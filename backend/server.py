@@ -612,7 +612,7 @@ Always include a risk disclaimer."""
 6. Confidence Level (High/Medium/Low)
 
 Format your response as JSON with keys: market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence""",
-            image_contents=[image_attachment]
+            file_contents=[image_attachment]
         )
         
         response = await chat.send_message(user_message)
