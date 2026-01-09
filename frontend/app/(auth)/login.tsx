@@ -46,9 +46,15 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       console.log('Attempting login...');
-      await login(email, password);
-      console.log('Login successful, navigating...');
-      router.replace('/(tabs)/dashboard');
+      const userData = await login(email, password);
+      console.log('Login successful, navigating...', userData);
+      
+      // Redirect based on admin status
+      if (userData.is_admin) {
+        router.replace('/(admin)/dashboard');
+      } else {
+        router.replace('/(tabs)/dashboard');
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       if (Platform.OS === 'web') {
