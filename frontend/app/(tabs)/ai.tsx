@@ -194,6 +194,32 @@ export default function AIScreen() {
     return 'remove';
   };
 
+  // Helper function to safely render any value as a string
+  const safeString = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (Array.isArray(value)) return value.map(v => safeString(v)).join(', ');
+    if (typeof value === 'object') {
+      // Handle objects with specific known structures
+      if (value.msg) return String(value.msg);
+      if (value.message) return String(value.message);
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[Object]';
+      }
+    }
+    return String(value);
+  };
+
+  // Helper to safely get array of levels
+  const safeLevels = (levels: any): string[] => {
+    if (!levels) return [];
+    if (!Array.isArray(levels)) return [];
+    return levels.map(level => safeString(level));
+  };
+
   // No access screen for free users
   if (!isLoadingUsage && !usage?.has_access) {
     return (
