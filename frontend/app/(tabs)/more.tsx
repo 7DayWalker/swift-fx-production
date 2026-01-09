@@ -81,7 +81,6 @@ export default function MoreScreen() {
     await logout();
     router.replace('/(auth)/login');
   };
-  };
 
   const handleUpgrade = async () => {
     if (!selectedPlan) {
