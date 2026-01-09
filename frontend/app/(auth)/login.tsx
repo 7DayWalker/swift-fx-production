@@ -33,17 +33,29 @@ export default function LoginScreen() {
   const router = useRouter();
 
   const handleLogin = async () => {
+    console.log('handleLogin called', { email, password: password ? '***' : '' });
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (Platform.OS === 'web') {
+        window.alert('Please fill in all fields');
+      } else {
+        Alert.alert('Error', 'Please fill in all fields');
+      }
       return;
     }
 
     setIsLoading(true);
     try {
+      console.log('Attempting login...');
       await login(email, password);
+      console.log('Login successful, navigating...');
       router.replace('/(tabs)/dashboard');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+      console.error('Login error:', error);
+      if (Platform.OS === 'web') {
+        window.alert(error.message || 'Invalid credentials');
+      } else {
+        Alert.alert('Login Failed', error.message || 'Invalid credentials');
+      }
     } finally {
       setIsLoading(false);
     }
