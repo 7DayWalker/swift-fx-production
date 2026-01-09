@@ -282,13 +282,16 @@ async def login(credentials: UserLogin):
             "name": user_doc["name"],
             "email": user_doc["email"],
             "role": user_doc.get("role", UserRole.FREE),
-            "subscription_status": user_doc.get("subscription_status", "inactive")
+            "subscription_status": user_doc.get("subscription_status", "inactive"),
+            "is_admin": user_doc.get("is_admin", False)
         }
     }
 
 @api_router.get("/auth/me")
 async def get_me(current_user: User = Depends(require_auth)):
-    return current_user
+    # Fetch additional fields like is_admin
+    user_doc = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
+    return user_doc
 
 @api_router.post("/auth/google/callback")
 async def google_auth_callback(session_id: str):
