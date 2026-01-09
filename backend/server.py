@@ -719,6 +719,8 @@ async def create_post(post_data: PostCreate, current_user: User = Depends(requir
     }
     
     await db.posts.insert_one(post_doc)
+    # Remove _id before returning (MongoDB adds it after insert)
+    post_doc.pop("_id", None)
     return post_doc
 
 @api_router.post("/community/posts/{post_id}/like")
