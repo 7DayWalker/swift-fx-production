@@ -763,6 +763,8 @@ async def create_comment(post_id: str, comment_data: CommentCreate, current_user
     }
     
     await db.comments.insert_one(comment_doc)
+    # Remove _id before returning (MongoDB adds it after insert)
+    comment_doc.pop("_id", None)
     return comment_doc
 
 # ===================== SUBSCRIPTION ENDPOINTS =====================
