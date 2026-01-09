@@ -9,15 +9,17 @@ interface User {
   role: 'free' | 'premium' | 'vip';
   subscription_status?: string;
   picture?: string;
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (sessionId: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  loginWithGoogle: (sessionId: string) => Promise<User>;
+  register: (name: string, email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -28,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isAdmin = user?.is_admin === true;
 
   useEffect(() => {
     loadStoredAuth();
@@ -57,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     const response = await api.post('/auth/login', { email, password });
     const { token: newToken, user: userData } = response.data;
     
@@ -66,9 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setToken(newToken);
     setUser(userData);
+    return userData;
   };
 
-  const loginWithGoogle = async (sessionId: string) => {
+  const loginWithGoogle = async (sessionId: string): Promise<User> => {
     const response = await api.post('/auth/google/callback', null, {
       params: { session_id: sessionId }
     });
@@ -79,9 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setToken(newToken);
     setUser(userData);
+    return userData;
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (name: string, email: string, password: string): Promise<User> => {
     const response = await api.post('/auth/register', { name, email, password });
     const { token: newToken, user: userData } = response.data;
     
@@ -90,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setToken(newToken);
     setUser(userData);
+    return userData;
   };
 
   const logout = async () => {
@@ -106,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isAdmin, login, loginWithGoogle, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
