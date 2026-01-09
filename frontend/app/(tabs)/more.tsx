@@ -58,7 +58,6 @@ export default function MoreScreen() {
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
-      // On web, use custom modal instead of Alert
       setShowLogoutModal(true);
     } else {
       Alert.alert(
@@ -327,7 +326,7 @@ export default function MoreScreen() {
         </View>
       </Modal>
 
-      {/* Logout Confirmation Modal (for web) */}
+      {/* Logout Confirmation Modal */}
       <Modal
         visible={showLogoutModal}
         animationType="fade"
