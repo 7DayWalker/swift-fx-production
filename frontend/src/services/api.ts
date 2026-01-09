@@ -1,12 +1,23 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL || '';
+// Use relative URL for web, full URL for native
+const getBaseUrl = () => {
+  if (Platform.OS === 'web') {
+    // On web, use relative URL which works with the proxy
+    return '/api';
+  }
+  // For native apps, use the full backend URL
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL || '';
+  return `${backendUrl}/api`;
+};
 
-console.log(BACKEND_URL, 'EXPO_PUBLIC_BACKEND_URL');
+const baseURL = getBaseUrl();
+console.log(baseURL, 'API_BASE_URL');
 
 export const api = axios.create({
-  baseURL: `${BACKEND_URL}/api`,
+  baseURL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
