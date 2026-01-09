@@ -141,7 +141,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </Link>
 
-            <TouchableOpacity
+            <Pressable
               style={[styles.loginButton, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
@@ -151,7 +151,7 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.loginButtonText}>Sign In</Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
