@@ -9,6 +9,7 @@ import {
   Switch,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,7 @@ export default function MoreScreen() {
   const router = useRouter();
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
@@ -55,21 +57,30 @@ export default function MoreScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            router.replace('/(auth)/login');
+    if (Platform.OS === 'web') {
+      // On web, use custom modal instead of Alert
+      setShowLogoutModal(true);
+    } else {
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: confirmLogout,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+    router.replace('/(auth)/login');
+  };
   };
 
   const handleUpgrade = async () => {
