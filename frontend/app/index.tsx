@@ -5,21 +5,26 @@ import { useAuth } from '../src/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SplashScreen() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading) {
       const timer = setTimeout(() => {
         if (user) {
-          router.replace('/(tabs)/dashboard');
+          // Redirect based on admin status
+          if (isAdmin) {
+            router.replace('/(admin)/dashboard');
+          } else {
+            router.replace('/(tabs)/dashboard');
+          }
         } else {
           router.replace('/(auth)/login');
         }
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, isAdmin]);
 
   return (
     <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
