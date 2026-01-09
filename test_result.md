@@ -165,7 +165,7 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: NA
         - agent: "main"
@@ -173,6 +173,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ TESTED: AI Chart Analyzer access control working correctly. Free users blocked (has_access: false). Premium users have access with 5 weekly analyses limit. Subscription upgrade working properly."
+        - working: true
+        - agent: "main"
+        - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
 
   - task: "Community Posts & Comments"
     implemented: true
