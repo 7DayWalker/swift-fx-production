@@ -1,30 +1,94 @@
-import { Text, View, StyleSheet, Image } from "react-native";
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuth } from '../src/context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const EXPO_PUBLIC_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+export default function SplashScreen() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
 
-export default function Index() {
-  console.log(EXPO_PUBLIC_BACKEND_URL, "EXPO_PUBLIC_BACKEND_URL");
+  useEffect(() => {
+    if (!isLoading) {
+      const timer = setTimeout(() => {
+        if (user) {
+          router.replace('/(tabs)/dashboard');
+        } else {
+          router.replace('/(auth)/login');
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, user]);
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={require("../assets/images/app-image.png")}
-        style={styles.image}
-      />
-    </View>
+    <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
+      <View style={styles.logoContainer}>
+        <View style={styles.iconWrapper}>
+          <Text style={styles.logoIcon}>⚡</Text>
+        </View>
+        <Text style={styles.title}>Swift FX</Text>
+        <Text style={styles.subtitle}>SIGNALS</Text>
+      </View>
+      
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#00D4AA" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+      
+      <Text style={styles.tagline}>Professional Trading Signals</Text>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0c0c0c",
-    alignItems: "center",
-    justifyContent: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  image: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 60,
+  },
+  iconWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 212, 170, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#00D4AA',
+  },
+  logoIcon: {
+    fontSize: 50,
+  },
+  title: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+  },
+  subtitle: {
+    fontSize: 18,
+    color: '#00D4AA',
+    letterSpacing: 8,
+    marginTop: 5,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#8A8D98',
+    marginTop: 15,
+    fontSize: 14,
+  },
+  tagline: {
+    position: 'absolute',
+    bottom: 50,
+    color: '#8A8D98',
+    fontSize: 14,
   },
 });
