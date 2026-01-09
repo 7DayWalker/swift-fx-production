@@ -11,7 +11,7 @@ import base64
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://swift-fx-signals.preview.emergentagent.com/api"
+BASE_URL = "https://signalswift.preview.emergentagent.com/api"
 TEST_USERS = {
     "admin": {"email": "admin@swiftfx.com", "password": "admin123"},
     "test_user": {"email": "test@example.com", "password": "test123"},
