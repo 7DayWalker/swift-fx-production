@@ -327,6 +327,36 @@ export default function MoreScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Logout Confirmation Modal (for web) */}
+      <Modal
+        visible={showLogoutModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.logoutModalContainer}>
+          <View style={styles.logoutModalContent}>
+            <Ionicons name="log-out-outline" size={48} color="#FF4757" style={{ marginBottom: 16 }} />
+            <Text style={styles.logoutModalTitle}>Logout</Text>
+            <Text style={styles.logoutModalText}>Are you sure you want to logout?</Text>
+            <View style={styles.logoutModalButtons}>
+              <TouchableOpacity 
+                style={styles.logoutCancelButton} 
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.logoutCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.logoutConfirmButton} 
+                onPress={confirmLogout}
+              >
+                <Text style={styles.logoutConfirmButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
