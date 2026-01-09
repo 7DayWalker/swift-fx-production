@@ -173,15 +173,18 @@ backend:
 
   - task: "Community Posts & Comments"
     implemented: true
-    working: NA
+    working: false
     file: "server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
         - comment: "CRUD endpoints for posts/comments/likes implemented"
+        - working: false
+        - agent: "testing"
+        - comment: "❌ CRITICAL BUG: Community post creation failing with 500 Internal Server Error. Root cause: MongoDB ObjectId serialization issue in FastAPI response. GET posts works fine, but POST /api/community/posts returns ValueError: ObjectId object is not iterable. This is a backend serialization bug that needs fixing."
 
   - task: "Subscription Management (Mock Payment)"
     implemented: true
