@@ -8,7 +8,6 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  TextInput,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,10 +34,14 @@ interface AnalysisResult {
   trade_insight: string;
   confidence: string;
   disclaimer?: string;
+  remaining_analyses?: number;
+  created_at?: string;
 }
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
+
+type ScreenState = 'upload' | 'analyzing' | 'result' | 'error';
 
 export default function AIScreen() {
   const { user } = useAuth();
@@ -46,11 +49,12 @@ export default function AIScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState(PAIRS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('H1');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPairPicker, setShowPairPicker] = useState(false);
   const [showTimeframePicker, setShowTimeframePicker] = useState(false);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
+  const [screenState, setScreenState] = useState<ScreenState>('upload');
 
   useEffect(() => {
     fetchUsage();
@@ -70,7 +74,8 @@ export default function AIScreen() {
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library');
+      const msg = 'Please allow access to your photo library';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Permission Required', msg);
       return;
     }
 
@@ -83,31 +88,41 @@ export default function AIScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setSelectedImage(result.assets[0].uri);
-      setAnalysisResult(null);
+      // Clear previous result when new image is selected
+      if (screenState === 'result' || screenState === 'error') {
+        setScreenState('upload');
+        setAnalysisResult(null);
+        setErrorMessage(null);
+      }
     }
   };
 
   const analyzeChart = async () => {
     if (!selectedImage) {
-      Alert.alert('No Image', 'Please select a chart image first');
+      const msg = 'Please select a chart image first';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('No Image', msg);
       return;
     }
 
     if (!usage?.has_access) {
-      Alert.alert('Upgrade Required', 'AI Chart Analyzer requires Premium or VIP subscription');
+      const msg = 'AI Chart Analyzer requires Premium or VIP subscription';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Upgrade Required', msg);
       return;
     }
 
     if (usage && usage.remaining <= 0) {
-      Alert.alert('Limit Reached', 'You have reached your weekly AI analysis limit. Upgrade to VIP for more.');
+      const msg = 'You have reached your weekly AI analysis limit. Upgrade to VIP for more.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Limit Reached', msg);
       return;
     }
 
-    setIsAnalyzing(true);
+    // Switch to analyzing state
+    setScreenState('analyzing');
+    setErrorMessage(null);
+
     try {
       const formData = new FormData();
       
-      // Get the image file
       const imageUri = selectedImage;
       const filename = imageUri.split('/').pop() || 'chart.jpg';
       const match = /\.([\w]+)$/.exec(filename);
@@ -125,15 +140,37 @@ export default function AIScreen() {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 120000, // 2 minute timeout for AI processing
       });
 
+      // Store the result and navigate to results screen
       setAnalysisResult(response.data);
-      fetchUsage(); // Refresh usage after analysis
+      setScreenState('result');
+      
+      // Refresh usage after analysis
+      fetchUsage();
     } catch (error: any) {
-      Alert.alert('Analysis Failed', error.response?.data?.detail || 'Failed to analyze chart. Please try again.');
-    } finally {
-      setIsAnalyzing(false);
+      console.error('AI Analysis error:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to analyze chart. Please try again.';
+      setErrorMessage(errorMsg);
+      setScreenState('error');
     }
+  };
+
+  const resetToUpload = () => {
+    setScreenState('upload');
+    setAnalysisResult(null);
+    setErrorMessage(null);
+    // Keep the image and settings - don't reset them
+  };
+
+  const startNewAnalysis = () => {
+    setScreenState('upload');
+    setSelectedImage(null);
+    setAnalysisResult(null);
+    setErrorMessage(null);
+    setSelectedPair(PAIRS[0]);
+    setSelectedTimeframe('H1');
   };
 
   const getBiasColor = (bias: string) => {
@@ -148,6 +185,13 @@ export default function AIScreen() {
     if (lowerConf.includes('high')) return '#00D4AA';
     if (lowerConf.includes('medium')) return '#FFD700';
     return '#FF4757';
+  };
+
+  const getBiasIcon = (bias: string) => {
+    const lowerBias = bias?.toLowerCase() || '';
+    if (lowerBias.includes('bullish')) return 'trending-up';
+    if (lowerBias.includes('bearish')) return 'trending-down';
+    return 'remove';
   };
 
   // No access screen for free users
@@ -195,6 +239,193 @@ export default function AIScreen() {
     );
   }
 
+  // Analyzing screen - show loading state
+  if (screenState === 'analyzing') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.analyzingContainer}>
+          <View style={styles.analyzingIconContainer}>
+            <ActivityIndicator size="large" color="#00D4AA" />
+          </View>
+          <Text style={styles.analyzingTitle}>Analyzing Chart</Text>
+          <Text style={styles.analyzingSubtitle}>
+            Our AI is analyzing your {selectedPair} chart on {selectedTimeframe} timeframe
+          </Text>
+          <View style={styles.analyzingSteps}>
+            <View style={styles.analyzingStep}>
+              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+              <Text style={styles.analyzingStepText}>Processing image</Text>
+            </View>
+            <View style={styles.analyzingStep}>
+              <ActivityIndicator size="small" color="#00D4AA" />
+              <Text style={styles.analyzingStepText}>Detecting patterns</Text>
+            </View>
+            <View style={styles.analyzingStep}>
+              <Ionicons name="ellipse-outline" size={20} color="#8A8D98" />
+              <Text style={[styles.analyzingStepText, { color: '#8A8D98' }]}>Generating insights</Text>
+            </View>
+          </View>
+          <Text style={styles.analyzingNote}>This may take up to 30 seconds...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error screen
+  if (screenState === 'error') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <View style={styles.errorIconContainer}>
+            <Ionicons name="alert-circle" size={64} color="#FF4757" />
+          </View>
+          <Text style={styles.errorTitle}>Analysis Failed</Text>
+          <Text style={styles.errorMessage}>{errorMessage}</Text>
+          <View style={styles.errorButtons}>
+            <TouchableOpacity style={styles.retryButton} onPress={analyzeChart}>
+              <Ionicons name="refresh" size={20} color="#0A0E17" />
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.backButton} onPress={resetToUpload}>
+              <Text style={styles.backButtonText}>Change Image</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Results screen
+  if (screenState === 'result' && analysisResult) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.resultHeader}>
+          <TouchableOpacity style={styles.resultBackButton} onPress={resetToUpload}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.resultHeaderTitle}>Analysis Result</Text>
+          <TouchableOpacity style={styles.newAnalysisButton} onPress={startNewAnalysis}>
+            <Ionicons name="add" size={24} color="#00D4AA" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.resultScrollView} showsVerticalScrollIndicator={false}>
+          {/* Chart Info */}
+          <View style={styles.chartInfoCard}>
+            <View style={styles.chartInfoRow}>
+              <View style={styles.chartInfoItem}>
+                <Text style={styles.chartInfoLabel}>Pair</Text>
+                <Text style={styles.chartInfoValue}>{analysisResult.pair}</Text>
+              </View>
+              <View style={styles.chartInfoItem}>
+                <Text style={styles.chartInfoLabel}>Timeframe</Text>
+                <Text style={styles.chartInfoValue}>{analysisResult.timeframe}</Text>
+              </View>
+            </View>
+            {selectedImage && (
+              <Image source={{ uri: selectedImage }} style={styles.resultChartImage} />
+            )}
+          </View>
+
+          {/* Market Bias Card - Prominent */}
+          <View style={[styles.biasCard, { borderColor: getBiasColor(analysisResult.market_bias) }]}>
+            <View style={[styles.biasIconContainer, { backgroundColor: `${getBiasColor(analysisResult.market_bias)}20` }]}>
+              <Ionicons name={getBiasIcon(analysisResult.market_bias) as any} size={32} color={getBiasColor(analysisResult.market_bias)} />
+            </View>
+            <Text style={styles.biasLabel}>Market Bias</Text>
+            <Text style={[styles.biasValue, { color: getBiasColor(analysisResult.market_bias) }]}>
+              {analysisResult.market_bias}
+            </Text>
+            <View style={[styles.confidenceBadge, { backgroundColor: `${getConfidenceColor(analysisResult.confidence)}20` }]}>
+              <Text style={[styles.confidenceText, { color: getConfidenceColor(analysisResult.confidence) }]}>
+                {analysisResult.confidence} Confidence
+              </Text>
+            </View>
+          </View>
+
+          {/* Trend Structure */}
+          <View style={styles.resultCard}>
+            <View style={styles.resultCardHeader}>
+              <Ionicons name="analytics" size={20} color="#00D4AA" />
+              <Text style={styles.resultCardTitle}>Trend Structure</Text>
+            </View>
+            <Text style={styles.resultCardText}>{analysisResult.trend_structure}</Text>
+          </View>
+
+          {/* Support & Resistance Levels */}
+          <View style={styles.levelsContainer}>
+            <View style={styles.levelCard}>
+              <View style={styles.levelHeader}>
+                <Ionicons name="arrow-down" size={16} color="#00D4AA" />
+                <Text style={styles.levelTitle}>Support Levels</Text>
+              </View>
+              {analysisResult.support_levels?.length > 0 ? (
+                analysisResult.support_levels.map((level, i) => (
+                  <View key={i} style={styles.levelItem}>
+                    <Text style={[styles.levelValue, { color: '#00D4AA' }]}>{level}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noLevelsText}>No levels identified</Text>
+              )}
+            </View>
+            <View style={styles.levelCard}>
+              <View style={styles.levelHeader}>
+                <Ionicons name="arrow-up" size={16} color="#FF4757" />
+                <Text style={styles.levelTitle}>Resistance Levels</Text>
+              </View>
+              {analysisResult.resistance_levels?.length > 0 ? (
+                analysisResult.resistance_levels.map((level, i) => (
+                  <View key={i} style={styles.levelItem}>
+                    <Text style={[styles.levelValue, { color: '#FF4757' }]}>{level}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noLevelsText}>No levels identified</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Trade Insight */}
+          <View style={styles.resultCard}>
+            <View style={styles.resultCardHeader}>
+              <Ionicons name="bulb" size={20} color="#FFD700" />
+              <Text style={styles.resultCardTitle}>Trade Insight</Text>
+            </View>
+            <Text style={styles.resultCardText}>{analysisResult.trade_insight}</Text>
+          </View>
+
+          {/* Remaining Analyses */}
+          {analysisResult.remaining_analyses !== undefined && (
+            <View style={styles.remainingCard}>
+              <Ionicons name="sparkles" size={20} color="#00D4AA" />
+              <Text style={styles.remainingText}>
+                {analysisResult.remaining_analyses} analyses remaining this week
+              </Text>
+            </View>
+          )}
+
+          {/* Disclaimer */}
+          <View style={styles.disclaimerContainer}>
+            <Ionicons name="information-circle-outline" size={16} color="#8A8D98" />
+            <Text style={styles.disclaimerText}>
+              {analysisResult.disclaimer || 'This analysis is for educational purposes only. Always do your own research before trading.'}
+            </Text>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.resultActions}>
+            <TouchableOpacity style={styles.analyzeAnotherButton} onPress={startNewAnalysis}>
+              <Ionicons name="camera" size={20} color="#0A0E17" />
+              <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Upload screen (default)
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -236,6 +467,12 @@ export default function AIScreen() {
               <Ionicons name="image-outline" size={48} color="#8A8D98" />
               <Text style={styles.imagePickerText}>Tap to select chart image</Text>
               <Text style={styles.imagePickerSubtext}>MT4, MT5, TradingView supported</Text>
+            </View>
+          )}
+          {selectedImage && (
+            <View style={styles.changeImageOverlay}>
+              <Ionicons name="camera" size={20} color="#FFFFFF" />
+              <Text style={styles.changeImageText}>Change</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -307,93 +544,13 @@ export default function AIScreen() {
 
         {/* Analyze Button */}
         <TouchableOpacity
-          style={[styles.analyzeButton, (!selectedImage || isAnalyzing) && styles.analyzeButtonDisabled]}
+          style={[styles.analyzeButton, !selectedImage && styles.analyzeButtonDisabled]}
           onPress={analyzeChart}
-          disabled={!selectedImage || isAnalyzing}
+          disabled={!selectedImage}
         >
-          {isAnalyzing ? (
-            <>
-              <ActivityIndicator color="#0A0E17" style={{ marginRight: 8 }} />
-              <Text style={styles.analyzeButtonText}>Analyzing...</Text>
-            </>
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
-              <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
-            </>
-          )}
+          <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
+          <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
         </TouchableOpacity>
-
-        {/* Analysis Result */}
-        {analysisResult && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultTitle}>Analysis Result</Text>
-
-            {/* Market Bias */}
-            <View style={styles.resultCard}>
-              <View style={styles.resultRow}>
-                <Text style={styles.resultLabel}>Market Bias</Text>
-                <View style={[styles.biasBadge, { backgroundColor: `${getBiasColor(analysisResult.market_bias)}20` }]}>
-                  <Text style={[styles.biasText, { color: getBiasColor(analysisResult.market_bias) }]}>
-                    {analysisResult.market_bias}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.resultRow}>
-                <Text style={styles.resultLabel}>Confidence</Text>
-                <View style={[styles.confidenceBadge, { backgroundColor: `${getConfidenceColor(analysisResult.confidence)}20` }]}>
-                  <Text style={[styles.confidenceText, { color: getConfidenceColor(analysisResult.confidence) }]}>
-                    {analysisResult.confidence}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Trend Structure */}
-            <View style={styles.resultCard}>
-              <Text style={styles.resultLabel}>Trend Structure</Text>
-              <Text style={styles.resultText}>{analysisResult.trend_structure}</Text>
-            </View>
-
-            {/* Levels */}
-            <View style={styles.levelsContainer}>
-              <View style={styles.levelCard}>
-                <Text style={styles.levelTitle}>Support Levels</Text>
-                {analysisResult.support_levels?.length > 0 ? (
-                  analysisResult.support_levels.map((level, i) => (
-                    <Text key={i} style={[styles.levelValue, { color: '#00D4AA' }]}>{level}</Text>
-                  ))
-                ) : (
-                  <Text style={styles.levelValue}>N/A</Text>
-                )}
-              </View>
-              <View style={styles.levelCard}>
-                <Text style={styles.levelTitle}>Resistance Levels</Text>
-                {analysisResult.resistance_levels?.length > 0 ? (
-                  analysisResult.resistance_levels.map((level, i) => (
-                    <Text key={i} style={[styles.levelValue, { color: '#FF4757' }]}>{level}</Text>
-                  ))
-                ) : (
-                  <Text style={styles.levelValue}>N/A</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Trade Insight */}
-            <View style={styles.resultCard}>
-              <Text style={styles.resultLabel}>Trade Insight</Text>
-              <Text style={styles.resultText}>{analysisResult.trade_insight}</Text>
-            </View>
-
-            {/* Disclaimer */}
-            <View style={styles.disclaimerContainer}>
-              <Ionicons name="information-circle-outline" size={16} color="#8A8D98" />
-              <Text style={styles.disclaimerText}>
-                {analysisResult.disclaimer || 'This analysis is for educational purposes only. Always do your own research before trading.'}
-              </Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -421,6 +578,7 @@ const styles = StyleSheet.create({
     color: '#8A8D98',
     marginTop: 4,
   },
+  // No Access Styles
   noAccessContainer: {
     flex: 1,
     padding: 24,
@@ -488,6 +646,319 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8A8D98',
   },
+  // Analyzing Styles
+  analyzingContainer: {
+    flex: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analyzingIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  analyzingTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  analyzingSubtitle: {
+    fontSize: 14,
+    color: '#8A8D98',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  analyzingSteps: {
+    width: '100%',
+    maxWidth: 300,
+    gap: 16,
+  },
+  analyzingStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  analyzingStepText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  analyzingNote: {
+    fontSize: 12,
+    color: '#8A8D98',
+    marginTop: 32,
+  },
+  // Error Styles
+  errorContainer: {
+    flex: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 71, 87, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF4757',
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: '#8A8D98',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  errorButtons: {
+    width: '100%',
+    maxWidth: 300,
+    gap: 12,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00D4AA',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0A0E17',
+  },
+  backButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1A1F2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Result Styles
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2F3E',
+  },
+  resultBackButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  newAnalysisButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultScrollView: {
+    flex: 1,
+    padding: 16,
+  },
+  chartInfoCard: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  chartInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  chartInfoItem: {
+    flex: 1,
+  },
+  chartInfoLabel: {
+    fontSize: 12,
+    color: '#8A8D98',
+    marginBottom: 4,
+  },
+  chartInfoValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  resultChartImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    resizeMode: 'contain',
+    backgroundColor: '#0A0E17',
+  },
+  biasCard: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+  },
+  biasIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  biasLabel: {
+    fontSize: 14,
+    color: '#8A8D98',
+    marginBottom: 4,
+  },
+  biasValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  confidenceBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  confidenceText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  resultCard: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  resultCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  resultCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  resultCardText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    lineHeight: 22,
+  },
+  levelsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  levelCard: {
+    flex: 1,
+    backgroundColor: '#1A1F2E',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 6,
+  },
+  levelTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  levelItem: {
+    marginBottom: 8,
+  },
+  levelValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  noLevelsText: {
+    fontSize: 12,
+    color: '#8A8D98',
+    fontStyle: 'italic',
+  },
+  remainingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  remainingText: {
+    fontSize: 14,
+    color: '#00D4AA',
+    fontWeight: '600',
+  },
+  disclaimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(138, 141, 152, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  disclaimerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#8A8D98',
+    lineHeight: 18,
+  },
+  resultActions: {
+    marginBottom: 40,
+  },
+  analyzeAnotherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00D4AA',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  analyzeAnotherText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0A0E17',
+  },
+  // Usage Card Styles
   usageCard: {
     backgroundColor: '#1A1F2E',
     borderRadius: 12,
@@ -528,6 +999,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
   },
+  // Image Picker Styles
   imagePicker: {
     backgroundColor: '#1A1F2E',
     borderRadius: 16,
@@ -536,6 +1008,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     overflow: 'hidden',
     marginBottom: 20,
+    position: 'relative',
   },
   imagePickerContent: {
     padding: 40,
@@ -556,6 +1029,24 @@ const styles = StyleSheet.create({
     height: 200,
     resizeMode: 'contain',
   },
+  changeImageOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  changeImageText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Settings Styles
   settingsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -584,6 +1075,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  // Picker Styles
   pickerContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -611,6 +1103,7 @@ const styles = StyleSheet.create({
     color: '#0A0E17',
     fontWeight: 'bold',
   },
+  // Analyze Button Styles
   analyzeButton: {
     backgroundColor: '#00D4AA',
     borderRadius: 12,
@@ -627,95 +1120,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#0A0E17',
-  },
-  resultContainer: {
-    marginBottom: 40,
-  },
-  resultTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  resultCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  resultLabel: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginBottom: 8,
-  },
-  resultText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    lineHeight: 22,
-  },
-  biasBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  biasText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  confidenceBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  confidenceText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  levelsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  levelCard: {
-    flex: 1,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  levelTitle: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginBottom: 8,
-  },
-  levelValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  disclaimerContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(138, 141, 152, 0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-  },
-  disclaimerText: {
-    flex: 1,
-    fontSize: 11,
-    color: '#8A8D98',
-    marginLeft: 8,
-    lineHeight: 16,
   },
 });
