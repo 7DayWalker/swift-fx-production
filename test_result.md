@@ -327,13 +327,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Signals CRUD with Visibility Control"
-    - "AI Chart Analyzer"
     - "Community Posts & Comments"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Community Posts & Comments"
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+  - agent: "testing"
+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
