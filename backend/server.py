@@ -662,6 +662,9 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
         
         await db.ai_analyses.insert_one(analysis_doc)
         
+        # Remove _id from the response (MongoDB adds it after insert)
+        analysis_doc.pop("_id", None)
+        
         # Increment usage
         await db.users.update_one(
             {"user_id": current_user.user_id},
