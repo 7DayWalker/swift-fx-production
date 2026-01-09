@@ -165,7 +165,7 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
@@ -176,6 +176,9 @@ backend:
         - working: true
         - agent: "main"
         - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
 
   - task: "Community Posts & Comments"
     implemented: true
