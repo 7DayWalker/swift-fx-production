@@ -152,6 +152,9 @@ backend:
         - working: true
         - agent: "main"
         - comment: "Signals correctly show locked/unlocked based on user role"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ TESTED: Signals endpoint working correctly. Without auth: 3 signals retrieved, 2 locked for premium/vip. With auth (free user): 1 free signal accessible, 2 locked. Role-based visibility control functioning properly."
 
   - task: "AI Chart Analyzer (Claude Vision)"
     implemented: true
