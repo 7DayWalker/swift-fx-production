@@ -323,6 +323,16 @@ export default function AIScreen() {
 
   // Results screen
   if (screenState === 'result' && analysisResult) {
+    const marketBias = safeString(analysisResult.market_bias) || 'Unknown';
+    const confidence = safeString(analysisResult.confidence) || 'Medium';
+    const trendStructure = safeString(analysisResult.trend_structure) || 'Analysis not available';
+    const tradeInsight = safeString(analysisResult.trade_insight) || 'No specific insight available';
+    const disclaimer = safeString(analysisResult.disclaimer) || 'This analysis is for educational purposes only. Always do your own research before trading.';
+    const supportLevels = safeLevels(analysisResult.support_levels);
+    const resistanceLevels = safeLevels(analysisResult.resistance_levels);
+    const pair = safeString(analysisResult.pair) || selectedPair;
+    const timeframe = safeString(analysisResult.timeframe) || selectedTimeframe;
+    
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.resultHeader}>
@@ -341,11 +351,11 @@ export default function AIScreen() {
             <View style={styles.chartInfoRow}>
               <View style={styles.chartInfoItem}>
                 <Text style={styles.chartInfoLabel}>Pair</Text>
-                <Text style={styles.chartInfoValue}>{analysisResult.pair}</Text>
+                <Text style={styles.chartInfoValue}>{pair}</Text>
               </View>
               <View style={styles.chartInfoItem}>
                 <Text style={styles.chartInfoLabel}>Timeframe</Text>
-                <Text style={styles.chartInfoValue}>{analysisResult.timeframe}</Text>
+                <Text style={styles.chartInfoValue}>{timeframe}</Text>
               </View>
             </View>
             {selectedImage && (
@@ -354,17 +364,17 @@ export default function AIScreen() {
           </View>
 
           {/* Market Bias Card - Prominent */}
-          <View style={[styles.biasCard, { borderColor: getBiasColor(analysisResult.market_bias) }]}>
-            <View style={[styles.biasIconContainer, { backgroundColor: `${getBiasColor(analysisResult.market_bias)}20` }]}>
-              <Ionicons name={getBiasIcon(analysisResult.market_bias) as any} size={32} color={getBiasColor(analysisResult.market_bias)} />
+          <View style={[styles.biasCard, { borderColor: getBiasColor(marketBias) }]}>
+            <View style={[styles.biasIconContainer, { backgroundColor: `${getBiasColor(marketBias)}20` }]}>
+              <Ionicons name={getBiasIcon(marketBias) as any} size={32} color={getBiasColor(marketBias)} />
             </View>
             <Text style={styles.biasLabel}>Market Bias</Text>
-            <Text style={[styles.biasValue, { color: getBiasColor(analysisResult.market_bias) }]}>
-              {analysisResult.market_bias}
+            <Text style={[styles.biasValue, { color: getBiasColor(marketBias) }]}>
+              {marketBias}
             </Text>
-            <View style={[styles.confidenceBadge, { backgroundColor: `${getConfidenceColor(analysisResult.confidence)}20` }]}>
-              <Text style={[styles.confidenceText, { color: getConfidenceColor(analysisResult.confidence) }]}>
-                {analysisResult.confidence} Confidence
+            <View style={[styles.confidenceBadge, { backgroundColor: `${getConfidenceColor(confidence)}20` }]}>
+              <Text style={[styles.confidenceText, { color: getConfidenceColor(confidence) }]}>
+                {confidence} Confidence
               </Text>
             </View>
           </View>
@@ -375,7 +385,7 @@ export default function AIScreen() {
               <Ionicons name="analytics" size={20} color="#00D4AA" />
               <Text style={styles.resultCardTitle}>Trend Structure</Text>
             </View>
-            <Text style={styles.resultCardText}>{analysisResult.trend_structure}</Text>
+            <Text style={styles.resultCardText}>{trendStructure}</Text>
           </View>
 
           {/* Support & Resistance Levels */}
@@ -385,8 +395,8 @@ export default function AIScreen() {
                 <Ionicons name="arrow-down" size={16} color="#00D4AA" />
                 <Text style={styles.levelTitle}>Support Levels</Text>
               </View>
-              {analysisResult.support_levels?.length > 0 ? (
-                analysisResult.support_levels.map((level, i) => (
+              {supportLevels.length > 0 ? (
+                supportLevels.map((level, i) => (
                   <View key={i} style={styles.levelItem}>
                     <Text style={[styles.levelValue, { color: '#00D4AA' }]}>{level}</Text>
                   </View>
@@ -400,8 +410,8 @@ export default function AIScreen() {
                 <Ionicons name="arrow-up" size={16} color="#FF4757" />
                 <Text style={styles.levelTitle}>Resistance Levels</Text>
               </View>
-              {analysisResult.resistance_levels?.length > 0 ? (
-                analysisResult.resistance_levels.map((level, i) => (
+              {resistanceLevels.length > 0 ? (
+                resistanceLevels.map((level, i) => (
                   <View key={i} style={styles.levelItem}>
                     <Text style={[styles.levelValue, { color: '#FF4757' }]}>{level}</Text>
                   </View>
@@ -418,7 +428,7 @@ export default function AIScreen() {
               <Ionicons name="bulb" size={20} color="#FFD700" />
               <Text style={styles.resultCardTitle}>Trade Insight</Text>
             </View>
-            <Text style={styles.resultCardText}>{analysisResult.trade_insight}</Text>
+            <Text style={styles.resultCardText}>{tradeInsight}</Text>
           </View>
 
           {/* Remaining Analyses */}
@@ -426,7 +436,7 @@ export default function AIScreen() {
             <View style={styles.remainingCard}>
               <Ionicons name="sparkles" size={20} color="#00D4AA" />
               <Text style={styles.remainingText}>
-                {analysisResult.remaining_analyses} analyses remaining this week
+                {safeString(analysisResult.remaining_analyses)} analyses remaining this week
               </Text>
             </View>
           )}
@@ -434,9 +444,7 @@ export default function AIScreen() {
           {/* Disclaimer */}
           <View style={styles.disclaimerContainer}>
             <Ionicons name="information-circle-outline" size={16} color="#8A8D98" />
-            <Text style={styles.disclaimerText}>
-              {analysisResult.disclaimer || 'This analysis is for educational purposes only. Always do your own research before trading.'}
-            </Text>
+            <Text style={styles.disclaimerText}>{disclaimer}</Text>
           </View>
 
           {/* Action Buttons */}
