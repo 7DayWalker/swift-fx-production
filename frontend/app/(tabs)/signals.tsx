@@ -22,13 +22,18 @@ interface Signal {
   signal_type: 'buy' | 'sell';
   entry?: number;
   stop_loss?: number;
-  take_profit?: number;
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  tp_hit?: number;
+  take_profit?: number; // Legacy support
   risk_reward?: number;
   status: 'pending' | 'active' | 'closed';
   visibility: 'free' | 'premium' | 'vip';
   created_at: string;
   locked?: boolean;
-  result_pips?: number;
+  final_pips?: number;
+  result_pips?: number; // Legacy support
 }
 
 export default function SignalsScreen() {
