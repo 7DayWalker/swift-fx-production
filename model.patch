@@ -1,275 +1,370 @@
-diff --git a/ai_chart_test.py b/ai_chart_test.py
-new file mode 100644
-index 0000000..e7edab5
---- /dev/null
-+++ b/ai_chart_test.py
-@@ -0,0 +1,250 @@
-+#!/usr/bin/env python3
-+"""
-+AI Chart Analyzer Backend Testing - Focused on AI endpoints
-+Testing as requested in the review request
-+"""
-+
-+import requests
-+import json
-+import base64
-+from io import BytesIO
-+from PIL import Image
-+import os
-+
-+# Configuration
-+BASE_URL = "https://signalswift.preview.emergentagent.com/api"
-+
-+class AIChartAnalyzerTester:
-+    def __init__(self):
-+        self.base_url = BASE_URL
-+        self.session = requests.Session()
-+        self.vip_token = None
-+        self.free_token = None
-+        
-+    def create_test_image(self):
-+        """Create a simple test chart image"""
-+        # Create a simple test image that looks like a chart
-+        img = Image.new('RGB', (800, 600), color='white')
-+        
-+        # Convert to bytes
-+        img_bytes = BytesIO()
-+        img.save(img_bytes, format='PNG')
-+        img_bytes.seek(0)
-+        
-+        return img_bytes.getvalue()
-+    
-+    def register_and_login_user(self, email, password, name="Test User"):
-+        """Register and login a user, return token"""
-+        print(f"\n=== Registering and logging in user: {email} ===")
-+        
-+        # Try to register (might fail if user exists)
-+        register_data = {
-+            "name": name,
-+            "email": email,
-+            "password": password
-+        }
-+        
-+        try:
-+            response = self.session.post(f"{self.base_url}/auth/register", json=register_data)
-+            if response.status_code == 200:
-+                print(f"✅ User registered successfully")
-+                return response.json()["token"]
-+            elif response.status_code == 400 and "already registered" in response.text:
-+                print(f"ℹ️ User already exists, proceeding to login")
-+            else:
-+                print(f"❌ Registration failed: {response.status_code} - {response.text}")
-+        except Exception as e:
-+            print(f"❌ Registration error: {e}")
-+        
-+        # Login
-+        login_data = {
-+            "email": email,
-+            "password": password
-+        }
-+        
-+        try:
-+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
-+            if response.status_code == 200:
-+                token = response.json()["token"]
-+                user_info = response.json()["user"]
-+                print(f"✅ Login successful - Role: {user_info.get('role', 'unknown')}")
-+                return token
-+            else:
-+                print(f"❌ Login failed: {response.status_code} - {response.text}")
-+                return None
-+        except Exception as e:
-+            print(f"❌ Login error: {e}")
-+            return None
-+    
-+    def upgrade_user_to_vip(self, token):
-+        """Upgrade user to VIP subscription"""
-+        print(f"\n=== Upgrading user to VIP ===")
-+        
-+        headers = {"Authorization": f"Bearer {token}"}
-+        upgrade_data = {
-+            "plan": "vip",
-+            "billing_cycle": "monthly"
-+        }
-+        
-+        try:
-+            response = self.session.post(f"{self.base_url}/subscription/upgrade", 
-+                                       json=upgrade_data, headers=headers)
-+            if response.status_code == 200:
-+                print(f"✅ User upgraded to VIP successfully")
-+                return True
-+            else:
-+                print(f"❌ Upgrade failed: {response.status_code} - {response.text}")
-+                return False
-+        except Exception as e:
-+            print(f"❌ Upgrade error: {e}")
-+            return False
-+    
-+    def test_ai_usage_endpoint(self, token, user_type="VIP"):
-+        """Test GET /api/ai/usage endpoint"""
-+        print(f"\n=== Testing AI Usage Endpoint ({user_type} user) ===")
-+        
-+        headers = {"Authorization": f"Bearer {token}"}
-+        
-+        try:
-+            response = self.session.get(f"{self.base_url}/ai/usage", headers=headers)
-+            print(f"Status Code: {response.status_code}")
-+            
-+            if response.status_code == 200:
-+                data = response.json()
-+                print(f"✅ AI Usage Response:")
-+                print(f"   - Current Usage: {data.get('current_usage')}")
-+                print(f"   - Weekly Limit: {data.get('weekly_limit')}")
-+                print(f"   - Remaining: {data.get('remaining')}")
-+                print(f"   - Has Access: {data.get('has_access')}")
-+                print(f"   - Reset Date: {data.get('reset_date')}")
-+                
-+                # Verify expected values
-+                if user_type == "VIP":
-+                    if data.get('weekly_limit') == 20:
-+                        print(f"✅ VIP weekly limit correct (20)")
-+                    else:
-+                        print(f"❌ VIP weekly limit incorrect: expected 20, got {data.get('weekly_limit')}")
-+                    
-+                    if data.get('has_access') == True:
-+                        print(f"✅ VIP has access: True")
-+                    else:
-+                        print(f"❌ VIP should have access but got: {data.get('has_access')}")
-+                
-+                elif user_type == "FREE":
-+                    if data.get('has_access') == False:
-+                        print(f"✅ Free user correctly blocked from AI access")
-+                    else:
-+                        print(f"❌ Free user should not have access but got: {data.get('has_access')}")
-+                
-+                return True
-+            else:
-+                print(f"❌ AI Usage request failed: {response.text}")
-+                return False
-+                
-+        except Exception as e:
-+            print(f"❌ AI Usage test error: {e}")
-+            return False
-+    
-+    def test_ai_analyze_endpoint(self, token, user_type="VIP"):
-+        """Test POST /api/ai/analyze endpoint"""
-+        print(f"\n=== Testing AI Analyze Endpoint ({user_type} user) ===")
-+        
-+        headers = {"Authorization": f"Bearer {token}"}
-+        
-+        # Create test image
-+        test_image = self.create_test_image()
-+        
-+        # Prepare form data
-+        files = {
-+            'image': ('test_chart.png', test_image, 'image/png')
-+        }
-+        data = {
-+            'pair': 'EUR/USD',
-+            'timeframe': '1H'
-+        }
-+        
-+        try:
-+            response = self.session.post(f"{self.base_url}/ai/analyze", 
-+                                       files=files, data=data, headers=headers)
-+            print(f"Status Code: {response.status_code}")
-+            
-+            if user_type == "FREE" and response.status_code == 403:
-+                print(f"✅ Free user correctly blocked from AI analyze (403)")
-+                return True
-+            elif user_type in ["VIP", "PREMIUM"] and response.status_code == 200:
-+                data = response.json()
-+                print(f"✅ AI Analysis Response received")
-+                
-+                # Check required fields
-+                required_fields = [
-+                    'analysis_id', 'pair', 'timeframe', 'market_bias', 
-+                    'trend_structure', 'support_levels', 'resistance_levels', 
-+                    'trade_insight', 'confidence', 'remaining_analyses', 'disclaimer'
-+                ]
-+                
-+                missing_fields = []
-+                for field in required_fields:
-+                    if field not in data:
-+                        missing_fields.append(field)
-+                    else:
-+                        print(f"   ✅ {field}: {data[field]}")
-+                
-+                if missing_fields:
-+                    print(f"❌ Missing required fields: {missing_fields}")
-+                    return False
-+                else:
-+                    print(f"✅ All required fields present in response")
-+                
-+                # Verify usage counter decremented
-+                if 'remaining_analyses' in data:
-+                    print(f"✅ Usage counter working - Remaining: {data['remaining_analyses']}")
-+                
-+                return True
-+            else:
-+                print(f"❌ AI Analyze request failed: {response.status_code} - {response.text}")
-+                return False
-+                
-+        except Exception as e:
-+            print(f"❌ AI Analyze test error: {e}")
-+            return False
-+    
-+    def test_access_control(self):
-+        """Test access control between free and premium/VIP users"""
-+        print(f"\n=== Testing Access Control ===")
-+        
-+        # Test with free user
-+        if self.free_token:
-+            print(f"\n--- Testing Free User Access ---")
-+            self.test_ai_usage_endpoint(self.free_token, "FREE")
-+            self.test_ai_analyze_endpoint(self.free_token, "FREE")
-+        
-+        # Test with VIP user
-+        if self.vip_token:
-+            print(f"\n--- Testing VIP User Access ---")
-+            self.test_ai_usage_endpoint(self.vip_token, "VIP")
-+            self.test_ai_analyze_endpoint(self.vip_token, "VIP")
-+    
-+    def run_all_tests(self):
-+        """Run all AI Chart Analyzer tests"""
-+        print("=" * 60)
-+        print("AI CHART ANALYZER BACKEND TESTING")
-+        print("=" * 60)
-+        
-+        # Setup VIP test user
-+        self.vip_token = self.register_and_login_user("viptest@test.com", "testpass123", "VIP Test User")
-+        if self.vip_token:
-+            self.upgrade_user_to_vip(self.vip_token)
-+        
-+        # Setup free test user
-+        self.free_token = self.register_and_login_user("freetest@test.com", "testpass123", "Free Test User")
-+        
-+        # Run access control tests
-+        self.test_access_control()
-+        
-+        print(f"\n" + "=" * 60)
-+        print("AI CHART ANALYZER TESTING COMPLETE")
-+        print("=" * 60)
-+
-+if __name__ == "__main__":
-+    tester = AIChartAnalyzerTester()
-+    tester.run_all_tests()
-\ No newline at end of file
 diff --git a/model.patch b/model.patch
-index b318722..646fd43 100644
+index 0f96aae..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,91 +0,0 @@
+@@ -1,390 +0,0 @@
+-diff --git a/ai_chart_test.py b/ai_chart_test.py
+-new file mode 100644
+-index 0000000..e7edab5
+---- /dev/null
+-+++ b/ai_chart_test.py
+-@@ -0,0 +1,250 @@
+-+#!/usr/bin/env python3
+-+"""
+-+AI Chart Analyzer Backend Testing - Focused on AI endpoints
+-+Testing as requested in the review request
+-+"""
+-+
+-+import requests
+-+import json
+-+import base64
+-+from io import BytesIO
+-+from PIL import Image
+-+import os
+-+
+-+# Configuration
+-+BASE_URL = "https://signalswift.preview.emergentagent.com/api"
+-+
+-+class AIChartAnalyzerTester:
+-+    def __init__(self):
+-+        self.base_url = BASE_URL
+-+        self.session = requests.Session()
+-+        self.vip_token = None
+-+        self.free_token = None
+-+        
+-+    def create_test_image(self):
+-+        """Create a simple test chart image"""
+-+        # Create a simple test image that looks like a chart
+-+        img = Image.new('RGB', (800, 600), color='white')
+-+        
+-+        # Convert to bytes
+-+        img_bytes = BytesIO()
+-+        img.save(img_bytes, format='PNG')
+-+        img_bytes.seek(0)
+-+        
+-+        return img_bytes.getvalue()
+-+    
+-+    def register_and_login_user(self, email, password, name="Test User"):
+-+        """Register and login a user, return token"""
+-+        print(f"\n=== Registering and logging in user: {email} ===")
+-+        
+-+        # Try to register (might fail if user exists)
+-+        register_data = {
+-+            "name": name,
+-+            "email": email,
+-+            "password": password
+-+        }
+-+        
+-+        try:
+-+            response = self.session.post(f"{self.base_url}/auth/register", json=register_data)
+-+            if response.status_code == 200:
+-+                print(f"✅ User registered successfully")
+-+                return response.json()["token"]
+-+            elif response.status_code == 400 and "already registered" in response.text:
+-+                print(f"ℹ️ User already exists, proceeding to login")
+-+            else:
+-+                print(f"❌ Registration failed: {response.status_code} - {response.text}")
+-+        except Exception as e:
+-+            print(f"❌ Registration error: {e}")
+-+        
+-+        # Login
+-+        login_data = {
+-+            "email": email,
+-+            "password": password
+-+        }
+-+        
+-+        try:
+-+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+-+            if response.status_code == 200:
+-+                token = response.json()["token"]
+-+                user_info = response.json()["user"]
+-+                print(f"✅ Login successful - Role: {user_info.get('role', 'unknown')}")
+-+                return token
+-+            else:
+-+                print(f"❌ Login failed: {response.status_code} - {response.text}")
+-+                return None
+-+        except Exception as e:
+-+            print(f"❌ Login error: {e}")
+-+            return None
+-+    
+-+    def upgrade_user_to_vip(self, token):
+-+        """Upgrade user to VIP subscription"""
+-+        print(f"\n=== Upgrading user to VIP ===")
+-+        
+-+        headers = {"Authorization": f"Bearer {token}"}
+-+        upgrade_data = {
+-+            "plan": "vip",
+-+            "billing_cycle": "monthly"
+-+        }
+-+        
+-+        try:
+-+            response = self.session.post(f"{self.base_url}/subscription/upgrade", 
+-+                                       json=upgrade_data, headers=headers)
+-+            if response.status_code == 200:
+-+                print(f"✅ User upgraded to VIP successfully")
+-+                return True
+-+            else:
+-+                print(f"❌ Upgrade failed: {response.status_code} - {response.text}")
+-+                return False
+-+        except Exception as e:
+-+            print(f"❌ Upgrade error: {e}")
+-+            return False
+-+    
+-+    def test_ai_usage_endpoint(self, token, user_type="VIP"):
+-+        """Test GET /api/ai/usage endpoint"""
+-+        print(f"\n=== Testing AI Usage Endpoint ({user_type} user) ===")
+-+        
+-+        headers = {"Authorization": f"Bearer {token}"}
+-+        
+-+        try:
+-+            response = self.session.get(f"{self.base_url}/ai/usage", headers=headers)
+-+            print(f"Status Code: {response.status_code}")
+-+            
+-+            if response.status_code == 200:
+-+                data = response.json()
+-+                print(f"✅ AI Usage Response:")
+-+                print(f"   - Current Usage: {data.get('current_usage')}")
+-+                print(f"   - Weekly Limit: {data.get('weekly_limit')}")
+-+                print(f"   - Remaining: {data.get('remaining')}")
+-+                print(f"   - Has Access: {data.get('has_access')}")
+-+                print(f"   - Reset Date: {data.get('reset_date')}")
+-+                
+-+                # Verify expected values
+-+                if user_type == "VIP":
+-+                    if data.get('weekly_limit') == 20:
+-+                        print(f"✅ VIP weekly limit correct (20)")
+-+                    else:
+-+                        print(f"❌ VIP weekly limit incorrect: expected 20, got {data.get('weekly_limit')}")
+-+                    
+-+                    if data.get('has_access') == True:
+-+                        print(f"✅ VIP has access: True")
+-+                    else:
+-+                        print(f"❌ VIP should have access but got: {data.get('has_access')}")
+-+                
+-+                elif user_type == "FREE":
+-+                    if data.get('has_access') == False:
+-+                        print(f"✅ Free user correctly blocked from AI access")
+-+                    else:
+-+                        print(f"❌ Free user should not have access but got: {data.get('has_access')}")
+-+                
+-+                return True
+-+            else:
+-+                print(f"❌ AI Usage request failed: {response.text}")
+-+                return False
+-+                
+-+        except Exception as e:
+-+            print(f"❌ AI Usage test error: {e}")
+-+            return False
+-+    
+-+    def test_ai_analyze_endpoint(self, token, user_type="VIP"):
+-+        """Test POST /api/ai/analyze endpoint"""
+-+        print(f"\n=== Testing AI Analyze Endpoint ({user_type} user) ===")
+-+        
+-+        headers = {"Authorization": f"Bearer {token}"}
+-+        
+-+        # Create test image
+-+        test_image = self.create_test_image()
+-+        
+-+        # Prepare form data
+-+        files = {
+-+            'image': ('test_chart.png', test_image, 'image/png')
+-+        }
+-+        data = {
+-+            'pair': 'EUR/USD',
+-+            'timeframe': '1H'
+-+        }
+-+        
+-+        try:
+-+            response = self.session.post(f"{self.base_url}/ai/analyze", 
+-+                                       files=files, data=data, headers=headers)
+-+            print(f"Status Code: {response.status_code}")
+-+            
+-+            if user_type == "FREE" and response.status_code == 403:
+-+                print(f"✅ Free user correctly blocked from AI analyze (403)")
+-+                return True
+-+            elif user_type in ["VIP", "PREMIUM"] and response.status_code == 200:
+-+                data = response.json()
+-+                print(f"✅ AI Analysis Response received")
+-+                
+-+                # Check required fields
+-+                required_fields = [
+-+                    'analysis_id', 'pair', 'timeframe', 'market_bias', 
+-+                    'trend_structure', 'support_levels', 'resistance_levels', 
+-+                    'trade_insight', 'confidence', 'remaining_analyses', 'disclaimer'
+-+                ]
+-+                
+-+                missing_fields = []
+-+                for field in required_fields:
+-+                    if field not in data:
+-+                        missing_fields.append(field)
+-+                    else:
+-+                        print(f"   ✅ {field}: {data[field]}")
+-+                
+-+                if missing_fields:
+-+                    print(f"❌ Missing required fields: {missing_fields}")
+-+                    return False
+-+                else:
+-+                    print(f"✅ All required fields present in response")
+-+                
+-+                # Verify usage counter decremented
+-+                if 'remaining_analyses' in data:
+-+                    print(f"✅ Usage counter working - Remaining: {data['remaining_analyses']}")
+-+                
+-+                return True
+-+            else:
+-+                print(f"❌ AI Analyze request failed: {response.status_code} - {response.text}")
+-+                return False
+-+                
+-+        except Exception as e:
+-+            print(f"❌ AI Analyze test error: {e}")
+-+            return False
+-+    
+-+    def test_access_control(self):
+-+        """Test access control between free and premium/VIP users"""
+-+        print(f"\n=== Testing Access Control ===")
+-+        
+-+        # Test with free user
+-+        if self.free_token:
+-+            print(f"\n--- Testing Free User Access ---")
+-+            self.test_ai_usage_endpoint(self.free_token, "FREE")
+-+            self.test_ai_analyze_endpoint(self.free_token, "FREE")
+-+        
+-+        # Test with VIP user
+-+        if self.vip_token:
+-+            print(f"\n--- Testing VIP User Access ---")
+-+            self.test_ai_usage_endpoint(self.vip_token, "VIP")
+-+            self.test_ai_analyze_endpoint(self.vip_token, "VIP")
+-+    
+-+    def run_all_tests(self):
+-+        """Run all AI Chart Analyzer tests"""
+-+        print("=" * 60)
+-+        print("AI CHART ANALYZER BACKEND TESTING")
+-+        print("=" * 60)
+-+        
+-+        # Setup VIP test user
+-+        self.vip_token = self.register_and_login_user("viptest@test.com", "testpass123", "VIP Test User")
+-+        if self.vip_token:
+-+            self.upgrade_user_to_vip(self.vip_token)
+-+        
+-+        # Setup free test user
+-+        self.free_token = self.register_and_login_user("freetest@test.com", "testpass123", "Free Test User")
+-+        
+-+        # Run access control tests
+-+        self.test_access_control()
+-+        
+-+        print(f"\n" + "=" * 60)
+-+        print("AI CHART ANALYZER TESTING COMPLETE")
+-+        print("=" * 60)
+-+
+-+if __name__ == "__main__":
+-+    tester = AIChartAnalyzerTester()
+-+    tester.run_all_tests()
+-\ No newline at end of file
+-diff --git a/model.patch b/model.patch
+-index b318722..646fd43 100644
+---- a/model.patch
+-+++ b/model.patch
+-@@ -1,91 +0,0 @@
+--diff --git a/test_result.md b/test_result.md
+--index c2c003d..cb8ea7a 100644
+----- a/test_result.md
+--+++ b/test_result.md
+--@@ -131,15 +131,18 @@ backend:
+-- 
+--   - task: "Google OAuth Integration"
+--     implemented: true
+---    working: NA
+--+    working: true
+--     file: "server.py"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--         - working: NA
+--         - agent: "main"
+--         - comment: "Endpoint implemented, needs testing with real Google OAuth"
+--+        - working: true
+--+        - agent: "testing"
+--+        - comment: "✅ TESTED: Google OAuth callback endpoint implemented and responding correctly. Returns 401 'Invalid session' for invalid session_id (expected behavior). Endpoint ready for integration with Emergent Auth service."
+-- 
+--   - task: "Signals CRUD with Visibility Control"
+--     implemented: true
+--@@ -152,30 +155,39 @@ backend:
+--         - working: true
+--         - agent: "main"
+--         - comment: "Signals correctly show locked/unlocked based on user role"
+--+        - working: true
+--+        - agent: "testing"
+--+        - comment: "✅ TESTED: Signals endpoint working correctly. Without auth: 3 signals retrieved, 2 locked for premium/vip. With auth (free user): 1 free signal accessible, 2 locked. Role-based visibility control functioning properly."
+-- 
+--   - task: "AI Chart Analyzer (Claude Vision)"
+--     implemented: true
+---    working: NA
+--+    working: true
+--     file: "server.py"
+--     stuck_count: 0
+--     priority: "high"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--         - working: NA
+--         - agent: "main"
+--         - comment: "AI endpoint implemented with emergentintegrations, needs testing with image upload"
+--+        - working: true
+--+        - agent: "testing"
+--+        - comment: "✅ TESTED: AI Chart Analyzer access control working correctly. Free users blocked (has_access: false). Premium users have access with 5 weekly analyses limit. Subscription upgrade working properly."
+-- 
+--   - task: "Community Posts & Comments"
+--     implemented: true
+---    working: NA
+--+    working: false
+--     file: "server.py"
+---    stuck_count: 0
+--+    stuck_count: 1
+--     priority: "medium"
+---    needs_retesting: true
+--+    needs_retesting: false
+--     status_history:
+--         - working: NA
+--         - agent: "main"
+--         - comment: "CRUD endpoints for posts/comments/likes implemented"
+--+        - working: false
+--+        - agent: "testing"
+--+        - comment: "❌ CRITICAL BUG: Community post creation failing with 500 Internal Server Error. Root cause: MongoDB ObjectId serialization issue in FastAPI response. GET posts works fine, but POST /api/community/posts returns ValueError: ObjectId object is not iterable. This is a backend serialization bug that needs fixing."
+-- 
+--   - task: "Subscription Management (Mock Payment)"
+--     implemented: true
+--@@ -318,13 +330,14 @@ metadata:
+-- 
+-- test_plan:
+--   current_focus:
+---    - "Signals CRUD with Visibility Control"
+---    - "AI Chart Analyzer"
+--     - "Community Posts & Comments"
+---  stuck_tasks: []
+--+  stuck_tasks:
+--+    - "Community Posts & Comments"
+--   test_all: false
+--   test_priority: "high_first"
+-- 
+-- agent_communication:
+--   - agent: "main"
+---  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+--\ No newline at end of file
+--+  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+--+  - agent: "testing"
+--+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
+--\ No newline at end of file
+-diff --git a/test_chart.png b/test_chart.png
+-new file mode 100644
+-index 0000000..a5435f2
+-Binary files /dev/null and b/test_chart.png differ
 -diff --git a/test_result.md b/test_result.md
--index c2c003d..cb8ea7a 100644
+-index a5a1135..2e12a80 100644
 ---- a/test_result.md
 -+++ b/test_result.md
--@@ -131,15 +131,18 @@ backend:
-- 
--   - task: "Google OAuth Integration"
--     implemented: true
---    working: NA
--+    working: true
+-@@ -165,7 +165,7 @@ backend:
 -     file: "server.py"
 -     stuck_count: 0
 -     priority: "high"
@@ -278,113 +373,37 @@ index b318722..646fd43 100644
 -     status_history:
 -         - working: NA
 -         - agent: "main"
--         - comment: "Endpoint implemented, needs testing with real Google OAuth"
--+        - working: true
--+        - agent: "testing"
--+        - comment: "✅ TESTED: Google OAuth callback endpoint implemented and responding correctly. Returns 401 'Invalid session' for invalid session_id (expected behavior). Endpoint ready for integration with Emergent Auth service."
-- 
--   - task: "Signals CRUD with Visibility Control"
--     implemented: true
--@@ -152,30 +155,39 @@ backend:
+-@@ -176,6 +176,9 @@ backend:
 -         - working: true
 -         - agent: "main"
--         - comment: "Signals correctly show locked/unlocked based on user role"
+-         - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
 -+        - working: true
 -+        - agent: "testing"
--+        - comment: "✅ TESTED: Signals endpoint working correctly. Without auth: 3 signals retrieved, 2 locked for premium/vip. With auth (free user): 1 free signal accessible, 2 locked. Role-based visibility control functioning properly."
-- 
--   - task: "AI Chart Analyzer (Claude Vision)"
--     implemented: true
---    working: NA
--+    working: true
--     file: "server.py"
--     stuck_count: 0
--     priority: "high"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--         - working: NA
--         - agent: "main"
--         - comment: "AI endpoint implemented with emergentintegrations, needs testing with image upload"
--+        - working: true
--+        - agent: "testing"
--+        - comment: "✅ TESTED: AI Chart Analyzer access control working correctly. Free users blocked (has_access: false). Premium users have access with 5 weekly analyses limit. Subscription upgrade working properly."
+-+        - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
 - 
 -   - task: "Community Posts & Comments"
 -     implemented: true
---    working: NA
--+    working: false
--     file: "server.py"
---    stuck_count: 0
--+    stuck_count: 1
--     priority: "medium"
---    needs_retesting: true
--+    needs_retesting: false
--     status_history:
--         - working: NA
--         - agent: "main"
--         - comment: "CRUD endpoints for posts/comments/likes implemented"
--+        - working: false
--+        - agent: "testing"
--+        - comment: "❌ CRITICAL BUG: Community post creation failing with 500 Internal Server Error. Root cause: MongoDB ObjectId serialization issue in FastAPI response. GET posts works fine, but POST /api/community/posts returns ValueError: ObjectId object is not iterable. This is a backend serialization bug that needs fixing."
-- 
--   - task: "Subscription Management (Mock Payment)"
--     implemented: true
--@@ -318,13 +330,14 @@ metadata:
-- 
-- test_plan:
--   current_focus:
---    - "Signals CRUD with Visibility Control"
---    - "AI Chart Analyzer"
--     - "Community Posts & Comments"
---  stuck_tasks: []
--+  stuck_tasks:
--+    - "Community Posts & Comments"
--   test_all: false
--   test_priority: "high_first"
-- 
-- agent_communication:
+-@@ -343,4 +346,6 @@ agent_communication:
 -   - agent: "main"
---  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+-   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+-   - agent: "testing"
+--  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
 -\ No newline at end of file
--+  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
--+  - agent: "testing"
 -+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
+-+  - agent: "testing"
+-+  - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
 -\ No newline at end of file
-diff --git a/test_chart.png b/test_chart.png
-new file mode 100644
-index 0000000..a5435f2
-Binary files /dev/null and b/test_chart.png differ
 diff --git a/test_result.md b/test_result.md
-index a5a1135..2e12a80 100644
+index 96ee4a4..26e0c4f 100644
 --- a/test_result.md
 +++ b/test_result.md
-@@ -165,7 +165,7 @@ backend:
-     file: "server.py"
-     stuck_count: 0
-     priority: "high"
--    needs_retesting: true
-+    needs_retesting: false
-     status_history:
-         - working: NA
-         - agent: "main"
-@@ -176,6 +176,9 @@ backend:
+@@ -179,6 +179,9 @@ backend:
          - working: true
-         - agent: "main"
-         - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
+         - agent: "testing"
+         - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
 +        - working: true
-+        - agent: "testing"
-+        - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
++        - agent: "main"
++        - comment: "✅ RESOLVED: Fixed React rendering crash (Objects not valid as React child) by adding safeString() and safeLevels() helpers. Fixed file upload format - converted base64 to proper Blob/File for multipart upload. AI Analyzer now fully working end-to-end. User confirmed working."
  
    - task: "Community Posts & Comments"
      implemented: true
-@@ -343,4 +346,6 @@ agent_communication:
-   - agent: "main"
-   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
-   - agent: "testing"
--  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
-\ No newline at end of file
-+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
-+  - agent: "testing"
-+  - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
-\ No newline at end of file
