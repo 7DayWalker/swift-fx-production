@@ -36,11 +36,13 @@ type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
 export default function MoreScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
@@ -48,6 +50,16 @@ export default function MoreScreen() {
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+
+  // Dynamic styles based on theme
+  const dynamicStyles = {
+    container: { backgroundColor: theme.background },
+    surface: { backgroundColor: theme.surface },
+    text: { color: theme.text },
+    textSecondary: { color: theme.textSecondary },
+    border: { borderColor: theme.border },
+    card: { backgroundColor: theme.cardBackground },
+  };
 
   useEffect(() => {
     fetchPlans();
