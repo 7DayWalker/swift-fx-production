@@ -21,13 +21,14 @@ interface Signal {
   signal_id: string;
   pair: string;
   signal_type: 'buy' | 'sell';
-  entry: number;
-  stop_loss: number;
-  tp1: number;
+  entry?: number;
+  stop_loss?: number;
+  tp1?: number;
   tp2?: number;
   tp3?: number;
-  tp_hit: number;
-  risk_reward: number;
+  take_profit?: number; // Legacy field
+  tp_hit?: number;
+  risk_reward?: number;
   status: 'pending' | 'active' | 'closed';
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
@@ -39,6 +40,19 @@ interface Signal {
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const VISIBILITIES = ['free', 'premium', 'vip'];
 const STATUSES = ['pending', 'active', 'closed'];
+
+// Safe string conversion - NEVER crashes
+const safeStr = (value: any): string => {
+  if (value === undefined || value === null) return '';
+  return String(value);
+};
+
+// Safe number conversion
+const safeNum = (value: any, fallback: number = 0): number => {
+  if (value === undefined || value === null) return fallback;
+  const num = Number(value);
+  return isNaN(num) ? fallback : num;
+};
 
 export default function SignalManagement() {
   const router = useRouter();
@@ -52,7 +66,7 @@ export default function SignalManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  // Create form state
+  // Create form state - INCLUDES STATUS SELECTION
   const [formData, setFormData] = useState({
     pair: 'EUR/USD',
     signal_type: 'buy' as 'buy' | 'sell',
@@ -61,6 +75,7 @@ export default function SignalManagement() {
     tp1: '',
     tp2: '',
     tp3: '',
+    status: 'pending' as 'pending' | 'active', // Can create as pending or active
     visibility: 'free' as 'free' | 'premium' | 'vip',
     analysis: '',
   });
@@ -77,6 +92,7 @@ export default function SignalManagement() {
     tp_hit: 0,
     status: 'pending' as 'pending' | 'active' | 'closed',
     visibility: 'free' as 'free' | 'premium' | 'vip',
+    final_pips: '',
   });
 
   // Close modal state
@@ -91,9 +107,10 @@ export default function SignalManagement() {
   const fetchSignals = async () => {
     try {
       const response = await api.get('/signals');
-      setSignals(response.data);
+      setSignals(response.data || []);
     } catch (error) {
       console.error('Failed to fetch signals:', error);
+      setSignals([]);
     } finally {
       setIsLoading(false);
     }
@@ -114,6 +131,7 @@ export default function SignalManagement() {
       tp1: '',
       tp2: '',
       tp3: '',
+      status: 'pending',
       visibility: 'free',
       analysis: '',
     });
@@ -127,9 +145,9 @@ export default function SignalManagement() {
     }
   };
 
-  const confirmAction = async (title: string, message: string): Promise<boolean> => {
+  const confirmAction = (title: string, message: string): Promise<boolean> => {
     if (Platform.OS === 'web') {
-      return window.confirm(`${title}\n\n${message}`);
+      return Promise.resolve(window.confirm(`${title}\n\n${message}`));
     }
     return new Promise((resolve) => {
       Alert.alert(title, message, [
@@ -139,7 +157,7 @@ export default function SignalManagement() {
     });
   };
 
-  // ========== CREATE SIGNAL ==========
+  // ========== CREATE SIGNAL (WITH STATUS CHOICE) ==========
   const handleCreateSignal = async () => {
     if (!formData.entry || !formData.stop_loss || !formData.tp1) {
       showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
@@ -156,14 +174,15 @@ export default function SignalManagement() {
         tp1: parseFloat(formData.tp1),
         tp2: formData.tp2 ? parseFloat(formData.tp2) : null,
         tp3: formData.tp3 ? parseFloat(formData.tp3) : null,
+        status: formData.status, // PENDING or ACTIVE
         visibility: formData.visibility,
         analysis: formData.analysis || null,
       });
       
       setShowCreateModal(false);
       resetCreateForm();
-      fetchSignals();
-      showAlert('Success', 'Signal created successfully!');
+      await fetchSignals();
+      showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to create signal');
     } finally {
@@ -171,34 +190,44 @@ export default function SignalManagement() {
     }
   };
 
-  // ========== EDIT SIGNAL ==========
+  // ========== EDIT SIGNAL (SAFE - NO CRASHES) ==========
   const openEditModal = (signal: Signal) => {
+    if (!signal) return;
+    
     setSelectedSignal(signal);
+    
+    // SAFE defaults - never call toString() on undefined
     setEditData({
-      pair: signal.pair,
-      signal_type: signal.signal_type,
-      entry: signal.entry.toString(),
-      stop_loss: signal.stop_loss.toString(),
-      tp1: signal.tp1.toString(),
-      tp2: signal.tp2?.toString() || '',
-      tp3: signal.tp3?.toString() || '',
-      tp_hit: signal.tp_hit || 0,
-      status: signal.status,
-      visibility: signal.visibility,
+      pair: signal.pair || 'EUR/USD',
+      signal_type: signal.signal_type || 'buy',
+      entry: safeStr(signal.entry),
+      stop_loss: safeStr(signal.stop_loss),
+      tp1: safeStr(signal.tp1 || signal.take_profit), // Support legacy field
+      tp2: safeStr(signal.tp2),
+      tp3: safeStr(signal.tp3),
+      tp_hit: safeNum(signal.tp_hit, 0),
+      status: signal.status || 'pending',
+      visibility: signal.visibility || 'free',
+      final_pips: safeStr(signal.final_pips || signal.result_pips),
     });
+    
     setShowEditModal(true);
   };
 
   const handleEditSignal = async () => {
-    if (!selectedSignal || !editData.entry || !editData.stop_loss || !editData.tp1) {
+    if (!selectedSignal) {
+      showAlert('Error', 'No signal selected');
+      return;
+    }
+    
+    if (!editData.entry || !editData.stop_loss || !editData.tp1) {
       showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Use PUT to update the signal with all fields
-      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, {
+      const updatePayload: any = {
         pair: editData.pair,
         signal_type: editData.signal_type,
         entry: parseFloat(editData.entry),
@@ -209,13 +238,21 @@ export default function SignalManagement() {
         tp_hit: editData.tp_hit,
         status: editData.status,
         visibility: editData.visibility,
-      });
+      };
+      
+      // Include final_pips if provided and status is closed
+      if (editData.status === 'closed' && editData.final_pips) {
+        updatePayload.final_pips = parseFloat(editData.final_pips);
+      }
+      
+      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, updatePayload);
       
       setShowEditModal(false);
       setSelectedSignal(null);
-      fetchSignals();
+      await fetchSignals();
       showAlert('Success', 'Signal updated successfully!');
     } catch (error: any) {
+      console.error('Edit error:', error);
       showAlert('Error', error.response?.data?.detail || 'Failed to update signal');
     } finally {
       setIsSubmitting(false);
@@ -226,7 +263,7 @@ export default function SignalManagement() {
   const handleActivateSignal = async (signalId: string) => {
     try {
       await api.post(`/admin/signals/${signalId}/activate`);
-      fetchSignals();
+      await fetchSignals();
       showAlert('Success', 'Signal activated!');
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to activate signal');
@@ -237,7 +274,7 @@ export default function SignalManagement() {
   const handleMarkTP = async (signalId: string, tpLevel: number) => {
     try {
       await api.post(`/admin/signals/${signalId}/mark-tp?tp_level=${tpLevel}`);
-      fetchSignals();
+      await fetchSignals();
       showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to mark TP');
@@ -249,7 +286,7 @@ export default function SignalManagement() {
     setSelectedSignal(signal);
     setClosePrice('');
     setFinalPips('');
-    setCloseTpHit(signal.tp_hit || 0);
+    setCloseTpHit(safeNum(signal.tp_hit, 0));
     setShowCloseModal(true);
   };
 
@@ -266,7 +303,7 @@ export default function SignalManagement() {
       
       setShowCloseModal(false);
       setSelectedSignal(null);
-      fetchSignals();
+      await fetchSignals();
       showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to close signal');
@@ -275,31 +312,40 @@ export default function SignalManagement() {
     }
   };
 
-  // ========== DELETE SIGNAL ==========
+  // ========== DELETE SIGNAL (FIXED - WORKS INDEPENDENTLY) ==========
   const handleDeleteSignal = async (signalId: string) => {
+    if (!signalId) {
+      showAlert('Error', 'Invalid signal ID');
+      return;
+    }
+    
     const confirmed = await confirmAction(
-      'Delete Signal',
-      'Are you sure you want to PERMANENTLY delete this signal? This cannot be undone and will remove it from all views including history.'
+      'DELETE SIGNAL',
+      'Are you sure you want to PERMANENTLY delete this signal?\n\nThis cannot be undone and will remove it from all views including history.'
     );
 
     if (!confirmed) return;
 
     setIsDeleting(signalId);
     try {
-      await api.delete(`/admin/signals/${signalId}`);
-      // Remove from local state immediately
+      const response = await api.delete(`/admin/signals/${signalId}`);
+      console.log('Delete response:', response.data);
+      
+      // Remove from local state immediately for instant feedback
       setSignals(prev => prev.filter(s => s.signal_id !== signalId));
       showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
       console.error('Delete error:', error);
-      showAlert('Error', error.response?.data?.detail || 'Failed to delete signal');
-      // Refresh to get accurate state
-      fetchSignals();
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to delete signal';
+      showAlert('Error', errorMsg);
+      // Refresh to sync state
+      await fetchSignals();
     } finally {
       setIsDeleting(null);
     }
   };
 
+  // ========== HELPERS ==========
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return '#FFD700';
@@ -319,17 +365,7 @@ export default function SignalManagement() {
 
   const getPipsValue = (signal: Signal) => signal.final_pips ?? signal.result_pips ?? null;
 
-  const renderTPBadge = (level: number, price: number | undefined, hit: number) => {
-    if (!price) return null;
-    const isHit = hit >= level;
-    return (
-      <View style={[styles.tpBadge, isHit && styles.tpBadgeHit]}>
-        <Text style={[styles.tpBadgeText, isHit && styles.tpBadgeTextHit]}>
-          TP{level}: {price} {isHit ? '✓' : ''}
-        </Text>
-      </View>
-    );
-  };
+  const getTP1Value = (signal: Signal) => signal.tp1 || signal.take_profit;
 
   if (isLoading) {
     return (
@@ -363,6 +399,7 @@ export default function SignalManagement() {
           <View style={styles.emptyState}>
             <Ionicons name="trending-up-outline" size={64} color="#8A8D98" />
             <Text style={styles.emptyText}>No signals yet</Text>
+            <Text style={styles.emptySubtext}>Tap + to create a signal</Text>
           </View>
         ) : (
           signals.map((signal) => (
@@ -374,12 +411,12 @@ export default function SignalManagement() {
                   <View style={styles.badges}>
                     <View style={[styles.badge, { backgroundColor: `${getStatusColor(signal.status)}20` }]}>
                       <Text style={[styles.badgeText, { color: getStatusColor(signal.status) }]}>
-                        {signal.status.toUpperCase()}
+                        {(signal.status || 'unknown').toUpperCase()}
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: `${getVisibilityColor(signal.visibility)}20` }]}>
                       <Text style={[styles.badgeText, { color: getVisibilityColor(signal.visibility) }]}>
-                        {signal.visibility.toUpperCase()}
+                        {(signal.visibility || 'free').toUpperCase()}
                       </Text>
                     </View>
                   </View>
@@ -394,7 +431,7 @@ export default function SignalManagement() {
                     color={signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757'}
                   />
                   <Text style={[styles.typeText, { color: signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }]}>
-                    {signal.signal_type.toUpperCase()}
+                    {(signal.signal_type || 'buy').toUpperCase()}
                   </Text>
                 </View>
               </View>
@@ -403,27 +440,44 @@ export default function SignalManagement() {
               <View style={styles.signalDetails}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Entry</Text>
-                  <Text style={styles.detailValue}>{signal.entry}</Text>
+                  <Text style={styles.detailValue}>{signal.entry ?? '-'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>SL</Text>
-                  <Text style={[styles.detailValue, { color: '#FF4757' }]}>{signal.stop_loss}</Text>
+                  <Text style={[styles.detailValue, { color: '#FF4757' }]}>{signal.stop_loss ?? '-'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>TP1</Text>
+                  <Text style={[styles.detailValue, { color: '#00D4AA' }]}>{getTP1Value(signal) ?? '-'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>R:R</Text>
-                  <Text style={styles.detailValue}>1:{signal.risk_reward}</Text>
+                  <Text style={styles.detailValue}>{signal.risk_reward ? `1:${signal.risk_reward}` : '-'}</Text>
                 </View>
               </View>
 
               {/* TP Levels */}
-              <View style={styles.tpContainer}>
-                {renderTPBadge(1, signal.tp1, signal.tp_hit || 0)}
-                {renderTPBadge(2, signal.tp2, signal.tp_hit || 0)}
-                {renderTPBadge(3, signal.tp3, signal.tp_hit || 0)}
-              </View>
+              {(signal.tp2 || signal.tp3) && (
+                <View style={styles.tpContainer}>
+                  {signal.tp2 && (
+                    <View style={[styles.tpBadge, safeNum(signal.tp_hit) >= 2 && styles.tpBadgeHit]}>
+                      <Text style={[styles.tpBadgeText, safeNum(signal.tp_hit) >= 2 && styles.tpBadgeTextHit]}>
+                        TP2: {signal.tp2} {safeNum(signal.tp_hit) >= 2 ? '✓' : ''}
+                      </Text>
+                    </View>
+                  )}
+                  {signal.tp3 && (
+                    <View style={[styles.tpBadge, safeNum(signal.tp_hit) >= 3 && styles.tpBadgeHit]}>
+                      <Text style={[styles.tpBadgeText, safeNum(signal.tp_hit) >= 3 && styles.tpBadgeTextHit]}>
+                        TP3: {signal.tp3} {safeNum(signal.tp_hit) >= 3 ? '✓' : ''}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Result for closed signals */}
-              {getPipsValue(signal) !== null && signal.status === 'closed' && (
+              {signal.status === 'closed' && getPipsValue(signal) !== null && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Final Result:</Text>
                   <Text style={[styles.resultValue, { color: (getPipsValue(signal) || 0) >= 0 ? '#00D4AA' : '#FF4757' }]}>
@@ -433,21 +487,21 @@ export default function SignalManagement() {
               )}
 
               {/* Quick TP Actions for Active Signals */}
-              {signal.status === 'active' && (
+              {signal.status === 'active' && (signal.tp1 || signal.tp2 || signal.tp3) && (
                 <View style={styles.tpActions}>
                   <Text style={styles.tpActionsLabel}>Mark TP Hit:</Text>
                   <View style={styles.tpButtonsRow}>
-                    {signal.tp1 && (signal.tp_hit || 0) < 1 && (
+                    {getTP1Value(signal) && safeNum(signal.tp_hit) < 1 && (
                       <TouchableOpacity style={styles.tpButton} onPress={() => handleMarkTP(signal.signal_id, 1)}>
                         <Text style={styles.tpButtonText}>TP1</Text>
                       </TouchableOpacity>
                     )}
-                    {signal.tp2 && (signal.tp_hit || 0) < 2 && (
+                    {signal.tp2 && safeNum(signal.tp_hit) < 2 && (
                       <TouchableOpacity style={styles.tpButton} onPress={() => handleMarkTP(signal.signal_id, 2)}>
                         <Text style={styles.tpButtonText}>TP2</Text>
                       </TouchableOpacity>
                     )}
-                    {signal.tp3 && (signal.tp_hit || 0) < 3 && (
+                    {signal.tp3 && safeNum(signal.tp_hit) < 3 && (
                       <TouchableOpacity style={[styles.tpButton, styles.tp3Button]} onPress={() => handleMarkTP(signal.signal_id, 3)}>
                         <Text style={styles.tpButtonText}>TP3 (Close)</Text>
                       </TouchableOpacity>
@@ -456,8 +510,9 @@ export default function SignalManagement() {
                 </View>
               )}
 
-              {/* Action Buttons */}
+              {/* ACTION BUTTONS - ALL VISIBLE */}
               <View style={styles.actionButtons}>
+                {/* Activate - only for pending */}
                 {signal.status === 'pending' && (
                   <TouchableOpacity style={styles.activateButton} onPress={() => handleActivateSignal(signal.signal_id)}>
                     <Ionicons name="play" size={16} color="#00D4AA" />
@@ -465,11 +520,13 @@ export default function SignalManagement() {
                   </TouchableOpacity>
                 )}
                 
+                {/* EDIT - always available */}
                 <TouchableOpacity style={styles.editButton} onPress={() => openEditModal(signal)}>
                   <Ionicons name="pencil" size={16} color="#00D4AA" />
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
                 
+                {/* Close - only for non-closed */}
                 {signal.status !== 'closed' && (
                   <TouchableOpacity style={styles.closeButton} onPress={() => openCloseModal(signal)}>
                     <Ionicons name="close-circle-outline" size={16} color="#FFD700" />
@@ -477,8 +534,9 @@ export default function SignalManagement() {
                   </TouchableOpacity>
                 )}
                 
+                {/* DELETE - always available, independent */}
                 <TouchableOpacity 
-                  style={[styles.deleteButton, isDeleting === signal.signal_id && styles.deleteButtonDisabled]} 
+                  style={[styles.deleteButton, isDeleting === signal.signal_id && styles.buttonDisabled]} 
                   onPress={() => handleDeleteSignal(signal.signal_id)}
                   disabled={isDeleting === signal.signal_id}
                 >
@@ -495,6 +553,8 @@ export default function SignalManagement() {
             </View>
           ))
         )}
+        
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* ========== CREATE SIGNAL MODAL ========== */}
@@ -509,16 +569,31 @@ export default function SignalManagement() {
             </View>
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {/* SIGNAL STATUS AT CREATION */}
+              <Text style={styles.inputLabel}>Signal Status</Text>
+              <View style={styles.statusRow}>
+                <TouchableOpacity 
+                  style={[styles.statusButton, formData.status === 'pending' && styles.statusButtonActive]} 
+                  onPress={() => setFormData({ ...formData, status: 'pending' })}
+                >
+                  <Ionicons name="time-outline" size={18} color={formData.status === 'pending' ? '#0A0E17' : '#FFD700'} />
+                  <Text style={[styles.statusButtonText, formData.status === 'pending' && { color: '#0A0E17' }]}>PENDING</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.statusButton, styles.activeStatusButton, formData.status === 'active' && styles.activeStatusButtonActive]} 
+                  onPress={() => setFormData({ ...formData, status: 'active' })}
+                >
+                  <Ionicons name="flash-outline" size={18} color={formData.status === 'active' ? '#0A0E17' : '#00D4AA'} />
+                  <Text style={[styles.statusButtonText, { color: formData.status === 'active' ? '#0A0E17' : '#00D4AA' }]}>ACTIVE</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.statusHint}>
+                {formData.status === 'pending' ? 'Signal will wait until entry price is reached' : 'Signal will be active immediately'}
+              </Text>
+
               <Text style={styles.inputLabel}>Trading Pair</Text>
               <View style={styles.optionsRow}>
-                {PAIRS.slice(0, 4).map((pair) => (
-                  <TouchableOpacity key={pair} style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, pair })}>
-                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>{pair}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.optionsRow}>
-                {PAIRS.slice(4).map((pair) => (
+                {PAIRS.map((pair) => (
                   <TouchableOpacity key={pair} style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, pair })}>
                     <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>{pair}</Text>
                   </TouchableOpacity>
@@ -561,7 +636,7 @@ export default function SignalManagement() {
                 ))}
               </View>
 
-              <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleCreateSignal} disabled={isSubmitting}>
+              <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.buttonDisabled]} onPress={handleCreateSignal} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color="#0A0E17" /> : <Text style={styles.submitButtonText}>Create Signal</Text>}
               </TouchableOpacity>
             </ScrollView>
@@ -587,16 +662,18 @@ export default function SignalManagement() {
                     <Text style={styles.editSignalId}>ID: {selectedSignal.signal_id}</Text>
                   </View>
 
-                  <Text style={styles.inputLabel}>Trading Pair</Text>
+                  <Text style={styles.inputLabel}>Status</Text>
                   <View style={styles.optionsRow}>
-                    {PAIRS.slice(0, 4).map((pair) => (
-                      <TouchableOpacity key={pair} style={[styles.optionButton, editData.pair === pair && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, pair })}>
-                        <Text style={[styles.optionText, editData.pair === pair && styles.optionTextActive]}>{pair}</Text>
+                    {STATUSES.map((s) => (
+                      <TouchableOpacity key={s} style={[styles.optionButton, editData.status === s && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, status: s as any })}>
+                        <Text style={[styles.optionText, editData.status === s && styles.optionTextActive]}>{s.toUpperCase()}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  <Text style={styles.inputLabel}>Trading Pair</Text>
                   <View style={styles.optionsRow}>
-                    {PAIRS.slice(4).map((pair) => (
+                    {PAIRS.map((pair) => (
                       <TouchableOpacity key={pair} style={[styles.optionButton, editData.pair === pair && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, pair })}>
                         <Text style={[styles.optionText, editData.pair === pair && styles.optionTextActive]}>{pair}</Text>
                       </TouchableOpacity>
@@ -615,15 +692,6 @@ export default function SignalManagement() {
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.inputLabel}>Status</Text>
-                  <View style={styles.optionsRow}>
-                    {STATUSES.map((s) => (
-                      <TouchableOpacity key={s} style={[styles.optionButton, editData.status === s && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, status: s as any })}>
-                        <Text style={[styles.optionText, editData.status === s && styles.optionTextActive]}>{s.toUpperCase()}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
                   <Text style={styles.inputLabel}>Entry Price *</Text>
                   <TextInput style={styles.input} placeholder="Entry" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.entry} onChangeText={(text) => setEditData({ ...editData, entry: text })} />
 
@@ -639,14 +707,21 @@ export default function SignalManagement() {
                   <Text style={styles.inputLabel}>Take Profit 3 (TP3)</Text>
                   <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.tp3} onChangeText={(text) => setEditData({ ...editData, tp3: text })} />
 
-                  <Text style={styles.inputLabel}>TP Hit Level (0-3)</Text>
+                  <Text style={styles.inputLabel}>TP Hit Level</Text>
                   <View style={styles.optionsRow}>
                     {[0, 1, 2, 3].map((level) => (
                       <TouchableOpacity key={level} style={[styles.optionButton, editData.tp_hit === level && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, tp_hit: level })}>
-                        <Text style={[styles.optionText, editData.tp_hit === level && styles.optionTextActive]}>{level}</Text>
+                        <Text style={[styles.optionText, editData.tp_hit === level && styles.optionTextActive]}>{level === 0 ? 'None' : `TP${level}`}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {editData.status === 'closed' && (
+                    <>
+                      <Text style={styles.inputLabel}>Final Pips (for closed signals)</Text>
+                      <TextInput style={styles.input} placeholder="e.g. 50 or -30" placeholderTextColor="#8A8D98" keyboardType="numeric" value={editData.final_pips} onChangeText={(text) => setEditData({ ...editData, final_pips: text })} />
+                    </>
+                  )}
 
                   <Text style={styles.inputLabel}>Visibility</Text>
                   <View style={styles.optionsRow}>
@@ -657,7 +732,7 @@ export default function SignalManagement() {
                     ))}
                   </View>
 
-                  <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleEditSignal} disabled={isSubmitting}>
+                  <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.buttonDisabled]} onPress={handleEditSignal} disabled={isSubmitting}>
                     {isSubmitting ? <ActivityIndicator color="#0A0E17" /> : <Text style={styles.submitButtonText}>Save Changes</Text>}
                   </TouchableOpacity>
                 </>
@@ -683,7 +758,7 @@ export default function SignalManagement() {
                 <>
                   <View style={styles.closeSignalInfo}>
                     <Text style={styles.closeSignalPair}>{selectedSignal.pair}</Text>
-                    <Text style={styles.closeSignalType}>{selectedSignal.signal_type.toUpperCase()} @ {selectedSignal.entry}</Text>
+                    <Text style={styles.closeSignalType}>{selectedSignal.signal_type?.toUpperCase()} @ {selectedSignal.entry}</Text>
                   </View>
 
                   <Text style={styles.inputLabel}>Final TP Hit Level</Text>
@@ -703,7 +778,7 @@ export default function SignalManagement() {
                   <Text style={styles.inputLabel}>Enter Final Pips Directly</Text>
                   <TextInput style={styles.input} placeholder="e.g. 50 or -30" placeholderTextColor="#8A8D98" keyboardType="numeric" value={finalPips} onChangeText={setFinalPips} />
 
-                  <TouchableOpacity style={[styles.submitButton, styles.closeSubmitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleCloseSignal} disabled={isSubmitting}>
+                  <TouchableOpacity style={[styles.submitButton, styles.closeSubmitButton, isSubmitting && styles.buttonDisabled]} onPress={handleCloseSignal} disabled={isSubmitting}>
                     {isSubmitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.closeSubmitButtonText}>Close Signal</Text>}
                   </TouchableOpacity>
                 </>
@@ -726,6 +801,7 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1, padding: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: '#8A8D98', marginTop: 8 },
   signalCard: { backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#2A2F3E' },
   signalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   signalPair: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' },
@@ -755,13 +831,13 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   activateButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 212, 170, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
   activateButtonText: { fontSize: 12, fontWeight: '600', color: '#00D4AA' },
-  editButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 212, 170, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
+  editButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 212, 170, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: 'rgba(0, 212, 170, 0.3)' },
   editButtonText: { fontSize: 12, fontWeight: '600', color: '#00D4AA' },
   closeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 215, 0, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
   closeButtonText: { fontSize: 12, fontWeight: '600', color: '#FFD700' },
-  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 71, 87, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
-  deleteButtonDisabled: { opacity: 0.5 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 71, 87, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: 'rgba(255, 71, 87, 0.3)' },
   deleteButtonText: { fontSize: 12, fontWeight: '600', color: '#FF4757' },
+  buttonDisabled: { opacity: 0.5 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#1A1F2E', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#2A2F3E' },
@@ -774,13 +850,19 @@ const styles = StyleSheet.create({
   optionButtonActive: { backgroundColor: '#00D4AA', borderColor: '#00D4AA' },
   optionText: { fontSize: 12, fontWeight: '600', color: '#8A8D98' },
   optionTextActive: { color: '#0A0E17' },
+  statusRow: { flexDirection: 'row', gap: 12 },
+  statusButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, backgroundColor: '#0A0E17', borderWidth: 1, borderColor: '#FFD700', gap: 8 },
+  statusButtonActive: { backgroundColor: '#FFD700' },
+  activeStatusButton: { borderColor: '#00D4AA' },
+  activeStatusButtonActive: { backgroundColor: '#00D4AA' },
+  statusButtonText: { fontSize: 14, fontWeight: 'bold', color: '#FFD700' },
+  statusHint: { fontSize: 12, color: '#8A8D98', marginTop: 8, fontStyle: 'italic' },
   typeRow: { flexDirection: 'row', gap: 12 },
   typeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, backgroundColor: '#0A0E17', borderWidth: 1, borderColor: '#2A2F3E', gap: 8 },
   buyButtonActive: { backgroundColor: '#00D4AA', borderColor: '#00D4AA' },
   sellButtonActive: { backgroundColor: '#FF4757', borderColor: '#FF4757' },
   typeButtonText: { fontSize: 14, fontWeight: 'bold', color: '#00D4AA' },
   submitButton: { backgroundColor: '#00D4AA', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 20, marginBottom: 40 },
-  submitButtonDisabled: { opacity: 0.5 },
   submitButtonText: { fontSize: 16, fontWeight: 'bold', color: '#0A0E17' },
   closeSubmitButton: { backgroundColor: '#FF4757' },
   closeSubmitButtonText: { fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' },
