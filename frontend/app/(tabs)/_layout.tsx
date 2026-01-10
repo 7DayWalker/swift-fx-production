@@ -2,49 +2,45 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 // Export tab bar height constant so screens can use it for padding
-export const TAB_BAR_HEIGHT = 60;
+export const TAB_BAR_HEIGHT = 56;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#1A1F2E',
-          borderTopWidth: 1,
-          borderTopColor: '#2A2F3E',
-          // Let the tab bar size itself based on content + safe area
-          minHeight: TAB_BAR_HEIGHT,
-          paddingTop: 8,
-          paddingBottom: Math.max(insets.bottom, 8),
-          // Shadow for elevation effect
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-        },
-        tabBarActiveTintColor: '#00D4AA',
-        tabBarInactiveTintColor: '#8A8D98',
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          paddingBottom: 4,
-        },
-        tabBarIconStyle: {
-          marginTop: 4,
-        },
-        // Ensure content doesn't overlap with tab bar
-        tabBarHideOnKeyboard: true,
-      }}
-      // Use safeAreaInsets for proper bottom spacing
-      safeAreaInsets={{ bottom: 0 }} // We handle bottom padding ourselves
-    >
+    <View style={{ flex: 1, backgroundColor: '#0A0E17' }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            backgroundColor: '#1A1F2E',
+            borderTopWidth: 1,
+            borderTopColor: '#2A2F3E',
+            height: TAB_BAR_HEIGHT + insets.bottom,
+            paddingTop: 6,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            // Shadow for elevation effect
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+          },
+          tabBarActiveTintColor: '#00D4AA',
+          tabBarInactiveTintColor: '#8A8D98',
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '600',
+          },
+          tabBarIconStyle: {
+            marginBottom: -2,
+          },
+          tabBarHideOnKeyboard: true,
+        }}
+      >
       <Tabs.Screen
         name="dashboard"
         options={{
