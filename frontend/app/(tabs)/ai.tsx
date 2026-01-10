@@ -258,6 +258,7 @@ export default function AIScreen() {
   const startNewAnalysis = () => {
     setScreenState('upload');
     setSelectedImage(null);
+    setImageBase64(null);
     setAnalysisResult(null);
     setErrorMessage(null);
     setSelectedPair(PAIRS[0]);
