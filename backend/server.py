@@ -43,6 +43,7 @@ class UserRole(str, Enum):
     FREE = "free"
     PREMIUM = "premium"
     VIP = "vip"
+    ADMIN = "admin"
 
 class BillingCycle(str, Enum):
     WEEKLY = "weekly"
