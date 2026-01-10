@@ -12,12 +12,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 interface Post {
   post_id: string;
@@ -25,6 +30,7 @@ interface Post {
   user_name: string;
   content: string;
   post_type: string;
+  image?: string | null;
   likes: string[];
   created_at: string;
 }
@@ -46,14 +52,20 @@ export default function CommunityScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostType, setNewPostType] = useState('analysis');
+  const [newPostImage, setNewPostImage] = useState<string | null>(null);
+  const [newPostImageBase64, setNewPostImageBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   const [loadingComments, setLoadingComments] = useState(false);
+  
+  // Check if user can upload images (premium or vip)
+  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
   useEffect(() => {
     fetchPosts();
