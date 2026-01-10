@@ -355,44 +355,49 @@ export default function AIScreen() {
   // No access screen for free users
   if (!isLoadingUsage && !usage?.has_access) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.noAccessContainer}>
-          <View style={styles.lockIconContainer}>
-            <Ionicons name="lock-closed" size={64} color="#FFD700" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.noAccessContainer}>
+            <View style={styles.lockIconContainer}>
+              <Ionicons name="lock-closed" size={64} color="#FFD700" />
+            </View>
+            <Text style={styles.noAccessTitle}>AI Chart Analyzer</Text>
+            <Text style={styles.noAccessSubtitle}>
+              This feature requires Premium or VIP subscription
+            </Text>
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+                <Text style={styles.featureText}>AI-powered chart analysis</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+                <Text style={styles.featureText}>Market bias detection</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+                <Text style={styles.featureText}>Support & resistance levels</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+                <Text style={styles.featureText}>Trade insights</Text>
+              </View>
+            </View>
+            <View style={styles.planComparison}>
+              <View style={styles.planCard}>
+                <Text style={styles.planName}>Premium</Text>
+                <Text style={styles.planLimit}>5 analyses/week</Text>
+              </View>
+              <View style={[styles.planCard, styles.vipPlanCard]}>
+                <Text style={[styles.planName, { color: '#FFD700' }]}>VIP</Text>
+                <Text style={styles.planLimit}>20 analyses/week</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.noAccessTitle}>AI Chart Analyzer</Text>
-          <Text style={styles.noAccessSubtitle}>
-            This feature requires Premium or VIP subscription
-          </Text>
-          <View style={styles.featureList}>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-              <Text style={styles.featureText}>AI-powered chart analysis</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-              <Text style={styles.featureText}>Market bias detection</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-              <Text style={styles.featureText}>Support & resistance levels</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-              <Text style={styles.featureText}>Trade insights</Text>
-            </View>
-          </View>
-          <View style={styles.planComparison}>
-            <View style={styles.planCard}>
-              <Text style={styles.planName}>Premium</Text>
-              <Text style={styles.planLimit}>5 analyses/week</Text>
-            </View>
-            <View style={[styles.planCard, styles.vipPlanCard]}>
-              <Text style={[styles.planName, { color: '#FFD700' }]}>VIP</Text>
-              <Text style={styles.planLimit}>20 analyses/week</Text>
-            </View>
-          </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
