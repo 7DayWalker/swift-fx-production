@@ -4,11 +4,17 @@ import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Export tab bar height constant so screens can use it for padding
-export const TAB_BAR_HEIGHT = 56;
+// Base tab bar height (without safe area)
+const BASE_TAB_BAR_HEIGHT = 50;
+
+// Export for screens that need to know total tab bar height
+export const TAB_BAR_HEIGHT = BASE_TAB_BAR_HEIGHT;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  
+  // Total height = base height + bottom safe area inset
+  const totalTabBarHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
 
   return (
     <View style={layoutStyles.container}>
@@ -19,9 +25,12 @@ export default function TabsLayout() {
             backgroundColor: '#1A1F2E',
             borderTopWidth: 1,
             borderTopColor: '#2A2F3E',
-            height: TAB_BAR_HEIGHT + insets.bottom,
-            paddingTop: 6,
-            paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            // Total height includes safe area
+            height: totalTabBarHeight,
+            // Padding at bottom pushes content above the home indicator
+            paddingBottom: insets.bottom,
+            paddingTop: 4,
+            // Shadow
             elevation: 8,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
@@ -33,9 +42,15 @@ export default function TabsLayout() {
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
+            marginTop: -2,
           },
           tabBarIconStyle: {
-            marginBottom: -2,
+            marginTop: 2,
+          },
+          tabBarItemStyle: {
+            // Ensure items are positioned in the safe area
+            paddingTop: 2,
+            paddingBottom: 2,
           },
           tabBarHideOnKeyboard: true,
         }}
