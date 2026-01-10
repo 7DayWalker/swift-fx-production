@@ -501,7 +501,7 @@ export default function AIScreen() {
     });
     
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.resultHeader}>
           <TouchableOpacity style={styles.resultBackButton} onPress={resetToUpload}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -512,7 +512,11 @@ export default function AIScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.resultScrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.resultScrollView} 
+          contentContainerStyle={{ paddingBottom: bottomPadding }}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Chart Info */}
           <View style={styles.chartInfoCard}>
             <View style={styles.chartInfoRow}>
