@@ -4,8 +4,13 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const TAB_BAR_HEIGHT = 60;
+
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  
+  // Calculate total tab bar height including safe area
+  const tabBarHeight = TAB_BAR_HEIGHT + insets.bottom;
 
   return (
     <Tabs
@@ -15,15 +20,29 @@ export default function TabsLayout() {
           backgroundColor: '#1A1F2E',
           borderTopWidth: 1,
           borderTopColor: '#2A2F3E',
-          height: 60 + (Platform.OS === 'ios' ? insets.bottom : 0),
-          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
           paddingTop: 8,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
         },
         tabBarActiveTintColor: '#00D4AA',
         tabBarInactiveTintColor: '#8A8D98',
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 4,
+        },
+        // Add padding to screen content to avoid tab bar overlap
+        sceneStyle: {
+          paddingBottom: tabBarHeight,
         },
       }}
     >
