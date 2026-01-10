@@ -478,6 +478,14 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
         signal_data.signal_type
     )
     
+    # Determine status from request (default: pending)
+    initial_status = signal_data.status if signal_data.status else SignalStatus.PENDING
+    activated_at = None
+    
+    # If created as active, set activated_at
+    if initial_status == SignalStatus.ACTIVE:
+        activated_at = datetime.now(timezone.utc)
+    
     signal_doc = {
         "signal_id": signal_id,
         "pair": signal_data.pair,
@@ -489,12 +497,12 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
         "tp3": signal_data.tp3,
         "tp_hit": 0,
         "risk_reward": risk_reward,
-        "status": SignalStatus.PENDING,
+        "status": initial_status,
         "visibility": signal_data.visibility,
         "analysis": signal_data.analysis,
         "final_pips": None,
         "created_at": datetime.now(timezone.utc),
-        "activated_at": None,
+        "activated_at": activated_at,
         "closed_at": None
     }
     
@@ -503,7 +511,7 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     # Queue push notification with visibility for role-based filtering
     background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
     
-    return {"signal_id": signal_id, "message": "Signal created successfully"}
+    return {"signal_id": signal_id, "message": f"Signal created as {initial_status.value}"}
 
 def calculate_pips(entry: float, close: float, signal_type: str, pair: str) -> float:
     """Calculate pips based on price movement and pair type"""
