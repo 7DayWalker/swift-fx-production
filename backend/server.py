@@ -92,7 +92,9 @@ class SignalCreate(BaseModel):
     signal_type: SignalType
     entry: float
     stop_loss: float
-    take_profit: float
+    tp1: float
+    tp2: Optional[float] = None
+    tp3: Optional[float] = None
     visibility: SignalVisibility = SignalVisibility.FREE
     analysis: Optional[str] = None
 
@@ -102,14 +104,25 @@ class Signal(BaseModel):
     signal_type: SignalType
     entry: float
     stop_loss: float
-    take_profit: float
+    tp1: float
+    tp2: Optional[float] = None
+    tp3: Optional[float] = None
+    tp_hit: int = 0  # 0 = none, 1 = tp1, 2 = tp2, 3 = tp3
     risk_reward: float
     status: SignalStatus = SignalStatus.PENDING
     visibility: SignalVisibility
     analysis: Optional[str] = None
-    result_pips: Optional[float] = None
+    final_pips: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    activated_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+
+class SignalUpdate(BaseModel):
+    """Admin signal update - for manual overrides"""
+    status: Optional[SignalStatus] = None
+    tp_hit: Optional[int] = None
+    final_pips: Optional[float] = None
+    close_price: Optional[float] = None  # For calculating final_pips on manual close
 
 class PostCreate(BaseModel):
     content: str
