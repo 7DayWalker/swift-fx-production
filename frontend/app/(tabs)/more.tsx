@@ -126,7 +126,7 @@ export default function MoreScreen() {
     {
       section: 'Trading',
       items: [
-        { icon: 'school-outline', label: 'Academy', badge: 'VIP', locked: user?.role !== 'vip' },
+        { icon: 'school-outline', label: 'Academy', badge: null, locked: false, action: () => router.push('/academy') },
         { icon: 'briefcase-outline', label: 'Fund Management', badge: 'VIP', locked: user?.role !== 'vip' },
         { icon: 'business-outline', label: 'Recommended Brokers', badge: null, locked: false },
         { icon: 'calendar-outline', label: 'Economic Calendar', badge: null, locked: false },
