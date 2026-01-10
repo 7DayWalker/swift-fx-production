@@ -405,31 +405,36 @@ export default function AIScreen() {
   // Analyzing screen - show loading state
   if (screenState === 'analyzing') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.analyzingContainer}>
-          <View style={styles.analyzingIconContainer}>
-            <ActivityIndicator size="large" color="#00D4AA" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.analyzingContainer}>
+            <View style={styles.analyzingIconContainer}>
+              <ActivityIndicator size="large" color="#00D4AA" />
+            </View>
+            <Text style={styles.analyzingTitle}>Analyzing Chart</Text>
+            <Text style={styles.analyzingSubtitle}>
+              Our AI is analyzing your {selectedPair} chart on {selectedTimeframe} timeframe
+            </Text>
+            <View style={styles.analyzingSteps}>
+              <View style={styles.analyzingStep}>
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+                <Text style={styles.analyzingStepText}>Processing image</Text>
+              </View>
+              <View style={styles.analyzingStep}>
+                <ActivityIndicator size="small" color="#00D4AA" />
+                <Text style={styles.analyzingStepText}>Detecting patterns</Text>
+              </View>
+              <View style={styles.analyzingStep}>
+                <Ionicons name="ellipse-outline" size={20} color="#8A8D98" />
+                <Text style={[styles.analyzingStepText, { color: '#8A8D98' }]}>Generating insights</Text>
+              </View>
+            </View>
+            <Text style={styles.analyzingNote}>This may take up to 30 seconds...</Text>
           </View>
-          <Text style={styles.analyzingTitle}>Analyzing Chart</Text>
-          <Text style={styles.analyzingSubtitle}>
-            Our AI is analyzing your {selectedPair} chart on {selectedTimeframe} timeframe
-          </Text>
-          <View style={styles.analyzingSteps}>
-            <View style={styles.analyzingStep}>
-              <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-              <Text style={styles.analyzingStepText}>Processing image</Text>
-            </View>
-            <View style={styles.analyzingStep}>
-              <ActivityIndicator size="small" color="#00D4AA" />
-              <Text style={styles.analyzingStepText}>Detecting patterns</Text>
-            </View>
-            <View style={styles.analyzingStep}>
-              <Ionicons name="ellipse-outline" size={20} color="#8A8D98" />
-              <Text style={[styles.analyzingStepText, { color: '#8A8D98' }]}>Generating insights</Text>
-            </View>
-          </View>
-          <Text style={styles.analyzingNote}>This may take up to 30 seconds...</Text>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -437,23 +442,28 @@ export default function AIScreen() {
   // Error screen
   if (screenState === 'error') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <View style={styles.errorIconContainer}>
-            <Ionicons name="alert-circle" size={64} color="#FF4757" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.errorContainer}>
+            <View style={styles.errorIconContainer}>
+              <Ionicons name="alert-circle" size={64} color="#FF4757" />
+            </View>
+            <Text style={styles.errorTitle}>Analysis Failed</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <View style={styles.errorButtons}>
+              <TouchableOpacity style={styles.retryButton} onPress={analyzeChart}>
+                <Ionicons name="refresh" size={20} color="#0A0E17" />
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.backButton} onPress={resetToUpload}>
+                <Text style={styles.backButtonText}>Change Image</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <Text style={styles.errorTitle}>Analysis Failed</Text>
-          <Text style={styles.errorMessage}>{errorMessage}</Text>
-          <View style={styles.errorButtons}>
-            <TouchableOpacity style={styles.retryButton} onPress={analyzeChart}>
-              <Ionicons name="refresh" size={20} color="#0A0E17" />
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.backButton} onPress={resetToUpload}>
-              <Text style={styles.backButtonText}>Change Image</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
