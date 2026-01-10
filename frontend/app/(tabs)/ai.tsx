@@ -143,15 +143,59 @@ export default function AIScreen() {
         timeout: 120000, // 2 minute timeout for AI processing
       });
 
+      // Validate response data before setting
+      const data = response.data;
+      console.log('AI Analysis response:', JSON.stringify(data, null, 2));
+      
+      // Check if it's an error response masquerading as success
+      if (data && data.detail) {
+        // This is actually an error
+        const errorMsg = typeof data.detail === 'string' 
+          ? data.detail 
+          : Array.isArray(data.detail)
+            ? data.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ')
+            : JSON.stringify(data.detail);
+        setErrorMessage(errorMsg);
+        setScreenState('error');
+        return;
+      }
+      
       // Store the result and navigate to results screen
-      setAnalysisResult(response.data);
+      setAnalysisResult(data);
       setScreenState('result');
       
       // Refresh usage after analysis
       fetchUsage();
     } catch (error: any) {
       console.error('AI Analysis error:', error);
-      const errorMsg = error.response?.data?.detail || 'Failed to analyze chart. Please try again.';
+      
+      // Extract error message safely
+      let errorMsg = 'Failed to analyze chart. Please try again.';
+      
+      if (error.response?.data) {
+        const errData = error.response.data;
+        if (typeof errData === 'string') {
+          errorMsg = errData;
+        } else if (errData.detail) {
+          if (typeof errData.detail === 'string') {
+            errorMsg = errData.detail;
+          } else if (Array.isArray(errData.detail)) {
+            // Pydantic validation errors
+            errorMsg = errData.detail.map((d: any) => {
+              if (typeof d === 'string') return d;
+              if (d.msg) return d.msg;
+              return JSON.stringify(d);
+            }).join('; ');
+          } else {
+            errorMsg = JSON.stringify(errData.detail);
+          }
+        } else if (errData.message) {
+          errorMsg = errData.message;
+        }
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
       setErrorMessage(errorMsg);
       setScreenState('error');
     }
