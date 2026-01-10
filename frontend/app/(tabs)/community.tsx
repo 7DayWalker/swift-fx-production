@@ -521,6 +521,30 @@ export default function CommunityScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Full Screen Image Viewer */}
+      <Modal
+        visible={!!viewingImage}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setViewingImage(null)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity 
+            style={styles.imageViewerClose} 
+            onPress={() => setViewingImage(null)}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+          {viewingImage && (
+            <Image
+              source={{ uri: viewingImage }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
