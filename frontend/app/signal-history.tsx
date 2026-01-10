@@ -140,7 +140,7 @@ export default function SignalHistoryScreen() {
                 styles.resultText,
                 { color: isProfitable ? '#00D4AA' : isLoss ? '#FF4757' : '#8A8D98' }
               ]}>
-                {isProfitable ? '+' : ''}{item.result_pips?.toFixed(1) || '0'} pips
+                {isProfitable ? '+' : ''}{pips.toFixed(1)} pips
               </Text>
             </View>
           </View>
@@ -156,8 +156,8 @@ export default function SignalHistoryScreen() {
             <Text style={[styles.detailValue, { color: '#FF4757' }]}>{item.stop_loss}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>TP</Text>
-            <Text style={[styles.detailValue, { color: '#00D4AA' }]}>{item.take_profit}</Text>
+            <Text style={styles.detailLabel}>TP1</Text>
+            <Text style={[styles.detailValue, { color: '#00D4AA' }]}>{item.tp1 || item.take_profit}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>R:R</Text>
