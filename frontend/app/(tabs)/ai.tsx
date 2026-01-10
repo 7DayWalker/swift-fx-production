@@ -122,17 +122,31 @@ export default function AIScreen() {
 
     try {
       const formData = new FormData();
-      
       const imageUri = selectedImage;
-      const filename = imageUri.split('/').pop() || 'chart.jpg';
-      const match = /\.([\w]+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-      formData.append('image', {
-        uri: imageUri,
-        name: filename,
-        type: type,
-      } as any);
+      
+      // Handle file upload differently for web vs native
+      if (Platform.OS === 'web') {
+        // On web, fetch the image URI as a blob
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        const filename = imageUri.split('/').pop()?.split('?')[0] || 'chart.jpg';
+        const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+        formData.append('image', file);
+        console.log('Web upload - File size:', file.size, 'Type:', file.type);
+      } else {
+        // On native (iOS/Android), use the uri-based approach
+        const filename = imageUri.split('/').pop() || 'chart.jpg';
+        const match = /\.([\w]+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
+        formData.append('image', {
+          uri: imageUri,
+          name: filename,
+          type: type,
+        } as any);
+        console.log('Native upload - URI:', imageUri, 'Type:', type);
+      }
+      
       formData.append('pair', selectedPair);
       formData.append('timeframe', selectedTimeframe);
 
