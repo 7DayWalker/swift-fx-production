@@ -132,17 +132,42 @@ export default function AIScreen() {
       const formData = new FormData();
       const imageUri = selectedImage;
       
-      // Handle file upload differently for web vs native
-      if (Platform.OS === 'web') {
-        // On web, fetch the image URI as a blob
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        const filename = imageUri.split('/').pop()?.split('?')[0] || 'chart.jpg';
-        const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
-        formData.append('image', file);
-        console.log('Web upload - File size:', file.size, 'Type:', file.type);
+      // Convert base64 to blob for proper file upload
+      if (imageBase64) {
+        // We have base64 data from the image picker
+        const byteCharacters = atob(imageBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        
+        if (Platform.OS === 'web') {
+          // On web, create a File from the blob
+          const file = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
+          formData.append('image', file);
+          console.log('Web upload from base64 - File size:', file.size);
+        } else {
+          // On native, also use blob approach
+          formData.append('image', blob, 'chart.jpg');
+          console.log('Native upload from base64 - Blob size:', blob.size);
+        }
+      } else if (Platform.OS === 'web') {
+        // Fallback: On web without base64, fetch the URI as blob
+        try {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          const filename = imageUri.split('/').pop()?.split('?')[0] || 'chart.jpg';
+          const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+          formData.append('image', file);
+          console.log('Web upload from URI - File size:', file.size, 'Type:', file.type);
+        } catch (fetchError) {
+          console.error('Failed to fetch image blob:', fetchError);
+          throw new Error('Failed to process image. Please try selecting the image again.');
+        }
       } else {
-        // On native (iOS/Android), use the uri-based approach
+        // Native fallback (shouldn't happen if base64 is enabled)
         const filename = imageUri.split('/').pop() || 'chart.jpg';
         const match = /\.([\w]+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
@@ -152,7 +177,7 @@ export default function AIScreen() {
           name: filename,
           type: type,
         } as any);
-        console.log('Native upload - URI:', imageUri, 'Type:', type);
+        console.log('Native upload from URI - URI:', imageUri);
       }
       
       formData.append('pair', selectedPair);
