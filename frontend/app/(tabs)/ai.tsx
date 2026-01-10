@@ -632,8 +632,12 @@ export default function AIScreen() {
 
   // Upload screen (default)
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>AI Chart Analyzer</Text>
           <Text style={styles.subtitle}>Upload a chart for instant analysis</Text>
