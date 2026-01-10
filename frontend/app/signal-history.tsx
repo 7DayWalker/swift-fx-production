@@ -102,9 +102,12 @@ export default function SignalHistoryScreen() {
     </View>
   );
 
+  const getPipsValue = (signal: Signal) => signal.final_pips ?? signal.result_pips ?? 0;
+
   const renderSignal = ({ item }: { item: Signal }) => {
-    const isProfitable = (item.result_pips || 0) > 0;
-    const isLoss = (item.result_pips || 0) < 0;
+    const pips = getPipsValue(item);
+    const isProfitable = pips > 0;
+    const isLoss = pips < 0;
     
     return (
       <View style={styles.signalCard}>
