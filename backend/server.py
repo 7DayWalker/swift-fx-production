@@ -687,7 +687,7 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
                     "trade_insight": "Please try again with a clearer chart image",
                     "confidence": "Low"
                 }
-        except:
+        except Exception:
             analysis_data = {
                 "market_bias": "Analysis complete",
                 "trend_structure": response[:500],
