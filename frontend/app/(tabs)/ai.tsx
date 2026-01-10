@@ -10,11 +10,12 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
+import { TAB_BAR_HEIGHT } from './_layout';
 
 interface AIUsage {
   current_usage: number;
@@ -45,9 +46,13 @@ type ScreenState = 'upload' | 'analyzing' | 'result' | 'error';
 
 export default function AIScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [usage, setUsage] = useState<AIUsage | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
+  
+  // Calculate bottom padding for content to avoid tab bar overlap
+  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
   const [selectedPair, setSelectedPair] = useState(PAIRS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('H1');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
