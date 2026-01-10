@@ -185,9 +185,9 @@ export default function SignalsScreen() {
                 <Text style={styles.resultLabel}>Result:</Text>
                 <Text style={[
                   styles.resultValue,
-                  { color: item.result_pips >= 0 ? '#00D4AA' : '#FF4757' }
+                  { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? '#00D4AA' : '#FF4757' }
                 ]}>
-                  {item.result_pips >= 0 ? '+' : ''}{item.result_pips} pips
+                  {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}{item.final_pips ?? item.result_pips} pips
                 </Text>
               </View>
             )}
