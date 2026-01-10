@@ -47,6 +47,7 @@ export default function AIScreen() {
   const { user } = useAuth();
   const [usage, setUsage] = useState<AIUsage | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState(PAIRS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('H1');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
