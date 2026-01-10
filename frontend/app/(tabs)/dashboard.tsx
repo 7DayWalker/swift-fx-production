@@ -35,7 +35,8 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
+  // TAB_BAR_HEIGHT (56) + safe area bottom + extra padding
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
 
   useEffect(() => {
     fetchDashboard();
