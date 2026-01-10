@@ -402,6 +402,10 @@ export default function AIScreen() {
 
   // Results screen
   if (screenState === 'result' && analysisResult) {
+    // Debug: Log the entire analysis result
+    console.log('Rendering analysis result:', JSON.stringify(analysisResult, null, 2));
+    
+    // Safely extract all values with defensive checks
     const marketBias = safeString(analysisResult.market_bias) || 'Unknown';
     const confidence = safeString(analysisResult.confidence) || 'Medium';
     const trendStructure = safeString(analysisResult.trend_structure) || 'Analysis not available';
@@ -411,6 +415,22 @@ export default function AIScreen() {
     const resistanceLevels = safeLevels(analysisResult.resistance_levels);
     const pair = safeString(analysisResult.pair) || selectedPair;
     const timeframe = safeString(analysisResult.timeframe) || selectedTimeframe;
+    const remainingAnalyses = analysisResult.remaining_analyses !== undefined 
+      ? String(analysisResult.remaining_analyses) 
+      : null;
+    
+    // Debug: Log extracted values
+    console.log('Extracted values:', {
+      marketBias,
+      confidence,
+      trendStructure: trendStructure.substring(0, 50) + '...',
+      tradeInsight: tradeInsight.substring(0, 50) + '...',
+      supportLevels,
+      resistanceLevels,
+      pair,
+      timeframe,
+      remainingAnalyses
+    });
     
     return (
       <SafeAreaView style={styles.container}>
@@ -511,11 +531,11 @@ export default function AIScreen() {
           </View>
 
           {/* Remaining Analyses */}
-          {analysisResult.remaining_analyses !== undefined && (
+          {remainingAnalyses !== null && (
             <View style={styles.remainingCard}>
               <Ionicons name="sparkles" size={20} color="#00D4AA" />
               <Text style={styles.remainingText}>
-                {safeString(analysisResult.remaining_analyses)} analyses remaining this week
+                {remainingAnalyses} analyses remaining this week
               </Text>
             </View>
           )}
