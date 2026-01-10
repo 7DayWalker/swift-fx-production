@@ -361,7 +361,11 @@ export default function CommunityScreen() {
         visible={showCreateModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowCreateModal(false)}
+        onRequestClose={() => {
+          setShowCreateModal(false);
+          setNewPostImage(null);
+          setNewPostImageBase64(null);
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -370,7 +374,11 @@ export default function CommunityScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Post</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowCreateModal(false);
+                setNewPostImage(null);
+                setNewPostImageBase64(null);
+              }}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -398,10 +406,45 @@ export default function CommunityScreen() {
               placeholder="Share your analysis, results, or question..."
               placeholderTextColor="#8A8D98"
               multiline
-              numberOfLines={6}
+              numberOfLines={4}
               value={newPostContent}
               onChangeText={setNewPostContent}
             />
+
+            {/* Image Picker Section */}
+            <View style={styles.imagePickerSection}>
+              {newPostImage ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: newPostImage }} style={styles.imagePreview} />
+                  <TouchableOpacity style={styles.removeImageButton} onPress={removePostImage}>
+                    <Ionicons name="close-circle" size={24} color="#FF4757" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={[
+                    styles.addImageButton,
+                    !canUploadImages && styles.addImageButtonDisabled
+                  ]} 
+                  onPress={pickPostImage}
+                >
+                  <Ionicons 
+                    name="image-outline" 
+                    size={24} 
+                    color={canUploadImages ? '#00D4AA' : '#8A8D98'} 
+                  />
+                  <Text style={[
+                    styles.addImageText,
+                    !canUploadImages && styles.addImageTextDisabled
+                  ]}>
+                    {canUploadImages ? 'Add Chart/Screenshot' : 'Upgrade to add images'}
+                  </Text>
+                  {!canUploadImages && (
+                    <Ionicons name="lock-closed" size={14} color="#8A8D98" style={{ marginLeft: 4 }} />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
 
             <TouchableOpacity
               style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
