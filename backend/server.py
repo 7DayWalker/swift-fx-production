@@ -676,6 +676,10 @@ async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
     return {"message": "Signal deleted successfully"}
 
 # ===================== SIGNAL HISTORY & ANALYTICS =====================
+def get_pips_value(signal: dict) -> float:
+    """Get pips value from signal - supports both old and new schema"""
+    return signal.get("final_pips") or signal.get("result_pips", 0) or 0
+
 @api_router.get("/signals/history/stats")
 async def get_signal_history_stats(current_user: Optional[User] = Depends(get_current_user)):
     """Get signal history with performance statistics based on user's access level"""
@@ -691,18 +695,18 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
         if can_access_signal(user_role, signal_visibility):
             accessible_signals.append(signal)
     
-    # Calculate basic stats (available to all users)
+    # Calculate basic stats (available to all users) - use final_pips or result_pips
     total_signals = len(accessible_signals)
-    winning_signals = len([s for s in accessible_signals if s.get("result_pips", 0) > 0])
-    losing_signals = len([s for s in accessible_signals if s.get("result_pips", 0) < 0])
+    winning_signals = len([s for s in accessible_signals if get_pips_value(s) > 0])
+    losing_signals = len([s for s in accessible_signals if get_pips_value(s) < 0])
     breakeven_signals = total_signals - winning_signals - losing_signals
     
     win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
-    total_pips = sum([s.get("result_pips", 0) for s in accessible_signals])
+    total_pips = sum([get_pips_value(s) for s in accessible_signals])
     avg_pips = round(total_pips / total_signals, 1) if total_signals > 0 else 0
     
     # Calculate best/worst trades
-    pips_list = [s.get("result_pips", 0) for s in accessible_signals if s.get("result_pips") is not None]
+    pips_list = [get_pips_value(s) for s in accessible_signals if get_pips_value(s) != 0]
     best_trade = max(pips_list) if pips_list else 0
     worst_trade = min(pips_list) if pips_list else 0
     
