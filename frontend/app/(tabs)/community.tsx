@@ -270,6 +270,23 @@ export default function CommunityScreen() {
 
         <Text style={styles.postContent}>{item.content}</Text>
 
+        {/* Post Image */}
+        {item.image && (
+          <TouchableOpacity 
+            style={styles.postImageContainer}
+            onPress={() => setViewingImage(`data:image/jpeg;base64,${item.image}`)}
+          >
+            <Image
+              source={{ uri: `data:image/jpeg;base64,${item.image}` }}
+              style={styles.postImage}
+              resizeMode="cover"
+            />
+            <View style={styles.imageOverlay}>
+              <Ionicons name="expand-outline" size={20} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.postActions}>
           <TouchableOpacity style={styles.actionButton} onPress={() => toggleLike(item.post_id)}>
             <Ionicons
