@@ -52,7 +52,7 @@ export default function AIScreen() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   const [selectedPair, setSelectedPair] = useState(PAIRS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('H1');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
