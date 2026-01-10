@@ -95,6 +95,7 @@ class SignalCreate(BaseModel):
     tp1: float
     tp2: Optional[float] = None
     tp3: Optional[float] = None
+    status: Optional[SignalStatus] = SignalStatus.PENDING  # Can be PENDING or ACTIVE at creation
     visibility: SignalVisibility = SignalVisibility.FREE
     analysis: Optional[str] = None
 
