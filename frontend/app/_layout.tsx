@@ -38,6 +38,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="signal-history" />
       </Stack>
     </>
   );
