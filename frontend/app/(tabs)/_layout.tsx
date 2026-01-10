@@ -4,8 +4,8 @@ import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Base tab bar height (without safe area)
-const BASE_TAB_BAR_HEIGHT = 50;
+// Base tab bar height (the visible content area, excluding safe area)
+const BASE_TAB_BAR_HEIGHT = 56;
 
 // Export for screens that need to know total tab bar height
 export const TAB_BAR_HEIGHT = BASE_TAB_BAR_HEIGHT;
@@ -13,7 +13,7 @@ export const TAB_BAR_HEIGHT = BASE_TAB_BAR_HEIGHT;
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   
-  // Total height = base height + bottom safe area inset
+  // Total height = visible content area + bottom safe area inset
   const totalTabBarHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
 
   return (
@@ -25,11 +25,11 @@ export default function TabsLayout() {
             backgroundColor: '#1A1F2E',
             borderTopWidth: 1,
             borderTopColor: '#2A2F3E',
-            // Total height includes safe area
+            // Total container height includes safe area at bottom
             height: totalTabBarHeight,
-            // Padding at bottom pushes content above the home indicator
-            paddingBottom: insets.bottom,
-            paddingTop: 4,
+            // NO padding here - we control item positioning instead
+            paddingTop: 0,
+            paddingBottom: 0,
             // Shadow
             elevation: 8,
             shadowColor: '#000',
@@ -37,21 +37,27 @@ export default function TabsLayout() {
             shadowOpacity: 0.15,
             shadowRadius: 8,
           },
-          tabBarActiveTintColor: '#00D4AA',
-          tabBarInactiveTintColor: '#8A8D98',
+          // Item container - constrained to visible area only
+          tabBarItemStyle: {
+            height: BASE_TAB_BAR_HEIGHT,
+            paddingTop: 6,
+            paddingBottom: 6,
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+          // Icon styling
+          tabBarIconStyle: {
+            marginBottom: 2,
+          },
+          // Label styling
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
-            marginTop: -2,
+            marginTop: 0,
+            marginBottom: 0,
           },
-          tabBarIconStyle: {
-            marginTop: 2,
-          },
-          tabBarItemStyle: {
-            // Ensure items are positioned in the safe area
-            paddingTop: 2,
-            paddingBottom: 2,
-          },
+          tabBarActiveTintColor: '#00D4AA',
+          tabBarInactiveTintColor: '#8A8D98',
           tabBarHideOnKeyboard: true,
         }}
       >
@@ -60,7 +66,7 @@ export default function TabsLayout() {
           options={{
             title: 'Dashboard',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="grid-outline" size={size} color={color} />
+              <Ionicons name="grid-outline" size={22} color={color} />
             ),
           }}
         />
@@ -69,7 +75,7 @@ export default function TabsLayout() {
           options={{
             title: 'Signals',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="trending-up-outline" size={size} color={color} />
+              <Ionicons name="trending-up-outline" size={22} color={color} />
             ),
           }}
         />
@@ -79,7 +85,7 @@ export default function TabsLayout() {
             title: 'AI',
             tabBarIcon: ({ color, size }) => (
               <View style={layoutStyles.aiIconContainer}>
-                <Ionicons name="sparkles" size={size} color={color} />
+                <Ionicons name="sparkles" size={22} color={color} />
               </View>
             ),
           }}
@@ -89,7 +95,7 @@ export default function TabsLayout() {
           options={{
             title: 'Community',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="people-outline" size={size} color={color} />
+              <Ionicons name="people-outline" size={22} color={color} />
             ),
           }}
         />
@@ -98,7 +104,7 @@ export default function TabsLayout() {
           options={{
             title: 'More',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="menu-outline" size={size} color={color} />
+              <Ionicons name="menu-outline" size={22} color={color} />
             ),
           }}
         />
