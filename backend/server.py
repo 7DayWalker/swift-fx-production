@@ -508,6 +508,72 @@ async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Signal not found")
     return {"message": "Signal deleted successfully"}
 
+# ===================== SIGNAL HISTORY & ANALYTICS =====================
+@api_router.get("/signals/history/stats")
+async def get_signal_history_stats(current_user: Optional[User] = Depends(get_current_user)):
+    """Get signal history with performance statistics based on user's access level"""
+    user_role = current_user.role if current_user else UserRole.FREE
+    
+    # Get all closed signals
+    all_closed = await db.signals.find({"status": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(500)
+    
+    # Filter signals based on user's access level
+    accessible_signals = []
+    for signal in all_closed:
+        signal_visibility = SignalVisibility(signal.get("visibility", "free"))
+        if can_access_signal(user_role, signal_visibility):
+            accessible_signals.append(signal)
+    
+    # Calculate basic stats (available to all users)
+    total_signals = len(accessible_signals)
+    winning_signals = len([s for s in accessible_signals if s.get("result_pips", 0) > 0])
+    losing_signals = len([s for s in accessible_signals if s.get("result_pips", 0) < 0])
+    breakeven_signals = total_signals - winning_signals - losing_signals
+    
+    win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
+    total_pips = sum([s.get("result_pips", 0) for s in accessible_signals])
+    avg_pips = round(total_pips / total_signals, 1) if total_signals > 0 else 0
+    
+    # Calculate best/worst trades
+    pips_list = [s.get("result_pips", 0) for s in accessible_signals if s.get("result_pips") is not None]
+    best_trade = max(pips_list) if pips_list else 0
+    worst_trade = min(pips_list) if pips_list else 0
+    
+    # Basic stats for all users
+    basic_stats = {
+        "total_signals": total_signals,
+        "winning_signals": winning_signals,
+        "losing_signals": losing_signals,
+        "breakeven_signals": breakeven_signals,
+        "win_rate": win_rate,
+        "total_pips": round(total_pips, 1),
+        "avg_pips_per_trade": avg_pips,
+        "best_trade_pips": round(best_trade, 1),
+        "worst_trade_pips": round(worst_trade, 1),
+    }
+    
+    # For free users, return basic stats only with limited signal history
+    if user_role == UserRole.FREE:
+        # Free users see only last 5 signals (preview)
+        limited_signals = accessible_signals[:5]
+        return {
+            "stats": basic_stats,
+            "signals": limited_signals,
+            "signals_count": len(limited_signals),
+            "total_available": total_signals,
+            "is_limited": True,
+            "upgrade_message": "Upgrade to Premium or VIP to see full signal history"
+        }
+    
+    # Premium/VIP users get full history
+    return {
+        "stats": basic_stats,
+        "signals": accessible_signals,
+        "signals_count": len(accessible_signals),
+        "total_available": total_signals,
+        "is_limited": False
+    }
+
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
     """Send push notification to users about new signal based on visibility rules"""
     try:
