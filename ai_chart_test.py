@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://signalswift.preview.emergentagent.com/api"
+BASE_URL = "https://tradersignals-2.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):
