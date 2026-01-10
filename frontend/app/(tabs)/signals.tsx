@@ -178,7 +178,7 @@ export default function SignalsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#00D4AA" />
         </View>
@@ -187,7 +187,7 @@ export default function SignalsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Trading Signals</Text>
         <Text style={styles.subtitle}>Real-time trading opportunities</Text>
@@ -212,7 +212,7 @@ export default function SignalsScreen() {
         data={filteredSignals}
         renderItem={renderSignal}
         keyExtractor={(item) => item.signal_id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
         }
