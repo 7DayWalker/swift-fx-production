@@ -46,7 +46,7 @@ export default function MoreScreen() {
   const [isUpgrading, setIsUpgrading] = useState(false);
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
 
   useEffect(() => {
     fetchPlans();
