@@ -8,12 +8,13 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
+import { TAB_BAR_HEIGHT } from './_layout';
 
 interface DashboardData {
   recent_signals: any[];
@@ -28,9 +29,13 @@ interface DashboardData {
 export default function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Calculate bottom padding for content to avoid tab bar overlap
+  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
 
   useEffect(() => {
     fetchDashboard();
