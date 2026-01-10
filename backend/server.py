@@ -584,6 +584,82 @@ async def update_signal(
     
     return {"message": "Signal updated successfully", "updates": update_doc}
 
+class SignalFullUpdate(BaseModel):
+    """Full signal update model for admin editing"""
+    pair: Optional[str] = None
+    signal_type: Optional[SignalType] = None
+    entry: Optional[float] = None
+    stop_loss: Optional[float] = None
+    tp1: Optional[float] = None
+    tp2: Optional[float] = None
+    tp3: Optional[float] = None
+    tp_hit: Optional[int] = None
+    status: Optional[SignalStatus] = None
+    visibility: Optional[SignalVisibility] = None
+    final_pips: Optional[float] = None
+
+@api_router.put("/admin/signals/{signal_id}/full")
+async def full_update_signal(
+    signal_id: str,
+    update_data: SignalFullUpdate,
+    admin: User = Depends(require_admin)
+):
+    """Admin endpoint to fully edit any signal field - ADMIN HAS FULL AUTHORITY"""
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    update_doc = {}
+    
+    # Update all provided fields - Admin has full authority
+    if update_data.pair is not None:
+        update_doc["pair"] = update_data.pair
+    if update_data.signal_type is not None:
+        update_doc["signal_type"] = update_data.signal_type
+    if update_data.entry is not None:
+        update_doc["entry"] = update_data.entry
+    if update_data.stop_loss is not None:
+        update_doc["stop_loss"] = update_data.stop_loss
+    if update_data.tp1 is not None:
+        update_doc["tp1"] = update_data.tp1
+    if update_data.tp2 is not None:
+        update_doc["tp2"] = update_data.tp2
+    if update_data.tp3 is not None:
+        update_doc["tp3"] = update_data.tp3
+    if update_data.tp_hit is not None:
+        update_doc["tp_hit"] = update_data.tp_hit
+    if update_data.visibility is not None:
+        update_doc["visibility"] = update_data.visibility
+    if update_data.final_pips is not None:
+        update_doc["final_pips"] = update_data.final_pips
+    
+    # Handle status changes
+    if update_data.status is not None:
+        update_doc["status"] = update_data.status
+        if update_data.status == SignalStatus.ACTIVE and signal.get("status") == "pending":
+            update_doc["activated_at"] = datetime.now(timezone.utc)
+        if update_data.status == SignalStatus.CLOSED and signal.get("status") != "closed":
+            update_doc["closed_at"] = datetime.now(timezone.utc)
+    
+    # Recalculate risk/reward if entry, SL, or TP1 changed
+    entry = update_data.entry if update_data.entry else signal.get("entry")
+    sl = update_data.stop_loss if update_data.stop_loss else signal.get("stop_loss")
+    tp1 = update_data.tp1 if update_data.tp1 else signal.get("tp1")
+    sig_type = update_data.signal_type if update_data.signal_type else signal.get("signal_type")
+    
+    if entry and sl and tp1:
+        update_doc["risk_reward"] = calculate_risk_reward(entry, sl, tp1, sig_type)
+    
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="No update fields provided")
+    
+    result = await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": update_doc}
+    )
+    
+    return {"message": "Signal updated successfully", "updates": list(update_doc.keys())}
+
 @api_router.post("/admin/signals/{signal_id}/activate")
 async def activate_signal(signal_id: str, admin: User = Depends(require_admin)):
     """Manually activate a pending signal"""
