@@ -468,10 +468,12 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
 @api_router.post("/admin/signals")
 async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundTasks, admin: User = Depends(require_admin)):
     signal_id = f"sig_{uuid.uuid4().hex[:12]}"
+    
+    # Calculate risk/reward using tp1 as primary target
     risk_reward = calculate_risk_reward(
         signal_data.entry,
         signal_data.stop_loss,
-        signal_data.take_profit,
+        signal_data.tp1,
         signal_data.signal_type
     )
     
@@ -481,12 +483,18 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
         "signal_type": signal_data.signal_type,
         "entry": signal_data.entry,
         "stop_loss": signal_data.stop_loss,
-        "take_profit": signal_data.take_profit,
+        "tp1": signal_data.tp1,
+        "tp2": signal_data.tp2,
+        "tp3": signal_data.tp3,
+        "tp_hit": 0,
         "risk_reward": risk_reward,
         "status": SignalStatus.PENDING,
         "visibility": signal_data.visibility,
         "analysis": signal_data.analysis,
-        "created_at": datetime.now(timezone.utc)
+        "final_pips": None,
+        "created_at": datetime.now(timezone.utc),
+        "activated_at": None,
+        "closed_at": None
     }
     
     await db.signals.insert_one(signal_doc)
@@ -496,13 +504,75 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     
     return {"signal_id": signal_id, "message": "Signal created successfully"}
 
+def calculate_pips(entry: float, close: float, signal_type: str, pair: str) -> float:
+    """Calculate pips based on price movement and pair type"""
+    # Determine pip value based on pair
+    if "JPY" in pair:
+        pip_multiplier = 100  # JPY pairs have 2 decimal places
+    elif "XAU" in pair or "GOLD" in pair:
+        pip_multiplier = 10  # Gold is measured in $0.10
+    elif "BTC" in pair or "ETH" in pair:
+        pip_multiplier = 1  # Crypto measured in whole units
+    else:
+        pip_multiplier = 10000  # Standard forex pairs
+    
+    if signal_type == "buy":
+        pips = (close - entry) * pip_multiplier
+    else:  # sell
+        pips = (entry - close) * pip_multiplier
+    
+    return round(pips, 1)
+
 @api_router.put("/admin/signals/{signal_id}")
-async def update_signal(signal_id: str, status: SignalStatus, result_pips: Optional[float] = None, admin: User = Depends(require_admin)):
-    update_doc = {"status": status}
-    if status == SignalStatus.CLOSED:
-        update_doc["closed_at"] = datetime.now(timezone.utc)
-        if result_pips is not None:
-            update_doc["result_pips"] = result_pips
+async def update_signal(
+    signal_id: str, 
+    status: Optional[SignalStatus] = None, 
+    tp_hit: Optional[int] = None,
+    final_pips: Optional[float] = None,
+    close_price: Optional[float] = None,
+    admin: User = Depends(require_admin)
+):
+    """Admin endpoint to manually update signal status, TP hit, or close signal"""
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    update_doc = {}
+    
+    # Update TP hit level
+    if tp_hit is not None:
+        if tp_hit < 0 or tp_hit > 3:
+            raise HTTPException(status_code=400, detail="tp_hit must be 0, 1, 2, or 3")
+        update_doc["tp_hit"] = tp_hit
+    
+    # Update status
+    if status is not None:
+        update_doc["status"] = status
+        
+        if status == SignalStatus.ACTIVE and signal.get("status") == "pending":
+            update_doc["activated_at"] = datetime.now(timezone.utc)
+        
+        if status == SignalStatus.CLOSED:
+            update_doc["closed_at"] = datetime.now(timezone.utc)
+            
+            # Calculate final_pips if close_price provided
+            if close_price is not None:
+                calculated_pips = calculate_pips(
+                    signal["entry"], 
+                    close_price, 
+                    signal["signal_type"],
+                    signal["pair"]
+                )
+                update_doc["final_pips"] = calculated_pips
+            elif final_pips is not None:
+                update_doc["final_pips"] = final_pips
+    
+    # Direct final_pips update (for corrections)
+    if final_pips is not None and status is None:
+        update_doc["final_pips"] = final_pips
+    
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="No update parameters provided")
     
     result = await db.signals.update_one(
         {"signal_id": signal_id},
@@ -510,9 +580,93 @@ async def update_signal(signal_id: str, status: SignalStatus, result_pips: Optio
     )
     
     if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found or no changes made")
+    
+    return {"message": "Signal updated successfully", "updates": update_doc}
+
+@api_router.post("/admin/signals/{signal_id}/activate")
+async def activate_signal(signal_id: str, admin: User = Depends(require_admin)):
+    """Manually activate a pending signal"""
+    result = await db.signals.update_one(
+        {"signal_id": signal_id, "status": "pending"},
+        {"$set": {
+            "status": SignalStatus.ACTIVE,
+            "activated_at": datetime.now(timezone.utc)
+        }}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found or not in pending status")
+    return {"message": "Signal activated successfully"}
+
+@api_router.post("/admin/signals/{signal_id}/close")
+async def close_signal(
+    signal_id: str, 
+    close_price: Optional[float] = None,
+    final_pips: Optional[float] = None,
+    tp_hit: Optional[int] = None,
+    admin: User = Depends(require_admin)
+):
+    """Manually close a signal with optional final_pips or close_price"""
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     
-    return {"message": "Signal updated successfully"}
+    update_doc = {
+        "status": SignalStatus.CLOSED,
+        "closed_at": datetime.now(timezone.utc)
+    }
+    
+    if tp_hit is not None:
+        update_doc["tp_hit"] = tp_hit
+    
+    # Calculate final_pips
+    if close_price is not None:
+        update_doc["final_pips"] = calculate_pips(
+            signal["entry"], 
+            close_price, 
+            signal["signal_type"],
+            signal["pair"]
+        )
+    elif final_pips is not None:
+        update_doc["final_pips"] = final_pips
+    
+    await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": update_doc}
+    )
+    
+    return {"message": "Signal closed successfully", "final_pips": update_doc.get("final_pips")}
+
+@api_router.post("/admin/signals/{signal_id}/mark-tp")
+async def mark_tp_hit(signal_id: str, tp_level: int, admin: User = Depends(require_admin)):
+    """Mark a specific TP level as hit (1, 2, or 3)"""
+    if tp_level not in [1, 2, 3]:
+        raise HTTPException(status_code=400, detail="tp_level must be 1, 2, or 3")
+    
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    update_doc = {"tp_hit": tp_level}
+    
+    # If TP3 is hit, auto-close the signal
+    if tp_level == 3:
+        tp3_price = signal.get("tp3") or signal.get("tp2") or signal.get("tp1")
+        update_doc["status"] = SignalStatus.CLOSED
+        update_doc["closed_at"] = datetime.now(timezone.utc)
+        update_doc["final_pips"] = calculate_pips(
+            signal["entry"],
+            tp3_price,
+            signal["signal_type"],
+            signal["pair"]
+        )
+    
+    await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": update_doc}
+    )
+    
+    return {"message": f"TP{tp_level} marked as hit", "auto_closed": tp_level == 3}
 
 @api_router.delete("/admin/signals/{signal_id}")
 async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
