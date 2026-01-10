@@ -132,14 +132,28 @@ export function setupNotificationListeners(): void {
 
 /**
  * Clean up notification listeners
+ * Defensive cleanup - never crashes even if notifications were never set up
  */
 export function cleanupNotifications(): void {
-  if (responseListener) {
-    Notifications.removeNotificationSubscription(responseListener);
+  try {
+    if (responseListener) {
+      // Use .remove() method on the subscription object (correct API)
+      if (typeof responseListener.remove === 'function') {
+        responseListener.remove();
+      }
+      responseListener = null;
+    }
+    if (receivedListener) {
+      // Use .remove() method on the subscription object (correct API)
+      if (typeof receivedListener.remove === 'function') {
+        receivedListener.remove();
+      }
+      receivedListener = null;
+    }
+  } catch (error) {
+    // Silently handle cleanup errors - logout must never crash
+    console.log('Notification cleanup skipped:', error);
     responseListener = null;
-  }
-  if (receivedListener) {
-    Notifications.removeNotificationSubscription(receivedListener);
     receivedListener = null;
   }
 }
