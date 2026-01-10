@@ -398,6 +398,63 @@ export default function MoreScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Theme Selection Modal */}
+      <Modal
+        visible={showThemeModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowThemeModal(false)}
+      >
+        <View style={styles.logoutModalContainer}>
+          <View style={[styles.themeModalContent, { backgroundColor: theme.surface }]}>
+            <View style={styles.themeModalHeader}>
+              <Text style={[styles.themeModalTitle, { color: theme.text }]}>Choose Theme</Text>
+              <TouchableOpacity onPress={() => setShowThemeModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {(['light', 'dark', 'system'] as ThemeType[]).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.themeOption,
+                  { borderColor: theme.border },
+                  themeType === option && { borderColor: theme.primary, backgroundColor: `${theme.primary}15` }
+                ]}
+                onPress={() => {
+                  setThemeType(option);
+                  setShowThemeModal(false);
+                }}
+              >
+                <View style={styles.themeOptionLeft}>
+                  <Ionicons 
+                    name={option === 'light' ? 'sunny-outline' : option === 'dark' ? 'moon-outline' : 'phone-portrait-outline'} 
+                    size={24} 
+                    color={themeType === option ? theme.primary : theme.text} 
+                  />
+                  <Text style={[
+                    styles.themeOptionText, 
+                    { color: themeType === option ? theme.primary : theme.text }
+                  ]}>
+                    {option === 'system' ? 'System Default' : option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </View>
+                {themeType === option && (
+                  <Ionicons name="checkmark-circle" size={24} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            <Text style={[styles.themeNote, { color: theme.textSecondary }]}>
+              {themeType === 'system' 
+                ? 'Theme will automatically match your device settings' 
+                : `${themeType.charAt(0).toUpperCase() + themeType.slice(1)} theme is always applied`}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
