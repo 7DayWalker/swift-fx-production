@@ -478,8 +478,8 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     
     await db.signals.insert_one(signal_doc)
     
-    # Queue push notification
-    background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type)
+    # Queue push notification with visibility for role-based filtering
+    background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
     
     return {"signal_id": signal_id, "message": "Signal created successfully"}
 
