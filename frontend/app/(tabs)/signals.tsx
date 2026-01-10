@@ -8,11 +8,12 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
+import { TAB_BAR_HEIGHT } from './_layout';
 
 interface Signal {
   signal_id: string;
@@ -31,10 +32,14 @@ interface Signal {
 
 export default function SignalsScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'closed'>('all');
+  
+  // Calculate bottom padding for content to avoid tab bar overlap
+  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
 
   useEffect(() => {
     fetchSignals();
