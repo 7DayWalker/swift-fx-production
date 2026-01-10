@@ -852,4 +852,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  // Theme toggle styles
+  themeValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  themeValueText: {
+    fontSize: 14,
+  },
+  themeModalContent: {
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  themeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  themeModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  themeOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  themeOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  themeNote: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+  },
 });
