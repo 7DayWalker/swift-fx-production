@@ -15,6 +15,9 @@ export default function TabsLayout() {
   
   // Total height = visible content area + bottom safe area inset
   const totalTabBarHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
+  
+  // Calculate label offset to push it above the safe area
+  const labelBottomOffset = insets.bottom > 0 ? insets.bottom + 4 : 4;
 
   return (
     <View style={layoutStyles.container}>
@@ -25,36 +28,31 @@ export default function TabsLayout() {
             backgroundColor: '#1A1F2E',
             borderTopWidth: 1,
             borderTopColor: '#2A2F3E',
-            // Total container height includes safe area at bottom
             height: totalTabBarHeight,
-            // NO padding here - we control item positioning instead
             paddingTop: 0,
             paddingBottom: 0,
-            // Shadow
             elevation: 8,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.15,
             shadowRadius: 8,
           },
-          // Item container - constrained to visible area only
+          // Item container - position content at top of tab bar
           tabBarItemStyle: {
             height: BASE_TAB_BAR_HEIGHT,
-            paddingTop: 6,
-            paddingBottom: 6,
-            justifyContent: 'center',
-            alignItems: 'center',
+            paddingTop: 8,
+            paddingBottom: 4,
           },
           // Icon styling
           tabBarIconStyle: {
-            marginBottom: 2,
+            marginBottom: 0,
           },
-          // Label styling - offset upward to stay above safe area
+          // Label styling - push up with bottom margin
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
-            marginTop: -2,
-            marginBottom: insets.bottom > 0 ? insets.bottom : 4,
+            marginTop: 2,
+            marginBottom: labelBottomOffset,
           },
           tabBarActiveTintColor: '#00D4AA',
           tabBarInactiveTintColor: '#8A8D98',
@@ -65,7 +63,7 @@ export default function TabsLayout() {
           name="dashboard"
           options={{
             title: 'Dashboard',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <Ionicons name="grid-outline" size={22} color={color} />
             ),
           }}
@@ -74,7 +72,7 @@ export default function TabsLayout() {
           name="signals"
           options={{
             title: 'Signals',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <Ionicons name="trending-up-outline" size={22} color={color} />
             ),
           }}
@@ -83,7 +81,7 @@ export default function TabsLayout() {
           name="ai"
           options={{
             title: 'AI',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <View style={layoutStyles.aiIconContainer}>
                 <Ionicons name="sparkles" size={22} color={color} />
               </View>
@@ -94,7 +92,7 @@ export default function TabsLayout() {
           name="community"
           options={{
             title: 'Community',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <Ionicons name="people-outline" size={22} color={color} />
             ),
           }}
@@ -103,7 +101,7 @@ export default function TabsLayout() {
           name="more"
           options={{
             title: 'More',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <Ionicons name="menu-outline" size={22} color={color} />
             ),
           }}
