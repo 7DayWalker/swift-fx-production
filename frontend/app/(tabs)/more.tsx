@@ -139,7 +139,7 @@ export default function MoreScreen() {
         { icon: 'card-outline', label: 'Subscription', badge: user?.role?.toUpperCase(), locked: false, action: () => setShowSubscriptionModal(true) },
         { icon: 'gift-outline', label: 'Referral Program', badge: null, locked: false },
         { icon: 'help-circle-outline', label: 'Help & Support', badge: null, locked: false },
-        { icon: 'settings-outline', label: 'Settings', badge: null, locked: false },
+        { icon: 'settings-outline', label: 'Settings', badge: null, locked: false, action: () => router.push('/settings') },
       ],
     },
   ];
