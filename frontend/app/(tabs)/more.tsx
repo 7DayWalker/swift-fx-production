@@ -158,20 +158,20 @@ export default function MoreScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
+        <View style={[styles.profileHeader, dynamicStyles.card]}>
+          <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
             <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name || 'User'}</Text>
-            <Text style={styles.profileEmail}>{user?.email}</Text>
+            <Text style={[styles.profileName, dynamicStyles.text]}>{user?.name || 'User'}</Text>
+            <Text style={[styles.profileEmail, dynamicStyles.textSecondary]}>{user?.email}</Text>
             <View style={[
               styles.roleBadge,
               user?.role === 'vip' && styles.vipBadge,
