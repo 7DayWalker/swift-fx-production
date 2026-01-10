@@ -4,13 +4,14 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const TAB_BAR_HEIGHT = 60;
+// Export tab bar height constant so screens can use it for padding
+export const TAB_BAR_HEIGHT = 60;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   
   // Calculate total tab bar height including safe area
-  const tabBarHeight = TAB_BAR_HEIGHT + insets.bottom;
+  const totalTabBarHeight = TAB_BAR_HEIGHT + insets.bottom;
 
   return (
     <Tabs
@@ -20,18 +21,20 @@ export default function TabsLayout() {
           backgroundColor: '#1A1F2E',
           borderTopWidth: 1,
           borderTopColor: '#2A2F3E',
-          height: tabBarHeight,
+          height: totalTabBarHeight,
           paddingBottom: insets.bottom,
           paddingTop: 8,
+          // Position absolute to overlay content
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
+          // Shadow for elevation effect
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
         },
         tabBarActiveTintColor: '#00D4AA',
         tabBarInactiveTintColor: '#8A8D98',
@@ -40,9 +43,8 @@ export default function TabsLayout() {
           fontWeight: '600',
           marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
-        // Add padding to screen content to avoid tab bar overlap
-        sceneStyle: {
-          paddingBottom: tabBarHeight,
+        tabBarIconStyle: {
+          marginTop: 4,
         },
       }}
     >
