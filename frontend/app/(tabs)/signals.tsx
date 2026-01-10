@@ -256,6 +256,11 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 8,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -265,6 +270,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8A8D98',
     marginTop: 4,
+  },
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 170, 0.3)',
+  },
+  historyButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#00D4AA',
+    marginLeft: 6,
   },
   filterContainer: {
     flexDirection: 'row',
