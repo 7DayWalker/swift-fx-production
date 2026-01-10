@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../src/context/ThemeContext';
 
 // Base tab bar height (the visible content area, excluding safe area)
 const BASE_TAB_BAR_HEIGHT = 56;
@@ -12,6 +13,7 @@ export const TAB_BAR_HEIGHT = BASE_TAB_BAR_HEIGHT;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   
   // Total height = visible content area + bottom safe area inset
   const totalTabBarHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
@@ -20,14 +22,14 @@ export default function TabsLayout() {
   const labelBottomOffset = insets.bottom > 0 ? insets.bottom + 4 : 4;
 
   return (
-    <View style={layoutStyles.container}>
+    <View style={[layoutStyles.container, { backgroundColor: theme.background }]}>
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: '#1A1F2E',
+            backgroundColor: theme.tabBarBackground,
             borderTopWidth: 1,
-            borderTopColor: '#2A2F3E',
+            borderTopColor: theme.tabBarBorder,
             height: totalTabBarHeight,
             paddingTop: 0,
             paddingBottom: 0,
@@ -54,8 +56,8 @@ export default function TabsLayout() {
             marginTop: 2,
             marginBottom: labelBottomOffset,
           },
-          tabBarActiveTintColor: '#00D4AA',
-          tabBarInactiveTintColor: '#8A8D98',
+          tabBarActiveTintColor: theme.primary,
+          tabBarInactiveTintColor: theme.textSecondary,
           tabBarHideOnKeyboard: true,
         }}
       >
