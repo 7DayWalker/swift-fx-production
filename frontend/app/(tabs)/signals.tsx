@@ -427,6 +427,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+  additionalTPs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  tpTag: {
+    backgroundColor: 'rgba(138, 141, 152, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  tpTagHit: {
+    backgroundColor: 'rgba(0, 212, 170, 0.2)',
+    borderColor: '#00D4AA',
+  },
+  tpTagText: {
+    fontSize: 12,
+    color: '#8A8D98',
+    fontWeight: '600',
+  },
+  tpTagTextHit: {
+    color: '#00D4AA',
+  },
   lockedContainer: {
     alignItems: 'center',
     paddingVertical: 24,
