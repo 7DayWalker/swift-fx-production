@@ -96,11 +96,39 @@ export default function CommunityScreen() {
 
     setIsSubmitting(true);
     try {
-      await api.post('/community/posts', {
-        content: newPostContent,
-        post_type: newPostType,
+      const formData = new FormData();
+      formData.append('content', newPostContent);
+      formData.append('post_type', newPostType);
+      
+      // Add image if selected
+      if (newPostImageBase64 && canUploadImages) {
+        // Convert base64 to blob for upload
+        const byteCharacters = atob(newPostImageBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        
+        if (Platform.OS === 'web') {
+          const file = new File([blob], 'post_image.jpg', { type: 'image/jpeg' });
+          formData.append('image', file);
+        } else {
+          formData.append('image', blob, 'post_image.jpg');
+        }
+      }
+      
+      await api.post('/community/posts', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
+      
+      // Reset form
       setNewPostContent('');
+      setNewPostImage(null);
+      setNewPostImageBase64(null);
       setShowCreateModal(false);
       fetchPosts();
     } catch (error: any) {
@@ -108,6 +136,43 @@ export default function CommunityScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const pickPostImage = async () => {
+    if (!canUploadImages) {
+      Alert.alert(
+        'Premium Feature',
+        'Image uploads require Premium or VIP subscription',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow access to your photo library');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setNewPostImage(asset.uri);
+      if (asset.base64) {
+        setNewPostImageBase64(asset.base64);
+      }
+    }
+  };
+
+  const removePostImage = () => {
+    setNewPostImage(null);
+    setNewPostImageBase64(null);
   };
 
   const toggleLike = async (postId: string) => {
