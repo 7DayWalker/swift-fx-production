@@ -199,11 +199,29 @@ export default function AIScreen() {
     if (value === null || value === undefined) return '';
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return String(value);
-    if (Array.isArray(value)) return value.map(v => safeString(v)).join(', ');
+    if (typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) {
+      // For arrays, join primitive values or stringify objects
+      return value.map(v => {
+        if (typeof v === 'string' || typeof v === 'number') return String(v);
+        if (typeof v === 'object' && v !== null) {
+          return v.msg || v.message || JSON.stringify(v);
+        }
+        return String(v);
+      }).join(', ');
+    }
     if (typeof value === 'object') {
-      // Handle objects with specific known structures
+      // Handle Pydantic validation errors {type, loc, msg, input, ctx, url}
       if (value.msg) return String(value.msg);
       if (value.message) return String(value.message);
+      if (value.detail) {
+        // FastAPI error detail can be string or array
+        if (typeof value.detail === 'string') return value.detail;
+        if (Array.isArray(value.detail)) {
+          return value.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ');
+        }
+        return JSON.stringify(value.detail);
+      }
       try {
         return JSON.stringify(value);
       } catch {
@@ -213,11 +231,28 @@ export default function AIScreen() {
     return String(value);
   };
 
-  // Helper to safely get array of levels
+  // Helper to safely get array of levels as strings
   const safeLevels = (levels: any): string[] => {
     if (!levels) return [];
-    if (!Array.isArray(levels)) return [];
-    return levels.map(level => safeString(level));
+    if (!Array.isArray(levels)) {
+      // If it's a single value, wrap in array
+      const str = safeString(levels);
+      return str ? [str] : [];
+    }
+    return levels.map(level => {
+      if (typeof level === 'string') return level;
+      if (typeof level === 'number') return String(level);
+      if (typeof level === 'object' && level !== null) {
+        return level.msg || level.message || JSON.stringify(level);
+      }
+      return String(level);
+    }).filter(Boolean);
+  };
+
+  // Safe render component - renders any value safely
+  const SafeText = ({ value, style }: { value: any; style?: any }) => {
+    const text = safeString(value);
+    return <Text style={style}>{text}</Text>;
   };
 
   // No access screen for free users
