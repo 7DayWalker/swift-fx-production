@@ -215,7 +215,7 @@ export default function CommunityScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#00D4AA" />
         </View>
@@ -224,7 +224,7 @@ export default function CommunityScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Community</Text>
         <Text style={styles.subtitle}>Share insights with fellow traders</Text>
@@ -242,7 +242,7 @@ export default function CommunityScreen() {
         data={posts}
         renderItem={renderPost}
         keyExtractor={(item) => item.post_id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
         }
