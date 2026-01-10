@@ -508,41 +508,94 @@ async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Signal not found")
     return {"message": "Signal deleted successfully"}
 
-async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType):
-    """Send push notification to all users about new signal"""
+async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
+    """Send push notification to users about new signal based on visibility rules"""
     try:
-        tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
-        if not tokens:
+        # Get signal info
+        signal = await db.signals.find_one({"signal_id": signal_id})
+        if not signal:
+            logger.error(f"Signal {signal_id} not found for notification")
             return
         
-        expo_tokens = [t["token"] for t in tokens if t.get("token", "").startswith("ExponentPushToken")]
-        
-        if not expo_tokens:
+        # Get all active device tokens with user info
+        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
+        if not device_tokens:
+            logger.info("No active device tokens found")
             return
         
-        # Limited notification content
-        title = "New Trading Signal"
-        body = f"New signal on {pair} — Tap to view"
+        # Notification content per spec: title="New Signal Alert", body="{PAIR} • {BUY/SELL}"
+        title = "New Signal Alert"
+        body = f"{pair} • {signal_type.value.upper()}"
         
-        messages = [
-            {
+        messages = []
+        notified_users = 0
+        
+        for token_doc in device_tokens:
+            token = token_doc.get("token", "")
+            user_id = token_doc.get("user_id")
+            
+            # Skip non-Expo tokens
+            if not token.startswith("ExponentPushToken"):
+                continue
+            
+            if not user_id:
+                continue
+            
+            # Get user info to check role and notification preferences
+            user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+            if not user:
+                continue
+            
+            # Check if user has notifications enabled
+            notification_prefs = user.get("notification_preferences", {})
+            if not notification_prefs.get("signals", True):
+                continue
+            
+            user_role = UserRole(user.get("role", "free"))
+            
+            # Apply visibility rules:
+            # - FREE signal -> notify ALL users
+            # - VIP signal -> notify VIP users ONLY
+            if visibility == SignalVisibility.VIP:
+                # Only VIP users get VIP signal notifications
+                if user_role != UserRole.VIP:
+                    continue
+            elif visibility == SignalVisibility.PREMIUM:
+                # Premium and VIP users get premium signal notifications
+                if user_role not in [UserRole.PREMIUM, UserRole.VIP]:
+                    continue
+            # FREE signals go to everyone
+            
+            messages.append({
                 "to": token,
                 "title": title,
                 "body": body,
                 "data": {"signalId": signal_id, "type": "new_signal"},
                 "sound": "default"
-            }
-            for token in expo_tokens
-        ]
+            })
+            notified_users += 1
         
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                "https://exp.host/--/api/v2/push/send",
-                json=messages,
-                headers={"Accept": "application/json"}
-            )
+        if not messages:
+            logger.info(f"No eligible users for signal {signal_id} notification")
+            return
         
-        logger.info(f"Sent notification for signal {signal_id} to {len(expo_tokens)} devices")
+        # Send notifications in batches of 100 (Expo limit)
+        batch_size = 100
+        for i in range(0, len(messages), batch_size):
+            batch = messages[i:i + batch_size]
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=batch,
+                    headers={
+                        "Accept": "application/json",
+                        "Accept-Encoding": "gzip, deflate",
+                        "Content-Type": "application/json",
+                    }
+                )
+                logger.info(f"Expo push response: {response.status_code}")
+        
+        logger.info(f"Sent notification for signal {signal_id} ({visibility.value}) to {notified_users} users")
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
 
