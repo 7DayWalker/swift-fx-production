@@ -145,19 +145,42 @@ export default function SignalsScreen() {
                 <Text style={styles.detailValue}>{item.entry}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Stop Loss</Text>
+                <Text style={styles.detailLabel}>SL</Text>
                 <Text style={[styles.detailValue, { color: '#FF4757' }]}>{item.stop_loss}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Take Profit</Text>
-                <Text style={[styles.detailValue, { color: '#00D4AA' }]}>{item.take_profit}</Text>
+                <Text style={styles.detailLabel}>TP1</Text>
+                <Text style={[styles.detailValue, { color: (item.tp_hit || 0) >= 1 ? '#00D4AA' : '#8A8D98' }]}>
+                  {item.tp1 || item.take_profit}{(item.tp_hit || 0) >= 1 ? ' ✓' : ''}
+                </Text>
               </View>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>R:R</Text>
                 <Text style={styles.detailValue}>1:{item.risk_reward}</Text>
               </View>
             </View>
-            {item.status === 'closed' && item.result_pips !== undefined && (
+            
+            {/* Show TP2 and TP3 if they exist */}
+            {(item.tp2 || item.tp3) && (
+              <View style={styles.additionalTPs}>
+                {item.tp2 && (
+                  <View style={[styles.tpTag, (item.tp_hit || 0) >= 2 && styles.tpTagHit]}>
+                    <Text style={[styles.tpTagText, (item.tp_hit || 0) >= 2 && styles.tpTagTextHit]}>
+                      TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' ✓' : ''}
+                    </Text>
+                  </View>
+                )}
+                {item.tp3 && (
+                  <View style={[styles.tpTag, (item.tp_hit || 0) >= 3 && styles.tpTagHit]}>
+                    <Text style={[styles.tpTagText, (item.tp_hit || 0) >= 3 && styles.tpTagTextHit]}>
+                      TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' ✓' : ''}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+            
+            {item.status === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
               <View style={styles.resultContainer}>
                 <Text style={styles.resultLabel}>Result:</Text>
                 <Text style={[
