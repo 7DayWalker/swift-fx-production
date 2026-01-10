@@ -178,7 +178,7 @@ def decode_token(token: str) -> Optional[str]:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload.get("user_id")
-    except:
+    except Exception:
         return None
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[User]:
