@@ -49,12 +49,12 @@ export default function TabsLayout() {
           tabBarIconStyle: {
             marginBottom: 2,
           },
-          // Label styling
+          // Label styling - offset upward to stay above safe area
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
-            marginTop: 0,
-            marginBottom: 0,
+            marginTop: -2,
+            marginBottom: insets.bottom > 0 ? insets.bottom : 4,
           },
           tabBarActiveTintColor: '#00D4AA',
           tabBarInactiveTintColor: '#8A8D98',
