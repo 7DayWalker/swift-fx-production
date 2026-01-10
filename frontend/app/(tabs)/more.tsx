@@ -183,18 +183,39 @@ export default function MoreScreen() {
         </View>
 
         {/* Notification Toggle */}
-        <View style={styles.notificationCard}>
+        <View style={[styles.notificationCard, dynamicStyles.card]}>
           <View style={styles.notificationLeft}>
-            <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.notificationText}>Push Notifications</Text>
+            <Ionicons name="notifications-outline" size={24} color={theme.text} />
+            <Text style={[styles.notificationText, dynamicStyles.text]}>Push Notifications</Text>
           </View>
           <Switch
             value={notificationEnabled}
             onValueChange={setNotificationEnabled}
-            trackColor={{ false: '#2A2F3E', true: '#00D4AA' }}
+            trackColor={{ false: theme.border, true: theme.primary }}
             thumbColor="#FFFFFF"
           />
         </View>
+
+        {/* Theme Toggle */}
+        <TouchableOpacity 
+          style={[styles.notificationCard, dynamicStyles.card]} 
+          onPress={() => setShowThemeModal(true)}
+        >
+          <View style={styles.notificationLeft}>
+            <Ionicons 
+              name={isDark ? "moon-outline" : "sunny-outline"} 
+              size={24} 
+              color={theme.text} 
+            />
+            <Text style={[styles.notificationText, dynamicStyles.text]}>Theme</Text>
+          </View>
+          <View style={styles.themeValueContainer}>
+            <Text style={[styles.themeValueText, { color: theme.textSecondary }]}>
+              {themeType === 'system' ? 'System' : themeType === 'dark' ? 'Dark' : 'Light'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </View>
+        </TouchableOpacity>
 
         {/* Menu Sections */}
         {menuItems.map((section, sectionIndex) => (
