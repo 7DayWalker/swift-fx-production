@@ -9,9 +9,6 @@ export const TAB_BAR_HEIGHT = 60;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  
-  // Calculate total tab bar height including safe area
-  const totalTabBarHeight = TAB_BAR_HEIGHT + insets.bottom;
 
   return (
     <Tabs
@@ -21,14 +18,10 @@ export default function TabsLayout() {
           backgroundColor: '#1A1F2E',
           borderTopWidth: 1,
           borderTopColor: '#2A2F3E',
-          height: totalTabBarHeight,
-          paddingBottom: insets.bottom,
+          // Let the tab bar size itself based on content + safe area
+          minHeight: TAB_BAR_HEIGHT,
           paddingTop: 8,
-          // Position absolute to overlay content
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
+          paddingBottom: Math.max(insets.bottom, 8),
           // Shadow for elevation effect
           elevation: 8,
           shadowColor: '#000',
@@ -41,12 +34,16 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
-          marginBottom: Platform.OS === 'ios' ? 0 : 4,
+          paddingBottom: 4,
         },
         tabBarIconStyle: {
           marginTop: 4,
         },
+        // Ensure content doesn't overlap with tab bar
+        tabBarHideOnKeyboard: true,
       }}
+      // Use safeAreaInsets for proper bottom spacing
+      safeAreaInsets={{ bottom: 0 }} // We handle bottom padding ourselves
     >
       <Tabs.Screen
         name="dashboard"
