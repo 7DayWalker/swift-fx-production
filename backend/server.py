@@ -236,6 +236,9 @@ def calculate_risk_reward(entry: float, stop_loss: float, take_profit: float, si
     return round(reward / risk, 2) if risk > 0 else 0
 
 def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) -> bool:
+    # Admin can access all signals
+    if user_role == UserRole.ADMIN:
+        return True
     role_hierarchy = {UserRole.FREE: 0, UserRole.PREMIUM: 1, UserRole.VIP: 2}
     visibility_hierarchy = {SignalVisibility.FREE: 0, SignalVisibility.PREMIUM: 1, SignalVisibility.VIP: 2}
     return role_hierarchy.get(user_role, 0) >= visibility_hierarchy.get(signal_visibility, 0)
