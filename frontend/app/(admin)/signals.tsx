@@ -32,12 +32,13 @@ interface Signal {
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
   final_pips?: number;
-  result_pips?: number; // Legacy support
+  result_pips?: number;
   created_at: string;
 }
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const VISIBILITIES = ['free', 'premium', 'vip'];
+const STATUSES = ['pending', 'active', 'closed'];
 
 export default function SignalManagement() {
   const router = useRouter();
@@ -46,10 +47,12 @@ export default function SignalManagement() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  // Form state
+  // Create form state
   const [formData, setFormData] = useState({
     pair: 'EUR/USD',
     signal_type: 'buy' as 'buy' | 'sell',
@@ -62,9 +65,24 @@ export default function SignalManagement() {
     analysis: '',
   });
 
-  // Edit state
+  // Edit form state
+  const [editData, setEditData] = useState({
+    pair: '',
+    signal_type: 'buy' as 'buy' | 'sell',
+    entry: '',
+    stop_loss: '',
+    tp1: '',
+    tp2: '',
+    tp3: '',
+    tp_hit: 0,
+    status: 'pending' as 'pending' | 'active' | 'closed',
+    visibility: 'free' as 'free' | 'premium' | 'vip',
+  });
+
+  // Close modal state
   const [closePrice, setClosePrice] = useState('');
   const [finalPips, setFinalPips] = useState('');
+  const [closeTpHit, setCloseTpHit] = useState(0);
 
   useEffect(() => {
     fetchSignals();
@@ -87,7 +105,7 @@ export default function SignalManagement() {
     setRefreshing(false);
   };
 
-  const resetForm = () => {
+  const resetCreateForm = () => {
     setFormData({
       pair: 'EUR/USD',
       signal_type: 'buy',
@@ -101,10 +119,30 @@ export default function SignalManagement() {
     });
   };
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const confirmAction = async (title: string, message: string): Promise<boolean> => {
+    if (Platform.OS === 'web') {
+      return window.confirm(`${title}\n\n${message}`);
+    }
+    return new Promise((resolve) => {
+      Alert.alert(title, message, [
+        { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+        { text: 'Confirm', onPress: () => resolve(true), style: 'destructive' },
+      ]);
+    });
+  };
+
+  // ========== CREATE SIGNAL ==========
   const handleCreateSignal = async () => {
     if (!formData.entry || !formData.stop_loss || !formData.tp1) {
-      const msg = 'Please fill in Entry, Stop Loss, and TP1';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
       return;
     }
 
@@ -123,40 +161,96 @@ export default function SignalManagement() {
       });
       
       setShowCreateModal(false);
-      resetForm();
+      resetCreateForm();
       fetchSignals();
-      const msg = 'Signal created successfully!';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      showAlert('Success', 'Signal created successfully!');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to create signal';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      showAlert('Error', error.response?.data?.detail || 'Failed to create signal');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ========== EDIT SIGNAL ==========
+  const openEditModal = (signal: Signal) => {
+    setSelectedSignal(signal);
+    setEditData({
+      pair: signal.pair,
+      signal_type: signal.signal_type,
+      entry: signal.entry.toString(),
+      stop_loss: signal.stop_loss.toString(),
+      tp1: signal.tp1.toString(),
+      tp2: signal.tp2?.toString() || '',
+      tp3: signal.tp3?.toString() || '',
+      tp_hit: signal.tp_hit || 0,
+      status: signal.status,
+      visibility: signal.visibility,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSignal = async () => {
+    if (!selectedSignal || !editData.entry || !editData.stop_loss || !editData.tp1) {
+      showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Use PUT to update the signal with all fields
+      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, {
+        pair: editData.pair,
+        signal_type: editData.signal_type,
+        entry: parseFloat(editData.entry),
+        stop_loss: parseFloat(editData.stop_loss),
+        tp1: parseFloat(editData.tp1),
+        tp2: editData.tp2 ? parseFloat(editData.tp2) : null,
+        tp3: editData.tp3 ? parseFloat(editData.tp3) : null,
+        tp_hit: editData.tp_hit,
+        status: editData.status,
+        visibility: editData.visibility,
+      });
+      
+      setShowEditModal(false);
+      setSelectedSignal(null);
+      fetchSignals();
+      showAlert('Success', 'Signal updated successfully!');
+    } catch (error: any) {
+      showAlert('Error', error.response?.data?.detail || 'Failed to update signal');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ========== ACTIVATE SIGNAL ==========
   const handleActivateSignal = async (signalId: string) => {
     try {
       await api.post(`/admin/signals/${signalId}/activate`);
       fetchSignals();
-      const msg = 'Signal activated!';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      showAlert('Success', 'Signal activated!');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to activate signal';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      showAlert('Error', error.response?.data?.detail || 'Failed to activate signal');
     }
   };
 
+  // ========== MARK TP HIT ==========
   const handleMarkTP = async (signalId: string, tpLevel: number) => {
     try {
       await api.post(`/admin/signals/${signalId}/mark-tp?tp_level=${tpLevel}`);
       fetchSignals();
-      const msg = tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`;
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to mark TP';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      showAlert('Error', error.response?.data?.detail || 'Failed to mark TP');
     }
+  };
+
+  // ========== CLOSE SIGNAL ==========
+  const openCloseModal = (signal: Signal) => {
+    setSelectedSignal(signal);
+    setClosePrice('');
+    setFinalPips('');
+    setCloseTpHit(signal.tp_hit || 0);
+    setShowCloseModal(true);
   };
 
   const handleCloseSignal = async () => {
@@ -164,59 +258,46 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      const params: any = {};
+      const params: any = { tp_hit: closeTpHit };
       if (closePrice) params.close_price = parseFloat(closePrice);
       else if (finalPips) params.final_pips = parseFloat(finalPips);
 
       await api.post(`/admin/signals/${selectedSignal.signal_id}/close`, null, { params });
       
-      setShowEditModal(false);
+      setShowCloseModal(false);
       setSelectedSignal(null);
-      setClosePrice('');
-      setFinalPips('');
       fetchSignals();
-      const msg = 'Signal closed successfully!';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to close signal';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      showAlert('Error', error.response?.data?.detail || 'Failed to close signal');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ========== DELETE SIGNAL ==========
   const handleDeleteSignal = async (signalId: string) => {
-    const confirmDelete = Platform.OS === 'web'
-      ? window.confirm('Are you sure you want to permanently delete this signal? This cannot be undone.')
-      : await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Delete Signal',
-            'Are you sure you want to permanently delete this signal? This cannot be undone.',
-            [
-              { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
-              { text: 'Delete', onPress: () => resolve(true), style: 'destructive' },
-            ]
-          );
-        });
+    const confirmed = await confirmAction(
+      'Delete Signal',
+      'Are you sure you want to PERMANENTLY delete this signal? This cannot be undone and will remove it from all views including history.'
+    );
 
-    if (!confirmDelete) return;
+    if (!confirmed) return;
 
+    setIsDeleting(signalId);
     try {
       await api.delete(`/admin/signals/${signalId}`);
-      fetchSignals();
-      const msg = 'Signal deleted permanently!';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      // Remove from local state immediately
+      setSignals(prev => prev.filter(s => s.signal_id !== signalId));
+      showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to delete signal';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      console.error('Delete error:', error);
+      showAlert('Error', error.response?.data?.detail || 'Failed to delete signal');
+      // Refresh to get accurate state
+      fetchSignals();
+    } finally {
+      setIsDeleting(null);
     }
-  };
-
-  const openEditModal = (signal: Signal) => {
-    setSelectedSignal(signal);
-    setClosePrice('');
-    setFinalPips('');
-    setShowEditModal(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -236,9 +317,7 @@ export default function SignalManagement() {
     }
   };
 
-  const getPipsValue = (signal: Signal) => {
-    return signal.final_pips ?? signal.result_pips ?? null;
-  };
+  const getPipsValue = (signal: Signal) => signal.final_pips ?? signal.result_pips ?? null;
 
   const renderTPBadge = (level: number, price: number | undefined, hit: number) => {
     if (!price) return null;
@@ -277,20 +356,18 @@ export default function SignalManagement() {
 
       <ScrollView
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />}
         showsVerticalScrollIndicator={false}
       >
         {signals.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="trending-up-outline" size={64} color="#8A8D98" />
             <Text style={styles.emptyText}>No signals yet</Text>
-            <Text style={styles.emptySubtext}>Create your first signal</Text>
           </View>
         ) : (
           signals.map((signal) => (
             <View key={signal.signal_id} style={styles.signalCard}>
+              {/* Signal Header */}
               <View style={styles.signalHeader}>
                 <View>
                   <Text style={styles.signalPair}>{signal.pair}</Text>
@@ -316,15 +393,13 @@ export default function SignalManagement() {
                     size={20}
                     color={signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757'}
                   />
-                  <Text style={[
-                    styles.typeText,
-                    { color: signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }
-                  ]}>
+                  <Text style={[styles.typeText, { color: signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }]}>
                     {signal.signal_type.toUpperCase()}
                   </Text>
                 </View>
               </View>
 
+              {/* Signal Details */}
               <View style={styles.signalDetails}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Entry</Text>
@@ -347,44 +422,33 @@ export default function SignalManagement() {
                 {renderTPBadge(3, signal.tp3, signal.tp_hit || 0)}
               </View>
 
+              {/* Result for closed signals */}
               {getPipsValue(signal) !== null && signal.status === 'closed' && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Final Result:</Text>
-                  <Text style={[
-                    styles.resultValue,
-                    { color: (getPipsValue(signal) || 0) >= 0 ? '#00D4AA' : '#FF4757' }
-                  ]}>
+                  <Text style={[styles.resultValue, { color: (getPipsValue(signal) || 0) >= 0 ? '#00D4AA' : '#FF4757' }]}>
                     {(getPipsValue(signal) || 0) >= 0 ? '+' : ''}{getPipsValue(signal)} pips
                   </Text>
                 </View>
               )}
 
-              {/* Quick Actions for Active Signals */}
+              {/* Quick TP Actions for Active Signals */}
               {signal.status === 'active' && (
                 <View style={styles.tpActions}>
                   <Text style={styles.tpActionsLabel}>Mark TP Hit:</Text>
                   <View style={styles.tpButtonsRow}>
                     {signal.tp1 && (signal.tp_hit || 0) < 1 && (
-                      <TouchableOpacity 
-                        style={styles.tpButton} 
-                        onPress={() => handleMarkTP(signal.signal_id, 1)}
-                      >
+                      <TouchableOpacity style={styles.tpButton} onPress={() => handleMarkTP(signal.signal_id, 1)}>
                         <Text style={styles.tpButtonText}>TP1</Text>
                       </TouchableOpacity>
                     )}
                     {signal.tp2 && (signal.tp_hit || 0) < 2 && (
-                      <TouchableOpacity 
-                        style={styles.tpButton} 
-                        onPress={() => handleMarkTP(signal.signal_id, 2)}
-                      >
+                      <TouchableOpacity style={styles.tpButton} onPress={() => handleMarkTP(signal.signal_id, 2)}>
                         <Text style={styles.tpButtonText}>TP2</Text>
                       </TouchableOpacity>
                     )}
                     {signal.tp3 && (signal.tp_hit || 0) < 3 && (
-                      <TouchableOpacity 
-                        style={[styles.tpButton, styles.tp3Button]} 
-                        onPress={() => handleMarkTP(signal.signal_id, 3)}
-                      >
+                      <TouchableOpacity style={[styles.tpButton, styles.tp3Button]} onPress={() => handleMarkTP(signal.signal_id, 3)}>
                         <Text style={styles.tpButtonText}>TP3 (Close)</Text>
                       </TouchableOpacity>
                     )}
@@ -392,22 +456,40 @@ export default function SignalManagement() {
                 </View>
               )}
 
+              {/* Action Buttons */}
               <View style={styles.actionButtons}>
                 {signal.status === 'pending' && (
                   <TouchableOpacity style={styles.activateButton} onPress={() => handleActivateSignal(signal.signal_id)}>
-                    <Ionicons name="play" size={18} color="#00D4AA" />
+                    <Ionicons name="play" size={16} color="#00D4AA" />
                     <Text style={styles.activateButtonText}>Activate</Text>
                   </TouchableOpacity>
                 )}
+                
+                <TouchableOpacity style={styles.editButton} onPress={() => openEditModal(signal)}>
+                  <Ionicons name="pencil" size={16} color="#00D4AA" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+                
                 {signal.status !== 'closed' && (
-                  <TouchableOpacity style={styles.editButton} onPress={() => openEditModal(signal)}>
-                    <Ionicons name="close-circle-outline" size={18} color="#FFD700" />
+                  <TouchableOpacity style={styles.closeButton} onPress={() => openCloseModal(signal)}>
+                    <Ionicons name="close-circle-outline" size={16} color="#FFD700" />
                     <Text style={styles.closeButtonText}>Close</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteSignal(signal.signal_id)}>
-                  <Ionicons name="trash-outline" size={18} color="#FF4757" />
-                  <Text style={styles.deleteButtonText}>Delete</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.deleteButton, isDeleting === signal.signal_id && styles.deleteButtonDisabled]} 
+                  onPress={() => handleDeleteSignal(signal.signal_id)}
+                  disabled={isDeleting === signal.signal_id}
+                >
+                  {isDeleting === signal.signal_id ? (
+                    <ActivityIndicator size="small" color="#FF4757" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={16} color="#FF4757" />
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -415,178 +497,85 @@ export default function SignalManagement() {
         )}
       </ScrollView>
 
-      {/* Create Signal Modal */}
-      <Modal
-        visible={showCreateModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowCreateModal(false)}
-      >
+      {/* ========== CREATE SIGNAL MODAL ========== */}
+      <Modal visible={showCreateModal} animationType="slide" transparent={true} onRequestClose={() => setShowCreateModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Signal</Text>
-              <TouchableOpacity onPress={() => { setShowCreateModal(false); resetForm(); }}>
+              <TouchableOpacity onPress={() => { setShowCreateModal(false); resetCreateForm(); }}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              {/* Pair Selection */}
               <Text style={styles.inputLabel}>Trading Pair</Text>
               <View style={styles.optionsRow}>
                 {PAIRS.slice(0, 4).map((pair) => (
-                  <TouchableOpacity
-                    key={pair}
-                    style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]}
-                    onPress={() => setFormData({ ...formData, pair })}
-                  >
-                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>
-                      {pair}
-                    </Text>
+                  <TouchableOpacity key={pair} style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, pair })}>
+                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>{pair}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <View style={styles.optionsRow}>
                 {PAIRS.slice(4).map((pair) => (
-                  <TouchableOpacity
-                    key={pair}
-                    style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]}
-                    onPress={() => setFormData({ ...formData, pair })}
-                  >
-                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>
-                      {pair}
-                    </Text>
+                  <TouchableOpacity key={pair} style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, pair })}>
+                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>{pair}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Signal Type */}
               <Text style={styles.inputLabel}>Signal Type</Text>
               <View style={styles.typeRow}>
-                <TouchableOpacity
-                  style={[styles.typeButton, formData.signal_type === 'buy' && styles.buyButtonActive]}
-                  onPress={() => setFormData({ ...formData, signal_type: 'buy' })}
-                >
+                <TouchableOpacity style={[styles.typeButton, formData.signal_type === 'buy' && styles.buyButtonActive]} onPress={() => setFormData({ ...formData, signal_type: 'buy' })}>
                   <Ionicons name="arrow-up" size={20} color={formData.signal_type === 'buy' ? '#0A0E17' : '#00D4AA'} />
                   <Text style={[styles.typeButtonText, formData.signal_type === 'buy' && { color: '#0A0E17' }]}>BUY</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeButton, formData.signal_type === 'sell' && styles.sellButtonActive]}
-                  onPress={() => setFormData({ ...formData, signal_type: 'sell' })}
-                >
+                <TouchableOpacity style={[styles.typeButton, formData.signal_type === 'sell' && styles.sellButtonActive]} onPress={() => setFormData({ ...formData, signal_type: 'sell' })}>
                   <Ionicons name="arrow-down" size={20} color={formData.signal_type === 'sell' ? '#FFFFFF' : '#FF4757'} />
                   <Text style={[styles.typeButtonText, { color: formData.signal_type === 'sell' ? '#FFFFFF' : '#FF4757' }]}>SELL</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Price Inputs */}
               <Text style={styles.inputLabel}>Entry Price *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1.0850"
-                placeholderTextColor="#8A8D98"
-                keyboardType="decimal-pad"
-                value={formData.entry}
-                onChangeText={(text) => setFormData({ ...formData, entry: text })}
-              />
+              <TextInput style={styles.input} placeholder="e.g. 1.0850" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={formData.entry} onChangeText={(text) => setFormData({ ...formData, entry: text })} />
 
               <Text style={styles.inputLabel}>Stop Loss *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1.0820"
-                placeholderTextColor="#8A8D98"
-                keyboardType="decimal-pad"
-                value={formData.stop_loss}
-                onChangeText={(text) => setFormData({ ...formData, stop_loss: text })}
-              />
+              <TextInput style={styles.input} placeholder="e.g. 1.0820" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={formData.stop_loss} onChangeText={(text) => setFormData({ ...formData, stop_loss: text })} />
 
               <Text style={styles.inputLabel}>Take Profit 1 (TP1) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1.0880"
-                placeholderTextColor="#8A8D98"
-                keyboardType="decimal-pad"
-                value={formData.tp1}
-                onChangeText={(text) => setFormData({ ...formData, tp1: text })}
-              />
+              <TextInput style={styles.input} placeholder="e.g. 1.0880" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={formData.tp1} onChangeText={(text) => setFormData({ ...formData, tp1: text })} />
 
-              <Text style={styles.inputLabel}>Take Profit 2 (TP2) - Optional</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1.0910"
-                placeholderTextColor="#8A8D98"
-                keyboardType="decimal-pad"
-                value={formData.tp2}
-                onChangeText={(text) => setFormData({ ...formData, tp2: text })}
-              />
+              <Text style={styles.inputLabel}>Take Profit 2 (TP2)</Text>
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={formData.tp2} onChangeText={(text) => setFormData({ ...formData, tp2: text })} />
 
-              <Text style={styles.inputLabel}>Take Profit 3 (TP3) - Optional</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1.0950"
-                placeholderTextColor="#8A8D98"
-                keyboardType="decimal-pad"
-                value={formData.tp3}
-                onChangeText={(text) => setFormData({ ...formData, tp3: text })}
-              />
+              <Text style={styles.inputLabel}>Take Profit 3 (TP3)</Text>
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={formData.tp3} onChangeText={(text) => setFormData({ ...formData, tp3: text })} />
 
-              {/* Visibility */}
               <Text style={styles.inputLabel}>Visibility</Text>
               <View style={styles.optionsRow}>
                 {VISIBILITIES.map((v) => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.optionButton, formData.visibility === v && styles.optionButtonActive]}
-                    onPress={() => setFormData({ ...formData, visibility: v as any })}
-                  >
-                    <Text style={[styles.optionText, formData.visibility === v && styles.optionTextActive]}>
-                      {v.toUpperCase()}
-                    </Text>
+                  <TouchableOpacity key={v} style={[styles.optionButton, formData.visibility === v && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, visibility: v as any })}>
+                    <Text style={[styles.optionText, formData.visibility === v && styles.optionTextActive]}>{v.toUpperCase()}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Analysis */}
-              <Text style={styles.inputLabel}>Analysis (Optional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Add technical analysis..."
-                placeholderTextColor="#8A8D98"
-                multiline
-                numberOfLines={3}
-                value={formData.analysis}
-                onChangeText={(text) => setFormData({ ...formData, analysis: text })}
-              />
-
-              <TouchableOpacity
-                style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-                onPress={handleCreateSignal}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#0A0E17" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Create Signal</Text>
-                )}
+              <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleCreateSignal} disabled={isSubmitting}>
+                {isSubmitting ? <ActivityIndicator color="#0A0E17" /> : <Text style={styles.submitButtonText}>Create Signal</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Close Signal Modal */}
-      <Modal
-        visible={showEditModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowEditModal(false)}
-      >
+      {/* ========== EDIT SIGNAL MODAL ========== */}
+      <Modal visible={showEditModal} animationType="slide" transparent={true} onRequestClose={() => setShowEditModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Close Signal</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+              <Text style={styles.modalTitle}>Edit Signal</Text>
+              <TouchableOpacity onPress={() => { setShowEditModal(false); setSelectedSignal(null); }}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -594,50 +583,128 @@ export default function SignalManagement() {
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               {selectedSignal && (
                 <>
-                  <View style={styles.signalInfo}>
-                    <Text style={styles.signalInfoPair}>{selectedSignal.pair}</Text>
-                    <Text style={styles.signalInfoType}>
-                      {selectedSignal.signal_type.toUpperCase()} @ {selectedSignal.entry}
-                    </Text>
-                    <View style={styles.tpInfoRow}>
-                      <Text style={styles.tpInfoText}>
-                        TP Hit Level: {selectedSignal.tp_hit || 0}
-                      </Text>
-                    </View>
+                  <View style={styles.editSignalInfo}>
+                    <Text style={styles.editSignalId}>ID: {selectedSignal.signal_id}</Text>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Trading Pair</Text>
+                  <View style={styles.optionsRow}>
+                    {PAIRS.slice(0, 4).map((pair) => (
+                      <TouchableOpacity key={pair} style={[styles.optionButton, editData.pair === pair && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, pair })}>
+                        <Text style={[styles.optionText, editData.pair === pair && styles.optionTextActive]}>{pair}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.optionsRow}>
+                    {PAIRS.slice(4).map((pair) => (
+                      <TouchableOpacity key={pair} style={[styles.optionButton, editData.pair === pair && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, pair })}>
+                        <Text style={[styles.optionText, editData.pair === pair && styles.optionTextActive]}>{pair}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.inputLabel}>Signal Type</Text>
+                  <View style={styles.typeRow}>
+                    <TouchableOpacity style={[styles.typeButton, editData.signal_type === 'buy' && styles.buyButtonActive]} onPress={() => setEditData({ ...editData, signal_type: 'buy' })}>
+                      <Ionicons name="arrow-up" size={20} color={editData.signal_type === 'buy' ? '#0A0E17' : '#00D4AA'} />
+                      <Text style={[styles.typeButtonText, editData.signal_type === 'buy' && { color: '#0A0E17' }]}>BUY</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.typeButton, editData.signal_type === 'sell' && styles.sellButtonActive]} onPress={() => setEditData({ ...editData, signal_type: 'sell' })}>
+                      <Ionicons name="arrow-down" size={20} color={editData.signal_type === 'sell' ? '#FFFFFF' : '#FF4757'} />
+                      <Text style={[styles.typeButtonText, { color: editData.signal_type === 'sell' ? '#FFFFFF' : '#FF4757' }]}>SELL</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Status</Text>
+                  <View style={styles.optionsRow}>
+                    {STATUSES.map((s) => (
+                      <TouchableOpacity key={s} style={[styles.optionButton, editData.status === s && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, status: s as any })}>
+                        <Text style={[styles.optionText, editData.status === s && styles.optionTextActive]}>{s.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.inputLabel}>Entry Price *</Text>
+                  <TextInput style={styles.input} placeholder="Entry" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.entry} onChangeText={(text) => setEditData({ ...editData, entry: text })} />
+
+                  <Text style={styles.inputLabel}>Stop Loss *</Text>
+                  <TextInput style={styles.input} placeholder="Stop Loss" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.stop_loss} onChangeText={(text) => setEditData({ ...editData, stop_loss: text })} />
+
+                  <Text style={styles.inputLabel}>Take Profit 1 (TP1) *</Text>
+                  <TextInput style={styles.input} placeholder="TP1" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.tp1} onChangeText={(text) => setEditData({ ...editData, tp1: text })} />
+
+                  <Text style={styles.inputLabel}>Take Profit 2 (TP2)</Text>
+                  <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.tp2} onChangeText={(text) => setEditData({ ...editData, tp2: text })} />
+
+                  <Text style={styles.inputLabel}>Take Profit 3 (TP3)</Text>
+                  <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={editData.tp3} onChangeText={(text) => setEditData({ ...editData, tp3: text })} />
+
+                  <Text style={styles.inputLabel}>TP Hit Level (0-3)</Text>
+                  <View style={styles.optionsRow}>
+                    {[0, 1, 2, 3].map((level) => (
+                      <TouchableOpacity key={level} style={[styles.optionButton, editData.tp_hit === level && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, tp_hit: level })}>
+                        <Text style={[styles.optionText, editData.tp_hit === level && styles.optionTextActive]}>{level}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.inputLabel}>Visibility</Text>
+                  <View style={styles.optionsRow}>
+                    {VISIBILITIES.map((v) => (
+                      <TouchableOpacity key={v} style={[styles.optionButton, editData.visibility === v && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, visibility: v as any })}>
+                        <Text style={[styles.optionText, editData.visibility === v && styles.optionTextActive]}>{v.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleEditSignal} disabled={isSubmitting}>
+                    {isSubmitting ? <ActivityIndicator color="#0A0E17" /> : <Text style={styles.submitButtonText}>Save Changes</Text>}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========== CLOSE SIGNAL MODAL ========== */}
+      <Modal visible={showCloseModal} animationType="slide" transparent={true} onRequestClose={() => setShowCloseModal(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Close Signal</Text>
+              <TouchableOpacity onPress={() => setShowCloseModal(false)}>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {selectedSignal && (
+                <>
+                  <View style={styles.closeSignalInfo}>
+                    <Text style={styles.closeSignalPair}>{selectedSignal.pair}</Text>
+                    <Text style={styles.closeSignalType}>{selectedSignal.signal_type.toUpperCase()} @ {selectedSignal.entry}</Text>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Final TP Hit Level</Text>
+                  <View style={styles.optionsRow}>
+                    {[0, 1, 2, 3].map((level) => (
+                      <TouchableOpacity key={level} style={[styles.optionButton, closeTpHit === level && styles.optionButtonActive]} onPress={() => setCloseTpHit(level)}>
+                        <Text style={[styles.optionText, closeTpHit === level && styles.optionTextActive]}>{level === 0 ? 'SL Hit' : `TP${level}`}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
 
                   <Text style={styles.inputLabel}>Close Price (calculates pips)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 1.0920"
-                    placeholderTextColor="#8A8D98"
-                    keyboardType="decimal-pad"
-                    value={closePrice}
-                    onChangeText={setClosePrice}
-                  />
+                  <TextInput style={styles.input} placeholder="e.g. 1.0920" placeholderTextColor="#8A8D98" keyboardType="decimal-pad" value={closePrice} onChangeText={setClosePrice} />
 
                   <Text style={styles.orText}>— OR —</Text>
 
                   <Text style={styles.inputLabel}>Enter Final Pips Directly</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 50 or -30"
-                    placeholderTextColor="#8A8D98"
-                    keyboardType="numeric"
-                    value={finalPips}
-                    onChangeText={setFinalPips}
-                  />
+                  <TextInput style={styles.input} placeholder="e.g. 50 or -30" placeholderTextColor="#8A8D98" keyboardType="numeric" value={finalPips} onChangeText={setFinalPips} />
 
-                  <TouchableOpacity
-                    style={[styles.submitButton, styles.closeSubmitButton, isSubmitting && styles.submitButtonDisabled]}
-                    onPress={handleCloseSignal}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.closeSubmitButtonText}>Close Signal</Text>
-                    )}
+                  <TouchableOpacity style={[styles.submitButton, styles.closeSubmitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleCloseSignal} disabled={isSubmitting}>
+                    {isSubmitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.closeSubmitButtonText}>Close Signal</Text>}
                   </TouchableOpacity>
                 </>
               )}
@@ -650,408 +717,77 @@ export default function SignalManagement() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E17',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2F3E',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#00D4AA',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollView: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginTop: 8,
-  },
-  signalCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  signalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  signalPair: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  badges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  typeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  signalDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#0A0E17',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  detailRow: {
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 11,
-    color: '#8A8D98',
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  tpContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  tpBadge: {
-    backgroundColor: 'rgba(138, 141, 152, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  tpBadgeHit: {
-    backgroundColor: 'rgba(0, 212, 170, 0.2)',
-    borderColor: '#00D4AA',
-  },
-  tpBadgeText: {
-    fontSize: 12,
-    color: '#8A8D98',
-    fontWeight: '600',
-  },
-  tpBadgeTextHit: {
-    color: '#00D4AA',
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: '#0A0E17',
-    padding: 12,
-    borderRadius: 8,
-  },
-  resultLabel: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginRight: 8,
-  },
-  resultValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  tpActions: {
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  tpActionsLabel: {
-    fontSize: 12,
-    color: '#00D4AA',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  tpButtonsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  tpButton: {
-    backgroundColor: '#00D4AA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  tp3Button: {
-    backgroundColor: '#FFD700',
-  },
-  tpButtonText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  activateButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  activateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#00D4AA',
-  },
-  editButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  closeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFD700',
-  },
-  deleteButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 71, 87, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FF4757',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1A1F2E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2F3E',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  modalScroll: {
-    padding: 24,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    backgroundColor: '#0A0E17',
-    borderRadius: 12,
-    padding: 14,
-    color: '#FFFFFF',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  optionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#0A0E17',
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  optionButtonActive: {
-    backgroundColor: '#00D4AA',
-    borderColor: '#00D4AA',
-  },
-  optionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8D98',
-  },
-  optionTextActive: {
-    color: '#0A0E17',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  typeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#0A0E17',
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-    gap: 8,
-  },
-  buyButtonActive: {
-    backgroundColor: '#00D4AA',
-    borderColor: '#00D4AA',
-  },
-  sellButtonActive: {
-    backgroundColor: '#FF4757',
-    borderColor: '#FF4757',
-  },
-  typeButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-  },
-  submitButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  closeSubmitButton: {
-    backgroundColor: '#FF4757',
-  },
-  closeSubmitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  signalInfo: {
-    backgroundColor: '#0A0E17',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  signalInfoPair: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  signalInfoType: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginTop: 4,
-  },
-  tpInfoRow: {
-    marginTop: 8,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  tpInfoText: {
-    fontSize: 12,
-    color: '#00D4AA',
-    fontWeight: '600',
-  },
-  orText: {
-    textAlign: 'center',
-    color: '#8A8D98',
-    marginVertical: 16,
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: '#0A0E17' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#2A2F3E' },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF' },
+  addButton: { width: 40, height: 40, backgroundColor: '#00D4AA', borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  scrollView: { flex: 1, padding: 16 },
+  emptyState: { alignItems: 'center', paddingVertical: 60 },
+  emptyText: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginTop: 16 },
+  signalCard: { backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#2A2F3E' },
+  signalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  signalPair: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' },
+  badges: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeText: { fontSize: 10, fontWeight: 'bold' },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 4 },
+  typeText: { fontSize: 14, fontWeight: 'bold' },
+  signalDetails: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#0A0E17', borderRadius: 12, padding: 12, marginBottom: 12 },
+  detailRow: { alignItems: 'center' },
+  detailLabel: { fontSize: 11, color: '#8A8D98', marginBottom: 4 },
+  detailValue: { fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' },
+  tpContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  tpBadge: { backgroundColor: 'rgba(138, 141, 152, 0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2A2F3E' },
+  tpBadgeHit: { backgroundColor: 'rgba(0, 212, 170, 0.2)', borderColor: '#00D4AA' },
+  tpBadgeText: { fontSize: 12, color: '#8A8D98', fontWeight: '600' },
+  tpBadgeTextHit: { color: '#00D4AA' },
+  resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12, backgroundColor: '#0A0E17', padding: 12, borderRadius: 8 },
+  resultLabel: { fontSize: 14, color: '#8A8D98', marginRight: 8 },
+  resultValue: { fontSize: 18, fontWeight: 'bold' },
+  tpActions: { backgroundColor: 'rgba(0, 212, 170, 0.1)', borderRadius: 12, padding: 12, marginBottom: 12 },
+  tpActionsLabel: { fontSize: 12, color: '#00D4AA', fontWeight: '600', marginBottom: 8 },
+  tpButtonsRow: { flexDirection: 'row', gap: 8 },
+  tpButton: { backgroundColor: '#00D4AA', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  tp3Button: { backgroundColor: '#FFD700' },
+  tpButtonText: { fontSize: 12, fontWeight: 'bold', color: '#0A0E17' },
+  actionButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  activateButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 212, 170, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
+  activateButtonText: { fontSize: 12, fontWeight: '600', color: '#00D4AA' },
+  editButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 212, 170, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
+  editButtonText: { fontSize: 12, fontWeight: '600', color: '#00D4AA' },
+  closeButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 215, 0, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
+  closeButtonText: { fontSize: 12, fontWeight: '600', color: '#FFD700' },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255, 71, 87, 0.1)', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, gap: 4 },
+  deleteButtonDisabled: { opacity: 0.5 },
+  deleteButtonText: { fontSize: 12, fontWeight: '600', color: '#FF4757' },
+  modalContainer: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#1A1F2E', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#2A2F3E' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' },
+  modalScroll: { padding: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', marginBottom: 8, marginTop: 12 },
+  input: { backgroundColor: '#0A0E17', borderRadius: 12, padding: 14, color: '#FFFFFF', fontSize: 16, borderWidth: 1, borderColor: '#2A2F3E' },
+  optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  optionButton: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: '#0A0E17', borderWidth: 1, borderColor: '#2A2F3E' },
+  optionButtonActive: { backgroundColor: '#00D4AA', borderColor: '#00D4AA' },
+  optionText: { fontSize: 12, fontWeight: '600', color: '#8A8D98' },
+  optionTextActive: { color: '#0A0E17' },
+  typeRow: { flexDirection: 'row', gap: 12 },
+  typeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, backgroundColor: '#0A0E17', borderWidth: 1, borderColor: '#2A2F3E', gap: 8 },
+  buyButtonActive: { backgroundColor: '#00D4AA', borderColor: '#00D4AA' },
+  sellButtonActive: { backgroundColor: '#FF4757', borderColor: '#FF4757' },
+  typeButtonText: { fontSize: 14, fontWeight: 'bold', color: '#00D4AA' },
+  submitButton: { backgroundColor: '#00D4AA', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { fontSize: 16, fontWeight: 'bold', color: '#0A0E17' },
+  closeSubmitButton: { backgroundColor: '#FF4757' },
+  closeSubmitButtonText: { fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' },
+  editSignalInfo: { backgroundColor: '#0A0E17', borderRadius: 12, padding: 12, marginBottom: 8 },
+  editSignalId: { fontSize: 12, color: '#8A8D98', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  closeSignalInfo: { backgroundColor: '#0A0E17', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  closeSignalPair: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' },
+  closeSignalType: { fontSize: 14, color: '#8A8D98', marginTop: 4 },
+  orText: { textAlign: 'center', color: '#8A8D98', marginVertical: 16, fontSize: 14 },
 });
