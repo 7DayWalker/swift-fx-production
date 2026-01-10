@@ -13,10 +13,11 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
+import { TAB_BAR_HEIGHT } from './_layout';
 
 interface Post {
   post_id: string;
@@ -38,6 +39,7 @@ interface Comment {
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +50,9 @@ export default function CommunityScreen() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
+  
+  // Calculate bottom padding for content to avoid tab bar overlap
+  const bottomPadding = TAB_BAR_HEIGHT + insets.bottom + 16;
   const [loadingComments, setLoadingComments] = useState(false);
 
   useEffect(() => {
