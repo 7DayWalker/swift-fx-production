@@ -20,13 +20,18 @@ interface Signal {
   signal_type: 'buy' | 'sell';
   entry?: number;
   stop_loss?: number;
-  take_profit?: number;
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  tp_hit?: number;
+  take_profit?: number; // Legacy
   risk_reward?: number;
   status: string;
   visibility: 'free' | 'premium' | 'vip';
   created_at: string;
   closed_at?: string;
-  result_pips?: number;
+  final_pips?: number;
+  result_pips?: number; // Legacy
 }
 
 interface Stats {
