@@ -191,8 +191,19 @@ export default function SignalsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Trading Signals</Text>
-        <Text style={styles.subtitle}>Real-time trading opportunities</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>Trading Signals</Text>
+            <Text style={styles.subtitle}>Real-time trading opportunities</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.historyButton}
+            onPress={() => router.push('/signal-history')}
+          >
+            <Ionicons name="time-outline" size={18} color="#00D4AA" />
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter Tabs */}
