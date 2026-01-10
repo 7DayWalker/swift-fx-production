@@ -87,7 +87,14 @@ export default function AIScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      setSelectedImage(asset.uri);
+      // Store base64 for upload if available
+      if (asset.base64) {
+        setImageBase64(asset.base64);
+      } else {
+        setImageBase64(null);
+      }
       // Clear previous result when new image is selected
       if (screenState === 'result' || screenState === 'error') {
         setScreenState('upload');
