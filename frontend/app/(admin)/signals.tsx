@@ -193,6 +193,10 @@ export default function SignalManagement() {
       setShowCreateModal(false);
       resetCreateForm();
       await fetchSignals();
+      
+      // Trigger real-time update for all users
+      onSignalCreated();
+      
       showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to create signal');
