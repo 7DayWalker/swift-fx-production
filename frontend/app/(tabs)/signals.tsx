@@ -12,7 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
-import { api } from '../../src/services/api';
+import { useSignals } from '../../src/context/SignalContext';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
 
