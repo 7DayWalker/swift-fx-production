@@ -51,7 +51,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <RootLayoutContent />
+            <SignalProvider>
+              <RootLayoutContent />
+            </SignalProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
