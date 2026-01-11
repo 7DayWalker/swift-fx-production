@@ -57,6 +57,16 @@ const safeNum = (value: any, fallback: number = 0): number => {
 
 export default function SignalManagement() {
   const router = useRouter();
+  
+  // Get signal event triggers from context for real-time propagation
+  const { 
+    onSignalCreated, 
+    onSignalActivated, 
+    onSignalClosed, 
+    onSignalDeleted, 
+    onSignalUpdated 
+  } = useSignals();
+  
   const [signals, setSignals] = useState<Signal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
