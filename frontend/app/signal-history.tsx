@@ -91,9 +91,7 @@ export default function SignalHistoryScreen() {
   };
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchHistory();
-    setRefreshing(false);
+    await Promise.all([fetchHistory(), refreshHistory()]);
   };
 
   const formatDate = (dateString: string) => {
