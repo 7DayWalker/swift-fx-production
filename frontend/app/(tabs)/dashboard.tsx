@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSignals } from '../../src/context/SignalContext';
 import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
@@ -30,9 +31,12 @@ export default function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  // Use centralized signal context for real-time stats
+  const { stats, isRefreshing, refreshAll } = useSignals();
+  
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   
   // Calculate bottom padding for content to avoid tab bar overlap
   // TAB_BAR_HEIGHT (56) + safe area bottom + extra padding
@@ -41,6 +45,20 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchDashboard();
   }, []);
+  
+  // Update performance data when stats change from context
+  useEffect(() => {
+    if (stats && dashboardData) {
+      setDashboardData(prev => prev ? {
+        ...prev,
+        performance: {
+          win_rate: stats.win_rate,
+          total_pips: stats.total_pips,
+          total_signals: stats.total_signals,
+        }
+      } : prev);
+    }
+  }, [stats]);
 
   const fetchDashboard = async () => {
     try {
@@ -54,9 +72,7 @@ export default function DashboardScreen() {
   };
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchDashboard();
-    setRefreshing(false);
+    await Promise.all([fetchDashboard(), refreshAll()]);
   };
 
   const getCategoryColor = (category: string) => {
