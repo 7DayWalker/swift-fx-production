@@ -60,13 +60,24 @@ export default function SignalHistoryScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  // Use the centralized signal context for auto-refresh
+  const { historyData, refreshHistory, isRefreshing } = useSignals();
+  
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchHistory();
   }, []);
+  
+  // Auto-update when historyData changes from context
+  useEffect(() => {
+    if (historyData) {
+      // Map context data to our local format
+      setData(historyData as any);
+    }
+  }, [historyData]);
 
   const fetchHistory = async () => {
     try {
