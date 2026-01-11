@@ -40,33 +40,23 @@ export default function SignalsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  
+  // Use centralized signal state with auto-refresh
+  const { 
+    signals, 
+    isLoading, 
+    isRefreshing, 
+    refreshSignals, 
+    lastUpdated 
+  } = useSignals();
+  
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'closed'>('all');
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
 
-  useEffect(() => {
-    fetchSignals();
-  }, []);
-
-  const fetchSignals = async () => {
-    try {
-      const response = await api.get('/signals');
-      setSignals(response.data);
-    } catch (error) {
-      console.error('Failed to fetch signals:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchSignals();
-    setRefreshing(false);
+    await refreshSignals();
   };
 
   const filteredSignals = signals.filter(signal => {
