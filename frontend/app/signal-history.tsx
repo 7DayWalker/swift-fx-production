@@ -211,7 +211,7 @@ export default function SignalHistoryScreen() {
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
         }
         ListHeaderComponent={
           <>
