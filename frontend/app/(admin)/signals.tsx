@@ -265,6 +265,10 @@ export default function SignalManagement() {
       setShowEditModal(false);
       setSelectedSignal(null);
       await fetchSignals();
+      
+      // Trigger real-time update for all users
+      onSignalUpdated();
+      
       showAlert('Success', 'Signal updated successfully!');
     } catch (error: any) {
       console.error('Edit error:', error);
@@ -279,6 +283,10 @@ export default function SignalManagement() {
     try {
       await api.post(`/admin/signals/${signalId}/activate`);
       await fetchSignals();
+      
+      // Trigger real-time update for all users
+      onSignalActivated();
+      
       showAlert('Success', 'Signal activated!');
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to activate signal');
@@ -290,6 +298,14 @@ export default function SignalManagement() {
     try {
       await api.post(`/admin/signals/${signalId}/mark-tp?tp_level=${tpLevel}`);
       await fetchSignals();
+      
+      // Trigger real-time update for all users (TP hit is like an update or close)
+      if (tpLevel === 3) {
+        onSignalClosed();
+      } else {
+        onSignalUpdated();
+      }
+      
       showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to mark TP');
@@ -319,6 +335,10 @@ export default function SignalManagement() {
       setShowCloseModal(false);
       setSelectedSignal(null);
       await fetchSignals();
+      
+      // Trigger real-time update for all users
+      onSignalClosed();
+      
       showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
       showAlert('Error', error.response?.data?.detail || 'Failed to close signal');
@@ -348,6 +368,10 @@ export default function SignalManagement() {
       
       // Remove from local state immediately for instant feedback
       setSignals(prev => prev.filter(s => s.signal_id !== signalId));
+      
+      // Trigger real-time update for all users
+      onSignalDeleted();
+      
       showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
       console.error('Delete error:', error);
