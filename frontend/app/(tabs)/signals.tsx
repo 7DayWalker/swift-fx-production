@@ -245,7 +245,7 @@ export default function SignalsScreen() {
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
