@@ -109,9 +109,11 @@ export default function DashboardScreen() {
             <Text style={styles.userName}>{user?.name || 'Trader'}</Text>
           </View>
           <View style={styles.headerRight}>
-            <View style={[styles.roleBadge, user?.role === 'vip' && styles.vipBadge, user?.role === 'premium' && styles.premiumBadge]}>
-              <Text style={styles.roleText}>{user?.role?.toUpperCase() || 'FREE'}</Text>
-            </View>
+            <SubscriptionBadge 
+              size="medium" 
+              showIcon={true}
+              onPress={() => router.push('/(tabs)/more')}
+            />
           </View>
         </View>
 
