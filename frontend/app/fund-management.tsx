@@ -12,15 +12,25 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
+import { useSubscription } from '../src/context/SubscriptionContext';
 
 export default function FundManagementScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const isVIP = user?.role === 'vip';
+  // Check VIP access using subscription context
+  const effectiveSubscription = subscriptionStatus?.subscription || user?.role || 'free';
+  const isVIP = effectiveSubscription === 'vip';
 
   const handleApply = () => {
+    // VIP-only action - redirect to subscription if not VIP
+    if (!isVIP) {
+      router.push('/subscription');
+      return;
+    }
+    
     const msg = 'Applications are currently being reviewed. Our team will contact you within 48 hours.';
     if (Platform.OS === 'web') {
       window.alert(msg);
@@ -30,6 +40,12 @@ export default function FundManagementScreen() {
   };
 
   const handleContact = () => {
+    // VIP-only action - redirect to subscription if not VIP
+    if (!isVIP) {
+      router.push('/subscription');
+      return;
+    }
+    
     const msg = 'Contact us at funds@swiftfxsignals.com for inquiries.';
     if (Platform.OS === 'web') {
       window.alert(msg);
@@ -38,63 +54,7 @@ export default function FundManagementScreen() {
     }
   };
 
-  // Locked screen for non-VIP users
-  if (!isVIP) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Fund Management</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={[styles.lockedContent, { paddingBottom: insets.bottom + 20 }]}
-        >
-          <View style={styles.lockIconContainer}>
-            <Ionicons name="lock-closed" size={64} color="#FFD700" />
-          </View>
-          <Text style={styles.lockedTitle}>VIP Exclusive Feature</Text>
-          <Text style={styles.lockedSubtitle}>
-            Fund Management is available exclusively for VIP members
-          </Text>
-
-          <View style={styles.benefitsCard}>
-            <Text style={styles.benefitsTitle}>What You'll Get</Text>
-            {[
-              'Professional fund management services',
-              'Monthly performance reports',
-              'Direct access to fund managers',
-              'Priority capital allocation',
-              'Risk-adjusted returns',
-            ].map((benefit, index) => (
-              <View key={index} style={styles.benefitItem}>
-                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-                <Text style={styles.benefitText}>{benefit}</Text>
-              </View>
-            ))}
-          </View>
-
-          <TouchableOpacity 
-            style={styles.upgradeButton}
-            onPress={() => router.push('/(tabs)/more')}
-          >
-            <Ionicons name="star" size={20} color="#0A0E17" />
-            <Text style={styles.upgradeButtonText}>Upgrade to VIP</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.lockedNote}>
-            Join our VIP membership to access professional fund management and maximize your trading potential
-          </Text>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // VIP Fund Management screen
+  // PREVIEW-FIRST: Show all content to all users, but lock actions
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -102,9 +62,15 @@ export default function FundManagementScreen() {
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Fund Management</Text>
-        <View style={styles.vipBadge}>
-          <Ionicons name="star" size={14} color="#FFD700" />
-        </View>
+        {isVIP ? (
+          <View style={styles.vipBadge}>
+            <Ionicons name="star" size={14} color="#FFD700" />
+          </View>
+        ) : (
+          <View style={styles.lockedBadge}>
+            <Ionicons name="lock-closed" size={14} color="#8A8D98" />
+          </View>
+        )}
       </View>
 
       <ScrollView 
@@ -112,6 +78,23 @@ export default function FundManagementScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* VIP Banner for non-VIP users */}
+        {!isVIP && (
+          <TouchableOpacity 
+            style={styles.vipBanner}
+            onPress={() => router.push('/subscription')}
+          >
+            <View style={styles.vipBannerContent}>
+              <Ionicons name="lock-closed" size={20} color="#FFD700" />
+              <View style={styles.vipBannerText}>
+                <Text style={styles.vipBannerTitle}>VIP Exclusive Feature</Text>
+                <Text style={styles.vipBannerSubtitle}>Upgrade to access fund management actions</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFD700" />
+          </TouchableOpacity>
+        )}
+
         {/* Intro Section */}
         <View style={styles.introSection}>
           <View style={styles.introIcon}>
