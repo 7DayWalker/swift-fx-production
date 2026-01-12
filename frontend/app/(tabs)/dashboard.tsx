@@ -147,11 +147,11 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Watchlist */}
+        {/* Watchlist - Static data */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Watchlist</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.watchlistScroll}>
-            {dashboardData?.watchlist?.map((item, index) => (
+            {WATCHLIST.map((item, index) => (
               <View key={index} style={styles.watchlistItem}>
                 <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(item.category) }]} />
                 <Text style={styles.watchlistPair}>{item.pair}</Text>
@@ -163,24 +163,24 @@ export default function DashboardScreen() {
           </ScrollView>
         </View>
 
-        {/* Recent Signals */}
+        {/* Recent Signals - REACTIVE from SignalContext */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Signals</Text>
+            <Text style={styles.sectionTitle}>Active Signals</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/signals')}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
           
-          {dashboardData?.recent_signals?.length === 0 ? (
+          {recentSignals.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="trending-up-outline" size={48} color="#8A8D98" />
-              <Text style={styles.emptyText}>No signals today yet</Text>
+              <Text style={styles.emptyText}>No active signals</Text>
             </View>
           ) : (
-            dashboardData?.recent_signals?.slice(0, 3).map((signal, index) => (
+            recentSignals.slice(0, 3).map((signal, index) => (
               <TouchableOpacity
-                key={index}
+                key={signal.signal_id || index}
                 style={styles.signalCard}
                 onPress={() => router.push(`/(tabs)/signals`)}
               >
@@ -206,7 +206,7 @@ export default function DashboardScreen() {
                 ) : (
                   <View style={styles.signalDetails}>
                     <Text style={styles.signalDetailText}>Entry: {signal.entry}</Text>
-                    <Text style={styles.signalDetailText}>TP: {signal.take_profit}</Text>
+                    <Text style={styles.signalDetailText}>TP1: {signal.tp1 || signal.take_profit}</Text>
                     <Text style={styles.signalDetailText}>SL: {signal.stop_loss}</Text>
                   </View>
                 )}
