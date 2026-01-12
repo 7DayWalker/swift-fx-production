@@ -1576,54 +1576,72 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
     # Group symbols by type
     forex_symbols = []
     crypto_symbols = []
+    gold_symbols = []
     
     for symbol in symbols:
         normalized = symbol.replace("/", "").upper()
         mapping = SYMBOL_MAP.get(symbol) or SYMBOL_MAP.get(normalized)
         if mapping:
-            if mapping["type"] in ["forex", "gold"]:
+            if mapping["type"] == "forex":
                 forex_symbols.append((symbol, mapping["symbol"]))
+            elif mapping["type"] == "gold":
+                gold_symbols.append((symbol, mapping["symbol"]))
             elif mapping["type"] == "crypto":
                 crypto_symbols.append((symbol, mapping["symbol"]))
     
     async with httpx.AsyncClient(timeout=10.0) as client:
-        # Fetch forex/gold from ExchangeRate-API or similar free API
+        # Fetch forex from frankfurter.app (free, no API key needed)
         if forex_symbols:
-            try:
-                # Using frankfurter.app as fallback (free, no API key needed)
-                # For gold, we'll use a separate approach
-                for orig_symbol, api_symbol in forex_symbols:
-                    if "XAU" in api_symbol:
-                        # Fetch gold price from alternative source
-                        try:
-                            gold_resp = await client.get(
-                                "https://api.metals.live/v1/spot/gold"
-                            )
-                            if gold_resp.status_code == 200:
-                                gold_data = gold_resp.json()
-                                if gold_data and len(gold_data) > 0:
-                                    prices[orig_symbol] = float(gold_data[0].get("price", 0))
-                        except Exception as e:
-                            logger.warning(f"Gold price fetch failed: {e}")
-                            # Fallback: use approximate market price
-                            prices[orig_symbol] = 2350.0
-                    else:
-                        # Standard forex pair
-                        base = api_symbol[:3]
-                        quote = api_symbol[3:]
-                        try:
-                            resp = await client.get(
-                                f"https://api.frankfurter.app/latest?from={base}&to={quote}"
-                            )
-                            if resp.status_code == 200:
-                                data = resp.json()
-                                rate = data.get("rates", {}).get(quote)
-                                if rate:
-                                    prices[orig_symbol] = float(rate)
-                        except Exception as e:
-                            logger.warning(f"Forex price fetch for {orig_symbol} failed: {e}")
-            except Exception as e:
-                logger.error(f"Forex price fetch failed: {e}")
+            for orig_symbol, api_symbol in forex_symbols:
+                base = api_symbol[:3]
+                quote = api_symbol[3:]
+                try:
+                    resp = await client.get(
+                        f"https://api.frankfurter.app/latest?from={base}&to={quote}"
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        rate = data.get("rates", {}).get(quote)
+                        if rate:
+                            prices[orig_symbol] = float(rate)
+                except Exception as e:
+                    logger.warning(f"Forex price fetch for {orig_symbol} failed: {e}")
+        
+        # Fetch gold from gold-api.io or fallback
+        if gold_symbols:
+            for orig_symbol, api_symbol in gold_symbols:
+                try:
+                    # Try goldapi.io free endpoint
+                    resp = await client.get(
+                        "https://www.goldapi.io/api/XAU/USD",
+                        headers={"x-access-token": "goldapi-free"}
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        price = data.get("price")
+                        if price:
+                            prices[orig_symbol] = float(price)
+                            continue
+                except:
+                    pass
+                
+                # Fallback: Use CoinGecko's gold price via PAX Gold token
+                try:
+                    resp = await client.get(
+                        "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd"
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if "pax-gold" in data:
+                            prices[orig_symbol] = float(data["pax-gold"]["usd"])
+                            continue
+                except:
+                    pass
+                
+                # Last fallback: approximate current market price
+                # This should be updated periodically or replaced with a real API key
+                logger.warning(f"Using fallback price for {orig_symbol}")
+                prices[orig_symbol] = 2650.0  # Approximate gold price
         
         # Fetch crypto from CoinGecko (free, no API key)
         if crypto_symbols:
