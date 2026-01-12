@@ -17,78 +17,54 @@ import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
 
-interface DashboardData {
-  recent_signals: any[];
-  performance: {
-    win_rate: number;
-    total_pips: number;
-    total_signals: number;
-  };
-  watchlist: { pair: string; category: string }[];
-}
+// Static data that doesn't need real-time updates
+const WATCHLIST = [
+  { pair: 'EUR/USD', category: 'forex' },
+  { pair: 'GBP/USD', category: 'forex' },
+  { pair: 'XAU/USD', category: 'gold' },
+  { pair: 'BTC/USD', category: 'crypto' },
+  { pair: 'ETH/USD', category: 'crypto' },
+];
 
 export default function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // Use centralized signal context for real-time stats
-  const { stats, signals, isRefreshing, refreshAll } = useSignals();
-  
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // SINGLE SOURCE OF TRUTH: Use SignalContext directly for all real-time data
+  const { 
+    stats, 
+    signals, 
+    activeSignals,
+    closedSignals,
+    isLoading: contextLoading, 
+    isRefreshing, 
+    refreshAll 
+  } = useSignals();
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  // TAB_BAR_HEIGHT (56) + safe area bottom + extra padding
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   
-  // Helper function to safely format numbers
-  const formatNumber = (value: number | undefined | null, decimals: number = 1): string => {
-    if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
-      return '0';
-    }
-    return Number(value).toFixed(decimals);
+  // REACTIVE STATS - Directly computed from SignalContext (no caching, no local state)
+  const winRate = stats?.win_rate ?? 0;
+  const totalPips = stats?.total_pips ?? 0;
+  const totalSignals = signals.length;
+  const closedCount = closedSignals.length;
+  
+  // Format helpers - pure functions, no state
+  const formatWinRate = (rate: number): string => {
+    if (isNaN(rate) || !isFinite(rate)) return '0.0';
+    return rate.toFixed(1);
   };
   
-  // Get real-time performance stats from context (priority) or fallback to dashboardData
-  const getWinRate = (): string => {
-    if (stats?.win_rate !== undefined) {
-      return formatNumber(stats.win_rate, 1);
-    }
-    return formatNumber(dashboardData?.performance?.win_rate, 1);
-  };
-  
-  const getTotalPips = (): number => {
-    if (stats?.total_pips !== undefined) {
-      return Math.round(stats.total_pips * 10) / 10;
-    }
-    return dashboardData?.performance?.total_pips || 0;
-  };
-  
-  const getTotalSignals = (): number => {
-    if (stats?.total_signals !== undefined) {
-      return stats.total_signals;
-    }
-    return dashboardData?.performance?.total_signals || 0;
-  };
-
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
-
-  const fetchDashboard = async () => {
-    try {
-      const response = await api.get('/dashboard');
-      setDashboardData(response.data);
-    } catch (error) {
-      console.error('Failed to fetch dashboard:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const formatPips = (pips: number): string => {
+    if (isNaN(pips) || !isFinite(pips)) return '0';
+    const rounded = Math.round(pips * 10) / 10;
+    return rounded >= 0 ? `+${rounded}` : `${rounded}`;
   };
 
   const onRefresh = async () => {
-    await Promise.all([fetchDashboard(), refreshAll()]);
+    await refreshAll();
   };
 
   const getCategoryColor = (category: string) => {
@@ -99,8 +75,11 @@ export default function DashboardScreen() {
       default: return '#8A8D98';
     }
   };
+  
+  // Get recent signals from context (first 5 active signals)
+  const recentSignals = activeSignals.slice(0, 5);
 
-  if (isLoading) {
+  if (contextLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
