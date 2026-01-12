@@ -126,22 +126,22 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Performance Stats */}
+        {/* Performance Stats - REACTIVE from SignalContext */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Performance</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{getWinRate()}%</Text>
+              <Text style={styles.statValue}>{formatWinRate(winRate)}%</Text>
               <Text style={styles.statLabel}>Win Rate</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: getTotalPips() >= 0 ? '#00D4AA' : '#FF4757' }]}>
-                {getTotalPips() >= 0 ? '+' : ''}{getTotalPips()}
+              <Text style={[styles.statValue, { color: totalPips >= 0 ? '#00D4AA' : '#FF4757' }]}>
+                {formatPips(totalPips)}
               </Text>
               <Text style={styles.statLabel}>Total Pips</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{getTotalSignals()}</Text>
+              <Text style={styles.statValue}>{totalSignals}</Text>
               <Text style={styles.statLabel}>Signals</Text>
             </View>
           </View>
