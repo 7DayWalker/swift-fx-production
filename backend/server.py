@@ -742,7 +742,7 @@ async def close_signal(
     return {"message": "Signal closed successfully", "final_pips": update_doc.get("final_pips")}
 
 @api_router.post("/admin/signals/{signal_id}/mark-tp")
-async def mark_tp_hit(signal_id: str, tp_level: int, admin: User = Depends(require_admin)):
+async def mark_tp_hit(signal_id: str, tp_level: int, background_tasks: BackgroundTasks, admin: User = Depends(require_admin)):
     """Mark a specific TP level as hit (1, 2, or 3)"""
     if tp_level not in [1, 2, 3]:
         raise HTTPException(status_code=400, detail="tp_level must be 1, 2, or 3")
@@ -752,23 +752,37 @@ async def mark_tp_hit(signal_id: str, tp_level: int, admin: User = Depends(requi
         raise HTTPException(status_code=404, detail="Signal not found")
     
     update_doc = {"tp_hit": tp_level}
+    final_pips_value = 0.0
     
     # If TP3 is hit, auto-close the signal
     if tp_level == 3:
         tp3_price = signal.get("tp3") or signal.get("tp2") or signal.get("tp1")
         update_doc["status"] = SignalStatus.CLOSED
         update_doc["closed_at"] = datetime.now(timezone.utc)
-        update_doc["final_pips"] = calculate_pips(
+        final_pips_value = calculate_pips(
             signal["entry"],
             tp3_price,
             signal["signal_type"],
             signal["pair"]
         )
+        update_doc["final_pips"] = final_pips_value
     
     await db.signals.update_one(
         {"signal_id": signal_id},
         {"$set": update_doc}
     )
+    
+    # Send push notification when signal is auto-closed (TP3 hit)
+    if tp_level == 3:
+        visibility = SignalVisibility(signal.get("visibility", "free"))
+        background_tasks.add_task(
+            send_signal_close_notification,
+            signal_id,
+            signal["pair"],
+            signal["signal_type"],
+            final_pips_value,
+            visibility
+        )
     
     return {"message": f"TP{tp_level} marked as hit", "auto_closed": tp_level == 3}
 
