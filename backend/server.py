@@ -300,10 +300,6 @@ def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) 
     visibility_hierarchy = {SignalVisibility.FREE: 0, SignalVisibility.PREMIUM: 1, SignalVisibility.VIP: 2}
     return role_hierarchy.get(user_role, 0) >= visibility_hierarchy.get(signal_visibility, 0)
 
-def get_ai_weekly_limit(role: UserRole) -> int:
-    limits = {UserRole.FREE: 0, UserRole.PREMIUM: 5, UserRole.VIP: 20, UserRole.ADMIN: 999}
-    return limits.get(role, 0)
-
 # ===================== AUTH ENDPOINTS =====================
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate):
