@@ -1791,10 +1791,11 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
         "is_admin": user_doc.get("is_admin", False),
         "features": {
             "signals_access": effective_subscription,  # "free", "premium", or "vip"
-            "ai_analyzer": effective_subscription != "free",
+            "ai_analyzer": True,  # All users have access, just different limits
             "ai_limit": ai_limit if ai_limit < 100000 else "unlimited",
             "ai_used": ai_weekly_used,
             "ai_remaining": max(0, ai_limit - ai_weekly_used) if ai_limit < 100000 else "unlimited",
+            "ai_limit_reached": ai_weekly_used >= ai_limit if ai_limit < 100000 else False,
             "fund_management": effective_subscription == "vip",
             "academy": effective_subscription == "vip",
             "image_uploads": effective_subscription != "free"
