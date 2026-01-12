@@ -334,9 +334,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  lockedBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(138, 141, 152, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scrollView: {
     flex: 1,
     padding: 16,
+  },
+  // VIP Banner for non-VIP users
+  vipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  vipBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  vipBannerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  vipBannerTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFD700',
+  },
+  vipBannerSubtitle: {
+    fontSize: 12,
+    color: '#8A8D98',
+    marginTop: 2,
+  },
+  // Locked button styles
+  lockedButton: {
+    opacity: 0.9,
+  },
+  lockedContactButton: {
+    borderColor: '#3A3F4E',
   },
   // Locked screen styles
   lockedContent: {
