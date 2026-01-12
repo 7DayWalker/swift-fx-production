@@ -144,7 +144,6 @@ export default function AcademyScreen() {
               key={category.id}
               style={[styles.categoryCard, locked && styles.categoryCardLocked]}
               onPress={() => handleCategoryPress(category)}
-              disabled={locked}
             >
               <View style={[styles.categoryIconContainer, { backgroundColor: `${category.color}20` }]}>
                 <Ionicons 
