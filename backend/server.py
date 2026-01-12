@@ -1122,14 +1122,8 @@ async def analyze_chart(
     # Get effective subscription (accounting for expiry)
     effective_subscription = get_effective_subscription(user_doc)
     
-    # Check access - Free users cannot use AI analyzer
-    if effective_subscription == "free":
-        raise HTTPException(
-            status_code=403, 
-            detail="AI Chart Analyzer requires Premium or VIP subscription. Upgrade to unlock this feature!"
-        )
-    
-    # Get weekly limit based on subscription (not role)
+    # Get weekly limit based on subscription
+    # Free: 3, Premium: 10, VIP: unlimited
     weekly_limit = get_ai_weekly_limit(effective_subscription)
     
     # Check and reset weekly counter if needed (using new fields)
