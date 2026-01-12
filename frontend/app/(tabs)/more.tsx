@@ -179,8 +179,8 @@ export default function MoreScreen() {
           </View>
         </View>
 
-        {/* Subscription Status Card - Real-time from SubscriptionContext */}
-        <SubscriptionCard onUpgradePress={() => setShowSubscriptionModal(true)} />
+        {/* Subscription Status Card - Routes to /subscription */}
+        <SubscriptionCard onUpgradePress={() => router.push('/subscription')} />
 
         {/* Notification Toggle */}
         <View style={[styles.notificationCard, dynamicStyles.card]}>
