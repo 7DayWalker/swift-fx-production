@@ -227,56 +227,71 @@ export default function AIScreen() {
       const formData = new FormData();
       const imageUri = selectedImage;
       
-      // Convert base64 to blob for proper file upload
+      // MOBILE FIX: Convert image URI to proper File/Blob for Claude Vision
+      // Mobile URIs (file://, blob://, ph://) must be converted to binary
+      
       if (imageBase64) {
-        // We have base64 data from the image picker
-        const byteCharacters = atob(imageBase64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        // Best case: We have base64 data from image picker
+        console.log('Converting base64 to file, length:', imageBase64.length);
         
-        if (Platform.OS === 'web') {
-          // On web, create a File from the blob
+        try {
+          // Clean base64 string (remove any data URI prefix if present)
+          let cleanBase64 = imageBase64;
+          if (cleanBase64.includes(',')) {
+            cleanBase64 = cleanBase64.split(',')[1];
+          }
+          
+          // Convert base64 to binary
+          const binaryString = atob(cleanBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Create blob from binary
+          const blob = new Blob([bytes], { type: 'image/jpeg' });
+          
+          // Create File object (works on both web and mobile web)
           const file = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
           formData.append('image', file);
-          console.log('Web upload from base64 - File size:', file.size);
-        } else {
-          // On native, also use blob approach
-          formData.append('image', blob, 'chart.jpg');
-          console.log('Native upload from base64 - Blob size:', blob.size);
-        }
-      } else if (Platform.OS === 'web') {
-        // Fallback: On web without base64, fetch the URI as blob
-        try {
-          const response = await fetch(imageUri);
-          const blob = await response.blob();
-          const filename = imageUri.split('/').pop()?.split('?')[0] || 'chart.jpg';
-          const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
-          formData.append('image', file);
-          console.log('Web upload from URI - File size:', file.size, 'Type:', file.type);
-        } catch (fetchError) {
-          console.error('Failed to fetch image blob:', fetchError);
-          throw new Error('Failed to process image. Please try selecting the image again.');
+          console.log('Image file created from base64, size:', file.size, 'bytes');
+        } catch (base64Error) {
+          console.error('Base64 conversion failed:', base64Error);
+          throw new Error('Failed to process image. Please try selecting a different image.');
         }
       } else {
-        // Native fallback (shouldn't happen if base64 is enabled)
-        const filename = imageUri.split('/').pop() || 'chart.jpg';
-        const match = /\.([\w]+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // Fallback: Fetch the URI and convert to blob
+        // This handles file://, blob://, http://, https:// URIs
+        console.log('Fetching image from URI:', imageUri.substring(0, 50) + '...');
         
-        formData.append('image', {
-          uri: imageUri,
-          name: filename,
-          type: type,
-        } as any);
-        console.log('Native upload from URI - URI:', imageUri);
+        try {
+          const response = await fetch(imageUri);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          console.log('Blob fetched, size:', blob.size, 'type:', blob.type);
+          
+          // Ensure we have a valid blob
+          if (blob.size === 0) {
+            throw new Error('Image data is empty');
+          }
+          
+          // Create File from blob
+          const file = new File([blob], 'chart.jpg', { type: blob.type || 'image/jpeg' });
+          formData.append('image', file);
+          console.log('Image file created from URI, size:', file.size, 'bytes');
+        } catch (fetchError: any) {
+          console.error('URI fetch failed:', fetchError);
+          throw new Error('Failed to load image. Please try selecting the image again.');
+        }
       }
       
       formData.append('pair', selectedPair);
       formData.append('timeframe', selectedTimeframe);
+      
+      console.log('Sending analysis request...');
 
       const response = await api.post('/ai/analyze', formData, {
         headers: {
