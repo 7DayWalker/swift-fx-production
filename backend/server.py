@@ -925,6 +925,83 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
 
+
+async def send_signal_close_notification(signal_id: str, pair: str, signal_type: str, final_pips: float, visibility: SignalVisibility):
+    """Send push notification when a signal is closed"""
+    try:
+        # Get all active device tokens with user info
+        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
+        if not device_tokens:
+            logger.info("No active device tokens found for close notification")
+            return
+        
+        # Notification content for closed signal
+        result = "WIN" if final_pips > 0 else "LOSS"
+        pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
+        title = f"Signal Closed: {result}"
+        body = f"{pair} • {signal_type.upper()} • {pips_str} pips"
+        
+        messages = []
+        notified_users = 0
+        
+        for token_doc in device_tokens:
+            token = token_doc.get("token", "")
+            user_id = token_doc.get("user_id")
+            
+            if not token.startswith("ExponentPushToken") or not user_id:
+                continue
+            
+            user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+            if not user:
+                continue
+            
+            notification_prefs = user.get("notification_preferences", {})
+            if not notification_prefs.get("signals", True):
+                continue
+            
+            user_role = UserRole(user.get("role", "free"))
+            
+            # Apply same visibility rules as new signals
+            if visibility == SignalVisibility.VIP:
+                if user_role != UserRole.VIP:
+                    continue
+            elif visibility == SignalVisibility.PREMIUM:
+                if user_role not in [UserRole.PREMIUM, UserRole.VIP]:
+                    continue
+            
+            messages.append({
+                "to": token,
+                "title": title,
+                "body": body,
+                "data": {"signalId": signal_id, "type": "signal_closed", "result": result},
+                "sound": "default"
+            })
+            notified_users += 1
+        
+        if not messages:
+            logger.info(f"No eligible users for close notification of signal {signal_id}")
+            return
+        
+        # Send notifications in batches
+        batch_size = 100
+        for i in range(0, len(messages), batch_size):
+            batch = messages[i:i + batch_size]
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=batch,
+                    headers={
+                        "Accept": "application/json",
+                        "Accept-Encoding": "gzip, deflate",
+                        "Content-Type": "application/json",
+                    }
+                )
+                logger.info(f"Expo push response for close: {response.status_code}")
+        
+        logger.info(f"Sent close notification for signal {signal_id} to {notified_users} users")
+    except Exception as e:
+        logger.error(f"Failed to send close notification: {e}")
+
 # ===================== AI CHART ANALYZER =====================
 @api_router.post("/ai/analyze")
 async def analyze_chart(
