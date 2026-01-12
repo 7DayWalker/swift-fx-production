@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
+import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
 import { api } from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
 
