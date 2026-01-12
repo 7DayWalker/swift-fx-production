@@ -1534,6 +1534,348 @@ async def setup_admin(email: EmailStr, password: str, admin_key: str):
     await db.users.insert_one(user_doc)
     return {"message": "Admin account created", "user_id": user_id}
 
+
+# ===================== PRICE-BASED SIGNAL AUTOMATION =====================
+import asyncio
+from contextlib import asynccontextmanager
+
+# Price feed configuration
+PRICE_POLL_INTERVAL = 30  # seconds
+price_automation_running = False
+
+# Symbol mapping for different price APIs
+SYMBOL_MAP = {
+    # Forex pairs
+    "EUR/USD": {"type": "forex", "symbol": "EURUSD"},
+    "EURUSD": {"type": "forex", "symbol": "EURUSD"},
+    "GBP/USD": {"type": "forex", "symbol": "GBPUSD"},
+    "GBPUSD": {"type": "forex", "symbol": "GBPUSD"},
+    "USD/JPY": {"type": "forex", "symbol": "USDJPY"},
+    "USDJPY": {"type": "forex", "symbol": "USDJPY"},
+    "AUD/USD": {"type": "forex", "symbol": "AUDUSD"},
+    "AUDUSD": {"type": "forex", "symbol": "AUDUSD"},
+    "USD/CAD": {"type": "forex", "symbol": "USDCAD"},
+    "USDCAD": {"type": "forex", "symbol": "USDCAD"},
+    "USD/CHF": {"type": "forex", "symbol": "USDCHF"},
+    "USDCHF": {"type": "forex", "symbol": "USDCHF"},
+    # Gold
+    "XAU/USD": {"type": "gold", "symbol": "XAUUSD"},
+    "XAUUSD": {"type": "gold", "symbol": "XAUUSD"},
+    # Crypto
+    "BTC/USD": {"type": "crypto", "symbol": "bitcoin"},
+    "BTCUSD": {"type": "crypto", "symbol": "bitcoin"},
+    "ETH/USD": {"type": "crypto", "symbol": "ethereum"},
+    "ETHUSD": {"type": "crypto", "symbol": "ethereum"},
+}
+
+
+async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
+    """Fetch live prices from multiple free APIs"""
+    prices = {}
+    
+    # Group symbols by type
+    forex_symbols = []
+    crypto_symbols = []
+    
+    for symbol in symbols:
+        normalized = symbol.replace("/", "").upper()
+        mapping = SYMBOL_MAP.get(symbol) or SYMBOL_MAP.get(normalized)
+        if mapping:
+            if mapping["type"] in ["forex", "gold"]:
+                forex_symbols.append((symbol, mapping["symbol"]))
+            elif mapping["type"] == "crypto":
+                crypto_symbols.append((symbol, mapping["symbol"]))
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        # Fetch forex/gold from ExchangeRate-API or similar free API
+        if forex_symbols:
+            try:
+                # Using frankfurter.app as fallback (free, no API key needed)
+                # For gold, we'll use a separate approach
+                for orig_symbol, api_symbol in forex_symbols:
+                    if "XAU" in api_symbol:
+                        # Fetch gold price from alternative source
+                        try:
+                            gold_resp = await client.get(
+                                "https://api.metals.live/v1/spot/gold"
+                            )
+                            if gold_resp.status_code == 200:
+                                gold_data = gold_resp.json()
+                                if gold_data and len(gold_data) > 0:
+                                    prices[orig_symbol] = float(gold_data[0].get("price", 0))
+                        except Exception as e:
+                            logger.warning(f"Gold price fetch failed: {e}")
+                            # Fallback: use approximate market price
+                            prices[orig_symbol] = 2350.0
+                    else:
+                        # Standard forex pair
+                        base = api_symbol[:3]
+                        quote = api_symbol[3:]
+                        try:
+                            resp = await client.get(
+                                f"https://api.frankfurter.app/latest?from={base}&to={quote}"
+                            )
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                rate = data.get("rates", {}).get(quote)
+                                if rate:
+                                    prices[orig_symbol] = float(rate)
+                        except Exception as e:
+                            logger.warning(f"Forex price fetch for {orig_symbol} failed: {e}")
+            except Exception as e:
+                logger.error(f"Forex price fetch failed: {e}")
+        
+        # Fetch crypto from CoinGecko (free, no API key)
+        if crypto_symbols:
+            try:
+                ids = ",".join([s[1] for s in crypto_symbols])
+                resp = await client.get(
+                    f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for orig_symbol, api_id in crypto_symbols:
+                        if api_id in data and "usd" in data[api_id]:
+                            prices[orig_symbol] = float(data[api_id]["usd"])
+            except Exception as e:
+                logger.error(f"Crypto price fetch failed: {e}")
+    
+    return prices
+
+
+def check_price_condition(price: float, target: float, signal_type: str, condition: str) -> bool:
+    """Check if price meets condition based on signal type
+    
+    For BUY signals:
+        - Entry hit: price >= entry
+        - TP hit: price >= TP
+        - SL hit: price <= SL
+    
+    For SELL signals:
+        - Entry hit: price <= entry
+        - TP hit: price <= TP
+        - SL hit: price >= SL
+    """
+    if condition == "entry":
+        if signal_type == "buy":
+            return price >= target
+        else:  # sell
+            return price <= target
+    elif condition == "tp":
+        if signal_type == "buy":
+            return price >= target
+        else:  # sell
+            return price <= target
+    elif condition == "sl":
+        if signal_type == "buy":
+            return price <= target
+        else:  # sell
+            return price >= target
+    return False
+
+
+async def process_pending_signal(signal: dict, current_price: float) -> bool:
+    """Process a pending signal - activate if entry price is reached"""
+    signal_id = signal["signal_id"]
+    entry = signal.get("entry", 0)
+    signal_type = signal.get("signal_type", "buy")
+    pair = signal.get("pair", "")
+    
+    if not entry or not current_price:
+        return False
+    
+    # Check if entry price is reached
+    if check_price_condition(current_price, entry, signal_type, "entry"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): Entry hit at {current_price} (entry: {entry})")
+        
+        # Activate the signal
+        await db.signals.update_one(
+            {"signal_id": signal_id, "status": "pending"},
+            {"$set": {
+                "status": "active",
+                "activated_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        # Send push notification
+        visibility = SignalVisibility(signal.get("visibility", "free"))
+        asyncio.create_task(send_signal_notification(
+            signal_id, pair, SignalType(signal_type), visibility
+        ))
+        
+        return True
+    
+    return False
+
+
+async def process_active_signal(signal: dict, current_price: float) -> bool:
+    """Process an active signal - check TP levels and SL"""
+    signal_id = signal["signal_id"]
+    signal_type = signal.get("signal_type", "buy")
+    pair = signal.get("pair", "")
+    entry = signal.get("entry", 0)
+    stop_loss = signal.get("stop_loss")
+    tp1 = signal.get("tp1")
+    tp2 = signal.get("tp2")
+    tp3 = signal.get("tp3")
+    current_tp_hit = signal.get("tp_hit", 0)
+    
+    if not current_price:
+        return False
+    
+    # Check Stop Loss first (highest priority)
+    if stop_loss and check_price_condition(current_price, stop_loss, signal_type, "sl"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price}")
+        
+        final_pips = calculate_pips(entry, current_price, signal_type, pair)
+        
+        await db.signals.update_one(
+            {"signal_id": signal_id, "status": "active"},
+            {"$set": {
+                "status": "closed",
+                "closed_at": datetime.now(timezone.utc),
+                "final_pips": final_pips,
+                "tp_hit": current_tp_hit
+            }}
+        )
+        
+        # Send close notification
+        visibility = SignalVisibility(signal.get("visibility", "free"))
+        asyncio.create_task(send_signal_close_notification(
+            signal_id, pair, signal_type, final_pips, visibility
+        ))
+        
+        return True
+    
+    # Check TP levels in order (TP1 → TP2 → TP3)
+    # TP1
+    if current_tp_hit < 1 and tp1 and check_price_condition(current_price, tp1, signal_type, "tp"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP1 hit at {current_price}")
+        
+        await db.signals.update_one(
+            {"signal_id": signal_id},
+            {"$set": {"tp_hit": 1}}
+        )
+        
+        # Notification for TP1 hit (not close yet)
+        # Could add a specific notification here if needed
+        return True
+    
+    # TP2
+    if current_tp_hit < 2 and tp2 and check_price_condition(current_price, tp2, signal_type, "tp"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP2 hit at {current_price}")
+        
+        await db.signals.update_one(
+            {"signal_id": signal_id},
+            {"$set": {"tp_hit": 2}}
+        )
+        return True
+    
+    # TP3 - This closes the signal as a WIN
+    if current_tp_hit < 3 and tp3 and check_price_condition(current_price, tp3, signal_type, "tp"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit - CLOSING as WIN at {current_price}")
+        
+        final_pips = calculate_pips(entry, tp3, signal_type, pair)
+        
+        await db.signals.update_one(
+            {"signal_id": signal_id, "status": "active"},
+            {"$set": {
+                "status": "closed",
+                "closed_at": datetime.now(timezone.utc),
+                "final_pips": final_pips,
+                "tp_hit": 3
+            }}
+        )
+        
+        # Send close notification
+        visibility = SignalVisibility(signal.get("visibility", "free"))
+        asyncio.create_task(send_signal_close_notification(
+            signal_id, pair, signal_type, final_pips, visibility
+        ))
+        
+        return True
+    
+    return False
+
+
+async def run_price_automation():
+    """Main automation loop - runs every 30 seconds"""
+    global price_automation_running
+    
+    logger.info("[AutoExec] Starting price-based signal automation...")
+    price_automation_running = True
+    
+    while price_automation_running:
+        try:
+            # Get all pending and active signals
+            pending_signals = await db.signals.find({"status": "pending"}).to_list(100)
+            active_signals = await db.signals.find({"status": "active"}).to_list(100)
+            
+            all_signals = pending_signals + active_signals
+            
+            if not all_signals:
+                logger.debug("[AutoExec] No pending/active signals to process")
+                await asyncio.sleep(PRICE_POLL_INTERVAL)
+                continue
+            
+            # Get unique symbols
+            symbols = list(set([s.get("pair", "") for s in all_signals if s.get("pair")]))
+            
+            if not symbols:
+                await asyncio.sleep(PRICE_POLL_INTERVAL)
+                continue
+            
+            # Fetch live prices
+            prices = await fetch_live_prices(symbols)
+            logger.info(f"[AutoExec] Fetched prices for {len(prices)} symbols: {prices}")
+            
+            # Process pending signals
+            for signal in pending_signals:
+                pair = signal.get("pair", "")
+                if pair in prices:
+                    await process_pending_signal(signal, prices[pair])
+            
+            # Process active signals
+            for signal in active_signals:
+                pair = signal.get("pair", "")
+                if pair in prices:
+                    await process_active_signal(signal, prices[pair])
+            
+        except Exception as e:
+            logger.error(f"[AutoExec] Error in automation loop: {e}")
+        
+        await asyncio.sleep(PRICE_POLL_INTERVAL)
+    
+    logger.info("[AutoExec] Price automation stopped")
+
+
+# Start automation on app startup
+@app.on_event("startup")
+async def startup_event():
+    """Start the price automation background task"""
+    asyncio.create_task(run_price_automation())
+    logger.info("[AutoExec] Background price automation task scheduled")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the price automation on shutdown"""
+    global price_automation_running
+    price_automation_running = False
+    logger.info("[AutoExec] Stopping price automation...")
+
+
+# API endpoint to check automation status
+@api_router.get("/automation/status")
+async def get_automation_status():
+    """Get the status of the price automation system"""
+    return {
+        "running": price_automation_running,
+        "poll_interval_seconds": PRICE_POLL_INTERVAL,
+        "supported_symbols": list(SYMBOL_MAP.keys())
+    }
+
+
 # Include router
 app.include_router(api_router)
 
