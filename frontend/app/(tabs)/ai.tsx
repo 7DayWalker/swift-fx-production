@@ -238,71 +238,33 @@ export default function AIScreen() {
     try {
       const formData = new FormData();
       
-      // MOBILE FIX: Convert image to JPEG format and proper binary
-      // This ensures Claude Vision receives a consistent format
+      // MOBILE FIX: Convert image to PNG format (required by emergentintegrations)
+      // Image is already preprocessed to max 1024px and PNG format
       
       let imageFile: File | null = null;
       
       if (imageBase64) {
-        // We have base64 from image picker - convert to JPEG file
-        console.log('Processing base64 image, length:', imageBase64.length);
+        // imageBase64 is already preprocessed PNG from processAndSetImage
+        console.log('Using preprocessed PNG image, base64 length:', imageBase64.length);
         
         try {
-          // Clean base64 string
+          // Clean base64 string (remove data URI prefix if present)
           let cleanBase64 = imageBase64;
           if (cleanBase64.includes(',')) {
             cleanBase64 = cleanBase64.split(',')[1];
           }
           
-          if (Platform.OS === 'web') {
-            // On web, we can use canvas to ensure JPEG format
-            const img = new window.Image();
-            const loadPromise = new Promise<void>((resolve, reject) => {
-              img.onload = () => resolve();
-              img.onerror = reject;
-            });
-            img.src = `data:image/jpeg;base64,${cleanBase64}`;
-            
-            try {
-              await loadPromise;
-              
-              // Draw to canvas and export as JPEG
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                const jpegBase64 = jpegDataUrl.split(',')[1];
-                
-                // Convert to binary
-                const binaryString = atob(jpegBase64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                
-                const blob = new Blob([bytes], { type: 'image/jpeg' });
-                imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
-                console.log('Converted to JPEG via canvas, size:', imageFile.size);
-              }
-            } catch (canvasError) {
-              console.warn('Canvas conversion failed, using direct method');
-            }
+          // Convert base64 to binary
+          const binaryString = atob(cleanBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
           }
           
-          // Fallback: Direct base64 to file conversion
-          if (!imageFile) {
-            const binaryString = atob(cleanBase64);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            const blob = new Blob([bytes], { type: 'image/jpeg' });
-            imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
-            console.log('Created file from base64 directly, size:', imageFile.size);
-          }
+          // Create PNG file (matching what emergentintegrations expects)
+          const blob = new Blob([bytes], { type: 'image/png' });
+          imageFile = new File([blob], 'chart.png', { type: 'image/png' });
+          console.log('Created PNG file, size:', imageFile.size, 'bytes');
         } catch (conversionError) {
           console.error('Image conversion failed:', conversionError);
           throw new Error('Failed to process image. Please try a different image.');
