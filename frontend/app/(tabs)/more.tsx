@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Switch,
   Modal,
-  ActivityIndicator,
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,28 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
-import { useSubscription } from '../../src/context/SubscriptionContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
-import { api } from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
 
-interface SubscriptionPlan {
-  id: string;
-  name: string;
-  description: string;
-  features: string[];
-  pricing: {
-    weekly: number;
-    monthly: number;
-    yearly: number;
-  };
-  ai_limit_note?: string;
-}
-
-type BillingCycle = 'weekly' | 'monthly' | 'yearly';
-
 export default function MoreScreen() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
