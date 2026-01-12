@@ -690,6 +690,7 @@ async def activate_signal(signal_id: str, admin: User = Depends(require_admin)):
 @api_router.post("/admin/signals/{signal_id}/close")
 async def close_signal(
     signal_id: str, 
+    background_tasks: BackgroundTasks,
     close_price: Optional[float] = None,
     final_pips: Optional[float] = None,
     tp_hit: Optional[int] = None,
@@ -709,19 +710,33 @@ async def close_signal(
         update_doc["tp_hit"] = tp_hit
     
     # Calculate final_pips
+    computed_pips = 0.0
     if close_price is not None:
-        update_doc["final_pips"] = calculate_pips(
+        computed_pips = calculate_pips(
             signal["entry"], 
             close_price, 
             signal["signal_type"],
             signal["pair"]
         )
+        update_doc["final_pips"] = computed_pips
     elif final_pips is not None:
-        update_doc["final_pips"] = final_pips
+        computed_pips = final_pips
+        update_doc["final_pips"] = computed_pips
     
     await db.signals.update_one(
         {"signal_id": signal_id},
         {"$set": update_doc}
+    )
+    
+    # Queue push notification for signal close
+    visibility = SignalVisibility(signal.get("visibility", "free"))
+    background_tasks.add_task(
+        send_signal_close_notification, 
+        signal_id, 
+        signal["pair"], 
+        signal["signal_type"],
+        computed_pips,
+        visibility
     )
     
     return {"message": "Signal closed successfully", "final_pips": update_doc.get("final_pips")}
