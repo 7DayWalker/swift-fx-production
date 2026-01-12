@@ -64,8 +64,8 @@ const defaultStatus: SubscriptionStatus = {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
-// Polling interval for real-time sync (30 seconds)
-const POLL_INTERVAL = 30000;
+// Polling interval for real-time sync (~5 seconds as per requirements)
+const POLL_INTERVAL = 5000;
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
