@@ -87,27 +87,117 @@ export default function AIScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
+      allowsEditing: false, // Allow any orientation - don't force crop
+      quality: 0.85,
       base64: true,
+      exif: false, // Don't need EXIF data
     });
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setSelectedImage(asset.uri);
-      // Store base64 for upload if available
-      if (asset.base64) {
-        setImageBase64(asset.base64);
-      } else {
-        setImageBase64(null);
-      }
-      // Clear previous result when new image is selected
-      if (screenState === 'result' || screenState === 'error') {
-        setScreenState('upload');
-        setAnalysisResult(null);
-        setErrorMessage(null);
+      await processAndSetImage(asset);
+    }
+  };
+  
+  // NEW: Camera capture for mobile users
+  const takePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      const msg = 'Please allow access to your camera to take chart photos';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Permission Required', msg);
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // Don't force crop - accept any orientation
+      quality: 0.85,
+      base64: true,
+      exif: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      await processAndSetImage(asset);
+    }
+  };
+  
+  // Process and preprocess image for better AI analysis
+  const processAndSetImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    setSelectedImage(asset.uri);
+    
+    // Store base64 for upload
+    if (asset.base64) {
+      // Preprocess image: resize if too large (max 2048px on longest side)
+      const processedBase64 = await preprocessImage(asset.base64, asset.width, asset.height);
+      setImageBase64(processedBase64);
+    } else {
+      setImageBase64(null);
+    }
+    
+    // Clear previous result when new image is selected
+    if (screenState === 'result' || screenState === 'error') {
+      setScreenState('upload');
+      setAnalysisResult(null);
+      setErrorMessage(null);
+    }
+  };
+  
+  // Preprocess image for optimal AI analysis
+  const preprocessImage = async (base64: string, width?: number, height?: number): Promise<string> => {
+    // If image is reasonably sized, return as-is
+    const maxDimension = 2048;
+    if (width && height && width <= maxDimension && height <= maxDimension) {
+      return base64;
+    }
+    
+    // For web, we can use canvas to resize
+    if (Platform.OS === 'web') {
+      try {
+        const img = new window.Image();
+        img.src = `data:image/jpeg;base64,${base64}`;
+        
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        
+        // Calculate new dimensions maintaining aspect ratio
+        let newWidth = img.width;
+        let newHeight = img.height;
+        
+        if (img.width > maxDimension || img.height > maxDimension) {
+          if (img.width > img.height) {
+            newWidth = maxDimension;
+            newHeight = Math.round(img.height * (maxDimension / img.width));
+          } else {
+            newHeight = maxDimension;
+            newWidth = Math.round(img.width * (maxDimension / img.height));
+          }
+        }
+        
+        // Create canvas and resize
+        const canvas = document.createElement('canvas');
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // Apply slight contrast enhancement for dark charts
+          ctx.filter = 'contrast(1.05)';
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+          
+          // Get resized base64
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          return resizedDataUrl.split(',')[1]; // Remove data URL prefix
+        }
+      } catch (error) {
+        console.warn('Image preprocessing failed, using original:', error);
       }
     }
+    
+    // For native or if processing fails, return original
+    return base64;
   };
 
   const analyzeChart = async () => {
