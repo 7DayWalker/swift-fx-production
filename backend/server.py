@@ -1082,13 +1082,19 @@ async def analyze_chart(
             session_id=f"chart_analysis_{uuid.uuid4().hex[:8]}",
             system_message="""You are an expert forex and cryptocurrency technical analyst. 
 Analyze trading charts and provide structured analysis. Be concise and professional.
+Handle charts in any orientation (portrait or landscape) and from any trading platform (MT4, MT5, TradingView, mobile apps).
+Ignore any UI elements, status bars, or app buttons in the image - focus only on the chart data.
 Always include a risk disclaimer."""
         ).with_model("anthropic", "claude-sonnet-4-20250514")
         
         image_attachment = ImageContent(image_base64=image_base64)
         
         user_message = UserMessage(
-            text=f"""Analyze this {pair} chart on the {timeframe} timeframe. Provide:
+            text=f"""Analyze this {pair} chart on the {timeframe} timeframe. 
+The image may be a portrait or landscape screenshot from any trading platform or a photo of a screen.
+Focus on the candlestick/price data and ignore any mobile UI elements.
+
+Provide:
 1. Market Bias (Bullish/Bearish/Neutral)
 2. Trend Structure (description)
 3. Key Support Levels (list 2-3 price levels)
