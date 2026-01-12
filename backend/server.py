@@ -122,6 +122,9 @@ def check_subscription_active(user_doc: dict) -> bool:
         return True  # No expiry means active (free plan or lifetime)
     if isinstance(expiry, str):
         expiry = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+    # Ensure both datetimes are timezone-aware
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
     return expiry > datetime.now(timezone.utc)
 
 
