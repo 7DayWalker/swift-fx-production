@@ -121,7 +121,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     }
   }, [token]);
   
-  // Fetch stats (for dashboard)
+  // Fetch stats (for dashboard) - PROPERLY ROUNDED
   const refreshStats = useCallback(async () => {
     if (!token) return;
     
@@ -135,20 +135,31 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       
       const totalPips = closed.reduce((sum, s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
-        return sum + pips;
+        return sum + (isNaN(pips) ? 0 : pips);
       }, 0);
       
-      const pipsArray = closed.map(s => s.final_pips ?? s.result_pips ?? 0);
+      const pipsArray = closed.map(s => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return isNaN(pips) ? 0 : pips;
+      });
+      
+      // Calculate win rate with proper rounding (1 decimal place)
+      const rawWinRate = closed.length > 0 ? (winning.length / closed.length) * 100 : 0;
+      const roundedWinRate = Math.round(rawWinRate * 10) / 10; // Round to 1 decimal
+      
+      // Round all values properly
+      const roundedTotalPips = Math.round(totalPips * 10) / 10;
+      const roundedAvgPips = closed.length > 0 ? Math.round((totalPips / closed.length) * 10) / 10 : 0;
       
       setStats({
         total_signals: signals.length,
         winning_trades: winning.length,
         losing_trades: closed.length - winning.length,
-        win_rate: closed.length > 0 ? (winning.length / closed.length) * 100 : 0,
-        total_pips: totalPips,
-        average_pips: closed.length > 0 ? totalPips / closed.length : 0,
-        best_trade: pipsArray.length > 0 ? Math.max(...pipsArray) : 0,
-        worst_trade: pipsArray.length > 0 ? Math.min(...pipsArray) : 0,
+        win_rate: roundedWinRate,
+        total_pips: roundedTotalPips,
+        average_pips: roundedAvgPips,
+        best_trade: pipsArray.length > 0 ? Math.round(Math.max(...pipsArray) * 10) / 10 : 0,
+        worst_trade: pipsArray.length > 0 ? Math.round(Math.min(...pipsArray) * 10) / 10 : 0,
       });
     } catch (error) {
       console.error('Failed to calculate stats:', error);
