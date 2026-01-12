@@ -806,6 +806,37 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
+  // Plan upgrade button styles
+  planUpgradeButton: {
+    backgroundColor: '#00D4AA',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  planUpgradeButtonVip: {
+    backgroundColor: '#8B5CF6',
+  },
+  planUpgradeButtonDisabled: {
+    opacity: 0.5,
+  },
+  planUpgradeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  // Security notice
+  securityNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  securityNoticeText: {
+    fontSize: 12,
+    color: '#10B981',
+  },
   upgradeNotice: {
     flexDirection: 'row',
     alignItems: 'center',
