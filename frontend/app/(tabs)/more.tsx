@@ -101,14 +101,26 @@ export default function MoreScreen() {
     router.replace('/(auth)/login');
   };
 
-  const handleUpgrade = async () => {
-    // SECURITY: Self-service upgrade is disabled
-    // Users must complete payment through official checkout (e.g., Stripe)
-    Alert.alert(
-      'Upgrade Required',
-      'To upgrade your subscription, please complete payment through our official checkout. Contact support for assistance.',
-      [{ text: 'OK', style: 'default' }]
-    );
+  const handleUpgrade = async (plan: string) => {
+    // Create a payment session and redirect to checkout
+    setIsUpgrading(true);
+    try {
+      const response = await api.post('/payments/create-session', {
+        plan: plan,
+        billing_cycle: selectedCycle,
+      });
+      
+      // Close modal and redirect to payment page
+      setShowSubscriptionModal(false);
+      router.push(response.data.checkout_url);
+    } catch (error: any) {
+      Alert.alert(
+        'Unable to Create Payment Session',
+        error.response?.data?.detail || 'Please try again or contact support.'
+      );
+    } finally {
+      setIsUpgrading(false);
+    }
   };
 
   const menuItems = [
