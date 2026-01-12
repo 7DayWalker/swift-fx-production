@@ -337,12 +337,12 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Community Posts & Comments"
+    - "Backend Subscription Enforcement System"
   stuck_tasks:
     - "Community Posts & Comments"
   test_all: false
@@ -355,3 +355,26 @@ agent_communication:
   - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
   - agent: "testing"
   - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
+  - agent: "main"
+  - message: |
+      ✅ BACKEND SUBSCRIPTION SYSTEM IMPLEMENTED: 
+      1. Signal filtering based on subscription (free/premium/vip) - GET /api/signals now filters by user's effective subscription
+      2. AI Analyzer weekly limits: Free=3, Premium=10, VIP=unlimited - enforced in POST /api/ai/analyze
+      3. VIP feature lock for Fund Management and Academy - GET /api/features/fund-management/access and /api/features/academy/access
+      4. Admin endpoints for subscription management:
+         - PUT /api/admin/users/{user_id}/subscription - Update subscription plan and expiry
+         - POST /api/admin/users/{user_id}/reset-ai-usage - Reset AI usage counter
+         - GET /api/admin/users/{user_id}/details - Get detailed user info with subscription
+      5. Real-time sync endpoint - GET /api/subscription/status - Returns full feature access map
+      
+      NEW ENDPOINTS TO TEST:
+      - PUT /api/admin/users/{user_id}/subscription with body {"subscription": "premium", "expiry_days": 30}
+      - POST /api/admin/users/{user_id}/reset-ai-usage
+      - GET /api/admin/users/{user_id}/details
+      - GET /api/features/fund-management/access
+      - GET /api/features/academy/access
+      - GET /api/subscription/status
+      
+      TEST CREDENTIALS:
+      - Admin: admin@swiftfx.com / adminpassword
+      - Free user: freeuser_test@example.com / test123
