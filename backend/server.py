@@ -1166,16 +1166,10 @@ async def analyze_chart(
     
     # Check usage limit (VIP has unlimited = 999999)
     if current_usage >= weekly_limit:
-        if effective_subscription == "premium":
-            raise HTTPException(
-                status_code=403,
-                detail=f"Weekly AI usage limit reached ({weekly_limit} analyses). Upgrade to VIP for unlimited analyses!"
-            )
-        else:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Weekly AI usage limit reached. Please wait until next week."
-            )
+        raise HTTPException(
+            status_code=403,
+            detail="AI limit reached. Upgrade to continue."
+        )
     
     # Read and encode image
     image_content = await image.read()
