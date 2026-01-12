@@ -43,16 +43,6 @@ export default function DashboardScreen() {
     lastUpdated
   } = useSignals();
   
-  // Debug: Log when stats change
-  useEffect(() => {
-    console.log('[Dashboard] SignalContext updated:', {
-      signalsCount: signals.length,
-      statsWinRate: stats?.win_rate,
-      statsTotalPips: stats?.total_pips,
-      lastUpdated: lastUpdated?.toISOString()
-    });
-  }, [signals, stats, lastUpdated]);
-  
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   
