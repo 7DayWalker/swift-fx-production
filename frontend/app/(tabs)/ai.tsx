@@ -225,73 +225,129 @@ export default function AIScreen() {
 
     try {
       const formData = new FormData();
-      const imageUri = selectedImage;
       
-      // MOBILE FIX: Convert image URI to proper File/Blob for Claude Vision
-      // Mobile URIs (file://, blob://, ph://) must be converted to binary
+      // MOBILE FIX: Convert image to JPEG format and proper binary
+      // This ensures Claude Vision receives a consistent format
+      
+      let imageFile: File | null = null;
       
       if (imageBase64) {
-        // Best case: We have base64 data from image picker
-        console.log('Converting base64 to file, length:', imageBase64.length);
+        // We have base64 from image picker - convert to JPEG file
+        console.log('Processing base64 image, length:', imageBase64.length);
         
         try {
-          // Clean base64 string (remove any data URI prefix if present)
+          // Clean base64 string
           let cleanBase64 = imageBase64;
           if (cleanBase64.includes(',')) {
             cleanBase64 = cleanBase64.split(',')[1];
           }
           
-          // Convert base64 to binary
-          const binaryString = atob(cleanBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+          if (Platform.OS === 'web') {
+            // On web, we can use canvas to ensure JPEG format
+            const img = new window.Image();
+            const loadPromise = new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = reject;
+            });
+            img.src = `data:image/jpeg;base64,${cleanBase64}`;
+            
+            try {
+              await loadPromise;
+              
+              // Draw to canvas and export as JPEG
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                const jpegBase64 = jpegDataUrl.split(',')[1];
+                
+                // Convert to binary
+                const binaryString = atob(jpegBase64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
+                console.log('Converted to JPEG via canvas, size:', imageFile.size);
+              }
+            } catch (canvasError) {
+              console.warn('Canvas conversion failed, using direct method');
+            }
           }
           
-          // Create blob from binary
-          const blob = new Blob([bytes], { type: 'image/jpeg' });
-          
-          // Create File object (works on both web and mobile web)
-          const file = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
-          formData.append('image', file);
-          console.log('Image file created from base64, size:', file.size, 'bytes');
-        } catch (base64Error) {
-          console.error('Base64 conversion failed:', base64Error);
-          throw new Error('Failed to process image. Please try selecting a different image.');
+          // Fallback: Direct base64 to file conversion
+          if (!imageFile) {
+            const binaryString = atob(cleanBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'image/jpeg' });
+            imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
+            console.log('Created file from base64 directly, size:', imageFile.size);
+          }
+        } catch (conversionError) {
+          console.error('Image conversion failed:', conversionError);
+          throw new Error('Failed to process image. Please try a different image.');
         }
-      } else {
-        // Fallback: Fetch the URI and convert to blob
-        // This handles file://, blob://, http://, https:// URIs
-        console.log('Fetching image from URI:', imageUri.substring(0, 50) + '...');
-        
+      } else if (selectedImage) {
+        // Fetch from URI and convert
+        console.log('Fetching image from URI...');
         try {
-          const response = await fetch(imageUri);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.status}`);
-          }
-          
+          const response = await fetch(selectedImage);
           const blob = await response.blob();
-          console.log('Blob fetched, size:', blob.size, 'type:', blob.type);
           
-          // Ensure we have a valid blob
-          if (blob.size === 0) {
-            throw new Error('Image data is empty');
+          if (Platform.OS === 'web' && blob.size > 0) {
+            // Convert to JPEG via canvas
+            const img = new window.Image();
+            const url = URL.createObjectURL(blob);
+            
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = reject;
+              img.src = url;
+            });
+            
+            URL.revokeObjectURL(url);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const jpegBlob = await new Promise<Blob>((resolve) => {
+                canvas.toBlob((b) => resolve(b || blob), 'image/jpeg', 0.85);
+              });
+              imageFile = new File([jpegBlob], 'chart.jpg', { type: 'image/jpeg' });
+              console.log('Converted URI to JPEG, size:', imageFile.size);
+            }
           }
           
-          // Create File from blob
-          const file = new File([blob], 'chart.jpg', { type: blob.type || 'image/jpeg' });
-          formData.append('image', file);
-          console.log('Image file created from URI, size:', file.size, 'bytes');
-        } catch (fetchError: any) {
-          console.error('URI fetch failed:', fetchError);
-          throw new Error('Failed to load image. Please try selecting the image again.');
+          if (!imageFile) {
+            imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
+          }
+        } catch (fetchError) {
+          console.error('Failed to fetch image:', fetchError);
+          throw new Error('Failed to load image. Please select again.');
         }
       }
       
+      if (!imageFile || imageFile.size === 0) {
+        throw new Error('Failed to process image. Please try again.');
+      }
+      
+      formData.append('image', imageFile);
       formData.append('pair', selectedPair);
       formData.append('timeframe', selectedTimeframe);
       
-      console.log('Sending analysis request...');
+      console.log('Sending analysis request, file size:', imageFile.size, 'type:', imageFile.type);
 
       const response = await api.post('/ai/analyze', formData, {
         headers: {
