@@ -122,8 +122,8 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Upgrade Banner for Free Users */}
-        {user?.role === 'free' && (
+        {/* Upgrade Banner for Free Users - Uses SubscriptionContext for real-time updates */}
+        {isFreeUser && (
           <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/(tabs)/more')}>
             <View style={styles.upgradeContent}>
               <Ionicons name="rocket-outline" size={24} color="#FFD700" />
