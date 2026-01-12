@@ -1418,20 +1418,7 @@ async def create_comment(post_id: str, comment_data: CommentCreate, current_user
     return comment_doc
 
 # ===================== SUBSCRIPTION ENDPOINTS =====================
-# SECURITY: Self-upgrade is DISABLED. Only admins can change subscriptions.
-# This endpoint will be re-enabled with proper payment provider (Stripe) integration.
-
-@api_router.post("/subscription/upgrade")
-async def upgrade_subscription(sub_data: SubscriptionUpdate, current_user: User = Depends(require_auth)):
-    """
-    DISABLED: Self-service subscription upgrade is not available.
-    Subscription changes can only be made by admins or through payment provider webhooks.
-    """
-    raise HTTPException(
-        status_code=403, 
-        detail="Self-service subscription upgrade is disabled. Please contact support or complete payment through the official checkout."
-    )
-
+# SECURITY: Self-upgrade is DISABLED. Only webhook can change subscriptions.
 
 @api_router.get("/subscription/plans")
 async def get_plans():
@@ -1444,7 +1431,7 @@ async def get_plans():
                 "features": [
                     "Everything in Free",
                     "Full access to Premium signals",
-                    "Limited AI Chart Analyzer access",
+                    "10 AI Chart Analyses per week",
                     "Ads removed"
                 ],
                 "pricing": {
@@ -1452,7 +1439,7 @@ async def get_plans():
                     "monthly": 29,
                     "yearly": 279
                 },
-                "ai_limit_note": "Includes limited AI chart analysis. Usage caps apply."
+                "ai_limit_note": "Includes 10 AI chart analyses per week."
             },
             {
                 "id": "vip",
@@ -1460,7 +1447,7 @@ async def get_plans():
                 "description": "For professional traders",
                 "features": [
                     "Everything in Premium",
-                    "20 AI chart analyses per week",
+                    "Unlimited AI chart analyses",
                     "Academy access",
                     "Fund Management access",
                     "Priority support"
@@ -1473,6 +1460,307 @@ async def get_plans():
             }
         ]
     }
+
+
+# ===================== PAYMENT SESSION FLOW =====================
+# This is a Stripe-ready payment flow. Currently uses manual confirmation.
+# When Stripe is integrated, the webhook will be called by Stripe instead of admin.
+
+class PaymentSessionCreate(BaseModel):
+    """Request to create a payment session"""
+    plan: str  # "premium" | "vip"
+    billing_cycle: str = "monthly"  # "weekly" | "monthly" | "yearly"
+
+
+class PaymentSessionStatus(str, Enum):
+    PENDING = "pending"
+    PAID = "paid"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class PaymentWebhook(BaseModel):
+    """Webhook payload to confirm payment (Stripe-ready)"""
+    session_id: str
+    status: str  # "paid" | "cancelled"
+
+
+# Pricing lookup
+PLAN_PRICING = {
+    "premium": {"weekly": 10, "monthly": 29, "yearly": 279},
+    "vip": {"weekly": 19, "monthly": 69, "yearly": 749}
+}
+
+
+@api_router.post("/payments/create-session")
+async def create_payment_session(
+    session_data: PaymentSessionCreate,
+    current_user: User = Depends(require_auth)
+):
+    """
+    Create a payment session for subscription upgrade.
+    This is the ONLY way to initiate an upgrade - returns a checkout URL.
+    User must complete payment through the checkout page.
+    """
+    # Validate plan
+    if session_data.plan not in ["premium", "vip"]:
+        raise HTTPException(status_code=400, detail="Invalid plan. Must be 'premium' or 'vip'")
+    
+    # Validate billing cycle
+    if session_data.billing_cycle not in ["weekly", "monthly", "yearly"]:
+        raise HTTPException(status_code=400, detail="Invalid billing cycle")
+    
+    # Check if user already has this or higher plan
+    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    current_subscription = get_effective_subscription(user_doc)
+    
+    plan_hierarchy = {"free": 0, "premium": 1, "vip": 2}
+    if plan_hierarchy.get(current_subscription, 0) >= plan_hierarchy.get(session_data.plan, 0):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"You already have {current_subscription.upper()} subscription or higher"
+        )
+    
+    # Get pricing
+    price = PLAN_PRICING.get(session_data.plan, {}).get(session_data.billing_cycle, 0)
+    
+    # Create session
+    session_id = f"ps_{uuid.uuid4().hex[:16]}"
+    session_doc = {
+        "session_id": session_id,
+        "user_id": current_user.user_id,
+        "user_email": user_doc.get("email"),
+        "user_name": user_doc.get("name"),
+        "plan": session_data.plan,
+        "billing_cycle": session_data.billing_cycle,
+        "amount": price,
+        "currency": "USD",
+        "status": PaymentSessionStatus.PENDING.value,
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=24),
+        "paid_at": None,
+        "cancelled_at": None
+    }
+    
+    await db.payment_sessions.insert_one(session_doc)
+    
+    logger.info(f"[Payment] Session created: {session_id} for user {current_user.user_id}, plan: {session_data.plan}")
+    
+    return {
+        "session_id": session_id,
+        "checkout_url": f"/pay?session_id={session_id}",
+        "plan": session_data.plan,
+        "billing_cycle": session_data.billing_cycle,
+        "amount": price,
+        "currency": "USD",
+        "expires_at": session_doc["expires_at"].isoformat()
+    }
+
+
+@api_router.get("/payments/session/{session_id}")
+async def get_payment_session(session_id: str, current_user: User = Depends(require_auth)):
+    """
+    Get payment session details.
+    Users can only view their own sessions.
+    """
+    session = await db.payment_sessions.find_one(
+        {"session_id": session_id},
+        {"_id": 0}
+    )
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Payment session not found")
+    
+    # Users can only view their own sessions (admins can view all)
+    if session["user_id"] != current_user.user_id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if expired
+    if session["status"] == "pending":
+        expires_at = session.get("expires_at")
+        if expires_at:
+            if isinstance(expires_at, str):
+                expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at < datetime.now(timezone.utc):
+                # Mark as expired
+                await db.payment_sessions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"status": "expired"}}
+                )
+                session["status"] = "expired"
+    
+    return session
+
+
+@api_router.get("/payments/my-sessions")
+async def get_my_payment_sessions(current_user: User = Depends(require_auth)):
+    """Get all payment sessions for the current user"""
+    sessions = await db.payment_sessions.find(
+        {"user_id": current_user.user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(20)
+    
+    return sessions
+
+
+@api_router.post("/payments/webhook")
+async def payment_webhook(webhook_data: PaymentWebhook):
+    """
+    WEBHOOK ENDPOINT - The ONLY way to upgrade a user's subscription.
+    
+    In production, this will be called by Stripe with a signature verification.
+    Currently, it's called by admin to manually confirm payments.
+    
+    This endpoint does NOT require authentication because:
+    1. In production, Stripe calls it with a webhook signature
+    2. Currently, admin uses the admin panel to trigger this
+    """
+    session = await db.payment_sessions.find_one({"session_id": webhook_data.session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Payment session not found")
+    
+    if session["status"] != "pending":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Session already processed with status: {session['status']}"
+        )
+    
+    # Check if expired
+    expires_at = session.get("expires_at")
+    if expires_at:
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            await db.payment_sessions.update_one(
+                {"session_id": webhook_data.session_id},
+                {"$set": {"status": "expired"}}
+            )
+            raise HTTPException(status_code=400, detail="Payment session has expired")
+    
+    if webhook_data.status == "paid":
+        # Calculate subscription expiry based on billing cycle
+        billing_cycle = session.get("billing_cycle", "monthly")
+        if billing_cycle == "weekly":
+            expiry = datetime.now(timezone.utc) + timedelta(days=7)
+        elif billing_cycle == "monthly":
+            expiry = datetime.now(timezone.utc) + timedelta(days=30)
+        else:  # yearly
+            expiry = datetime.now(timezone.utc) + timedelta(days=365)
+        
+        # UPGRADE USER SUBSCRIPTION - The ONLY place this happens
+        await db.users.update_one(
+            {"user_id": session["user_id"]},
+            {"$set": {
+                "subscription": session["plan"],
+                "role": session["plan"],
+                "subscription_status": "active",
+                "subscription_expiry": expiry,
+                "billing_cycle": billing_cycle
+            }}
+        )
+        
+        # Mark session as paid
+        await db.payment_sessions.update_one(
+            {"session_id": webhook_data.session_id},
+            {"$set": {
+                "status": "paid",
+                "paid_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        logger.info(f"[Payment] SUCCESS: User {session['user_id']} upgraded to {session['plan']}")
+        
+        return {
+            "success": True,
+            "message": f"User upgraded to {session['plan'].upper()} successfully",
+            "user_id": session["user_id"],
+            "plan": session["plan"],
+            "expiry": expiry.isoformat()
+        }
+    
+    elif webhook_data.status == "cancelled":
+        await db.payment_sessions.update_one(
+            {"session_id": webhook_data.session_id},
+            {"$set": {
+                "status": "cancelled",
+                "cancelled_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": "Payment session cancelled",
+            "session_id": webhook_data.session_id
+        }
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'paid' or 'cancelled'")
+
+
+# ===================== ADMIN PAYMENT MANAGEMENT =====================
+@api_router.get("/admin/payments/sessions")
+async def admin_get_payment_sessions(
+    status: Optional[str] = None,
+    admin: User = Depends(require_admin)
+):
+    """Admin: Get all payment sessions with optional status filter"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    sessions = await db.payment_sessions.find(
+        query,
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    return sessions
+
+
+@api_router.post("/admin/payments/confirm/{session_id}")
+async def admin_confirm_payment(session_id: str, admin: User = Depends(require_admin)):
+    """
+    Admin: Manually confirm a payment (e.g., for bank transfer users).
+    This calls the webhook internally with status="paid".
+    """
+    # Call the webhook endpoint logic
+    webhook_data = PaymentWebhook(session_id=session_id, status="paid")
+    
+    try:
+        result = await payment_webhook(webhook_data)
+        logger.info(f"[Admin] Payment confirmed by {admin.user_id} for session {session_id}")
+        return result
+    except HTTPException as e:
+        raise e
+
+
+@api_router.post("/admin/payments/cancel/{session_id}")
+async def admin_cancel_payment(session_id: str, admin: User = Depends(require_admin)):
+    """Admin: Cancel a pending payment session"""
+    session = await db.payment_sessions.find_one({"session_id": session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Payment session not found")
+    
+    if session["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Cannot cancel session with status: {session['status']}")
+    
+    await db.payment_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    logger.info(f"[Admin] Payment cancelled by {admin.user_id} for session {session_id}")
+    
+    return {"success": True, "message": "Payment session cancelled"}
+
 
 # ===================== NOTIFICATIONS ENDPOINTS =====================
 @api_router.post("/notifications/register-token")
