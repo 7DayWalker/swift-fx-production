@@ -224,14 +224,37 @@ export default function AIScreen() {
     }
 
     if (!usage?.has_access) {
-      const msg = 'AI Chart Analyzer requires Premium or VIP subscription';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Upgrade Required', msg);
+      // Redirect to subscription page when no access
+      if (Platform.OS === 'web') {
+        window.alert('AI Chart Analyzer requires a subscription. Redirecting to plans...');
+      } else {
+        Alert.alert(
+          'Upgrade Required', 
+          'AI Chart Analyzer requires a subscription.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'View Plans', onPress: () => router.push('/subscription') }
+          ]
+        );
+      }
+      router.push('/subscription');
       return;
     }
 
     if (usage && usage.remaining <= 0) {
-      const msg = 'You have reached your weekly AI analysis limit. Upgrade to VIP for more.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Limit Reached', msg);
+      // Show limit reached and redirect to subscription
+      if (Platform.OS === 'web') {
+        window.alert('AI limit reached. Upgrade to continue.');
+      } else {
+        Alert.alert(
+          'AI Limit Reached', 
+          'You have used all your weekly AI analyses. Upgrade for more.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => router.push('/subscription') }
+          ]
+        );
+      }
       return;
     }
 
