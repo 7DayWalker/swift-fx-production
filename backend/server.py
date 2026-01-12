@@ -130,7 +130,17 @@ def check_subscription_active(user_doc: dict) -> bool:
 
 def get_effective_subscription(user_doc: dict) -> str:
     """Get user's effective subscription, accounting for expiry"""
-    subscription = user_doc.get("subscription", "free")
+    # Check subscription field first, then fall back to role for backward compatibility
+    subscription = user_doc.get("subscription")
+    if not subscription:
+        # Fallback to role field for backward compatibility
+        role = user_doc.get("role", "free")
+        if role in ["premium", "vip"]:
+            subscription = role
+        else:
+            subscription = "free"
+    
+    # Check if premium/vip subscription is still active
     if subscription in ["premium", "vip"] and not check_subscription_active(user_doc):
         return "free"  # Expired subscription reverts to free
     return subscription
