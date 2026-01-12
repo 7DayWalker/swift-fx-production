@@ -79,14 +79,58 @@ class User(BaseModel):
     name: str
     email: str
     role: UserRole = UserRole.FREE
-    subscription_status: str = "inactive"
-    billing_cycle: Optional[BillingCycle] = None
+    # Subscription fields - single source of truth
+    subscription: str = "free"  # "free" | "premium" | "vip"
     subscription_expiry: Optional[datetime] = None
+    subscription_status: str = "active"  # Legacy field kept for compatibility
+    billing_cycle: Optional[BillingCycle] = None
+    # AI usage tracking - account level
+    ai_weekly_used: int = 0
+    ai_weekly_reset: Optional[datetime] = None
+    # Legacy fields
     ai_usage_count: int = 0
     ai_usage_reset_date: Optional[datetime] = None
     notification_preferences: Dict[str, bool] = Field(default_factory=lambda: {"signals": True, "community": True})
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     picture: Optional[str] = None
+
+
+# Subscription helper functions
+def get_subscription_level(subscription: str) -> int:
+    """Get numeric level for subscription comparison"""
+    levels = {"free": 0, "premium": 1, "vip": 2}
+    return levels.get(subscription.lower(), 0)
+
+
+def can_access_visibility(user_subscription: str, signal_visibility: str) -> bool:
+    """Check if user subscription can access signal visibility level"""
+    user_level = get_subscription_level(user_subscription)
+    visibility_level = get_subscription_level(signal_visibility)
+    return user_level >= visibility_level
+
+
+def get_ai_weekly_limit(subscription: str) -> int:
+    """Get weekly AI analysis limit based on subscription"""
+    limits = {"free": 3, "premium": 10, "vip": 999999}  # VIP is essentially unlimited
+    return limits.get(subscription.lower(), 3)
+
+
+def check_subscription_active(user_doc: dict) -> bool:
+    """Check if user subscription is active (not expired)"""
+    expiry = user_doc.get("subscription_expiry")
+    if expiry is None:
+        return True  # No expiry means active (free plan or lifetime)
+    if isinstance(expiry, str):
+        expiry = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+    return expiry > datetime.now(timezone.utc)
+
+
+def get_effective_subscription(user_doc: dict) -> str:
+    """Get user's effective subscription, accounting for expiry"""
+    subscription = user_doc.get("subscription", "free")
+    if subscription in ["premium", "vip"] and not check_subscription_active(user_doc):
+        return "free"  # Expired subscription reverts to free
+    return subscription
 
 class SignalCreate(BaseModel):
     pair: str
