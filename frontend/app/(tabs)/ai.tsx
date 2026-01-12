@@ -757,24 +757,51 @@ export default function AIScreen() {
           )}
         </View>
 
-        {/* Image Picker */}
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+        {/* Image Picker - Gallery and Camera Options */}
+        <View style={styles.imagePickerSection}>
           {selectedImage ? (
-            <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+            <View style={styles.selectedImageContainer}>
+              <Image source={{ uri: selectedImage }} style={styles.selectedImage} resizeMode="contain" />
+              <View style={styles.imageActions}>
+                <TouchableOpacity style={styles.imageActionButton} onPress={pickImage}>
+                  <Ionicons name="images-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.imageActionText}>Gallery</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.imageActionButton} onPress={takePhoto}>
+                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.imageActionText}>Camera</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
-            <View style={styles.imagePickerContent}>
-              <Ionicons name="image-outline" size={48} color="#8A8D98" />
-              <Text style={styles.imagePickerText}>Tap to select chart image</Text>
-              <Text style={styles.imagePickerSubtext}>MT4, MT5, TradingView supported</Text>
+            <View style={styles.uploadOptions}>
+              <Text style={styles.uploadTitle}>Upload Your Chart</Text>
+              <Text style={styles.uploadSubtitle}>Portrait or landscape • Any trading platform</Text>
+              
+              <View style={styles.uploadButtonsRow}>
+                <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
+                  <View style={styles.uploadIconContainer}>
+                    <Ionicons name="images" size={32} color="#00D4AA" />
+                  </View>
+                  <Text style={styles.uploadButtonTitle}>Gallery</Text>
+                  <Text style={styles.uploadButtonSubtext}>Screenshot or saved image</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
+                  <View style={styles.uploadIconContainer}>
+                    <Ionicons name="camera" size={32} color="#00D4AA" />
+                  </View>
+                  <Text style={styles.uploadButtonTitle}>Camera</Text>
+                  <Text style={styles.uploadButtonSubtext}>Snap a chart photo</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.supportedPlatforms}>
+                <Text style={styles.supportedText}>Works with MT4 • MT5 • TradingView • Any chart</Text>
+              </View>
             </View>
           )}
-          {selectedImage && (
-            <View style={styles.changeImageOverlay}>
-              <Ionicons name="camera" size={20} color="#FFFFFF" />
-              <Text style={styles.changeImageText}>Change</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        </View>
 
         {/* Settings */}
         <View style={styles.settingsContainer}>
