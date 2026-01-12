@@ -75,6 +75,9 @@ export default function AcademyScreen() {
   const handleCategoryPress = (category: Category) => {
     if (hasAccess(category.requiredRole)) {
       router.push(`/academy/${category.id}`);
+    } else {
+      // Redirect to subscription page for locked content
+      router.push('/subscription');
     }
   };
 
