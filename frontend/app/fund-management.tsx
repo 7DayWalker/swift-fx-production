@@ -267,13 +267,25 @@ export default function FundManagementScreen() {
 
         {/* CTA Buttons */}
         <View style={styles.ctaContainer}>
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+          <TouchableOpacity 
+            style={[styles.applyButton, !isVIP && styles.lockedButton]} 
+            onPress={handleApply}
+          >
+            {!isVIP && <Ionicons name="lock-closed" size={16} color="#0A0E17" style={{ marginRight: 4 }} />}
             <Ionicons name="rocket-outline" size={20} color="#0A0E17" />
-            <Text style={styles.applyButtonText}>Apply Now</Text>
+            <Text style={styles.applyButtonText}>
+              {isVIP ? 'Apply Now' : 'Upgrade to Apply'}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
-            <Ionicons name="chatbubble-outline" size={20} color="#00D4AA" />
-            <Text style={styles.contactButtonText}>Contact Fund Manager</Text>
+          <TouchableOpacity 
+            style={[styles.contactButton, !isVIP && styles.lockedContactButton]} 
+            onPress={handleContact}
+          >
+            {!isVIP && <Ionicons name="lock-closed" size={16} color={isVIP ? '#00D4AA' : '#8A8D98'} style={{ marginRight: 4 }} />}
+            <Ionicons name="chatbubble-outline" size={20} color={isVIP ? '#00D4AA' : '#8A8D98'} />
+            <Text style={[styles.contactButtonText, !isVIP && { color: '#8A8D98' }]}>
+              {isVIP ? 'Contact Fund Manager' : 'VIP Only'}
+            </Text>
           </TouchableOpacity>
         </View>
 
