@@ -369,26 +369,24 @@ agent_communication:
   - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
   - agent: "main"
   - message: |
-      ✅ BACKEND SUBSCRIPTION SYSTEM IMPLEMENTED: 
-      1. Signal filtering based on subscription (free/premium/vip) - GET /api/signals now filters by user's effective subscription
-      2. AI Analyzer weekly limits: Free=3, Premium=10, VIP=unlimited - enforced in POST /api/ai/analyze
-      3. VIP feature lock for Fund Management and Academy - GET /api/features/fund-management/access and /api/features/academy/access
-      4. Admin endpoints for subscription management:
-         - PUT /api/admin/users/{user_id}/subscription - Update subscription plan and expiry
-         - POST /api/admin/users/{user_id}/reset-ai-usage - Reset AI usage counter
-         - GET /api/admin/users/{user_id}/details - Get detailed user info with subscription
-      5. Real-time sync endpoint - GET /api/subscription/status - Returns full feature access map
+      ✅ SUBSCRIPTION SECURITY FIX COMPLETE:
       
-      NEW ENDPOINTS TO TEST:
-      - PUT /api/admin/users/{user_id}/subscription with body {"subscription": "premium", "expiry_days": 30}
-      - POST /api/admin/users/{user_id}/reset-ai-usage
-      - GET /api/admin/users/{user_id}/details
-      - GET /api/features/fund-management/access
-      - GET /api/features/academy/access
-      - GET /api/subscription/status
+      BACKEND CHANGES:
+      1. Disabled POST /api/subscription/upgrade endpoint - returns 403 Forbidden with message
+      2. Only admin can modify subscriptions via PUT /api/admin/users/{user_id}/subscription
+      3. All subscription fields (subscription, subscription_expiry, ai_weekly_used) are admin-protected
       
-      TEST CREDENTIALS:
-      - Admin: admin@swiftfx.com / adminpassword
-      - Free user: freeuser_test@example.com / test123
+      FRONTEND CHANGES:
+      1. Removed self-service upgrade functionality from more.tsx
+      2. Subscription modal is now READ-ONLY - shows current plan info only
+      3. "Upgrade" button now shows "contact support" message instead of processing payment
+      
+      SECURITY TESTS PASSED:
+      - Free user cannot upgrade to Premium (403)
+      - Premium user cannot upgrade to VIP (403)
+      - Admin CAN upgrade users via admin endpoint
+      - User subscription field is immutable via user endpoints
+      
+      PAYWALL IS NOW SECURE AND STRIPE-READY
   - agent: "testing"
   - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
