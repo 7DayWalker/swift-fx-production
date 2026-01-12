@@ -271,7 +271,7 @@ export default function MoreScreen() {
         <Text style={styles.versionText}>Swift FX Signals v1.0.0</Text>
       </ScrollView>
 
-      {/* Subscription Information Modal - READ ONLY */}
+      {/* Subscription & Upgrade Modal */}
       <Modal
         visible={showSubscriptionModal}
         animationType="slide"
@@ -281,26 +281,40 @@ export default function MoreScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Your Subscription</Text>
+              <Text style={styles.modalTitle}>Subscription Plans</Text>
               <TouchableOpacity onPress={() => setShowSubscriptionModal(false)}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            {/* Current Plan Display - Read Only */}
+            {/* Current Plan Display */}
             <View style={styles.currentPlanContainer}>
               <SubscriptionBadge size="large" showIcon={true} />
               <Text style={styles.currentPlanLabel}>Current Plan</Text>
             </View>
 
-            {/* Plan Features Display */}
+            {/* Billing Cycle Selector */}
+            <View style={styles.cycleSelector}>
+              {(['weekly', 'monthly', 'yearly'] as BillingCycle[]).map((cycle) => (
+                <TouchableOpacity
+                  key={cycle}
+                  style={[styles.cycleOption, selectedCycle === cycle && styles.cycleOptionActive]}
+                  onPress={() => setSelectedCycle(cycle)}
+                >
+                  <Text style={[styles.cycleText, selectedCycle === cycle && styles.cycleTextActive]}>
+                    {cycle.charAt(0).toUpperCase() + cycle.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Plan Cards with Upgrade Buttons */}
             <ScrollView style={styles.plansContainer} showsVerticalScrollIndicator={false}>
               {plans.map((plan) => (
                 <View
                   key={plan.id}
                   style={[
                     styles.planCard,
-                    styles.planCardReadOnly,
                     plan.id === 'vip' && styles.planCardVip
                   ]}
                 >
@@ -314,9 +328,14 @@ export default function MoreScreen() {
                       {plan.name}
                     </Text>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.priceAmount}>${plan.pricing.monthly}</Text>
-                      <Text style={styles.pricePeriod}>/month</Text>
+                      <Text style={styles.priceAmount}>${getCyclePrice(plan, selectedCycle)}</Text>
+                      <Text style={styles.pricePeriod}>/{selectedCycle === 'yearly' ? 'year' : selectedCycle === 'monthly' ? 'month' : 'week'}</Text>
                     </View>
+                    {selectedCycle === 'yearly' && getCycleSavings(plan, selectedCycle) > 0 && (
+                      <View style={styles.savingsBadge}>
+                        <Text style={styles.savingsText}>Save {getCycleSavings(plan, selectedCycle)}%</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.planDescription}>{plan.description}</Text>
                   <View style={styles.featuresList}>
@@ -327,24 +346,36 @@ export default function MoreScreen() {
                       </View>
                     ))}
                   </View>
+                  
+                  {/* Upgrade Button - Creates Payment Session */}
+                  <TouchableOpacity
+                    style={[
+                      styles.planUpgradeButton,
+                      plan.id === 'vip' && styles.planUpgradeButtonVip,
+                      isUpgrading && styles.planUpgradeButtonDisabled
+                    ]}
+                    onPress={() => handleUpgrade(plan.id)}
+                    disabled={isUpgrading}
+                  >
+                    {isUpgrading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.planUpgradeButtonText}>
+                        Upgrade to {plan.name}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
 
-            {/* Upgrade Notice - No Self-Service */}
-            <View style={styles.upgradeNotice}>
-              <Ionicons name="information-circle" size={20} color="#3B82F6" />
-              <Text style={styles.upgradeNoticeText}>
-                To upgrade your plan, please contact support or use our official payment portal.
+            {/* Security Notice */}
+            <View style={styles.securityNotice}>
+              <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+              <Text style={styles.securityNoticeText}>
+                Secure checkout. Payment processed through official channels.
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.closeModalButton}
-              onPress={() => setShowSubscriptionModal(false)}
-            >
-              <Text style={styles.closeModalButtonText}>Close</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
