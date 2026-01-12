@@ -1998,7 +1998,10 @@ async def admin_get_user_details(user_id: str, admin: User = Depends(require_adm
 # ===================== VIP FEATURE ACCESS ENDPOINTS =====================
 @api_router.get("/features/fund-management/access")
 async def check_fund_management_access(current_user: User = Depends(require_auth)):
-    """Check if user has access to Fund Management (VIP only)"""
+    """
+    Guard endpoint for Fund Management (VIP only).
+    Returns 403 if user does not have VIP subscription.
+    """
     user_doc = await db.users.find_one({"user_id": current_user.user_id})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2006,18 +2009,26 @@ async def check_fund_management_access(current_user: User = Depends(require_auth
     effective_subscription = get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
+    if not has_access:
+        raise HTTPException(
+            status_code=403,
+            detail="VIP subscription required"
+        )
+    
     return {
         "feature": "fund_management",
-        "has_access": has_access,
+        "has_access": True,
         "subscription": effective_subscription,
-        "required_plan": "vip",
-        "message": "Fund Management is available for VIP members only." if not has_access else "You have full access to Fund Management."
+        "message": "You have full access to Fund Management."
     }
 
 
 @api_router.get("/features/academy/access")
 async def check_academy_access(current_user: User = Depends(require_auth)):
-    """Check if user has access to Academy (VIP only)"""
+    """
+    Guard endpoint for Academy (VIP only).
+    Returns 403 if user does not have VIP subscription.
+    """
     user_doc = await db.users.find_one({"user_id": current_user.user_id})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2025,12 +2036,17 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
     effective_subscription = get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
+    if not has_access:
+        raise HTTPException(
+            status_code=403,
+            detail="VIP subscription required"
+        )
+    
     return {
         "feature": "academy",
-        "has_access": has_access,
+        "has_access": True,
         "subscription": effective_subscription,
-        "required_plan": "vip",
-        "message": "Academy is available for VIP members only." if not has_access else "You have full access to Academy."
+        "message": "You have full access to Academy."
     }
 
 
