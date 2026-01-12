@@ -48,6 +48,8 @@ type ScreenState = 'upload' | 'analyzing' | 'result' | 'error';
 
 export default function AIScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [usage, setUsage] = useState<AIUsage | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
