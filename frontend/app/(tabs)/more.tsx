@@ -102,26 +102,13 @@ export default function MoreScreen() {
   };
 
   const handleUpgrade = async () => {
-    if (!selectedPlan) {
-      Alert.alert('Error', 'Please select a plan');
-      return;
-    }
-
-    setIsUpgrading(true);
-    try {
-      await api.post('/subscription/upgrade', {
-        plan: selectedPlan,
-        billing_cycle: selectedCycle,
-      });
-      
-      await refreshUser();
-      setShowSubscriptionModal(false);
-      Alert.alert('Success', `You have been upgraded to ${selectedPlan.toUpperCase()}!`);
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to upgrade subscription');
-    } finally {
-      setIsUpgrading(false);
-    }
+    // SECURITY: Self-service upgrade is disabled
+    // Users must complete payment through official checkout (e.g., Stripe)
+    Alert.alert(
+      'Upgrade Required',
+      'To upgrade your subscription, please complete payment through our official checkout. Contact support for assistance.',
+      [{ text: 'OK', style: 'default' }]
+    );
   };
 
   const menuItems = [
