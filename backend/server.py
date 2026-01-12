@@ -1105,35 +1105,74 @@ async def analyze_chart(
     timeframe: str = Form(...),
     current_user: User = Depends(require_auth)
 ):
-    # Check access
-    if current_user.role == UserRole.FREE:
-        raise HTTPException(status_code=403, detail="AI Chart Analyzer requires Premium or VIP subscription")
-    
-    # Check usage limits
-    weekly_limit = get_ai_weekly_limit(current_user.role)
-    
-    # Reset weekly counter if needed
+    # Get user document for subscription check
     user_doc = await db.users.find_one({"user_id": current_user.user_id})
-    reset_date = user_doc.get("ai_usage_reset_date")
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get effective subscription (accounting for expiry)
+    effective_subscription = get_effective_subscription(user_doc)
+    
+    # Check access - Free users cannot use AI analyzer
+    if effective_subscription == "free":
+        raise HTTPException(
+            status_code=403, 
+            detail="AI Chart Analyzer requires Premium or VIP subscription. Upgrade to unlock this feature!"
+        )
+    
+    # Get weekly limit based on subscription (not role)
+    weekly_limit = get_ai_weekly_limit(effective_subscription)
+    
+    # Check and reset weekly counter if needed (using new fields)
+    reset_date = user_doc.get("ai_weekly_reset")
+    current_usage = user_doc.get("ai_weekly_used", 0)
+    
+    # Also check legacy fields for backward compatibility
+    if reset_date is None:
+        reset_date = user_doc.get("ai_usage_reset_date")
+        current_usage = user_doc.get("ai_usage_count", 0)
+    
     if reset_date:
-        if reset_date.tzinfo is None:
+        if isinstance(reset_date, str):
+            reset_date = datetime.fromisoformat(reset_date.replace('Z', '+00:00'))
+        elif reset_date.tzinfo is None:
             reset_date = reset_date.replace(tzinfo=timezone.utc)
+        
         if reset_date < datetime.now(timezone.utc):
+            # Reset weekly counter
             await db.users.update_one(
                 {"user_id": current_user.user_id},
                 {"$set": {
+                    "ai_weekly_used": 0,
+                    "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
+                    # Also reset legacy fields
                     "ai_usage_count": 0,
                     "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
                 }}
             )
-            user_doc["ai_usage_count"] = 0
-    
-    current_usage = user_doc.get("ai_usage_count", 0)
-    if current_usage >= weekly_limit:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Weekly AI usage limit reached ({weekly_limit} analyses). Upgrade to VIP for more or wait until next week."
+            current_usage = 0
+    else:
+        # Initialize reset date if not set
+        await db.users.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {
+                "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
+                "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
+            }}
         )
+    
+    # Check usage limit (VIP has unlimited = 999999)
+    if current_usage >= weekly_limit:
+        if effective_subscription == "premium":
+            raise HTTPException(
+                status_code=403,
+                detail=f"Weekly AI usage limit reached ({weekly_limit} analyses). Upgrade to VIP for unlimited analyses!"
+            )
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Weekly AI usage limit reached. Please wait until next week."
+            )
     
     # Read and encode image
     image_content = await image.read()
