@@ -52,9 +52,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <SignalProvider>
-              <RootLayoutContent />
-            </SignalProvider>
+            <SubscriptionProvider>
+              <SignalProvider>
+                <RootLayoutContent />
+              </SignalProvider>
+            </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
