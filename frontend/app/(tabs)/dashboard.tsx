@@ -117,14 +117,14 @@ export default function DashboardScreen() {
             <SubscriptionBadge 
               size="medium" 
               showIcon={true}
-              onPress={() => router.push('/(tabs)/more')}
+              onPress={() => router.push('/subscription')}
             />
           </View>
         </View>
 
-        {/* Upgrade Banner for Free Users - Uses SubscriptionContext for real-time updates */}
+        {/* Upgrade Banner for Free Users - Routes to canonical /subscription page */}
         {isFreeUser && (
-          <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/(tabs)/more')}>
+          <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/subscription')}>
             <View style={styles.upgradeContent}>
               <Ionicons name="rocket-outline" size={24} color="#FFD700" />
               <View style={styles.upgradeTextContainer}>
