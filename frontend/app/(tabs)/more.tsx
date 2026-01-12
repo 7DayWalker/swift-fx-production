@@ -172,17 +172,16 @@ export default function MoreScreen() {
             <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, dynamicStyles.text]}>{user?.name || 'User'}</Text>
-            <Text style={[styles.profileEmail, dynamicStyles.textSecondary]}>{user?.email}</Text>
-            <View style={[
-              styles.roleBadge,
-              user?.role === 'vip' && styles.vipBadge,
-              user?.role === 'premium' && styles.premiumBadge
-            ]}>
-              <Text style={styles.roleText}>{user?.role?.toUpperCase() || 'FREE'}</Text>
+            <View style={styles.profileNameRow}>
+              <Text style={[styles.profileName, dynamicStyles.text]}>{user?.name || 'User'}</Text>
+              <SubscriptionBadge size="small" showIcon={true} />
             </View>
+            <Text style={[styles.profileEmail, dynamicStyles.textSecondary]}>{user?.email}</Text>
           </View>
         </View>
+
+        {/* Subscription Status Card - Real-time from SubscriptionContext */}
+        <SubscriptionCard onUpgradePress={() => setShowSubscriptionModal(true)} />
 
         {/* Notification Toggle */}
         <View style={[styles.notificationCard, dynamicStyles.card]}>
