@@ -1264,15 +1264,18 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
         # Remove _id from the response (MongoDB adds it after insert)
         analysis_doc.pop("_id", None)
         
-        # Increment usage
+        # Increment usage (both new and legacy fields for backward compatibility)
         await db.users.update_one(
             {"user_id": current_user.user_id},
-            {"$inc": {"ai_usage_count": 1}}
+            {"$inc": {"ai_weekly_used": 1, "ai_usage_count": 1}}
         )
+        
+        remaining = max(0, weekly_limit - current_usage - 1)
         
         return {
             **analysis_doc,
-            "remaining_analyses": weekly_limit - current_usage - 1,
+            "remaining_analyses": remaining if weekly_limit < 100000 else "unlimited",
+            "subscription": effective_subscription,
             "disclaimer": "This analysis is for educational purposes only. Always do your own research before trading."
         }
         
@@ -1292,9 +1295,16 @@ async def get_ai_history(current_user: User = Depends(require_auth)):
 @api_router.get("/ai/usage")
 async def get_ai_usage(current_user: User = Depends(require_auth)):
     user_doc = await db.users.find_one({"user_id": current_user.user_id})
-    weekly_limit = get_ai_weekly_limit(current_user.role)
-    current_usage = user_doc.get("ai_usage_count", 0)
-    reset_date = user_doc.get("ai_usage_reset_date")
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get effective subscription
+    effective_subscription = get_effective_subscription(user_doc)
+    weekly_limit = get_ai_weekly_limit(effective_subscription)
+    
+    # Check both new and legacy fields
+    current_usage = user_doc.get("ai_weekly_used", 0) or user_doc.get("ai_usage_count", 0)
+    reset_date = user_doc.get("ai_weekly_reset") or user_doc.get("ai_usage_reset_date")
     
     return {
         "current_usage": current_usage,
