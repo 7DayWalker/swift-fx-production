@@ -1621,6 +1621,182 @@ async def get_admin_stats(admin: User = Depends(require_admin)):
         "total_ai_analyses": total_ai_analyses
     }
 
+
+# ===================== ADMIN SUBSCRIPTION MANAGEMENT =====================
+class AdminSubscriptionUpdate(BaseModel):
+    """Admin model for updating user subscription"""
+    subscription: str  # "free" | "premium" | "vip"
+    expiry_days: Optional[int] = None  # Days until expiry (None = no expiry)
+
+
+@api_router.put("/admin/users/{user_id}/subscription")
+async def admin_update_user_subscription(
+    user_id: str, 
+    update_data: AdminSubscriptionUpdate, 
+    admin: User = Depends(require_admin)
+):
+    """Admin endpoint to update a user's subscription plan and expiry"""
+    # Validate subscription value
+    valid_subscriptions = ["free", "premium", "vip"]
+    if update_data.subscription.lower() not in valid_subscriptions:
+        raise HTTPException(status_code=400, detail=f"Invalid subscription. Must be one of: {valid_subscriptions}")
+    
+    # Find user
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Build update document
+    subscription = update_data.subscription.lower()
+    update_doc = {
+        "subscription": subscription,
+        "role": subscription,  # Keep role in sync with subscription
+    }
+    
+    # Set expiry
+    if subscription == "free":
+        update_doc["subscription_expiry"] = None
+        update_doc["subscription_status"] = "inactive"
+    else:
+        if update_data.expiry_days:
+            update_doc["subscription_expiry"] = datetime.now(timezone.utc) + timedelta(days=update_data.expiry_days)
+        else:
+            # No expiry = lifetime/indefinite
+            update_doc["subscription_expiry"] = None
+        update_doc["subscription_status"] = "active"
+    
+    result = await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_doc}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="No changes made")
+    
+    return {
+        "message": f"User subscription updated to {subscription}",
+        "user_id": user_id,
+        "subscription": subscription,
+        "expiry": update_doc.get("subscription_expiry")
+    }
+
+
+@api_router.post("/admin/users/{user_id}/reset-ai-usage")
+async def admin_reset_user_ai_usage(user_id: str, admin: User = Depends(require_admin)):
+    """Admin endpoint to reset a user's AI usage counter"""
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    result = await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "ai_weekly_used": 0,
+            "ai_usage_count": 0,
+            "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
+            "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
+        }}
+    )
+    
+    return {
+        "message": "AI usage reset successfully",
+        "user_id": user_id,
+        "new_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
+    }
+
+
+@api_router.get("/admin/users/{user_id}/details")
+async def admin_get_user_details(user_id: str, admin: User = Depends(require_admin)):
+    """Admin endpoint to get detailed user information including subscription status"""
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate effective subscription
+    effective_subscription = get_effective_subscription(user)
+    
+    return {
+        **user,
+        "effective_subscription": effective_subscription,
+        "subscription_active": check_subscription_active(user),
+        "ai_limit": get_ai_weekly_limit(effective_subscription)
+    }
+
+
+# ===================== VIP FEATURE ACCESS ENDPOINTS =====================
+@api_router.get("/features/fund-management/access")
+async def check_fund_management_access(current_user: User = Depends(require_auth)):
+    """Check if user has access to Fund Management (VIP only)"""
+    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    effective_subscription = get_effective_subscription(user_doc)
+    has_access = effective_subscription == "vip"
+    
+    return {
+        "feature": "fund_management",
+        "has_access": has_access,
+        "subscription": effective_subscription,
+        "required_plan": "vip",
+        "message": "Fund Management is available for VIP members only." if not has_access else "You have full access to Fund Management."
+    }
+
+
+@api_router.get("/features/academy/access")
+async def check_academy_access(current_user: User = Depends(require_auth)):
+    """Check if user has access to Academy (VIP only)"""
+    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    effective_subscription = get_effective_subscription(user_doc)
+    has_access = effective_subscription == "vip"
+    
+    return {
+        "feature": "academy",
+        "has_access": has_access,
+        "subscription": effective_subscription,
+        "required_plan": "vip",
+        "message": "Academy is available for VIP members only." if not has_access else "You have full access to Academy."
+    }
+
+
+# ===================== USER SUBSCRIPTION INFO ENDPOINT =====================
+@api_router.get("/subscription/status")
+async def get_subscription_status(current_user: User = Depends(require_auth)):
+    """Get current user's subscription status - used for real-time UI sync"""
+    user_doc = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    effective_subscription = get_effective_subscription(user_doc)
+    is_active = check_subscription_active(user_doc)
+    
+    # Get AI usage info
+    ai_weekly_used = user_doc.get("ai_weekly_used", 0) or user_doc.get("ai_usage_count", 0)
+    ai_limit = get_ai_weekly_limit(effective_subscription)
+    
+    return {
+        "user_id": user_doc.get("user_id"),
+        "subscription": effective_subscription,
+        "subscription_raw": user_doc.get("subscription", "free"),
+        "subscription_expiry": user_doc.get("subscription_expiry"),
+        "subscription_active": is_active,
+        "role": user_doc.get("role", "free"),
+        "is_admin": user_doc.get("is_admin", False),
+        "features": {
+            "signals_access": effective_subscription,  # "free", "premium", or "vip"
+            "ai_analyzer": effective_subscription != "free",
+            "ai_limit": ai_limit if ai_limit < 100000 else "unlimited",
+            "ai_used": ai_weekly_used,
+            "ai_remaining": max(0, ai_limit - ai_weekly_used) if ai_limit < 100000 else "unlimited",
+            "fund_management": effective_subscription == "vip",
+            "academy": effective_subscription == "vip",
+            "image_uploads": effective_subscription != "free"
+        }
+    }
+
 # ===================== SETUP ADMIN =====================
 @api_router.post("/setup/admin")
 async def setup_admin(email: EmailStr, password: str, admin_key: str):
