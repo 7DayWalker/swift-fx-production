@@ -152,17 +152,17 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>Performance</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{dashboardData?.performance?.win_rate || 0}%</Text>
+              <Text style={styles.statValue}>{getWinRate()}%</Text>
               <Text style={styles.statLabel}>Win Rate</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: (dashboardData?.performance?.total_pips || 0) >= 0 ? '#00D4AA' : '#FF4757' }]}>
-                {(dashboardData?.performance?.total_pips || 0) >= 0 ? '+' : ''}{dashboardData?.performance?.total_pips || 0}
+              <Text style={[styles.statValue, { color: getTotalPips() >= 0 ? '#00D4AA' : '#FF4757' }]}>
+                {getTotalPips() >= 0 ? '+' : ''}{getTotalPips()}
               </Text>
               <Text style={styles.statLabel}>Total Pips</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{dashboardData?.performance?.total_signals || 0}</Text>
+              <Text style={styles.statValue}>{getTotalSignals()}</Text>
               <Text style={styles.statLabel}>Signals</Text>
             </View>
           </View>
