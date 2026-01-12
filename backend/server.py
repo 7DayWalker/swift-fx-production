@@ -1306,12 +1306,15 @@ async def get_ai_usage(current_user: User = Depends(require_auth)):
     current_usage = user_doc.get("ai_weekly_used", 0) or user_doc.get("ai_usage_count", 0)
     reset_date = user_doc.get("ai_weekly_reset") or user_doc.get("ai_usage_reset_date")
     
+    remaining = max(0, weekly_limit - current_usage)
+    
     return {
         "current_usage": current_usage,
-        "weekly_limit": weekly_limit,
-        "remaining": max(0, weekly_limit - current_usage),
+        "weekly_limit": weekly_limit if weekly_limit < 100000 else "unlimited",
+        "remaining": remaining if weekly_limit < 100000 else "unlimited",
         "reset_date": reset_date,
-        "has_access": current_user.role != UserRole.FREE
+        "has_access": effective_subscription != "free",
+        "subscription": effective_subscription
     }
 
 # ===================== COMMUNITY ENDPOINTS =====================
