@@ -105,19 +105,6 @@ export default function MoreScreen() {
     },
   ];
 
-  const getCyclePrice = (plan: SubscriptionPlan, cycle: BillingCycle) => {
-    return plan.pricing[cycle];
-  };
-
-  const getCycleSavings = (plan: SubscriptionPlan, cycle: BillingCycle) => {
-    if (cycle === 'yearly') {
-      const monthlyTotal = plan.pricing.monthly * 12;
-      const savings = monthlyTotal - plan.pricing.yearly;
-      return Math.round((savings / monthlyTotal) * 100);
-    }
-    return 0;
-  };
-
   return (
     <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
       <ScrollView 
