@@ -468,17 +468,29 @@ async def reset_password(token: str, new_password: str):
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
     signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
-    user_role = current_user.role if current_user else UserRole.FREE
+    # Get user's effective subscription
+    if current_user:
+        user_doc = await db.users.find_one({"user_id": current_user.user_id})
+        user_subscription = get_effective_subscription(user_doc) if user_doc else "free"
+        is_admin = user_doc.get("role") == "admin" if user_doc else False
+    else:
+        user_subscription = "free"
+        is_admin = False
     
     result = []
     for signal in signals:
-        signal_visibility = SignalVisibility(signal.get("visibility", "free"))
-        can_view = can_access_signal(user_role, signal_visibility)
+        signal_visibility = signal.get("visibility", "free")
         
-        if can_view:
+        # Admin sees all signals
+        if is_admin:
             result.append(signal)
+        # Check if user subscription can access this signal
+        elif can_access_visibility(user_subscription, signal_visibility):
+            result.append(signal)
+        # Don't send blocked signals to frontend at all (per requirements)
+        # But we can optionally show limited info
         else:
-            # Return limited info for locked signals
+            # Return limited info for locked signals so UI can show upgrade prompts
             result.append({
                 "signal_id": signal["signal_id"],
                 "pair": signal["pair"],
@@ -486,7 +498,8 @@ async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
                 "status": signal["status"],
                 "visibility": signal["visibility"],
                 "created_at": signal["created_at"],
-                "locked": True
+                "locked": True,
+                "required_plan": signal_visibility
             })
     
     return result
@@ -497,22 +510,31 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     
-    user_role = current_user.role if current_user else UserRole.FREE
-    signal_visibility = SignalVisibility(signal.get("visibility", "free"))
+    # Get user's effective subscription
+    if current_user:
+        user_doc = await db.users.find_one({"user_id": current_user.user_id})
+        user_subscription = get_effective_subscription(user_doc) if user_doc else "free"
+        is_admin = user_doc.get("role") == "admin" if user_doc else False
+    else:
+        user_subscription = "free"
+        is_admin = False
     
-    if not can_access_signal(user_role, signal_visibility):
-        return {
-            "signal_id": signal["signal_id"],
-            "pair": signal["pair"],
-            "signal_type": signal["signal_type"],
-            "status": signal["status"],
-            "visibility": signal["visibility"],
-            "created_at": signal["created_at"],
-            "locked": True,
-            "required_plan": signal_visibility
-        }
+    signal_visibility = signal.get("visibility", "free")
     
-    return signal
+    # Admin sees all signals
+    if is_admin or can_access_visibility(user_subscription, signal_visibility):
+        return signal
+    
+    return {
+        "signal_id": signal["signal_id"],
+        "pair": signal["pair"],
+        "signal_type": signal["signal_type"],
+        "status": signal["status"],
+        "visibility": signal["visibility"],
+        "created_at": signal["created_at"],
+        "locked": True,
+        "required_plan": signal_visibility
+    }
 
 @api_router.post("/admin/signals")
 async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundTasks, admin: User = Depends(require_admin)):
