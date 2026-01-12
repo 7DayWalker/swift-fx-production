@@ -23,7 +23,7 @@ index 0f96aae..e69de29 100644
 -+import os
 -+
 -+# Configuration
--+BASE_URL = "https://fxtrader-app-2.preview.emergentagent.com/api"
+-+BASE_URL = "https://swift-trader-9.preview.emergentagent.com/api"
 -+
 -+class AIChartAnalyzerTester:
 -+    def __init__(self):

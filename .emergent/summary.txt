@@ -1,108 +1,111 @@
 <analysis>
-<original_problem_statement>
+
+**original_problem_statement**:
 The user wants to build a production-ready mobile trading signals application called **Swift FX Signals** for Forex, Gold, and Crypto traders.
 
-**PRODUCT REQUIREMENTS:**
--   **Platform**: Expo Mobile App (iOS & Android).
--   **Authentication**: Email/password and Google social login. Role-based access control for **Free**, **Premium**, **VIP**, and **Admin** users.
--   **Subscriptions**: Mocked payment system for weekly/monthly/yearly plans. Access is based on plan (Premium/VIP), not billing cycle. Auto-downgrade to Free on expiry.
--   **UI**: Dark mode, mobile-first, bottom navigation (Dashboard, Signals, AI, Community, More). A Dark/Light mode toggle has been added.
--   **Dashboard**: Welcome header, watchlist, signals preview, performance summary, and an upgrade banner for free users.
--   **Signals Module**: Core feature. Signals have specific data structures and are locked based on user role.
--   **Push Notifications**: Use Expo Push Notifications for all users when a new signal is posted.
--   **AI Chart Analyzer**: A feature for Premium (limited) and VIP (20/week) users to upload a chart screenshot and get AI analysis. The analysis result must be persisted and displayed. **(This was fixed in the session).**
--   **Community Module**: Users can create posts, like, and comment. Premium/VIP users can attach an image to their posts. **(Image upload was added in this session).**
--   **Academy Module**: A new module with educational content (Beginner, Intermediate, Advanced) with role-based access. **(Scaffolding was built in this session).**
--   **Fund Management Module**: A new info-only screen for VIP users. **(This is in progress).**
--   **Ads**: Mocked AdMob banners for Free users only.
--   **Admin Panel**: A separate, protected area for admins to manage signals, users, and view AI usage metrics.
--   **Bug Fix (Reported by user)**: The bottom tab navigation has a clipping issue on iOS, where it overlaps the home indicator. **(This is NOT resolved).**
-</original_problem_statement>
+The last request was to implement a backend-enforced subscription system.
+
+**PRODUCT REQUIREMENTS (for the current task):**
+-   **Subscription Model**: Extend the User model with  (free, premium, vip), , , and .
+-   **Signal Access Control**: The  endpoint must filter signals based on the user's subscription plan (Free sees free, Premium sees free+premium, VIP sees all).
+-   **AI Analyzer Limits**: Enforce weekly usage limits (Free: 3, Premium: 10, VIP: unlimited) at the account level. The system must automatically reset the weekly counter.
+-   **VIP Feature Lock**: The Fund Management feature should be accessible only to VIP users.
+-   **Admin Controls**: Admins need endpoints to manage user subscriptions (plan, expiry) and reset AI usage.
+-   **Real-Time Sync**: When an admin changes a user's subscription, the UI must update and unlock/lock features immediately without requiring a user logout.
+-   **UI Badge**: Display the user's current plan (Free / Premium / VIP) in the app header.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application. The core features like Authentication, a role-based Admin Panel, and a User Dashboard are complete.
+A full-stack Expo (React Native) and FastAPI application with a MongoDB database. The app features role-based authentication, a comprehensive signals module with a full lifecycle (pending, active, closed), an AI chart analyzer, community features, and more.
 
-In this session, the following were accomplished:
--   The **AI Chart Analyzer** was fully fixed, from the backend API call ( usage) to frontend file upload (using base64 to Blob conversion) and safe rendering of results.
--   A **Dark/Light Mode** theme system was implemented using React Context and AsyncStorage for persistence. A toggle is available in the 'More' screen.
--   The **Community Module** was enhanced to allow Premium and VIP users to upload an image when creating a post. This included backend updates to the  endpoint and frontend UI changes for picking and displaying the image.
--   The **Academy Module** was scaffolded. This includes a new stack navigator with screens for an academy home, a course list by category, and a lesson detail view, all with role-based access control and placeholder content.
+Two major systems were added in the last session:
+1.  **Real-Time Frontend Updates**: A  was created to manage a global state for signals, stats, and history. It uses a 5-second polling mechanism to keep all components (, , ) in sync. Admin actions on signals now trigger context refreshes.
+2.  **Automatic Signal Execution**: A FastAPI  was implemented in . It runs every 30 seconds, fetches live market prices for active/pending symbols from public APIs, and automatically activates pending signals or closes active signals when price targets (Entry, SL, TP) are met.
 
 **Last working item**:
--   Last item agent was working: Building the **Fund Management** module, which is an info-only screen accessible from the More tab for VIP users. The agent created the screen file .
+-   Last item agent was working: The agent began implementing the backend-enforced subscription system. It started modifying  by adding new Pydantic models for subscriptions (, ), updating the main  model, and beginning to modify the  endpoint to filter signals based on the user's subscription plan.
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **Frontend testing agent**. After implementation, the agent should use the screenshot tool to:
-    1. Log in as a VIP user and navigate to More -> Fund Management to verify access.
-    2. Log in as a Free/Premium user and verify the screen is locked with an upgrade CTA.
-    3. Verify the UI content matches the requirements.
+-   Which testing method agent to use? **backend testing agent**. After the backend work is complete, the agent needs to test the following:
+    1.  Create users with                total        used        free      shared  buff/cache   available
+Mem:        16359160     5791156     5352684       45088     5533236    10568004
+Swap:              0           0           0, , and  subscriptions.
+    2.  Test the  endpoint with each user to verify they only receive signals appropriate for their plan.
+    3.  Test the  endpoint to verify usage limits are enforced.
+    4.  Test the admin endpoints for updating user subscriptions.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: Bottom tab navigation is clipped on iOS (P1)
+-   Issue 1: Bottom tab navigation is clipped on iOS (P2, FROZEN)
 
   Issues Detail:
   - **Issue 1: Bottom tab navigation is clipped on iOS.**
-     -   Attempted fixes: Multiple attempts were made to fix this in . These included adding padding to screens, adjusting  height with , and adjusting  to move labels up. None of the fixes were successful, and the user eventually instructed the agent to **Freeze bottom navigation polish completely** and move on. The last attempt involved using an inline style to add a  offset to the . The file was also left in a state with a syntax error which was later fixed, but the core layout issue persists.
-     -   Next debug checklist:
-         1.  **DO NOT work on this unless explicitly instructed by the user.**
-         2.  If instructed, review . The core issue is the internal layout of the tab items (icon + label) is not respecting the safe area padding applied to the tab bar container.
-         3.  A robust solution would likely involve using the  prop of the  component to render a fully custom tab bar component that has complete control over its internal layout and safe area handling, rather than tweaking  and .
-     -   Why fix this issue and what will be achieved with the fix?: This is a critical UI/UX bug that makes the app's primary navigation look broken and unprofessional on modern iPhones.
+     -   Attempted fixes: Multiple failed attempts in  during a previous session.
+     -   Next debug checklist: **DO NOT work on this unless explicitly instructed by the user.** The user has frozen all work on this issue.
+     -   Why fix this issue and what will be achieved with the fix?: Fixes a critical UI bug on modern iPhones, making the app's primary navigation look unprofessional.
      -   Status: **NOT STARTED** (Work was frozen by the user).
-     -   Is recurring issue?: Y (Multiple failed fix attempts).
+     -   Is recurring issue?: Y
      -   Should Test frontend/backend/both after fix?: Frontend.
      -   Blocked on other issue: None.
 
 **In progress Task List**:
--   Task 1: Implement Fund Management Info-only screen (P0)
+-   Task 1: Implement Backend-Enforced Subscription System (P0)
 
-  Task Detail:
-  - **Task 1: Implement Fund Management Info-only screen**
-     -   Where to resume: The file  has been created. The next step is to populate this file with the UI components and static content as requested by the user in Message 499 (Intro, Performance, How it works, Disclaimer, CTA). Then, the navigation link in  for Fund Management needs to be updated to navigate to this new screen.
-     -   What will be achieved with this?: It will complete the scaffolding for another one of the user's requested features.
+ Task Detail:
+  - **Task 1: Implement Backend-Enforced Subscription System**
+     -   Where to resume: Continue editing . The agent has added the models and started modifying .
+     -   **Remaining Backend work**:
+        1.  Finalize the subscription filtering logic in the  endpoint.
+        2.  Implement the AI Analyzer weekly usage limit logic in the  endpoint, including the weekly reset mechanism.
+        3.  Implement the VIP feature lock for the Fund Management module.
+        4.  Create the admin endpoints to manage user subscriptions and AI usage.
+     -   **Frontend work (Not Started)**:
+        1.  Add a UI badge to the header to display the user's current subscription plan.
+        2.  Implement the real-time UI update when an admin changes a user's subscription. This will likely involve updating the  or  to re-fetch user data.
+        3.  Show an upgrade prompt when a user hits their AI analyzer limit.
+     -   What will be achieved with this?: This will add a core monetization and access control layer to the application.
      -   Status: **IN PROGRESS**
-     -   Should Test frontend/backend/both after fix?: Frontend.
+     -   Should Test frontend/backend/both after fix?: Both.
      -   Blocked on something: None.
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks**:
-    -   (P1) Implement Push Notifications using Expo Push Notifications for new signal alerts.
 -   **Future Tasks**:
-    -   (P1) Integrate a real payment provider (e.g., Stripe) to replace the mock subscription flow.
-    -   (P2) Expand Dark/Light mode theme to all screens (Dashboard, Signals, AI, Community currently use hardcoded dark mode colors).
+    -   (P1) Integrate a real payment provider (e.g., Stripe) to replace the mock/manual subscription flow.
+    -   (P2) Expand Dark/Light mode theme to all screens.
     -   (P2) Implement remaining Community features (liking, commenting).
     -   (P2) Implement mock AdMob banners for Free users.
-    -   (P2) Implement the remaining placeholder screens from the More tab (Recommended Brokers, etc.).
-    -   (P3) Add actual content (videos, text) to the Academy module.
-    -   (P3) Add progress tracking to the Academy module.
-    -   (P3) Enhance the Admin Panel to allow admins to manage other admins.
+    -   (P3) Add actual content (videos, text) to the Academy module and implement progress tracking.
 
 **Completed work in this session**
-- **AI Chart Analyzer Fix (RESOLVED)**
-  - Fixed backend API call in  to use the correct  parameters ().
-  - Fixed  serialization error in the backend analysis response.
-  - Fixed frontend file upload in  to correctly send a  in  for cross-platform compatibility.
-  - Fixed a React rendering crash (Objects are not valid as a React child) by implementing safe rendering and proper error handling in .
-- **Dark/Light Mode Toggle (v1)**
-  - Created  with  for persistence.
-  - Added a theme toggle UI in .
-  - Applied theme to the tab bar and the 'More' screen.
-- **Community Image Uploads (v1)**
-  - Updated  in  to accept an .
-  - Updated  to include an image picker in the create post modal (for Premium/VIP users) and display the image in the post feed.
-- **Academy Module Scaffolding (v1)**
-  - Created a new route group  with screens for home, course lists, and lesson details (, , ).
-  - Implemented role-based access control for different course categories.
-  - Updated  to navigate to the academy.
+- **Critical Crash Fix (COMPLETED)**
+  - Resolved an app boot failure caused by a database-user mismatch in the forked environment. The agent corrected the admin user's password hash and role in MongoDB.
+
+- **Signal Creation & Viewing Bugs (RESOLVED)**
+  - Fixed a Pydantic validation error by adding the  role to the  enum in .
+  - Fixed a display bug by updating the  function to grant admins full access.
+
+- **Delete Signal Functionality (VERIFIED)**
+  - Confirmed via API and UI testing that the delete signal functionality was working as intended.
+
+- **AI Chart Analyzer Mobile Upgrade (COMPLETED)**
+  - Added a Camera option to the UI for taking photos of charts.
+  - Fixed the mobile image upload process by correctly converting image URIs to binary  objects.
+  - Resolved a Claude Vision error by resizing all images to a max dimension of 1024px and converting them to PNG format before upload.
+
+- **Real-Time System Implementation (v1 COMPLETED)**
+  - Created , a centralized state manager with a 5-second polling mechanism to keep the frontend in sync.
+  - Refactored the Dashboard, Signals, and History screens to be fully reactive to the new context.
+
+- **Price-Based Signal Automation (COMPLETED)**
+  - Implemented a FastAPI  in  that runs every 30 seconds.
+  - The task fetches live market prices from public APIs (Forex, Gold, Crypto).
+  - It automatically activates pending signals and closes active signals based on entry, stop-loss, and take-profit price triggers.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: Bottom tab navigation is clipped on iOS.**
-    -   This was a major focus of the session but remains unresolved. The agent was explicitly told to stop working on it.
-    -   Debug checklist: See All Pending/In progress Issue list above.
-    -   Why to solve this issue and what will be achieved with this?: Fixes a critical, user-facing UI bug in the app's main navigation.
+    -   Debug checklist: See All Pending/In progress Issue list above. Work is frozen.
+    -   Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug.
     -   Should Test frontend/backend/both after fix: Frontend.
     -   Is recurring issue?: Y.
 
@@ -113,88 +116,89 @@ In this session, the following were accomplished:
 
 
 **Key Technical Concepts**
--   **Frontend**: React Native, Expo, Expo Router, TypeScript
--   **Backend**: Python, FastAPI
+-   **Frontend**: React Native, Expo, Expo Router, TypeScript, Zustand, 
+-   **Backend**: Python, FastAPI, **FastAPI BackgroundTasks**
 -   **Database**: MongoDB
--   **State Management**: Zustand (for Auth), React Context (for Theme)
--   **API Communication**: Axios, FormData for file uploads
--   **UI**: Custom components,  (), , .
--   **Persistence**: AsyncStorage (for theme preference).
+-   **State Management**:  for Signals (), Zustand for Auth
+-   **Real-time Strategy**: Frontend polling via , Backend price-based automation via .
 
 **key DB schema**
--   : Unchanged.
--   : Unchanged.
--   : Unchanged.
--   : Now includes an optional  field.
--   : Unchanged.
+-   **users**: About to be modified to include:
+    -    ('free', 'premium', 'vip')
+    -   
+    -   
+    -   
+-   **signals**: Now includes:
+    -    ('pending', 'active', 'closed')
+    -   
+    -   
+    -   
 
 **changes in tech stack**
--   None.
+-   No new packages were added, but core application architecture was changed with the introduction of  on the frontend and  on the backend.
 
 **All files of reference**
--   : The file currently being worked on.
--   : Modified multiple times to add navigation for Academy and to implement the Theme toggle. Will need to be modified again for Fund Management.
--   : **CONTAINS UNRESOLVED BUG.** This file was heavily modified in failed attempts to fix the tab bar clipping. Work on this was frozen by the user.
--   : The file was completely refactored to fix the AI analyzer functionality.
--   : Updated to support image uploads.
--   : New file for managing dark/light mode.
--   : New folder containing all files for the Academy module.
--   : The  and  endpoints were modified.
+-   : **Most critical file.** Contains all API logic, the new price automation system, and the in-progress subscription logic.
+-   : New file, central to the frontend's real-time functionality.
+-   : Heavily modified to support mobile camera/gallery uploads and robust image preprocessing.
+-   : Refactored to be fully reactive to .
 
 **Areas that need refactoring**:
--   The  file is very fragile after multiple failed attempts to fix the tab bar. It should be cleaned up or rewritten with a more robust approach when the user decides to address the navigation bug again.
+-   The  file contains commented-out code from failed attempts to fix the tab bar bug. It should be cleaned up when the bug is eventually addressed.
 
 **key api endpoints**
--   : (POST) Now fully functional.
--   : (POST) Now accepts  with an optional  file.
+-    (GET): Being modified to enforce subscription-based access.
+-    (POST): Will be modified to enforce weekly usage limits.
+-    (GET): New endpoint to check the status of the price automation background task.
+-   **New Admin Endpoints (to be created)**: for managing user subscriptions.
 
 **Critical Info for New Agent**
--   **DO NOT WORK ON THE TAB BAR:** The user has explicitly instructed to **freeze** all work on the bottom navigation layout (). The clipping issue is a known bug, but do not attempt to fix it until you receive new instructions from the user.
--   **THEME IS V1:** The dark/light mode toggle is functional, but the theme is only applied to the 'More' screen and the tab bar. Other screens still have hardcoded dark mode styles. Do not expand the theme without user instruction.
--   **CONTINUE FUND MANAGEMENT:** The immediate next task is to complete the UI for the Fund Management screen as per the user's requirements in Message 499.
+-   **DO NOT WORK ON THE TAB BAR:** The user has explicitly frozen all work on the bottom navigation layout ().
+-   **Subscription Logic is the Priority:** The current task is to finish the backend-enforced subscription system. This is the single source of truth for access control.
+-   **Two New Core Systems**: The app now has two major asynchronous systems.
+    1.  **Frontend Polling**:  polls  every 5 seconds to update the UI.
+    2.  **Backend Automation**: A  in  polls public price APIs every 30 seconds to update signal statuses in the database. These two systems work together to create a real-time experience.
 
 **documents created in this job**
 -   
--   
--   
--   
--   
--   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Msg 499)**: Freeze Academy work. Start building the Fund Management module (info-only, VIP access). (IN PROGRESS)
-2.  **User (Msg 466)**: Freeze Community work. Start building the Academy module scaffolding. (Completed)
-3.  **User (Msg 409)**: Freeze theme work. Start building Community Image Uploads. (Completed)
-4.  **User (Msg 350)**: **Freeze bottom navigation polish completely.** Do not modify it further. Proceed to implement Dark/Light Mode. (Completed)
-5.  **User (Msg 341)**: Reported that tab bar labels are still partially clipped and gave specific instructions on how to fix the label offset. (This led to the final failed attempt before work was frozen).
-6.  **User (Msg 334)**: Reported that tab bar labels were hidden after the previous fix and provided a screenshot. (Part of the tab bar bug saga).
-7.  **User (Msg 325)**: Reported that the tab bar itself was overlapping the iOS home indicator, providing a screenshot and specific instructions. (Part of the tab bar bug saga).
-8.  **User (Msg 288)**: Reported that the app was crashing with a  in . (This was fixed).
-9.  **User (Msg 265)**: Reported that the bottom navigation was still clipped after the first padding-based fix attempt.
-10. **User (Msg 188)**: Requested a fix for the bottom tab navigation clipping issue. (This is the start of the unresolved Issue 1).
+1.  **User (Msg 599)**: Requested the backend-enforced subscription system with specific requirements for signals, AI limits, and admin controls. **(IN PROGRESS)**
+2.  **User (Msg 565)**: Confirmed AI analyzer works and requested implementation of price-based automatic signal execution. (Completed)
+3.  **User (Msg 541)**: Reported AI analysis still fails on mobile due to tall images and requested a 1024px resize limit. (Completed)
+4.  **User (Msg 513)**: Reported AI analysis fails on mobile due to image upload format (URI string vs. binary) and requested a fix. (Completed)
+5.  **User (Msg 435)**: Confirmed dashboard is working and requested an upgrade to the AI Analyzer for mobile users (camera support, portrait images). (Completed)
+6.  **User (Msg 407)**: Reported the Dashboard was not updating from SignalContext, suspecting a provider scope issue. (Completed, was likely a caching issue)
+7.  **User (Msg 381)**: Requested a fix for the Dashboard not updating in real-time. (Completed)
+8.  **User (Msg 321)**: Requested a fix for dashboard stat calculation errors and reactivity. (Completed)
+9.  **User (Msg 233)**: Requested real-time signal event propagation across the app. (Completed)
+10. **User (Msg 203)**: Froze work on the Delete button and requested a fix for the broken AI Chart Analyzer. (Completed)
 
 **Project Health Check:**
 -   **Broken**:
-    -   Bottom tab navigation UI on iOS ().
+    -   Bottom tab navigation UI on iOS (). Work is frozen.
 -   **Mocked**:
-    -   Payment/Subscription system.
+    -   Payment/Subscription system (payment gateway is missing, but backend logic is being built now).
     -   Ad system.
 
 **3rd Party Integrations**
 -   **Anthropic Claude Vision**: Used for the AI Chart Analyzer via . Uses **Emergent LLM Key**.
--   **Expo Push Notifications**: To be implemented.
+-   **Frankfurter API**: Used for live Forex price data in the backend automation.
+-   **CoinGecko API**: Used for live Gold (PAXG) and Crypto (BTC, ETH) price data in the backend automation.
+-   **Expo Push Notifications**: Integrated for sending alerts.
 
 **Testing status**
--   Testing agent used after significant changes: YES (for the backend).
+-   Testing agent used after significant changes: NO (Agent used manual , screenshot testing, and log inspection).
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: The backend test file in  was updated and executed.
--   Known regressions: None.
+-   Test files created: None.
+-   Known regressions: None from this session; many bugs were fixed.
 
 **Credentials to test flow:**
--   Admin:  / 
--   VIP: A test user  was created and upgraded to VIP. The login flow can be repeated to get a fresh token for testing.
+-   **Admin**:  / 
+-   **VIP User**:  / 
+-   **Free User**:  / 
 
 **What agent forgot to execute**
--   The agent did not *forget* but was explicitly told to **stop** working on the tab navigation bug. This bug remains the most significant piece of unfinished work from the session's problem list.
+-   The current task (subscription system) is only partially complete. The agent has not yet implemented the frontend UI badge or the real-time sync when an admin changes a user's subscription. These were part of the user's request (Msg 599).
 
 </analysis>
