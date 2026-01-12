@@ -270,14 +270,15 @@ export default function AIScreen() {
           throw new Error('Failed to process image. Please try a different image.');
         }
       } else if (selectedImage) {
-        // Fetch from URI and convert
+        // Fetch from URI and convert to PNG (required by emergentintegrations)
         console.log('Fetching image from URI...');
         try {
           const response = await fetch(selectedImage);
           const blob = await response.blob();
           
           if (Platform.OS === 'web' && blob.size > 0) {
-            // Convert to JPEG via canvas
+            // Convert to PNG via canvas with 1024px max dimension
+            const MAX_DIMENSION = 1024;
             const img = new window.Image();
             const url = URL.createObjectURL(blob);
             
@@ -289,23 +290,34 @@ export default function AIScreen() {
             
             URL.revokeObjectURL(url);
             
+            // Calculate dimensions
+            let newWidth = img.width;
+            let newHeight = img.height;
+            if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+              const ratio = Math.min(MAX_DIMENSION / img.width, MAX_DIMENSION / img.height);
+              newWidth = Math.round(img.width * ratio);
+              newHeight = Math.round(img.height * ratio);
+            }
+            
             const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
+            canvas.width = newWidth;
+            canvas.height = newHeight;
             const ctx = canvas.getContext('2d');
             
             if (ctx) {
-              ctx.drawImage(img, 0, 0);
-              const jpegBlob = await new Promise<Blob>((resolve) => {
-                canvas.toBlob((b) => resolve(b || blob), 'image/jpeg', 0.85);
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, newWidth, newHeight);
+              ctx.drawImage(img, 0, 0, newWidth, newHeight);
+              const pngBlob = await new Promise<Blob>((resolve) => {
+                canvas.toBlob((b) => resolve(b || blob), 'image/png');
               });
-              imageFile = new File([jpegBlob], 'chart.jpg', { type: 'image/jpeg' });
-              console.log('Converted URI to JPEG, size:', imageFile.size);
+              imageFile = new File([pngBlob], 'chart.png', { type: 'image/png' });
+              console.log('Converted URI to PNG, size:', imageFile.size, 'dimensions:', newWidth, 'x', newHeight);
             }
           }
           
           if (!imageFile) {
-            imageFile = new File([blob], 'chart.jpg', { type: 'image/jpeg' });
+            imageFile = new File([blob], 'chart.png', { type: 'image/png' });
           }
         } catch (fetchError) {
           console.error('Failed to fetch image:', fetchError);
