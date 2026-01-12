@@ -746,6 +746,50 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 12,
   },
+  // Read-only subscription modal styles
+  currentPlanContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
+  },
+  currentPlanLabel: {
+    fontSize: 14,
+    color: '#8A8D98',
+    marginTop: 8,
+  },
+  planCardReadOnly: {
+    opacity: 0.85,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  upgradeNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    gap: 12,
+  },
+  upgradeNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#3B82F6',
+    lineHeight: 18,
+  },
+  closeModalButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  closeModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
   upgradeButton: {
     backgroundColor: '#00D4AA',
     borderRadius: 12,
