@@ -143,60 +143,73 @@ export default function AIScreen() {
     }
   };
   
-  // Preprocess image for optimal AI analysis
+  // Preprocess image for Claude Vision - CRITICAL for mobile support
+  // Claude Vision requires: max 1024px on any dimension, JPEG format, no alpha
   const preprocessImage = async (base64: string, width?: number, height?: number): Promise<string> => {
-    // If image is reasonably sized, return as-is
-    const maxDimension = 2048;
-    if (width && height && width <= maxDimension && height <= maxDimension) {
-      return base64;
-    }
+    // ALWAYS process to ensure JPEG format and proper dimensions
+    const MAX_DIMENSION = 1024; // Claude Vision limit
     
-    // For web, we can use canvas to resize
+    // For web, use canvas to resize and convert to JPEG
     if (Platform.OS === 'web') {
       try {
         const img = new window.Image();
-        img.src = `data:image/jpeg;base64,${base64}`;
+        
+        // Handle both raw base64 and data URI formats
+        const imgSrc = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
+        img.src = imgSrc;
         
         await new Promise((resolve, reject) => {
           img.onload = resolve;
           img.onerror = reject;
+          // Timeout after 10 seconds
+          setTimeout(() => reject(new Error('Image load timeout')), 10000);
         });
         
-        // Calculate new dimensions maintaining aspect ratio
+        console.log(`Original image: ${img.width}x${img.height}`);
+        
+        // Calculate new dimensions - BOTH must be <= 1024px
         let newWidth = img.width;
         let newHeight = img.height;
         
-        if (img.width > maxDimension || img.height > maxDimension) {
-          if (img.width > img.height) {
-            newWidth = maxDimension;
-            newHeight = Math.round(img.height * (maxDimension / img.width));
-          } else {
-            newHeight = maxDimension;
-            newWidth = Math.round(img.width * (maxDimension / img.height));
-          }
+        if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+          const widthRatio = MAX_DIMENSION / img.width;
+          const heightRatio = MAX_DIMENSION / img.height;
+          // Use the smaller ratio to ensure BOTH dimensions are within limit
+          const ratio = Math.min(widthRatio, heightRatio);
+          newWidth = Math.round(img.width * ratio);
+          newHeight = Math.round(img.height * ratio);
         }
         
-        // Create canvas and resize
+        console.log(`Resized image: ${newWidth}x${newHeight}`);
+        
+        // Create canvas with white background (removes alpha channel)
         const canvas = document.createElement('canvas');
         canvas.width = newWidth;
         canvas.height = newHeight;
         const ctx = canvas.getContext('2d');
         
         if (ctx) {
-          // Apply slight contrast enhancement for dark charts
-          ctx.filter = 'contrast(1.05)';
+          // Fill with white background to handle PNG transparency
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, newWidth, newHeight);
+          
+          // Draw the image
           ctx.drawImage(img, 0, 0, newWidth, newHeight);
           
-          // Get resized base64
-          const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          return resizedDataUrl.split(',')[1]; // Remove data URL prefix
+          // Export as JPEG (no alpha channel)
+          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const jpegBase64 = jpegDataUrl.split(',')[1];
+          
+          console.log(`JPEG base64 length: ${jpegBase64.length}`);
+          return jpegBase64;
         }
       } catch (error) {
-        console.warn('Image preprocessing failed, using original:', error);
+        console.warn('Image preprocessing failed:', error);
       }
     }
     
-    // For native or if processing fails, return original
+    // For native platforms or if processing fails, return original
+    // Note: Native should ideally also resize, but expo-image-picker's quality setting helps
     return base64;
   };
 
