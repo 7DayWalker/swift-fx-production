@@ -199,7 +199,7 @@ export default function AcademyScreen() {
             </Text>
             <TouchableOpacity 
               style={styles.upgradeButton}
-              onPress={() => router.push('/(tabs)/more')}
+              onPress={() => router.push('/subscription')}
             >
               <Text style={styles.upgradeButtonText}>View Plans</Text>
             </TouchableOpacity>
