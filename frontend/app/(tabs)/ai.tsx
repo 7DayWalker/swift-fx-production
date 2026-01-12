@@ -144,18 +144,18 @@ export default function AIScreen() {
   };
   
   // Preprocess image for Claude Vision - CRITICAL for mobile support
-  // Claude Vision requires: max 1024px on any dimension, JPEG format, no alpha
+  // Claude Vision via emergentintegrations requires PNG format, max 1024px
   const preprocessImage = async (base64: string, width?: number, height?: number): Promise<string> => {
-    // ALWAYS process to ensure JPEG format and proper dimensions
+    // ALWAYS process to ensure PNG format and proper dimensions
     const MAX_DIMENSION = 1024; // Claude Vision limit
     
-    // For web, use canvas to resize and convert to JPEG
+    // For web, use canvas to resize and convert to PNG
     if (Platform.OS === 'web') {
       try {
         const img = new window.Image();
         
         // Handle both raw base64 and data URI formats
-        const imgSrc = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
+        const imgSrc = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
         img.src = imgSrc;
         
         await new Promise((resolve, reject) => {
@@ -182,26 +182,26 @@ export default function AIScreen() {
         
         console.log(`Resized image: ${newWidth}x${newHeight}`);
         
-        // Create canvas with white background (removes alpha channel)
+        // Create canvas with white background (removes alpha channel issues)
         const canvas = document.createElement('canvas');
         canvas.width = newWidth;
         canvas.height = newHeight;
         const ctx = canvas.getContext('2d');
         
         if (ctx) {
-          // Fill with white background to handle PNG transparency
+          // Fill with white background
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, newWidth, newHeight);
           
           // Draw the image
           ctx.drawImage(img, 0, 0, newWidth, newHeight);
           
-          // Export as JPEG (no alpha channel)
-          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          const jpegBase64 = jpegDataUrl.split(',')[1];
+          // Export as PNG (required by emergentintegrations library)
+          const pngDataUrl = canvas.toDataURL('image/png');
+          const pngBase64 = pngDataUrl.split(',')[1];
           
-          console.log(`JPEG base64 length: ${jpegBase64.length}`);
-          return jpegBase64;
+          console.log(`PNG base64 length: ${pngBase64.length}`);
+          return pngBase64;
         }
       } catch (error) {
         console.warn('Image preprocessing failed:', error);
@@ -209,7 +209,6 @@ export default function AIScreen() {
     }
     
     // For native platforms or if processing fails, return original
-    // Note: Native should ideally also resize, but expo-image-picker's quality setting helps
     return base64;
   };
 
