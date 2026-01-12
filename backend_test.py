@@ -1,406 +1,413 @@
 #!/usr/bin/env python3
 """
-Swift FX Signals Backend API Testing Suite
-Tests all core endpoints with role-based access control
+Backend Subscription Enforcement System Test Suite
+Tests all subscription-related endpoints and access control
 """
 
 import requests
 import json
-import time
-import base64
-from datetime import datetime
+import sys
+from typing import Dict, Optional
 
-# Configuration
-BASE_URL = "https://swift-trader-9.preview.emergentagent.com/api"
-TEST_USERS = {
-    "admin": {"email": "admin@swiftfx.com", "password": "admin123"},
-    "test_user": {"email": "test@example.com", "password": "test123"},
-    "new_user": {"email": f"testuser_{int(time.time())}@example.com", "password": "test123", "name": "Test User"}
-}
+# Backend URL from environment
+BACKEND_URL = "https://swift-trader-9.preview.emergentagent.com/api"
 
-class APITester:
+# Test credentials
+ADMIN_EMAIL = "admin@swiftfx.com"
+ADMIN_PASSWORD = "adminpassword"
+FREE_USER_EMAIL = "freeuser_test@example.com"
+FREE_USER_PASSWORD = "test123"
+
+class TestRunner:
     def __init__(self):
-        self.session = requests.Session()
-        self.tokens = {}
-        self.test_results = []
+        self.admin_token = None
+        self.free_user_token = None
+        self.test_user_id = None
+        self.results = []
         
-    def log_result(self, test_name, success, details="", response_data=None):
-        """Log test result"""
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}")
-        if details:
-            print(f"   Details: {details}")
-        if response_data and not success:
-            print(f"   Response: {response_data}")
-        print()
-        
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "details": details,
-            "response": response_data
-        })
+    def log(self, message: str, status: str = "INFO"):
+        print(f"[{status}] {message}")
+        self.results.append(f"[{status}] {message}")
     
-    def test_user_registration(self):
-        """Test user registration endpoint"""
-        print("🔐 Testing User Registration...")
-        
+    def test_login(self, email: str, password: str) -> Optional[str]:
+        """Test login and return token"""
         try:
-            response = self.session.post(
-                f"{BASE_URL}/auth/register",
-                json=TEST_USERS["new_user"]
-            )
+            response = requests.post(f"{BACKEND_URL}/auth/login", json={
+                "email": email,
+                "password": password
+            })
             
             if response.status_code == 200:
                 data = response.json()
-                if "token" in data and "user" in data:
-                    self.tokens["new_user"] = data["token"]
-                    self.log_result("User Registration", True, f"User created with ID: {data['user']['user_id']}")
-                    return True
-                else:
-                    self.log_result("User Registration", False, "Missing token or user in response", data)
+                token = data.get("token")
+                user_info = data.get("user", {})
+                self.log(f"✅ Login successful for {email} - Role: {user_info.get('role', 'unknown')}")
+                return token
             else:
-                self.log_result("User Registration", False, f"Status: {response.status_code}", response.text)
+                self.log(f"❌ Login failed for {email}: {response.status_code} - {response.text}", "ERROR")
+                return None
                 
         except Exception as e:
-            self.log_result("User Registration", False, f"Exception: {str(e)}")
-        
-        return False
+            self.log(f"❌ Login error for {email}: {str(e)}", "ERROR")
+            return None
     
-    def test_user_login(self):
-        """Test user login endpoint"""
-        print("🔐 Testing User Login...")
+    def make_request(self, method: str, endpoint: str, token: str = None, data: dict = None) -> requests.Response:
+        """Make authenticated request"""
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        
+        url = f"{BACKEND_URL}{endpoint}"
         
         try:
-            # Test with existing user
-            response = self.session.post(
-                f"{BASE_URL}/auth/login",
-                json=TEST_USERS["test_user"]
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "token" in data and "user" in data:
-                    self.tokens["test_user"] = data["token"]
-                    self.log_result("User Login", True, f"Login successful for {data['user']['email']}")
-                    return True
-                else:
-                    self.log_result("User Login", False, "Missing token or user in response", data)
+            if method.upper() == "GET":
+                return requests.get(url, headers=headers)
+            elif method.upper() == "POST":
+                return requests.post(url, headers=headers, json=data)
+            elif method.upper() == "PUT":
+                return requests.put(url, headers=headers, json=data)
             else:
-                self.log_result("User Login", False, f"Status: {response.status_code}", response.text)
-                
+                raise ValueError(f"Unsupported method: {method}")
         except Exception as e:
-            self.log_result("User Login", False, f"Exception: {str(e)}")
-        
-        return False
+            self.log(f"❌ Request error: {str(e)}", "ERROR")
+            raise
     
-    def test_admin_login(self):
-        """Test admin login"""
-        print("👑 Testing Admin Login...")
+    def test_subscription_status(self):
+        """Test GET /api/subscription/status endpoint"""
+        self.log("\n=== Testing Subscription Status Endpoint ===")
         
-        try:
-            response = self.session.post(
-                f"{BASE_URL}/auth/login",
-                json=TEST_USERS["admin"]
-            )
+        # Test with admin token
+        self.log("Testing with admin user...")
+        response = self.make_request("GET", "/subscription/status", self.admin_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            subscription = data.get("subscription")
+            features = data.get("features", {})
             
-            if response.status_code == 200:
-                data = response.json()
-                if "token" in data:
-                    self.tokens["admin"] = data["token"]
-                    self.log_result("Admin Login", True, f"Admin login successful")
-                    return True
-                else:
-                    self.log_result("Admin Login", False, "Missing token in response", data)
+            self.log(f"✅ Admin subscription status: {subscription}")
+            self.log(f"✅ Admin fund_management access: {features.get('fund_management')}")
+            
+            # Verify admin has VIP features
+            if subscription == "vip" and features.get("fund_management") == True:
+                self.log("✅ Admin has correct VIP subscription and fund management access")
             else:
-                self.log_result("Admin Login", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Admin Login", False, f"Exception: {str(e)}")
+                self.log(f"❌ Admin subscription issue - Expected VIP with fund_management=True, got {subscription} with fund_management={features.get('fund_management')}", "ERROR")
+        else:
+            self.log(f"❌ Admin subscription status failed: {response.status_code} - {response.text}", "ERROR")
         
-        return False
+        # Test with free user token
+        self.log("Testing with free user...")
+        response = self.make_request("GET", "/subscription/status", self.free_user_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            subscription = data.get("subscription")
+            features = data.get("features", {})
+            
+            self.log(f"✅ Free user subscription status: {subscription}")
+            self.log(f"✅ Free user AI limit: {features.get('ai_limit')}")
+            
+            # Verify free user has correct limits
+            if subscription == "free" and features.get("ai_limit") == 3:
+                self.log("✅ Free user has correct subscription and AI limit")
+            else:
+                self.log(f"❌ Free user subscription issue - Expected free with ai_limit=3, got {subscription} with ai_limit={features.get('ai_limit')}", "ERROR")
+        else:
+            self.log(f"❌ Free user subscription status failed: {response.status_code} - {response.text}", "ERROR")
     
-    def test_signals_without_auth(self):
-        """Test signals endpoint without authentication"""
-        print("📊 Testing Signals (No Auth)...")
+    def test_admin_user_management(self):
+        """Test admin user management endpoints"""
+        self.log("\n=== Testing Admin User Management ===")
         
-        try:
-            response = self.session.get(f"{BASE_URL}/signals")
+        # First get list of users to find a user_id
+        self.log("Getting user list...")
+        response = self.make_request("GET", "/admin/users", self.admin_token)
+        
+        if response.status_code == 200:
+            users = response.json()
+            self.log(f"✅ Retrieved {len(users)} users")
             
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    locked_signals = [s for s in data if s.get("locked", False)]
-                    self.log_result("Signals Without Auth", True, 
-                                  f"Retrieved {len(data)} signals, {len(locked_signals)} locked for premium/vip")
-                    return True
-                else:
-                    self.log_result("Signals Without Auth", False, "Response is not a list", data)
-            else:
-                self.log_result("Signals Without Auth", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Signals Without Auth", False, f"Exception: {str(e)}")
-        
-        return False
+            # Find the free user
+            free_user = None
+            for user in users:
+                if user.get("email") == FREE_USER_EMAIL:
+                    free_user = user
+                    self.test_user_id = user.get("user_id")
+                    break
+            
+            if not free_user:
+                self.log("❌ Could not find free test user", "ERROR")
+                return
+            
+            self.log(f"✅ Found free test user: {self.test_user_id}")
+            
+            # Test user details endpoint
+            self.test_user_details()
+            
+            # Test subscription update
+            self.test_subscription_update()
+            
+            # Test AI usage reset
+            self.test_ai_usage_reset()
+            
+        else:
+            self.log(f"❌ Failed to get user list: {response.status_code} - {response.text}", "ERROR")
     
-    def test_signals_with_auth(self):
-        """Test signals endpoint with authentication"""
-        print("📊 Testing Signals (With Auth)...")
+    def test_user_details(self):
+        """Test GET /api/admin/users/{user_id}/details"""
+        self.log("Testing user details endpoint...")
         
-        if "test_user" not in self.tokens:
-            self.log_result("Signals With Auth", False, "No test user token available")
-            return False
+        response = self.make_request("GET", f"/admin/users/{self.test_user_id}/details", self.admin_token)
         
-        try:
-            headers = {"Authorization": f"Bearer {self.tokens['test_user']}"}
-            response = self.session.get(f"{BASE_URL}/signals", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            effective_subscription = data.get("effective_subscription")
+            ai_limit = data.get("ai_limit")
             
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    free_signals = [s for s in data if s.get("visibility") == "free" and not s.get("locked")]
-                    locked_signals = [s for s in data if s.get("locked", False)]
-                    self.log_result("Signals With Auth", True, 
-                                  f"Retrieved {len(data)} signals, {len(free_signals)} free accessible, {len(locked_signals)} locked")
-                    return True
-                else:
-                    self.log_result("Signals With Auth", False, "Response is not a list", data)
-            else:
-                self.log_result("Signals With Auth", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Signals With Auth", False, f"Exception: {str(e)}")
-        
-        return False
+            self.log(f"✅ User details retrieved - Effective subscription: {effective_subscription}, AI limit: {ai_limit}")
+        else:
+            self.log(f"❌ User details failed: {response.status_code} - {response.text}", "ERROR")
     
-    def test_dashboard(self):
-        """Test dashboard endpoint"""
-        print("📈 Testing Dashboard...")
+    def test_subscription_update(self):
+        """Test PUT /api/admin/users/{user_id}/subscription"""
+        self.log("Testing subscription update...")
         
-        try:
-            # Test without auth first
-            response = self.session.get(f"{BASE_URL}/dashboard")
+        # Update user to premium for 30 days
+        update_data = {
+            "subscription": "premium",
+            "expiry_days": 30
+        }
+        
+        response = self.make_request("PUT", f"/admin/users/{self.test_user_id}/subscription", self.admin_token, update_data)
+        
+        if response.status_code == 200:
+            data = response.json()
+            self.log(f"✅ Subscription updated: {data.get('message')}")
             
-            if response.status_code == 200:
-                data = response.json()
-                required_keys = ["recent_signals", "performance", "watchlist"]
-                if all(key in data for key in required_keys):
-                    self.log_result("Dashboard", True, 
-                                  f"Dashboard data retrieved with {len(data['recent_signals'])} recent signals")
-                    return True
+            # Verify the update by checking user details
+            details_response = self.make_request("GET", f"/admin/users/{self.test_user_id}/details", self.admin_token)
+            if details_response.status_code == 200:
+                details = details_response.json()
+                if details.get("effective_subscription") == "premium":
+                    self.log("✅ Subscription update verified - user is now premium")
                 else:
-                    missing_keys = [key for key in required_keys if key not in data]
-                    self.log_result("Dashboard", False, f"Missing keys: {missing_keys}", data)
-            else:
-                self.log_result("Dashboard", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Dashboard", False, f"Exception: {str(e)}")
-        
-        return False
+                    self.log(f"❌ Subscription update verification failed - expected premium, got {details.get('effective_subscription')}", "ERROR")
+        else:
+            self.log(f"❌ Subscription update failed: {response.status_code} - {response.text}", "ERROR")
     
-    def test_subscription_plans(self):
-        """Test subscription plans endpoint"""
-        print("💳 Testing Subscription Plans...")
+    def test_ai_usage_reset(self):
+        """Test POST /api/admin/users/{user_id}/reset-ai-usage"""
+        self.log("Testing AI usage reset...")
         
-        try:
-            response = self.session.get(f"{BASE_URL}/subscription/plans")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "plans" in data and isinstance(data["plans"], list):
-                    plans = data["plans"]
-                    plan_names = [p.get("name") for p in plans]
-                    self.log_result("Subscription Plans", True, 
-                                  f"Retrieved {len(plans)} plans: {', '.join(plan_names)}")
-                    return True
-                else:
-                    self.log_result("Subscription Plans", False, "Invalid plans structure", data)
-            else:
-                self.log_result("Subscription Plans", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Subscription Plans", False, f"Exception: {str(e)}")
+        response = self.make_request("POST", f"/admin/users/{self.test_user_id}/reset-ai-usage", self.admin_token)
         
-        return False
+        if response.status_code == 200:
+            data = response.json()
+            self.log(f"✅ AI usage reset: {data.get('message')}")
+        else:
+            self.log(f"❌ AI usage reset failed: {response.status_code} - {response.text}", "ERROR")
     
-    def test_admin_signal_creation(self):
-        """Test admin signal creation"""
-        print("👑 Testing Admin Signal Creation...")
+    def test_vip_feature_access(self):
+        """Test VIP feature access endpoints"""
+        self.log("\n=== Testing VIP Feature Access ===")
         
-        if "admin" not in self.tokens:
-            self.log_result("Admin Signal Creation", False, "No admin token available")
-            return False
+        # Test fund management access with admin (should have access)
+        self.log("Testing fund management access with admin...")
+        response = self.make_request("GET", "/features/fund-management/access", self.admin_token)
         
-        try:
-            headers = {"Authorization": f"Bearer {self.tokens['admin']}"}
-            signal_data = {
-                "pair": "EUR/USD",
-                "signal_type": "buy",
-                "entry": 1.0850,
-                "stop_loss": 1.0800,
-                "take_profit": 1.0950,
-                "visibility": "premium",
-                "analysis": "Test signal created by automated testing"
-            }
-            
-            response = self.session.post(
-                f"{BASE_URL}/admin/signals",
-                json=signal_data,
-                headers=headers
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "signal_id" in data:
-                    self.log_result("Admin Signal Creation", True, 
-                                  f"Signal created with ID: {data['signal_id']}")
-                    return True
-                else:
-                    self.log_result("Admin Signal Creation", False, "Missing signal_id in response", data)
+        if response.status_code == 200:
+            data = response.json()
+            has_access = data.get("has_access")
+            if has_access:
+                self.log("✅ Admin has fund management access")
             else:
-                self.log_result("Admin Signal Creation", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Admin Signal Creation", False, f"Exception: {str(e)}")
+                self.log(f"❌ Admin should have fund management access but doesn't: {data}", "ERROR")
+        else:
+            self.log(f"❌ Fund management access check failed for admin: {response.status_code} - {response.text}", "ERROR")
         
-        return False
+        # Test fund management access with free user (should not have access)
+        self.log("Testing fund management access with free user...")
+        response = self.make_request("GET", "/features/fund-management/access", self.free_user_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            has_access = data.get("has_access")
+            if not has_access:
+                self.log("✅ Free user correctly denied fund management access")
+            else:
+                self.log(f"❌ Free user should not have fund management access: {data}", "ERROR")
+        else:
+            self.log(f"❌ Fund management access check failed for free user: {response.status_code} - {response.text}", "ERROR")
+        
+        # Test academy access with admin
+        self.log("Testing academy access with admin...")
+        response = self.make_request("GET", "/features/academy/access", self.admin_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            has_access = data.get("has_access")
+            if has_access:
+                self.log("✅ Admin has academy access")
+            else:
+                self.log(f"❌ Admin should have academy access but doesn't: {data}", "ERROR")
+        else:
+            self.log(f"❌ Academy access check failed for admin: {response.status_code} - {response.text}", "ERROR")
+        
+        # Test academy access with free user
+        self.log("Testing academy access with free user...")
+        response = self.make_request("GET", "/features/academy/access", self.free_user_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            has_access = data.get("has_access")
+            if not has_access:
+                self.log("✅ Free user correctly denied academy access")
+            else:
+                self.log(f"❌ Free user should not have academy access: {data}", "ERROR")
+        else:
+            self.log(f"❌ Academy access check failed for free user: {response.status_code} - {response.text}", "ERROR")
     
-    def test_community_posts(self):
-        """Test community posts endpoints"""
-        print("💬 Testing Community Posts...")
+    def test_ai_usage_endpoint(self):
+        """Test GET /api/ai/usage endpoint"""
+        self.log("\n=== Testing AI Usage Endpoint ===")
         
-        try:
-            # Test getting posts (no auth required)
-            response = self.session.get(f"{BASE_URL}/community/posts")
+        # Test with free user
+        self.log("Testing AI usage with free user...")
+        response = self.make_request("GET", "/ai/usage", self.free_user_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            weekly_limit = data.get("weekly_limit")
+            has_access = data.get("has_access")
             
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    self.log_result("Community Posts - Get", True, 
-                                  f"Retrieved {len(data)} community posts")
-                    
-                    # Test creating a post (auth required)
-                    if "test_user" in self.tokens:
-                        headers = {"Authorization": f"Bearer {self.tokens['test_user']}"}
-                        post_data = {
-                            "content": "Test post from automated testing",
-                            "post_type": "analysis"
-                        }
-                        
-                        create_response = self.session.post(
-                            f"{BASE_URL}/community/posts",
-                            json=post_data,
-                            headers=headers
-                        )
-                        
-                        if create_response.status_code == 200:
-                            create_data = create_response.json()
-                            if "post_id" in create_data:
-                                self.log_result("Community Posts - Create", True, 
-                                              f"Post created with ID: {create_data['post_id']}")
-                                return True
-                            else:
-                                self.log_result("Community Posts - Create", False, 
-                                              "Missing post_id in response", create_data)
-                        else:
-                            self.log_result("Community Posts - Create", False, 
-                                          f"Status: {create_response.status_code}", create_response.text)
-                    else:
-                        self.log_result("Community Posts - Create", False, "No test user token available")
-                        return False
-                else:
-                    self.log_result("Community Posts - Get", False, "Response is not a list", data)
+            self.log(f"✅ Free user AI usage - Limit: {weekly_limit}, Has access: {has_access}")
+            
+            if weekly_limit == 3 and has_access == True:
+                self.log("✅ Free user has correct AI usage limits")
             else:
-                self.log_result("Community Posts - Get", False, f"Status: {response.status_code}", response.text)
-                
-        except Exception as e:
-            self.log_result("Community Posts", False, f"Exception: {str(e)}")
+                self.log(f"❌ Free user AI usage incorrect - Expected limit=3, has_access=True, got limit={weekly_limit}, has_access={has_access}", "ERROR")
+        else:
+            self.log(f"❌ AI usage check failed for free user: {response.status_code} - {response.text}", "ERROR")
         
-        return False
+        # Test with admin/VIP user
+        self.log("Testing AI usage with admin...")
+        response = self.make_request("GET", "/ai/usage", self.admin_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            weekly_limit = data.get("weekly_limit")
+            
+            self.log(f"✅ Admin AI usage - Limit: {weekly_limit}")
+            
+            if weekly_limit == "unlimited":
+                self.log("✅ Admin has unlimited AI usage")
+            else:
+                self.log(f"❌ Admin should have unlimited AI usage, got: {weekly_limit}", "ERROR")
+        else:
+            self.log(f"❌ AI usage check failed for admin: {response.status_code} - {response.text}", "ERROR")
     
-    def test_ai_analyzer_access(self):
-        """Test AI Chart Analyzer access control"""
-        print("🤖 Testing AI Chart Analyzer Access...")
+    def test_signals_filtering(self):
+        """Test GET /api/signals with subscription filtering"""
+        self.log("\n=== Testing Signals Filtering ===")
         
-        if "test_user" not in self.tokens:
-            self.log_result("AI Analyzer Access", False, "No test user token available")
-            return False
+        # Test signals access without authentication
+        self.log("Testing signals without authentication...")
+        response = self.make_request("GET", "/signals")
         
-        try:
-            headers = {"Authorization": f"Bearer {self.tokens['test_user']}"}
+        if response.status_code == 200:
+            signals = response.json()
+            self.log(f"✅ Retrieved {len(signals)} signals without auth")
             
-            # Test usage endpoint first
-            usage_response = self.session.get(f"{BASE_URL}/ai/usage", headers=headers)
-            
-            if usage_response.status_code == 200:
-                usage_data = usage_response.json()
-                has_access = usage_data.get("has_access", False)
-                
-                if not has_access:
-                    self.log_result("AI Analyzer Access", True, 
-                                  "Free user correctly blocked from AI analyzer")
-                    return True
-                else:
-                    self.log_result("AI Analyzer Access", False, 
-                                  "Free user should not have AI access", usage_data)
-            else:
-                self.log_result("AI Analyzer Access", False, 
-                              f"Usage endpoint status: {usage_response.status_code}", usage_response.text)
-                
-        except Exception as e:
-            self.log_result("AI Analyzer Access", False, f"Exception: {str(e)}")
+            # Check if locked signals are present
+            locked_signals = [s for s in signals if s.get("locked") == True]
+            self.log(f"✅ Found {len(locked_signals)} locked signals for unauthenticated users")
+        else:
+            self.log(f"❌ Signals retrieval failed without auth: {response.status_code} - {response.text}", "ERROR")
         
-        return False
+        # Test signals access with free user
+        self.log("Testing signals with free user...")
+        response = self.make_request("GET", "/signals", self.free_user_token)
+        
+        if response.status_code == 200:
+            signals = response.json()
+            self.log(f"✅ Retrieved {len(signals)} signals for free user")
+            
+            # Check signal access levels
+            free_signals = [s for s in signals if s.get("visibility") == "free" and not s.get("locked")]
+            locked_signals = [s for s in signals if s.get("locked") == True]
+            
+            self.log(f"✅ Free user can access {len(free_signals)} free signals, {len(locked_signals)} are locked")
+        else:
+            self.log(f"❌ Signals retrieval failed for free user: {response.status_code} - {response.text}", "ERROR")
+        
+        # Test signals access with admin
+        self.log("Testing signals with admin...")
+        response = self.make_request("GET", "/signals", self.admin_token)
+        
+        if response.status_code == 200:
+            signals = response.json()
+            self.log(f"✅ Retrieved {len(signals)} signals for admin")
+            
+            # Admin should see all signals without locks
+            locked_signals = [s for s in signals if s.get("locked") == True]
+            self.log(f"✅ Admin sees {len(locked_signals)} locked signals (should be 0 or very few)")
+        else:
+            self.log(f"❌ Signals retrieval failed for admin: {response.status_code} - {response.text}", "ERROR")
     
     def run_all_tests(self):
-        """Run all tests in sequence"""
-        print("🚀 Starting Swift FX Signals Backend API Tests")
-        print("=" * 60)
+        """Run all subscription enforcement tests"""
+        self.log("🚀 Starting Backend Subscription Enforcement System Tests")
+        self.log(f"Backend URL: {BACKEND_URL}")
         
-        # Authentication tests
-        self.test_user_registration()
-        self.test_user_login()
-        self.test_admin_login()
+        # Step 1: Login with both accounts
+        self.log("\n=== Authentication Tests ===")
+        self.admin_token = self.test_login(ADMIN_EMAIL, ADMIN_PASSWORD)
+        self.free_user_token = self.test_login(FREE_USER_EMAIL, FREE_USER_PASSWORD)
         
-        # Core functionality tests
-        self.test_signals_without_auth()
-        self.test_signals_with_auth()
-        self.test_dashboard()
-        self.test_subscription_plans()
+        if not self.admin_token or not self.free_user_token:
+            self.log("❌ Authentication failed - cannot continue tests", "ERROR")
+            return False
         
-        # Admin and premium features
-        self.test_admin_signal_creation()
-        self.test_community_posts()
-        self.test_ai_analyzer_access()
-        
-        # Summary
-        print("=" * 60)
-        print("📊 TEST SUMMARY")
-        print("=" * 60)
-        
-        passed = sum(1 for result in self.test_results if result["success"])
-        total = len(self.test_results)
-        
-        print(f"Total Tests: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {total - passed}")
-        print(f"Success Rate: {(passed/total*100):.1f}%")
-        
-        if total - passed > 0:
-            print("\n❌ FAILED TESTS:")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"  - {result['test']}: {result['details']}")
-        
-        return passed == total
+        # Step 2: Test all subscription endpoints
+        try:
+            self.test_subscription_status()
+            self.test_admin_user_management()
+            self.test_vip_feature_access()
+            self.test_ai_usage_endpoint()
+            self.test_signals_filtering()
+            
+            self.log("\n🎉 All subscription enforcement tests completed!")
+            return True
+            
+        except Exception as e:
+            self.log(f"❌ Test suite failed with error: {str(e)}", "ERROR")
+            return False
+
+def main():
+    """Main test runner"""
+    runner = TestRunner()
+    success = runner.run_all_tests()
+    
+    # Print summary
+    print("\n" + "="*60)
+    print("TEST SUMMARY")
+    print("="*60)
+    
+    error_count = len([r for r in runner.results if "[ERROR]" in r])
+    success_count = len([r for r in runner.results if "✅" in r])
+    
+    print(f"Total Tests: {len(runner.results)}")
+    print(f"Successful: {success_count}")
+    print(f"Errors: {error_count}")
+    
+    if error_count > 0:
+        print("\nERRORS FOUND:")
+        for result in runner.results:
+            if "[ERROR]" in result:
+                print(result)
+    
+    return 0 if success else 1
 
 if __name__ == "__main__":
-    tester = APITester()
-    success = tester.run_all_tests()
-    
-    if success:
-        print("\n🎉 All tests passed!")
-    else:
-        print("\n⚠️  Some tests failed. Check the details above.")
+    sys.exit(main())
