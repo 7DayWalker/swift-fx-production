@@ -496,6 +496,11 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
   },
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   profileName: {
     fontSize: 18,
     fontWeight: 'bold',
