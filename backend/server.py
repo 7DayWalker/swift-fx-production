@@ -1073,6 +1073,23 @@ async def analyze_chart(
     image_content = await image.read()
     image_base64 = base64.b64encode(image_content).decode()
     
+    # Detect actual image format from magic bytes
+    def detect_image_format(data: bytes) -> str:
+        if data[:8] == b'\x89PNG\r\n\x1a\n':
+            return 'image/png'
+        elif data[:2] == b'\xff\xd8':
+            return 'image/jpeg'
+        elif data[:6] in (b'GIF87a', b'GIF89a'):
+            return 'image/gif'
+        elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            return 'image/webp'
+        else:
+            # Default to JPEG for unknown formats
+            return 'image/jpeg'
+    
+    detected_media_type = detect_image_format(image_content)
+    logger.info(f"Detected image format: {detected_media_type}, uploaded type: {image.content_type}")
+    
     # Analyze with Claude Vision
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
@@ -1087,7 +1104,8 @@ Ignore any UI elements, status bars, or app buttons in the image - focus only on
 Always include a risk disclaimer."""
         ).with_model("anthropic", "claude-sonnet-4-20250514")
         
-        image_attachment = ImageContent(image_base64=image_base64)
+        # Pass the correct media type to avoid format mismatch errors
+        image_attachment = ImageContent(image_base64=image_base64, media_type=detected_media_type)
         
         user_message = UserMessage(
             text=f"""Analyze this {pair} chart on the {timeframe} timeframe. 
