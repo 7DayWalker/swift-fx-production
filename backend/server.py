@@ -1418,34 +1418,20 @@ async def create_comment(post_id: str, comment_data: CommentCreate, current_user
     return comment_doc
 
 # ===================== SUBSCRIPTION ENDPOINTS =====================
+# SECURITY: Self-upgrade is DISABLED. Only admins can change subscriptions.
+# This endpoint will be re-enabled with proper payment provider (Stripe) integration.
+
 @api_router.post("/subscription/upgrade")
 async def upgrade_subscription(sub_data: SubscriptionUpdate, current_user: User = Depends(require_auth)):
-    # Mock payment - in production, integrate real payment provider
-    
-    # Calculate expiry based on billing cycle
-    if sub_data.billing_cycle == BillingCycle.WEEKLY:
-        expiry = datetime.now(timezone.utc) + timedelta(days=7)
-    elif sub_data.billing_cycle == BillingCycle.MONTHLY:
-        expiry = datetime.now(timezone.utc) + timedelta(days=30)
-    else:  # YEARLY
-        expiry = datetime.now(timezone.utc) + timedelta(days=365)
-    
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {
-            "role": sub_data.plan,
-            "subscription_status": "active",
-            "billing_cycle": sub_data.billing_cycle,
-            "subscription_expiry": expiry
-        }}
+    """
+    DISABLED: Self-service subscription upgrade is not available.
+    Subscription changes can only be made by admins or through payment provider webhooks.
+    """
+    raise HTTPException(
+        status_code=403, 
+        detail="Self-service subscription upgrade is disabled. Please contact support or complete payment through the official checkout."
     )
-    
-    return {
-        "message": "Subscription upgraded successfully",
-        "plan": sub_data.plan,
-        "billing_cycle": sub_data.billing_cycle,
-        "expiry": expiry
-    }
+
 
 @api_router.get("/subscription/plans")
 async def get_plans():
