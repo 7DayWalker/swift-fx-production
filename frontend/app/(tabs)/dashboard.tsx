@@ -33,7 +33,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   
   // Use centralized signal context for real-time stats
-  const { stats, isRefreshing, refreshAll } = useSignals();
+  const { stats, signals, isRefreshing, refreshAll } = useSignals();
   
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,24 +41,40 @@ export default function DashboardScreen() {
   // Calculate bottom padding for content to avoid tab bar overlap
   // TAB_BAR_HEIGHT (56) + safe area bottom + extra padding
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  
+  // Helper function to safely format numbers
+  const formatNumber = (value: number | undefined | null, decimals: number = 1): string => {
+    if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+      return '0';
+    }
+    return Number(value).toFixed(decimals);
+  };
+  
+  // Get real-time performance stats from context (priority) or fallback to dashboardData
+  const getWinRate = (): string => {
+    if (stats?.win_rate !== undefined) {
+      return formatNumber(stats.win_rate, 1);
+    }
+    return formatNumber(dashboardData?.performance?.win_rate, 1);
+  };
+  
+  const getTotalPips = (): number => {
+    if (stats?.total_pips !== undefined) {
+      return Math.round(stats.total_pips * 10) / 10;
+    }
+    return dashboardData?.performance?.total_pips || 0;
+  };
+  
+  const getTotalSignals = (): number => {
+    if (stats?.total_signals !== undefined) {
+      return stats.total_signals;
+    }
+    return dashboardData?.performance?.total_signals || 0;
+  };
 
   useEffect(() => {
     fetchDashboard();
   }, []);
-  
-  // Update performance data when stats change from context
-  useEffect(() => {
-    if (stats && dashboardData) {
-      setDashboardData(prev => prev ? {
-        ...prev,
-        performance: {
-          win_rate: stats.win_rate,
-          total_pips: stats.total_pips,
-          total_signals: stats.total_signals,
-        }
-      } : prev);
-    }
-  }, [stats]);
 
   const fetchDashboard = async () => {
     try {
