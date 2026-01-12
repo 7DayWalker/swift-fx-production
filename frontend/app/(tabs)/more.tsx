@@ -83,34 +83,12 @@ export default function MoreScreen() {
     router.replace('/(auth)/login');
   };
 
-  const handleUpgrade = async (plan: string) => {
-    // Create a payment session and redirect to checkout
-    setIsUpgrading(true);
-    try {
-      const response = await api.post('/payments/create-session', {
-        plan: plan,
-        billing_cycle: selectedCycle,
-      });
-      
-      // Close modal and redirect to payment page
-      setShowSubscriptionModal(false);
-      router.push(response.data.checkout_url);
-    } catch (error: any) {
-      Alert.alert(
-        'Unable to Create Payment Session',
-        error.response?.data?.detail || 'Please try again or contact support.'
-      );
-    } finally {
-      setIsUpgrading(false);
-    }
-  };
-
   const menuItems = [
     {
       section: 'Trading',
       items: [
-        { icon: 'school-outline', label: 'Academy', badge: null, locked: false, action: () => router.push('/academy') },
-        { icon: 'briefcase-outline', label: 'Fund Management', badge: 'VIP', locked: false, action: () => router.push('/fund-management') },
+        { icon: 'school-outline', label: 'Academy', badge: 'VIP', locked: false, action: () => router.push('/subscription?highlight=vip') },
+        { icon: 'briefcase-outline', label: 'Fund Management', badge: 'VIP', locked: false, action: () => router.push('/subscription?highlight=vip') },
         { icon: 'business-outline', label: 'Recommended Brokers', badge: null, locked: false },
         { icon: 'calendar-outline', label: 'Economic Calendar', badge: null, locked: false },
         { icon: 'newspaper-outline', label: 'News', badge: null, locked: false },
