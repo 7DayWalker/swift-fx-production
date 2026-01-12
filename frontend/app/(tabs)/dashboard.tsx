@@ -30,6 +30,7 @@ const WATCHLIST = [
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
@@ -47,6 +48,10 @@ export default function DashboardScreen() {
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  
+  // Use subscription context for plan info (real-time reactive)
+  const currentPlan = subscriptionStatus?.subscription || 'free';
+  const isFreeUser = currentPlan === 'free';
   
   // REACTIVE STATS - Directly computed from SignalContext (no caching, no local state)
   const winRate = stats?.win_rate ?? 0;
