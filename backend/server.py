@@ -1316,8 +1316,9 @@ async def get_ai_usage(current_user: User = Depends(require_auth)):
         "weekly_limit": weekly_limit if weekly_limit < 100000 else "unlimited",
         "remaining": remaining if weekly_limit < 100000 else "unlimited",
         "reset_date": reset_date,
-        "has_access": effective_subscription != "free",
-        "subscription": effective_subscription
+        "has_access": True,  # All users have access, just different limits
+        "subscription": effective_subscription,
+        "limit_reached": current_usage >= weekly_limit if weekly_limit < 100000 else False
     }
 
 # ===================== COMMUNITY ENDPOINTS =====================
