@@ -354,7 +354,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Backend Subscription Enforcement System"
+    - "Trade Lifecycle Engine"
   stuck_tasks:
     - "Community Posts & Comments"
   test_all: false
