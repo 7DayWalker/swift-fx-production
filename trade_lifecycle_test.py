@@ -19,8 +19,8 @@ ADMIN_CREDENTIALS = {
 }
 
 FREE_USER_CREDENTIALS = {
-    "email": "freeuser@test.com", 
-    "password": "password"
+    "email": "freeuser_test@example.com", 
+    "password": "test123"
 }
 
 class TradeLifecycleTest:
