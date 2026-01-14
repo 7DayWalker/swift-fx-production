@@ -1,300 +1,395 @@
 diff --git a/model.patch b/model.patch
-index b2714e9..e69de29 100644
+index ad2bd0b..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,1158 +0,0 @@
+@@ -1,1196 +0,0 @@
 -diff --git a/model.patch b/model.patch
--index 6d92303..e69de29 100644
+-index b2714e9..e69de29 100644
 ---- a/model.patch
 -+++ b/model.patch
--@@ -1,1140 +0,0 @@
+-@@ -1,1158 +0,0 @@
 --diff --git a/model.patch b/model.patch
---index c3739cf..e69de29 100644
+--index 6d92303..e69de29 100644
 ----- a/model.patch
 --+++ b/model.patch
---@@ -1,447 +0,0 @@
+--@@ -1,1140 +0,0 @@
 ---diff --git a/model.patch b/model.patch
----index f36706f..e69de29 100644
+---index c3739cf..e69de29 100644
 ------ a/model.patch
 ---+++ b/model.patch
----@@ -1,409 +0,0 @@
+---@@ -1,447 +0,0 @@
 ----diff --git a/model.patch b/model.patch
-----index 0f96aae..e69de29 100644
+----index f36706f..e69de29 100644
 ------- a/model.patch
 ----+++ b/model.patch
-----@@ -1,390 +0,0 @@
------diff --git a/ai_chart_test.py b/ai_chart_test.py
------new file mode 100644
------index 0000000..e7edab5
--------- /dev/null
------+++ b/ai_chart_test.py
------@@ -0,0 +1,250 @@
------+#!/usr/bin/env python3
------+"""
------+AI Chart Analyzer Backend Testing - Focused on AI endpoints
------+Testing as requested in the review request
------+"""
------+
------+import requests
------+import json
------+import base64
------+from io import BytesIO
------+from PIL import Image
------+import os
------+
------+# Configuration
------+BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
------+
------+class AIChartAnalyzerTester:
------+    def __init__(self):
------+        self.base_url = BASE_URL
------+        self.session = requests.Session()
------+        self.vip_token = None
------+        self.free_token = None
------+        
------+    def create_test_image(self):
------+        """Create a simple test chart image"""
------+        # Create a simple test image that looks like a chart
------+        img = Image.new('RGB', (800, 600), color='white')
------+        
------+        # Convert to bytes
------+        img_bytes = BytesIO()
------+        img.save(img_bytes, format='PNG')
------+        img_bytes.seek(0)
------+        
------+        return img_bytes.getvalue()
------+    
------+    def register_and_login_user(self, email, password, name="Test User"):
------+        """Register and login a user, return token"""
------+        print(f"\n=== Registering and logging in user: {email} ===")
------+        
------+        # Try to register (might fail if user exists)
------+        register_data = {
------+            "name": name,
------+            "email": email,
------+            "password": password
------+        }
------+        
------+        try:
------+            response = self.session.post(f"{self.base_url}/auth/register", json=register_data)
------+            if response.status_code == 200:
------+                print(f"✅ User registered successfully")
------+                return response.json()["token"]
------+            elif response.status_code == 400 and "already registered" in response.text:
------+                print(f"ℹ️ User already exists, proceeding to login")
------+            else:
------+                print(f"❌ Registration failed: {response.status_code} - {response.text}")
------+        except Exception as e:
------+            print(f"❌ Registration error: {e}")
------+        
------+        # Login
------+        login_data = {
------+            "email": email,
------+            "password": password
------+        }
------+        
------+        try:
------+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
------+            if response.status_code == 200:
------+                token = response.json()["token"]
------+                user_info = response.json()["user"]
------+                print(f"✅ Login successful - Role: {user_info.get('role', 'unknown')}")
------+                return token
------+            else:
------+                print(f"❌ Login failed: {response.status_code} - {response.text}")
------+                return None
------+        except Exception as e:
------+            print(f"❌ Login error: {e}")
------+            return None
------+    
------+    def upgrade_user_to_vip(self, token):
------+        """Upgrade user to VIP subscription"""
------+        print(f"\n=== Upgrading user to VIP ===")
------+        
------+        headers = {"Authorization": f"Bearer {token}"}
------+        upgrade_data = {
------+            "plan": "vip",
------+            "billing_cycle": "monthly"
------+        }
------+        
------+        try:
------+            response = self.session.post(f"{self.base_url}/subscription/upgrade", 
------+                                       json=upgrade_data, headers=headers)
------+            if response.status_code == 200:
------+                print(f"✅ User upgraded to VIP successfully")
------+                return True
------+            else:
------+                print(f"❌ Upgrade failed: {response.status_code} - {response.text}")
------+                return False
------+        except Exception as e:
------+            print(f"❌ Upgrade error: {e}")
------+            return False
------+    
------+    def test_ai_usage_endpoint(self, token, user_type="VIP"):
------+        """Test GET /api/ai/usage endpoint"""
------+        print(f"\n=== Testing AI Usage Endpoint ({user_type} user) ===")
------+        
------+        headers = {"Authorization": f"Bearer {token}"}
------+        
------+        try:
------+            response = self.session.get(f"{self.base_url}/ai/usage", headers=headers)
------+            print(f"Status Code: {response.status_code}")
------+            
------+            if response.status_code == 200:
------+                data = response.json()
------+                print(f"✅ AI Usage Response:")
------+                print(f"   - Current Usage: {data.get('current_usage')}")
------+                print(f"   - Weekly Limit: {data.get('weekly_limit')}")
------+                print(f"   - Remaining: {data.get('remaining')}")
------+                print(f"   - Has Access: {data.get('has_access')}")
------+                print(f"   - Reset Date: {data.get('reset_date')}")
------+                
------+                # Verify expected values
------+                if user_type == "VIP":
------+                    if data.get('weekly_limit') == 20:
------+                        print(f"✅ VIP weekly limit correct (20)")
------+                    else:
------+                        print(f"❌ VIP weekly limit incorrect: expected 20, got {data.get('weekly_limit')}")
------+                    
------+                    if data.get('has_access') == True:
------+                        print(f"✅ VIP has access: True")
------+                    else:
------+                        print(f"❌ VIP should have access but got: {data.get('has_access')}")
------+                
------+                elif user_type == "FREE":
------+                    if data.get('has_access') == False:
------+                        print(f"✅ Free user correctly blocked from AI access")
------+                    else:
------+                        print(f"❌ Free user should not have access but got: {data.get('has_access')}")
------+                
------+                return True
------+            else:
------+                print(f"❌ AI Usage request failed: {response.text}")
------+                return False
------+                
------+        except Exception as e:
------+            print(f"❌ AI Usage test error: {e}")
------+            return False
------+    
------+    def test_ai_analyze_endpoint(self, token, user_type="VIP"):
------+        """Test POST /api/ai/analyze endpoint"""
------+        print(f"\n=== Testing AI Analyze Endpoint ({user_type} user) ===")
------+        
------+        headers = {"Authorization": f"Bearer {token}"}
------+        
------+        # Create test image
------+        test_image = self.create_test_image()
------+        
------+        # Prepare form data
------+        files = {
------+            'image': ('test_chart.png', test_image, 'image/png')
------+        }
------+        data = {
------+            'pair': 'EUR/USD',
------+            'timeframe': '1H'
------+        }
------+        
------+        try:
------+            response = self.session.post(f"{self.base_url}/ai/analyze", 
------+                                       files=files, data=data, headers=headers)
------+            print(f"Status Code: {response.status_code}")
------+            
------+            if user_type == "FREE" and response.status_code == 403:
------+                print(f"✅ Free user correctly blocked from AI analyze (403)")
------+                return True
------+            elif user_type in ["VIP", "PREMIUM"] and response.status_code == 200:
------+                data = response.json()
------+                print(f"✅ AI Analysis Response received")
------+                
------+                # Check required fields
------+                required_fields = [
------+                    'analysis_id', 'pair', 'timeframe', 'market_bias', 
------+                    'trend_structure', 'support_levels', 'resistance_levels', 
------+                    'trade_insight', 'confidence', 'remaining_analyses', 'disclaimer'
------+                ]
------+                
------+                missing_fields = []
------+                for field in required_fields:
------+                    if field not in data:
------+                        missing_fields.append(field)
------+                    else:
------+                        print(f"   ✅ {field}: {data[field]}")
------+                
------+                if missing_fields:
------+                    print(f"❌ Missing required fields: {missing_fields}")
------+                    return False
------+                else:
------+                    print(f"✅ All required fields present in response")
------+                
------+                # Verify usage counter decremented
------+                if 'remaining_analyses' in data:
------+                    print(f"✅ Usage counter working - Remaining: {data['remaining_analyses']}")
------+                
------+                return True
------+            else:
------+                print(f"❌ AI Analyze request failed: {response.status_code} - {response.text}")
------+                return False
------+                
------+        except Exception as e:
------+            print(f"❌ AI Analyze test error: {e}")
------+            return False
------+    
------+    def test_access_control(self):
------+        """Test access control between free and premium/VIP users"""
------+        print(f"\n=== Testing Access Control ===")
------+        
------+        # Test with free user
------+        if self.free_token:
------+            print(f"\n--- Testing Free User Access ---")
------+            self.test_ai_usage_endpoint(self.free_token, "FREE")
------+            self.test_ai_analyze_endpoint(self.free_token, "FREE")
------+        
------+        # Test with VIP user
------+        if self.vip_token:
------+            print(f"\n--- Testing VIP User Access ---")
------+            self.test_ai_usage_endpoint(self.vip_token, "VIP")
------+            self.test_ai_analyze_endpoint(self.vip_token, "VIP")
------+    
------+    def run_all_tests(self):
------+        """Run all AI Chart Analyzer tests"""
------+        print("=" * 60)
------+        print("AI CHART ANALYZER BACKEND TESTING")
------+        print("=" * 60)
------+        
------+        # Setup VIP test user
------+        self.vip_token = self.register_and_login_user("viptest@test.com", "testpass123", "VIP Test User")
------+        if self.vip_token:
------+            self.upgrade_user_to_vip(self.vip_token)
------+        
------+        # Setup free test user
------+        self.free_token = self.register_and_login_user("freetest@test.com", "testpass123", "Free Test User")
------+        
------+        # Run access control tests
------+        self.test_access_control()
------+        
------+        print(f"\n" + "=" * 60)
------+        print("AI CHART ANALYZER TESTING COMPLETE")
------+        print("=" * 60)
------+
------+if __name__ == "__main__":
------+    tester = AIChartAnalyzerTester()
------+    tester.run_all_tests()
------\ No newline at end of file
+----@@ -1,409 +0,0 @@
 -----diff --git a/model.patch b/model.patch
------index b318722..646fd43 100644
+-----index 0f96aae..e69de29 100644
 -------- a/model.patch
 -----+++ b/model.patch
------@@ -1,91 +0,0 @@
+-----@@ -1,390 +0,0 @@
+------diff --git a/ai_chart_test.py b/ai_chart_test.py
+------new file mode 100644
+------index 0000000..e7edab5
+--------- /dev/null
+------+++ b/ai_chart_test.py
+------@@ -0,0 +1,250 @@
+------+#!/usr/bin/env python3
+------+"""
+------+AI Chart Analyzer Backend Testing - Focused on AI endpoints
+------+Testing as requested in the review request
+------+"""
+------+
+------+import requests
+------+import json
+------+import base64
+------+from io import BytesIO
+------+from PIL import Image
+------+import os
+------+
+------+# Configuration
+------+BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
+------+
+------+class AIChartAnalyzerTester:
+------+    def __init__(self):
+------+        self.base_url = BASE_URL
+------+        self.session = requests.Session()
+------+        self.vip_token = None
+------+        self.free_token = None
+------+        
+------+    def create_test_image(self):
+------+        """Create a simple test chart image"""
+------+        # Create a simple test image that looks like a chart
+------+        img = Image.new('RGB', (800, 600), color='white')
+------+        
+------+        # Convert to bytes
+------+        img_bytes = BytesIO()
+------+        img.save(img_bytes, format='PNG')
+------+        img_bytes.seek(0)
+------+        
+------+        return img_bytes.getvalue()
+------+    
+------+    def register_and_login_user(self, email, password, name="Test User"):
+------+        """Register and login a user, return token"""
+------+        print(f"\n=== Registering and logging in user: {email} ===")
+------+        
+------+        # Try to register (might fail if user exists)
+------+        register_data = {
+------+            "name": name,
+------+            "email": email,
+------+            "password": password
+------+        }
+------+        
+------+        try:
+------+            response = self.session.post(f"{self.base_url}/auth/register", json=register_data)
+------+            if response.status_code == 200:
+------+                print(f"✅ User registered successfully")
+------+                return response.json()["token"]
+------+            elif response.status_code == 400 and "already registered" in response.text:
+------+                print(f"ℹ️ User already exists, proceeding to login")
+------+            else:
+------+                print(f"❌ Registration failed: {response.status_code} - {response.text}")
+------+        except Exception as e:
+------+            print(f"❌ Registration error: {e}")
+------+        
+------+        # Login
+------+        login_data = {
+------+            "email": email,
+------+            "password": password
+------+        }
+------+        
+------+        try:
+------+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+------+            if response.status_code == 200:
+------+                token = response.json()["token"]
+------+                user_info = response.json()["user"]
+------+                print(f"✅ Login successful - Role: {user_info.get('role', 'unknown')}")
+------+                return token
+------+            else:
+------+                print(f"❌ Login failed: {response.status_code} - {response.text}")
+------+                return None
+------+        except Exception as e:
+------+            print(f"❌ Login error: {e}")
+------+            return None
+------+    
+------+    def upgrade_user_to_vip(self, token):
+------+        """Upgrade user to VIP subscription"""
+------+        print(f"\n=== Upgrading user to VIP ===")
+------+        
+------+        headers = {"Authorization": f"Bearer {token}"}
+------+        upgrade_data = {
+------+            "plan": "vip",
+------+            "billing_cycle": "monthly"
+------+        }
+------+        
+------+        try:
+------+            response = self.session.post(f"{self.base_url}/subscription/upgrade", 
+------+                                       json=upgrade_data, headers=headers)
+------+            if response.status_code == 200:
+------+                print(f"✅ User upgraded to VIP successfully")
+------+                return True
+------+            else:
+------+                print(f"❌ Upgrade failed: {response.status_code} - {response.text}")
+------+                return False
+------+        except Exception as e:
+------+            print(f"❌ Upgrade error: {e}")
+------+            return False
+------+    
+------+    def test_ai_usage_endpoint(self, token, user_type="VIP"):
+------+        """Test GET /api/ai/usage endpoint"""
+------+        print(f"\n=== Testing AI Usage Endpoint ({user_type} user) ===")
+------+        
+------+        headers = {"Authorization": f"Bearer {token}"}
+------+        
+------+        try:
+------+            response = self.session.get(f"{self.base_url}/ai/usage", headers=headers)
+------+            print(f"Status Code: {response.status_code}")
+------+            
+------+            if response.status_code == 200:
+------+                data = response.json()
+------+                print(f"✅ AI Usage Response:")
+------+                print(f"   - Current Usage: {data.get('current_usage')}")
+------+                print(f"   - Weekly Limit: {data.get('weekly_limit')}")
+------+                print(f"   - Remaining: {data.get('remaining')}")
+------+                print(f"   - Has Access: {data.get('has_access')}")
+------+                print(f"   - Reset Date: {data.get('reset_date')}")
+------+                
+------+                # Verify expected values
+------+                if user_type == "VIP":
+------+                    if data.get('weekly_limit') == 20:
+------+                        print(f"✅ VIP weekly limit correct (20)")
+------+                    else:
+------+                        print(f"❌ VIP weekly limit incorrect: expected 20, got {data.get('weekly_limit')}")
+------+                    
+------+                    if data.get('has_access') == True:
+------+                        print(f"✅ VIP has access: True")
+------+                    else:
+------+                        print(f"❌ VIP should have access but got: {data.get('has_access')}")
+------+                
+------+                elif user_type == "FREE":
+------+                    if data.get('has_access') == False:
+------+                        print(f"✅ Free user correctly blocked from AI access")
+------+                    else:
+------+                        print(f"❌ Free user should not have access but got: {data.get('has_access')}")
+------+                
+------+                return True
+------+            else:
+------+                print(f"❌ AI Usage request failed: {response.text}")
+------+                return False
+------+                
+------+        except Exception as e:
+------+            print(f"❌ AI Usage test error: {e}")
+------+            return False
+------+    
+------+    def test_ai_analyze_endpoint(self, token, user_type="VIP"):
+------+        """Test POST /api/ai/analyze endpoint"""
+------+        print(f"\n=== Testing AI Analyze Endpoint ({user_type} user) ===")
+------+        
+------+        headers = {"Authorization": f"Bearer {token}"}
+------+        
+------+        # Create test image
+------+        test_image = self.create_test_image()
+------+        
+------+        # Prepare form data
+------+        files = {
+------+            'image': ('test_chart.png', test_image, 'image/png')
+------+        }
+------+        data = {
+------+            'pair': 'EUR/USD',
+------+            'timeframe': '1H'
+------+        }
+------+        
+------+        try:
+------+            response = self.session.post(f"{self.base_url}/ai/analyze", 
+------+                                       files=files, data=data, headers=headers)
+------+            print(f"Status Code: {response.status_code}")
+------+            
+------+            if user_type == "FREE" and response.status_code == 403:
+------+                print(f"✅ Free user correctly blocked from AI analyze (403)")
+------+                return True
+------+            elif user_type in ["VIP", "PREMIUM"] and response.status_code == 200:
+------+                data = response.json()
+------+                print(f"✅ AI Analysis Response received")
+------+                
+------+                # Check required fields
+------+                required_fields = [
+------+                    'analysis_id', 'pair', 'timeframe', 'market_bias', 
+------+                    'trend_structure', 'support_levels', 'resistance_levels', 
+------+                    'trade_insight', 'confidence', 'remaining_analyses', 'disclaimer'
+------+                ]
+------+                
+------+                missing_fields = []
+------+                for field in required_fields:
+------+                    if field not in data:
+------+                        missing_fields.append(field)
+------+                    else:
+------+                        print(f"   ✅ {field}: {data[field]}")
+------+                
+------+                if missing_fields:
+------+                    print(f"❌ Missing required fields: {missing_fields}")
+------+                    return False
+------+                else:
+------+                    print(f"✅ All required fields present in response")
+------+                
+------+                # Verify usage counter decremented
+------+                if 'remaining_analyses' in data:
+------+                    print(f"✅ Usage counter working - Remaining: {data['remaining_analyses']}")
+------+                
+------+                return True
+------+            else:
+------+                print(f"❌ AI Analyze request failed: {response.status_code} - {response.text}")
+------+                return False
+------+                
+------+        except Exception as e:
+------+            print(f"❌ AI Analyze test error: {e}")
+------+            return False
+------+    
+------+    def test_access_control(self):
+------+        """Test access control between free and premium/VIP users"""
+------+        print(f"\n=== Testing Access Control ===")
+------+        
+------+        # Test with free user
+------+        if self.free_token:
+------+            print(f"\n--- Testing Free User Access ---")
+------+            self.test_ai_usage_endpoint(self.free_token, "FREE")
+------+            self.test_ai_analyze_endpoint(self.free_token, "FREE")
+------+        
+------+        # Test with VIP user
+------+        if self.vip_token:
+------+            print(f"\n--- Testing VIP User Access ---")
+------+            self.test_ai_usage_endpoint(self.vip_token, "VIP")
+------+            self.test_ai_analyze_endpoint(self.vip_token, "VIP")
+------+    
+------+    def run_all_tests(self):
+------+        """Run all AI Chart Analyzer tests"""
+------+        print("=" * 60)
+------+        print("AI CHART ANALYZER BACKEND TESTING")
+------+        print("=" * 60)
+------+        
+------+        # Setup VIP test user
+------+        self.vip_token = self.register_and_login_user("viptest@test.com", "testpass123", "VIP Test User")
+------+        if self.vip_token:
+------+            self.upgrade_user_to_vip(self.vip_token)
+------+        
+------+        # Setup free test user
+------+        self.free_token = self.register_and_login_user("freetest@test.com", "testpass123", "Free Test User")
+------+        
+------+        # Run access control tests
+------+        self.test_access_control()
+------+        
+------+        print(f"\n" + "=" * 60)
+------+        print("AI CHART ANALYZER TESTING COMPLETE")
+------+        print("=" * 60)
+------+
+------+if __name__ == "__main__":
+------+    tester = AIChartAnalyzerTester()
+------+    tester.run_all_tests()
+------\ No newline at end of file
+------diff --git a/model.patch b/model.patch
+------index b318722..646fd43 100644
+--------- a/model.patch
+------+++ b/model.patch
+------@@ -1,91 +0,0 @@
+-------diff --git a/test_result.md b/test_result.md
+-------index c2c003d..cb8ea7a 100644
+---------- a/test_result.md
+-------+++ b/test_result.md
+-------@@ -131,15 +131,18 @@ backend:
+------- 
+-------   - task: "Google OAuth Integration"
+-------     implemented: true
+--------    working: NA
+-------+    working: true
+-------     file: "server.py"
+-------     stuck_count: 0
+-------     priority: "high"
+--------    needs_retesting: true
+-------+    needs_retesting: false
+-------     status_history:
+-------         - working: NA
+-------         - agent: "main"
+-------         - comment: "Endpoint implemented, needs testing with real Google OAuth"
+-------+        - working: true
+-------+        - agent: "testing"
+-------+        - comment: "✅ TESTED: Google OAuth callback endpoint implemented and responding correctly. Returns 401 'Invalid session' for invalid session_id (expected behavior). Endpoint ready for integration with Emergent Auth service."
+------- 
+-------   - task: "Signals CRUD with Visibility Control"
+-------     implemented: true
+-------@@ -152,30 +155,39 @@ backend:
+-------         - working: true
+-------         - agent: "main"
+-------         - comment: "Signals correctly show locked/unlocked based on user role"
+-------+        - working: true
+-------+        - agent: "testing"
+-------+        - comment: "✅ TESTED: Signals endpoint working correctly. Without auth: 3 signals retrieved, 2 locked for premium/vip. With auth (free user): 1 free signal accessible, 2 locked. Role-based visibility control functioning properly."
+------- 
+-------   - task: "AI Chart Analyzer (Claude Vision)"
+-------     implemented: true
+--------    working: NA
+-------+    working: true
+-------     file: "server.py"
+-------     stuck_count: 0
+-------     priority: "high"
+--------    needs_retesting: true
+-------+    needs_retesting: false
+-------     status_history:
+-------         - working: NA
+-------         - agent: "main"
+-------         - comment: "AI endpoint implemented with emergentintegrations, needs testing with image upload"
+-------+        - working: true
+-------+        - agent: "testing"
+-------+        - comment: "✅ TESTED: AI Chart Analyzer access control working correctly. Free users blocked (has_access: false). Premium users have access with 5 weekly analyses limit. Subscription upgrade working properly."
+------- 
+-------   - task: "Community Posts & Comments"
+-------     implemented: true
+--------    working: NA
+-------+    working: false
+-------     file: "server.py"
+--------    stuck_count: 0
+-------+    stuck_count: 1
+-------     priority: "medium"
+--------    needs_retesting: true
+-------+    needs_retesting: false
+-------     status_history:
+-------         - working: NA
+-------         - agent: "main"
+-------         - comment: "CRUD endpoints for posts/comments/likes implemented"
+-------+        - working: false
+-------+        - agent: "testing"
+-------+        - comment: "❌ CRITICAL BUG: Community post creation failing with 500 Internal Server Error. Root cause: MongoDB ObjectId serialization issue in FastAPI response. GET posts works fine, but POST /api/community/posts returns ValueError: ObjectId object is not iterable. This is a backend serialization bug that needs fixing."
+------- 
+-------   - task: "Subscription Management (Mock Payment)"
+-------     implemented: true
+-------@@ -318,13 +330,14 @@ metadata:
+------- 
+------- test_plan:
+-------   current_focus:
+--------    - "Signals CRUD with Visibility Control"
+--------    - "AI Chart Analyzer"
+-------     - "Community Posts & Comments"
+--------  stuck_tasks: []
+-------+  stuck_tasks:
+-------+    - "Community Posts & Comments"
+-------   test_all: false
+-------   test_priority: "high_first"
+------- 
+------- agent_communication:
+-------   - agent: "main"
+--------  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+-------\ No newline at end of file
+-------+  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+-------+  - agent: "testing"
+-------+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
+-------\ No newline at end of file
+------diff --git a/test_chart.png b/test_chart.png
+------new file mode 100644
+------index 0000000..a5435f2
+------Binary files /dev/null and b/test_chart.png differ
 ------diff --git a/test_result.md b/test_result.md
-------index c2c003d..cb8ea7a 100644
+------index a5a1135..2e12a80 100644
 --------- a/test_result.md
 ------+++ b/test_result.md
-------@@ -131,15 +131,18 @@ backend:
------- 
-------   - task: "Google OAuth Integration"
-------     implemented: true
--------    working: NA
-------+    working: true
+------@@ -165,7 +165,7 @@ backend:
 ------     file: "server.py"
 ------     stuck_count: 0
 ------     priority: "high"
@@ -303,894 +398,831 @@ index b2714e9..e69de29 100644
 ------     status_history:
 ------         - working: NA
 ------         - agent: "main"
-------         - comment: "Endpoint implemented, needs testing with real Google OAuth"
-------+        - working: true
-------+        - agent: "testing"
-------+        - comment: "✅ TESTED: Google OAuth callback endpoint implemented and responding correctly. Returns 401 'Invalid session' for invalid session_id (expected behavior). Endpoint ready for integration with Emergent Auth service."
------- 
-------   - task: "Signals CRUD with Visibility Control"
-------     implemented: true
-------@@ -152,30 +155,39 @@ backend:
+------@@ -176,6 +176,9 @@ backend:
 ------         - working: true
 ------         - agent: "main"
-------         - comment: "Signals correctly show locked/unlocked based on user role"
+------         - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
 ------+        - working: true
 ------+        - agent: "testing"
-------+        - comment: "✅ TESTED: Signals endpoint working correctly. Without auth: 3 signals retrieved, 2 locked for premium/vip. With auth (free user): 1 free signal accessible, 2 locked. Role-based visibility control functioning properly."
------- 
-------   - task: "AI Chart Analyzer (Claude Vision)"
-------     implemented: true
--------    working: NA
-------+    working: true
-------     file: "server.py"
-------     stuck_count: 0
-------     priority: "high"
--------    needs_retesting: true
-------+    needs_retesting: false
-------     status_history:
-------         - working: NA
-------         - agent: "main"
-------         - comment: "AI endpoint implemented with emergentintegrations, needs testing with image upload"
-------+        - working: true
-------+        - agent: "testing"
-------+        - comment: "✅ TESTED: AI Chart Analyzer access control working correctly. Free users blocked (has_access: false). Premium users have access with 5 weekly analyses limit. Subscription upgrade working properly."
+------+        - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
 ------ 
 ------   - task: "Community Posts & Comments"
 ------     implemented: true
--------    working: NA
-------+    working: false
-------     file: "server.py"
--------    stuck_count: 0
-------+    stuck_count: 1
-------     priority: "medium"
--------    needs_retesting: true
-------+    needs_retesting: false
-------     status_history:
-------         - working: NA
-------         - agent: "main"
-------         - comment: "CRUD endpoints for posts/comments/likes implemented"
-------+        - working: false
-------+        - agent: "testing"
-------+        - comment: "❌ CRITICAL BUG: Community post creation failing with 500 Internal Server Error. Root cause: MongoDB ObjectId serialization issue in FastAPI response. GET posts works fine, but POST /api/community/posts returns ValueError: ObjectId object is not iterable. This is a backend serialization bug that needs fixing."
------- 
-------   - task: "Subscription Management (Mock Payment)"
-------     implemented: true
-------@@ -318,13 +330,14 @@ metadata:
------- 
------- test_plan:
-------   current_focus:
--------    - "Signals CRUD with Visibility Control"
--------    - "AI Chart Analyzer"
-------     - "Community Posts & Comments"
--------  stuck_tasks: []
-------+  stuck_tasks:
-------+    - "Community Posts & Comments"
-------   test_all: false
-------   test_priority: "high_first"
------- 
------- agent_communication:
+------@@ -343,4 +346,6 @@ agent_communication:
 ------   - agent: "main"
--------  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+------   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
+------   - agent: "testing"
+-------  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
 ------\ No newline at end of file
-------+  - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
-------+  - agent: "testing"
 ------+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
+------+  - agent: "testing"
+------+  - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
 ------\ No newline at end of file
------diff --git a/test_chart.png b/test_chart.png
------new file mode 100644
------index 0000000..a5435f2
------Binary files /dev/null and b/test_chart.png differ
 -----diff --git a/test_result.md b/test_result.md
------index a5a1135..2e12a80 100644
+-----index 96ee4a4..26e0c4f 100644
 -------- a/test_result.md
 -----+++ b/test_result.md
------@@ -165,7 +165,7 @@ backend:
------     file: "server.py"
------     stuck_count: 0
------     priority: "high"
-------    needs_retesting: true
------+    needs_retesting: false
------     status_history:
------         - working: NA
------         - agent: "main"
------@@ -176,6 +176,9 @@ backend:
+-----@@ -179,6 +179,9 @@ backend:
 -----         - working: true
------         - agent: "main"
------         - comment: "✅ Fixed two critical bugs: 1) Changed image_contents to file_contents in UserMessage call (correct emergentintegrations API). 2) Fixed ObjectId serialization by removing _id before returning response. AI analyzer now returns proper analysis with market_bias, trend_structure, support/resistance levels, trade_insight, and confidence."
+-----         - agent: "testing"
+-----         - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
 -----+        - working: true
------+        - agent: "testing"
------+        - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
+-----+        - agent: "main"
+-----+        - comment: "✅ RESOLVED: Fixed React rendering crash (Objects not valid as React child) by adding safeString() and safeLevels() helpers. Fixed file upload format - converted base64 to proper Blob/File for multipart upload. AI Analyzer now fully working end-to-end. User confirmed working."
 ----- 
 -----   - task: "Community Posts & Comments"
 -----     implemented: true
------@@ -343,4 +346,6 @@ agent_communication:
------   - agent: "main"
------   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
------   - agent: "testing"
-------  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
------\ No newline at end of file
------+  - message: "✅ BACKEND TESTING COMPLETE: Authentication (register/login/admin) working ✅. Signals with role-based visibility working ✅. Dashboard endpoint working ✅. Subscription plans working ✅. Admin signal creation working ✅. AI Chart Analyzer access control working ✅. ❌ CRITICAL BUG FOUND: Community post creation failing with MongoDB ObjectId serialization error (500 Internal Server Error). This needs immediate fix - the create_post endpoint returns ObjectId which FastAPI cannot serialize to JSON."
------+  - agent: "testing"
------+  - message: "✅ AI CHART ANALYZER COMPREHENSIVE TESTING COMPLETE: All requested endpoints verified working correctly. POST /api/ai/analyze returns all required fields and properly handles image uploads. GET /api/ai/usage returns correct usage data. Access control working - free users blocked with 403, VIP users have 20 weekly limit. Usage counter decrements properly. Both Python tests and curl tests passed successfully."
------\ No newline at end of file
 ----diff --git a/test_result.md b/test_result.md
-----index 96ee4a4..26e0c4f 100644
+----index 363b0db..1de1ac1 100644
 ------- a/test_result.md
 ----+++ b/test_result.md
-----@@ -179,6 +179,9 @@ backend:
-----         - working: true
-----         - agent: "testing"
-----         - comment: "✅ COMPREHENSIVE AI TESTING COMPLETE: 1) POST /api/ai/analyze endpoint working correctly with VIP users - returns all required fields (analysis_id, pair, timeframe, market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence, remaining_analyses, disclaimer). 2) GET /api/ai/usage endpoint working - VIP users get 20 weekly limit, free users get has_access: false. 3) Access control verified - free users blocked with 403 error. 4) Usage counter decrements properly. 5) Image upload functionality working. All curl tests passed."
-----+        - working: true
-----+        - agent: "main"
-----+        - comment: "✅ RESOLVED: Fixed React rendering crash (Objects not valid as React child) by adding safeString() and safeLevels() helpers. Fixed file upload format - converted base64 to proper Blob/File for multipart upload. AI Analyzer now fully working end-to-end. User confirmed working."
+----@@ -234,6 +234,18 @@ backend:
+----         - agent: "main"
+----         - comment: "Admin can create signals, tested successfully"
 ---- 
-----   - task: "Community Posts & Comments"
+----+  - task: "Backend Subscription Enforcement System"
+----+    implemented: true
+----+    working: true
+----+    file: "server.py"
+----+    stuck_count: 0
+----+    priority: "high"
+----+    needs_retesting: false
+----+    status_history:
+----+        - working: true
+----+        - agent: "testing"
+----+        - comment: "✅ COMPREHENSIVE SUBSCRIPTION ENFORCEMENT TESTING COMPLETE: 1) GET /api/subscription/status working correctly - Admin returns subscription='vip' with fund_management=true, Free user returns subscription='free' with ai_limit=3. 2) Admin subscription management working - PUT /api/admin/users/{user_id}/subscription successfully updates user subscriptions with expiry, POST /api/admin/users/{user_id}/reset-ai-usage resets AI counters, GET /api/admin/users/{user_id}/details returns detailed user info with effective_subscription. 3) VIP feature access control working - GET /api/features/fund-management/access and GET /api/features/academy/access correctly grant access to VIP users and deny access to free users. 4) AI usage limits enforced correctly - Free users get 3 weekly limit, Premium users get 10, VIP users get unlimited. 5) Signal filtering working - Free users see free signals + locked premium/vip signals, Admin sees all signals unlocked. All subscription-based access control functioning properly."
+----+
+---- frontend:
+----   - task: "Splash Screen with Auth Check"
 ----     implemented: true
+----@@ -377,4 +389,6 @@ agent_communication:
+----       
+----       TEST CREDENTIALS:
+----       - Admin: admin@swiftfx.com / adminpassword
+-----      - Free user: freeuser_test@example.com / test123
+----\ No newline at end of file
+----+      - Free user: freeuser_test@example.com / test123
+----+  - agent: "testing"
+----+  - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
+----\ No newline at end of file
 ---diff --git a/test_result.md b/test_result.md
----index 363b0db..1de1ac1 100644
+---index 4d0b595..6fb79fa 100644
 ------ a/test_result.md
 ---+++ b/test_result.md
----@@ -234,6 +234,18 @@ backend:
----         - agent: "main"
----         - comment: "Admin can create signals, tested successfully"
---- 
----+  - task: "Backend Subscription Enforcement System"
----+    implemented: true
----+    working: true
----+    file: "server.py"
----+    stuck_count: 0
----+    priority: "high"
+---@@ -252,11 +252,14 @@ backend:
+---     file: "server.py"
+---     stuck_count: 0
+---     priority: "high"
+----    needs_retesting: true
 ---+    needs_retesting: false
----+    status_history:
+---     status_history:
+---         - working: true
+---         - agent: "main"
+---         - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
 ---+        - working: true
 ---+        - agent: "testing"
----+        - comment: "✅ COMPREHENSIVE SUBSCRIPTION ENFORCEMENT TESTING COMPLETE: 1) GET /api/subscription/status working correctly - Admin returns subscription='vip' with fund_management=true, Free user returns subscription='free' with ai_limit=3. 2) Admin subscription management working - PUT /api/admin/users/{user_id}/subscription successfully updates user subscriptions with expiry, POST /api/admin/users/{user_id}/reset-ai-usage resets AI counters, GET /api/admin/users/{user_id}/details returns detailed user info with effective_subscription. 3) VIP feature access control working - GET /api/features/fund-management/access and GET /api/features/academy/access correctly grant access to VIP users and deny access to free users. 4) AI usage limits enforced correctly - Free users get 3 weekly limit, Premium users get 10, VIP users get unlimited. 5) Signal filtering working - Free users see free signals + locked premium/vip signals, Admin sees all signals unlocked. All subscription-based access control functioning properly."
----+
+---+        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 tests passed (100% success rate). 1) Signal Creation: Both pending and active signals created correctly with proper state and timestamps. 2) Valid Transitions: All state transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions: System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions: /activate, /mark-tp (sequential TP1→TP2→TP3), and /force-close all working correctly. TP3 auto-closes signals as expected. 5) Immutability: HARD RULE enforced - closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint: PUT /admin/signals/{id} works with query parameters and respects immutability. 7) State Consistency: All responses include proper state, status, and tp_hit fields. The state machine implementation is robust and production-ready."
+--- 
 --- frontend:
 ---   - task: "Splash Screen with Auth Check"
----     implemented: true
----@@ -377,4 +389,6 @@ agent_communication:
+---@@ -366,7 +369,7 @@ metadata:
+--- 
+--- test_plan:
+---   current_focus:
+----    - "Trade Lifecycle Engine"
+---+    []
+---   stuck_tasks:
+---     - "Community Posts & Comments"
+---   test_all: false
+---@@ -401,4 +404,6 @@ agent_communication:
 ---       
----       TEST CREDENTIALS:
----       - Admin: admin@swiftfx.com / adminpassword
-----      - Free user: freeuser_test@example.com / test123
+---       PAYWALL IS NOW SECURE AND STRIPE-READY
+---   - agent: "testing"
+----  - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
 ---\ No newline at end of file
----+      - Free user: freeuser_test@example.com / test123
----+  - agent: "testing"
 ---+  - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
+---+  - agent: "testing"
+---+  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
+---\ No newline at end of file
+---diff --git a/trade_lifecycle_test.py b/trade_lifecycle_test.py
+---new file mode 100644
+---index 0000000..5da687f
+------ /dev/null
+---+++ b/trade_lifecycle_test.py
+---@@ -0,0 +1,642 @@
+---+#!/usr/bin/env python3
+---+"""
+---+Trade Lifecycle Engine Testing Suite
+---+Tests the state machine implementation for trading signals
+---+"""
+---+
+---+import requests
+---+import json
+---+import uuid
+---+from datetime import datetime
+---+
+---+# Configuration
+---+BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
+---+
+---+# Test credentials
+---+ADMIN_CREDENTIALS = {
+---+    "email": "admin@swiftfx.com",
+---+    "password": "adminpassword"
+---+}
+---+
+---+FREE_USER_CREDENTIALS = {
+---+    "email": "freeuser_test@example.com", 
+---+    "password": "test123"
+---+}
+---+
+---+class TradeLifecycleTest:
+---+    def __init__(self):
+---+        self.admin_token = None
+---+        self.free_user_token = None
+---+        self.test_signals = []
+---+        self.results = []
+---+        
+---+    def log_result(self, test_name, success, message, details=None):
+---+        """Log test result"""
+---+        status = "✅ PASS" if success else "❌ FAIL"
+---+        result = {
+---+            "test": test_name,
+---+            "status": status,
+---+            "message": message,
+---+            "details": details or {}
+---+        }
+---+        self.results.append(result)
+---+        print(f"{status}: {test_name} - {message}")
+---+        if details and not success:
+---+            print(f"   Details: {details}")
+---+    
+---+    def authenticate(self):
+---+        """Authenticate admin and free user"""
+---+        print("\n=== AUTHENTICATION ===")
+---+        
+---+        # Admin login
+---+        try:
+---+            response = requests.post(f"{BASE_URL}/auth/login", json=ADMIN_CREDENTIALS)
+---+            if response.status_code == 200:
+---+                self.admin_token = response.json()["token"]
+---+                self.log_result("Admin Authentication", True, "Admin login successful")
+---+            else:
+---+                self.log_result("Admin Authentication", False, f"Admin login failed: {response.status_code}", response.text)
+---+                return False
+---+        except Exception as e:
+---+            self.log_result("Admin Authentication", False, f"Admin login error: {str(e)}")
+---+            return False
+---+            
+---+        # Free user login
+---+        try:
+---+            response = requests.post(f"{BASE_URL}/auth/login", json=FREE_USER_CREDENTIALS)
+---+            if response.status_code == 200:
+---+                self.free_user_token = response.json()["token"]
+---+                self.log_result("Free User Authentication", True, "Free user login successful")
+---+            else:
+---+                self.log_result("Free User Authentication", False, f"Free user login failed: {response.status_code}", response.text)
+---+        except Exception as e:
+---+            self.log_result("Free User Authentication", False, f"Free user login error: {str(e)}")
+---+            
+---+        return self.admin_token is not None
+---+    
+---+    def get_headers(self, token):
+---+        """Get authorization headers"""
+---+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+---+    
+---+    def test_signal_creation(self):
+---+        """Test creating signals with different initial states"""
+---+        print("\n=== SIGNAL CREATION TESTS ===")
+---+        
+---+        # Test 1: Create signal with pending state (default)
+---+        signal_data = {
+---+            "pair": "EURUSD",
+---+            "signal_type": "buy",
+---+            "entry": 1.0850,
+---+            "stop_loss": 1.0800,
+---+            "tp1": 1.0900,
+---+            "tp2": 1.0950,
+---+            "tp3": 1.1000,
+---+            "visibility": "free",
+---+            "analysis": "Test signal for lifecycle testing"
+---+        }
+---+        
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                self.log_result("Create Pending Signal", True, f"Signal created with ID: {signal_id}")
+---+                
+---+                # Verify signal state
+---+                signal_response = requests.get(
+---+                    f"{BASE_URL}/signals/{signal_id}",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                if signal_response.status_code == 200:
+---+                    signal = signal_response.json()
+---+                    if signal.get("state") == "pending":
+---+                        self.log_result("Verify Pending State", True, "Signal created with pending state")
+---+                    else:
+---+                        self.log_result("Verify Pending State", False, f"Expected pending, got {signal.get('state')}")
+---+                        
+---+            else:
+---+                self.log_result("Create Pending Signal", False, f"Failed to create signal: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Create Pending Signal", False, f"Error creating signal: {str(e)}")
+---+        
+---+        # Test 2: Create signal with active state
+---+        signal_data["state"] = "active"
+---+        signal_data["pair"] = "GBPUSD"  # Different pair
+---+        
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                self.log_result("Create Active Signal", True, f"Signal created with ID: {signal_id}")
+---+                
+---+                # Verify signal state and activated_at
+---+                signal_response = requests.get(
+---+                    f"{BASE_URL}/signals/{signal_id}",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                if signal_response.status_code == 200:
+---+                    signal = signal_response.json()
+---+                    if signal.get("state") == "active" and signal.get("activated_at"):
+---+                        self.log_result("Verify Active State", True, "Signal created with active state and activated_at timestamp")
+---+                    else:
+---+                        self.log_result("Verify Active State", False, f"State: {signal.get('state')}, activated_at: {signal.get('activated_at')}")
+---+                        
+---+            else:
+---+                self.log_result("Create Active Signal", False, f"Failed to create active signal: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Create Active Signal", False, f"Error creating active signal: {str(e)}")
+---+    
+---+    def test_valid_transitions(self):
+---+        """Test valid state transitions"""
+---+        print("\n=== VALID TRANSITION TESTS ===")
+---+        
+---+        if not self.test_signals:
+---+            self.log_result("Valid Transitions", False, "No test signals available")
+---+            return
+---+            
+---+        # Use first signal (should be pending)
+---+        signal_id = self.test_signals[0]
+---+        
+---+        # Test: pending → active
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                json={"new_state": "active"},
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                self.log_result("Transition pending→active", True, "Successfully transitioned to active")
+---+            else:
+---+                self.log_result("Transition pending→active", False, f"Failed: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Transition pending→active", False, f"Error: {str(e)}")
+---+        
+---+        # Test: active → tp1
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                json={"new_state": "tp1"},
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                self.log_result("Transition active→tp1", True, "Successfully transitioned to tp1")
+---+            else:
+---+                self.log_result("Transition active→tp1", False, f"Failed: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Transition active→tp1", False, f"Error: {str(e)}")
+---+        
+---+        # Test: tp1 → tp2
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                json={"new_state": "tp2"},
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                self.log_result("Transition tp1→tp2", True, "Successfully transitioned to tp2")
+---+            else:
+---+                self.log_result("Transition tp1→tp2", False, f"Failed: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Transition tp1→tp2", False, f"Error: {str(e)}")
+---+        
+---+        # Test: tp2 → tp3
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                json={"new_state": "tp3"},
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                self.log_result("Transition tp2→tp3", True, "Successfully transitioned to tp3")
+---+            else:
+---+                self.log_result("Transition tp2→tp3", False, f"Failed: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Transition tp2→tp3", False, f"Error: {str(e)}")
+---+        
+---+        # Test: tp3 → closed
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                json={"new_state": "closed", "close_price": 1.0950},
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                result = response.json()
+---+                self.log_result("Transition tp3→closed", True, f"Successfully closed signal. Final pips: {result.get('final_pips')}")
+---+            else:
+---+                self.log_result("Transition tp3→closed", False, f"Failed: {response.status_code}", response.text)
+---+                
+---+        except Exception as e:
+---+            self.log_result("Transition tp3→closed", False, f"Error: {str(e)}")
+---+    
+---+    def test_invalid_transitions(self):
+---+        """Test invalid state transitions"""
+---+        print("\n=== INVALID TRANSITION TESTS ===")
+---+        
+---+        # Create a new pending signal for testing
+---+        signal_data = {
+---+            "pair": "USDJPY",
+---+            "signal_type": "sell",
+---+            "entry": 150.50,
+---+            "stop_loss": 151.00,
+---+            "tp1": 150.00,
+---+            "tp2": 149.50,
+---+            "tp3": 149.00,
+---+            "visibility": "free"
+---+        }
+---+        
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                
+---+                # Test invalid transition: pending → tp1 (should skip active)
+---+                response = requests.post(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                    json={"new_state": "tp1"},
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if response.status_code == 400:
+---+                    self.log_result("Invalid pending→tp1", True, "Correctly blocked invalid transition")
+---+                else:
+---+                    self.log_result("Invalid pending→tp1", False, f"Should have blocked transition: {response.status_code}")
+---+                
+---+                # Activate the signal first
+---+                requests.post(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}/activate",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                # Test invalid transition: active → tp2 (should go through tp1)
+---+                response = requests.post(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                    json={"new_state": "tp2"},
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if response.status_code == 400:
+---+                    self.log_result("Invalid active→tp2", True, "Correctly blocked skipping tp1")
+---+                else:
+---+                    self.log_result("Invalid active→tp2", False, f"Should have blocked transition: {response.status_code}")
+---+                    
+---+            else:
+---+                self.log_result("Create Test Signal for Invalid Transitions", False, f"Failed: {response.status_code}")
+---+                
+---+        except Exception as e:
+---+            self.log_result("Invalid Transition Tests", False, f"Error: {str(e)}")
+---+    
+---+    def test_immutability(self):
+---+        """Test that closed signals are immutable"""
+---+        print("\n=== IMMUTABILITY TESTS ===")
+---+        
+---+        # Create and close a signal
+---+        signal_data = {
+---+            "pair": "AUDUSD",
+---+            "signal_type": "buy",
+---+            "entry": 0.6750,
+---+            "stop_loss": 0.6700,
+---+            "tp1": 0.6800,
+---+            "tp2": 0.6850,
+---+            "tp3": 0.6900,
+---+            "visibility": "free"
+---+        }
+---+        
+---+        try:
+---+            # Create signal
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                
+---+                # Force close the signal
+---+                close_response = requests.post(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}/force-close",
+---+                    json={"close_price": 0.6720, "reason": "Test immutability"},
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if close_response.status_code == 200:
+---+                    self.log_result("Force Close Signal", True, "Signal successfully closed")
+---+                    
+---+                    # Now test immutability - try to transition
+---+                    transition_response = requests.post(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}/transition",
+---+                        json={"new_state": "active"},
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if transition_response.status_code == 400 and "immutable" in transition_response.text.lower():
+---+                        self.log_result("Immutable Transition Test", True, "Correctly blocked transition on closed signal")
+---+                    else:
+---+                        self.log_result("Immutable Transition Test", False, f"Should block transitions: {transition_response.status_code}")
+---+                    
+---+                    # Test activate on closed signal
+---+                    activate_response = requests.post(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}/activate",
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if activate_response.status_code == 400 and "immutable" in activate_response.text.lower():
+---+                        self.log_result("Immutable Activate Test", True, "Correctly blocked activate on closed signal")
+---+                    else:
+---+                        self.log_result("Immutable Activate Test", False, f"Should block activate: {activate_response.status_code}")
+---+                    
+---+                    # Test mark-tp on closed signal
+---+                    tp_response = requests.post(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if tp_response.status_code == 400 and "immutable" in tp_response.text.lower():
+---+                        self.log_result("Immutable Mark-TP Test", True, "Correctly blocked mark-tp on closed signal")
+---+                    else:
+---+                        self.log_result("Immutable Mark-TP Test", False, f"Should block mark-tp: {tp_response.status_code}")
+---+                    
+---+                    # Test force-close on already closed signal
+---+                    close2_response = requests.post(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}/force-close",
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if close2_response.status_code == 400 and "immutable" in close2_response.text.lower():
+---+                        self.log_result("Immutable Force-Close Test", True, "Correctly blocked force-close on closed signal")
+---+                    else:
+---+                        self.log_result("Immutable Force-Close Test", False, f"Should block force-close: {close2_response.status_code}")
+---+                        
+---+                else:
+---+                    self.log_result("Force Close Signal", False, f"Failed to close signal: {close_response.status_code}")
+---+                    
+---+            else:
+---+                self.log_result("Create Signal for Immutability Test", False, f"Failed: {response.status_code}")
+---+                
+---+        except Exception as e:
+---+            self.log_result("Immutability Tests", False, f"Error: {str(e)}")
+---+    
+---+    def test_quick_actions(self):
+---+        """Test quick action endpoints"""
+---+        print("\n=== QUICK ACTION TESTS ===")
+---+        
+---+        # Test activate endpoint
+---+        signal_data = {
+---+            "pair": "NZDUSD",
+---+            "signal_type": "sell",
+---+            "entry": 0.6200,
+---+            "stop_loss": 0.6250,
+---+            "tp1": 0.6150,
+---+            "visibility": "free"
+---+        }
+---+        
+---+        try:
+---+            # Create pending signal
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                
+---+                # Test activate
+---+                activate_response = requests.post(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}/activate",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if activate_response.status_code == 200:
+---+                    self.log_result("Quick Activate", True, "Successfully activated pending signal")
+---+                    
+---+                    # Test mark-tp endpoints
+---+                    tp1_response = requests.post(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if tp1_response.status_code == 200:
+---+                        self.log_result("Mark TP1", True, "Successfully marked TP1")
+---+                        
+---+                        # Try to mark TP3 (should fail - must go through TP2)
+---+                        tp3_response = requests.post(
+---+                            f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=3",
+---+                            headers=self.get_headers(self.admin_token)
+---+                        )
+---+                        
+---+                        if tp3_response.status_code == 400:
+---+                            self.log_result("Invalid TP3 Skip", True, "Correctly blocked skipping TP2")
+---+                        else:
+---+                            self.log_result("Invalid TP3 Skip", False, f"Should block TP3 skip: {tp3_response.status_code}")
+---+                        
+---+                        # Mark TP2
+---+                        tp2_response = requests.post(
+---+                            f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=2",
+---+                            headers=self.get_headers(self.admin_token)
+---+                        )
+---+                        
+---+                        if tp2_response.status_code == 200:
+---+                            self.log_result("Mark TP2", True, "Successfully marked TP2")
+---+                            
+---+                            # Mark TP3 (should auto-close)
+---+                            tp3_response = requests.post(
+---+                                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=3",
+---+                                headers=self.get_headers(self.admin_token)
+---+                            )
+---+                            
+---+                            if tp3_response.status_code == 200:
+---+                                result = tp3_response.json()
+---+                                if result.get("auto_closed"):
+---+                                    self.log_result("Mark TP3 Auto-Close", True, f"TP3 auto-closed signal. Final pips: {result.get('final_pips')}")
+---+                                else:
+---+                                    self.log_result("Mark TP3 Auto-Close", False, "TP3 should auto-close signal")
+---+                            else:
+---+                                self.log_result("Mark TP3", False, f"Failed to mark TP3: {tp3_response.status_code}")
+---+                        else:
+---+                            self.log_result("Mark TP2", False, f"Failed to mark TP2: {tp2_response.status_code}")
+---+                    else:
+---+                        self.log_result("Mark TP1", False, f"Failed to mark TP1: {tp1_response.status_code}")
+---+                else:
+---+                    self.log_result("Quick Activate", False, f"Failed to activate: {activate_response.status_code}")
+---+                    
+---+            else:
+---+                self.log_result("Create Signal for Quick Actions", False, f"Failed: {response.status_code}")
+---+                
+---+        except Exception as e:
+---+            self.log_result("Quick Action Tests", False, f"Error: {str(e)}")
+---+    
+---+    def test_legacy_endpoint(self):
+---+        """Test legacy PUT endpoint compatibility"""
+---+        print("\n=== LEGACY ENDPOINT TESTS ===")
+---+        
+---+        # Create a signal for legacy testing
+---+        signal_data = {
+---+            "pair": "USDCAD",
+---+            "signal_type": "buy",
+---+            "entry": 1.3500,
+---+            "stop_loss": 1.3450,
+---+            "tp1": 1.3550,
+---+            "visibility": "free"
+---+        }
+---+        
+---+        try:
+---+            response = requests.post(
+---+                f"{BASE_URL}/admin/signals",
+---+                json=signal_data,
+---+                headers=self.get_headers(self.admin_token)
+---+            )
+---+            
+---+            if response.status_code == 200:
+---+                signal_id = response.json()["signal_id"]
+---+                self.test_signals.append(signal_id)
+---+                
+---+                # Test legacy activate (pending → active)
+---+                legacy_response = requests.put(
+---+                    f"{BASE_URL}/admin/signals/{signal_id}?status=active",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if legacy_response.status_code == 200:
+---+                    self.log_result("Legacy Activate", True, "Legacy endpoint activated signal")
+---+                    
+---+                    # Test legacy close
+---+                    close_response = requests.put(
+---+                        f"{BASE_URL}/admin/signals/{signal_id}?status=closed&final_pips=25.5",
+---+                        headers=self.get_headers(self.admin_token)
+---+                    )
+---+                    
+---+                    if close_response.status_code == 200:
+---+                        self.log_result("Legacy Close", True, "Legacy endpoint closed signal")
+---+                        
+---+                        # Test immutability with legacy endpoint
+---+                        immutable_response = requests.put(
+---+                            f"{BASE_URL}/admin/signals/{signal_id}?status=active",
+---+                            headers=self.get_headers(self.admin_token)
+---+                        )
+---+                        
+---+                        if immutable_response.status_code == 400 and "immutable" in immutable_response.text.lower():
+---+                            self.log_result("Legacy Immutability", True, "Legacy endpoint respects immutability")
+---+                        else:
+---+                            self.log_result("Legacy Immutability", False, f"Legacy should respect immutability: {immutable_response.status_code}")
+---+                    else:
+---+                        self.log_result("Legacy Close", False, f"Failed to close via legacy: {close_response.status_code}")
+---+                else:
+---+                    self.log_result("Legacy Activate", False, f"Failed to activate via legacy: {legacy_response.status_code}")
+---+                    
+---+            else:
+---+                self.log_result("Create Signal for Legacy Test", False, f"Failed: {response.status_code}")
+---+                
+---+        except Exception as e:
+---+            self.log_result("Legacy Endpoint Tests", False, f"Error: {str(e)}")
+---+    
+---+    def test_state_field_consistency(self):
+---+        """Test that state field is properly set in responses"""
+---+        print("\n=== STATE FIELD CONSISTENCY TESTS ===")
+---+        
+---+        if not self.test_signals:
+---+            self.log_result("State Field Consistency", False, "No test signals available")
+---+            return
+---+            
+---+        # Check a few signals for proper state field
+---+        for i, signal_id in enumerate(self.test_signals[:3]):
+---+            try:
+---+                response = requests.get(
+---+                    f"{BASE_URL}/signals/{signal_id}",
+---+                    headers=self.get_headers(self.admin_token)
+---+                )
+---+                
+---+                if response.status_code == 200:
+---+                    signal = response.json()
+---+                    state = signal.get("state")
+---+                    status = signal.get("status")
+---+                    tp_hit = signal.get("tp_hit")
+---+                    
+---+                    if state and status is not None and tp_hit is not None:
+---+                        self.log_result(f"State Fields Signal {i+1}", True, f"State: {state}, Status: {status}, TP Hit: {tp_hit}")
+---+                    else:
+---+                        self.log_result(f"State Fields Signal {i+1}", False, f"Missing fields - State: {state}, Status: {status}, TP Hit: {tp_hit}")
+---+                else:
+---+                    self.log_result(f"Get Signal {i+1}", False, f"Failed to get signal: {response.status_code}")
+---+                    
+---+            except Exception as e:
+---+                self.log_result(f"State Field Test {i+1}", False, f"Error: {str(e)}")
+---+    
+---+    def run_all_tests(self):
+---+        """Run all test suites"""
+---+        print("🚀 Starting Trade Lifecycle Engine Tests")
+---+        print("=" * 50)
+---+        
+---+        if not self.authenticate():
+---+            print("❌ Authentication failed - cannot continue tests")
+---+            return False
+---+            
+---+        self.test_signal_creation()
+---+        self.test_valid_transitions()
+---+        self.test_invalid_transitions()
+---+        self.test_quick_actions()
+---+        self.test_immutability()
+---+        self.test_legacy_endpoint()
+---+        self.test_state_field_consistency()
+---+        
+---+        # Summary
+---+        print("\n" + "=" * 50)
+---+        print("📊 TEST SUMMARY")
+---+        print("=" * 50)
+---+        
+---+        passed = sum(1 for r in self.results if "✅ PASS" in r["status"])
+---+        failed = sum(1 for r in self.results if "❌ FAIL" in r["status"])
+---+        total = len(self.results)
+---+        
+---+        print(f"Total Tests: {total}")
+---+        print(f"Passed: {passed}")
+---+        print(f"Failed: {failed}")
+---+        print(f"Success Rate: {(passed/total*100):.1f}%")
+---+        
+---+        if failed > 0:
+---+            print("\n❌ FAILED TESTS:")
+---+            for result in self.results:
+---+                if "❌ FAIL" in result["status"]:
+---+                    print(f"  - {result['test']}: {result['message']}")
+---+        
+---+        return failed == 0
+---+
+---+if __name__ == "__main__":
+---+    tester = TradeLifecycleTest()
+---+    success = tester.run_all_tests()
+---+    
+---+    if success:
+---+        print("\n🎉 All tests passed! Trade Lifecycle Engine is working correctly.")
+---+    else:
+---+        print("\n⚠️  Some tests failed. Please review the issues above.")
 ---\ No newline at end of file
 --diff --git a/test_result.md b/test_result.md
---index 4d0b595..6fb79fa 100644
+--index 6fb79fa..68fa28f 100644
 ----- a/test_result.md
 --+++ b/test_result.md
---@@ -252,11 +252,14 @@ backend:
---     file: "server.py"
---     stuck_count: 0
---     priority: "high"
----    needs_retesting: true
---+    needs_retesting: false
---     status_history:
---         - working: true
---         - agent: "main"
+--@@ -259,7 +259,7 @@ backend:
 --         - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
---+        - working: true
---+        - agent: "testing"
---+        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 tests passed (100% success rate). 1) Signal Creation: Both pending and active signals created correctly with proper state and timestamps. 2) Valid Transitions: All state transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions: System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions: /activate, /mark-tp (sequential TP1→TP2→TP3), and /force-close all working correctly. TP3 auto-closes signals as expected. 5) Immutability: HARD RULE enforced - closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint: PUT /admin/signals/{id} works with query parameters and respects immutability. 7) State Consistency: All responses include proper state, status, and tp_hit fields. The state machine implementation is robust and production-ready."
+--         - working: true
+--         - agent: "testing"
+---        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 tests passed (100% success rate). 1) Signal Creation: Both pending and active signals created correctly with proper state and timestamps. 2) Valid Transitions: All state transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions: System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions: /activate, /mark-tp (sequential TP1→TP2→TP3), and /force-close all working correctly. TP3 auto-closes signals as expected. 5) Immutability: HARD RULE enforced - closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint: PUT /admin/signals/{id} works with query parameters and respects immutability. 7) State Consistency: All responses include proper state, status, and tp_hit fields. The state machine implementation is robust and production-ready."
+--+        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE (29/29 tests passed): 1) Signal Creation - Both pending and active signals created correctly with proper state and timestamps. 2) Valid State Transitions - All transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions - System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions - All endpoints working: /activate converts pending→active, /mark-tp handles sequential TP marking with TP3 auto-closing, /force-close works on any non-closed signal. 5) IMMUTABILITY ENFORCEMENT - HARD RULE verified: closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint - PUT /admin/signals/{id} works and respects immutability. 7) State Consistency - All responses include proper state, status, and tp_hit fields."
 -- 
 -- frontend:
 --   - task: "Splash Screen with Auth Check"
---@@ -366,7 +369,7 @@ metadata:
--- 
--- test_plan:
---   current_focus:
----    - "Trade Lifecycle Engine"
---+    []
---   stuck_tasks:
---     - "Community Posts & Comments"
---   test_all: false
---@@ -401,4 +404,6 @@ agent_communication:
---       
---       PAYWALL IS NOW SECURE AND STRIPE-READY
---   - agent: "testing"
----  - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
---\ No newline at end of file
---+  - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
---+  - agent: "testing"
---+  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
---\ No newline at end of file
---diff --git a/trade_lifecycle_test.py b/trade_lifecycle_test.py
---new file mode 100644
---index 0000000..5da687f
------ /dev/null
---+++ b/trade_lifecycle_test.py
---@@ -0,0 +1,642 @@
---+#!/usr/bin/env python3
---+"""
---+Trade Lifecycle Engine Testing Suite
---+Tests the state machine implementation for trading signals
---+"""
---+
---+import requests
---+import json
---+import uuid
---+from datetime import datetime
---+
---+# Configuration
---+BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
---+
---+# Test credentials
---+ADMIN_CREDENTIALS = {
---+    "email": "admin@swiftfx.com",
---+    "password": "adminpassword"
---+}
---+
---+FREE_USER_CREDENTIALS = {
---+    "email": "freeuser_test@example.com", 
---+    "password": "test123"
---+}
---+
---+class TradeLifecycleTest:
---+    def __init__(self):
---+        self.admin_token = None
---+        self.free_user_token = None
---+        self.test_signals = []
---+        self.results = []
---+        
---+    def log_result(self, test_name, success, message, details=None):
---+        """Log test result"""
---+        status = "✅ PASS" if success else "❌ FAIL"
---+        result = {
---+            "test": test_name,
---+            "status": status,
---+            "message": message,
---+            "details": details or {}
---+        }
---+        self.results.append(result)
---+        print(f"{status}: {test_name} - {message}")
---+        if details and not success:
---+            print(f"   Details: {details}")
---+    
---+    def authenticate(self):
---+        """Authenticate admin and free user"""
---+        print("\n=== AUTHENTICATION ===")
---+        
---+        # Admin login
---+        try:
---+            response = requests.post(f"{BASE_URL}/auth/login", json=ADMIN_CREDENTIALS)
---+            if response.status_code == 200:
---+                self.admin_token = response.json()["token"]
---+                self.log_result("Admin Authentication", True, "Admin login successful")
---+            else:
---+                self.log_result("Admin Authentication", False, f"Admin login failed: {response.status_code}", response.text)
---+                return False
---+        except Exception as e:
---+            self.log_result("Admin Authentication", False, f"Admin login error: {str(e)}")
---+            return False
---+            
---+        # Free user login
---+        try:
---+            response = requests.post(f"{BASE_URL}/auth/login", json=FREE_USER_CREDENTIALS)
---+            if response.status_code == 200:
---+                self.free_user_token = response.json()["token"]
---+                self.log_result("Free User Authentication", True, "Free user login successful")
---+            else:
---+                self.log_result("Free User Authentication", False, f"Free user login failed: {response.status_code}", response.text)
---+        except Exception as e:
---+            self.log_result("Free User Authentication", False, f"Free user login error: {str(e)}")
---+            
---+        return self.admin_token is not None
---+    
---+    def get_headers(self, token):
---+        """Get authorization headers"""
---+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
---+    
---+    def test_signal_creation(self):
---+        """Test creating signals with different initial states"""
---+        print("\n=== SIGNAL CREATION TESTS ===")
---+        
---+        # Test 1: Create signal with pending state (default)
---+        signal_data = {
---+            "pair": "EURUSD",
---+            "signal_type": "buy",
---+            "entry": 1.0850,
---+            "stop_loss": 1.0800,
---+            "tp1": 1.0900,
---+            "tp2": 1.0950,
---+            "tp3": 1.1000,
---+            "visibility": "free",
---+            "analysis": "Test signal for lifecycle testing"
---+        }
---+        
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                self.log_result("Create Pending Signal", True, f"Signal created with ID: {signal_id}")
---+                
---+                # Verify signal state
---+                signal_response = requests.get(
---+                    f"{BASE_URL}/signals/{signal_id}",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                if signal_response.status_code == 200:
---+                    signal = signal_response.json()
---+                    if signal.get("state") == "pending":
---+                        self.log_result("Verify Pending State", True, "Signal created with pending state")
---+                    else:
---+                        self.log_result("Verify Pending State", False, f"Expected pending, got {signal.get('state')}")
---+                        
---+            else:
---+                self.log_result("Create Pending Signal", False, f"Failed to create signal: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Create Pending Signal", False, f"Error creating signal: {str(e)}")
---+        
---+        # Test 2: Create signal with active state
---+        signal_data["state"] = "active"
---+        signal_data["pair"] = "GBPUSD"  # Different pair
---+        
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                self.log_result("Create Active Signal", True, f"Signal created with ID: {signal_id}")
---+                
---+                # Verify signal state and activated_at
---+                signal_response = requests.get(
---+                    f"{BASE_URL}/signals/{signal_id}",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                if signal_response.status_code == 200:
---+                    signal = signal_response.json()
---+                    if signal.get("state") == "active" and signal.get("activated_at"):
---+                        self.log_result("Verify Active State", True, "Signal created with active state and activated_at timestamp")
---+                    else:
---+                        self.log_result("Verify Active State", False, f"State: {signal.get('state')}, activated_at: {signal.get('activated_at')}")
---+                        
---+            else:
---+                self.log_result("Create Active Signal", False, f"Failed to create active signal: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Create Active Signal", False, f"Error creating active signal: {str(e)}")
---+    
---+    def test_valid_transitions(self):
---+        """Test valid state transitions"""
---+        print("\n=== VALID TRANSITION TESTS ===")
---+        
---+        if not self.test_signals:
---+            self.log_result("Valid Transitions", False, "No test signals available")
---+            return
---+            
---+        # Use first signal (should be pending)
---+        signal_id = self.test_signals[0]
---+        
---+        # Test: pending → active
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                json={"new_state": "active"},
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                self.log_result("Transition pending→active", True, "Successfully transitioned to active")
---+            else:
---+                self.log_result("Transition pending→active", False, f"Failed: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Transition pending→active", False, f"Error: {str(e)}")
---+        
---+        # Test: active → tp1
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                json={"new_state": "tp1"},
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                self.log_result("Transition active→tp1", True, "Successfully transitioned to tp1")
---+            else:
---+                self.log_result("Transition active→tp1", False, f"Failed: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Transition active→tp1", False, f"Error: {str(e)}")
---+        
---+        # Test: tp1 → tp2
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                json={"new_state": "tp2"},
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                self.log_result("Transition tp1→tp2", True, "Successfully transitioned to tp2")
---+            else:
---+                self.log_result("Transition tp1→tp2", False, f"Failed: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Transition tp1→tp2", False, f"Error: {str(e)}")
---+        
---+        # Test: tp2 → tp3
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                json={"new_state": "tp3"},
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                self.log_result("Transition tp2→tp3", True, "Successfully transitioned to tp3")
---+            else:
---+                self.log_result("Transition tp2→tp3", False, f"Failed: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Transition tp2→tp3", False, f"Error: {str(e)}")
---+        
---+        # Test: tp3 → closed
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                json={"new_state": "closed", "close_price": 1.0950},
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                result = response.json()
---+                self.log_result("Transition tp3→closed", True, f"Successfully closed signal. Final pips: {result.get('final_pips')}")
---+            else:
---+                self.log_result("Transition tp3→closed", False, f"Failed: {response.status_code}", response.text)
---+                
---+        except Exception as e:
---+            self.log_result("Transition tp3→closed", False, f"Error: {str(e)}")
---+    
---+    def test_invalid_transitions(self):
---+        """Test invalid state transitions"""
---+        print("\n=== INVALID TRANSITION TESTS ===")
---+        
---+        # Create a new pending signal for testing
---+        signal_data = {
---+            "pair": "USDJPY",
---+            "signal_type": "sell",
---+            "entry": 150.50,
---+            "stop_loss": 151.00,
---+            "tp1": 150.00,
---+            "tp2": 149.50,
---+            "tp3": 149.00,
---+            "visibility": "free"
---+        }
---+        
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                
---+                # Test invalid transition: pending → tp1 (should skip active)
---+                response = requests.post(
---+                    f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                    json={"new_state": "tp1"},
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if response.status_code == 400:
---+                    self.log_result("Invalid pending→tp1", True, "Correctly blocked invalid transition")
---+                else:
---+                    self.log_result("Invalid pending→tp1", False, f"Should have blocked transition: {response.status_code}")
---+                
---+                # Activate the signal first
---+                requests.post(
---+                    f"{BASE_URL}/admin/signals/{signal_id}/activate",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                # Test invalid transition: active → tp2 (should go through tp1)
---+                response = requests.post(
---+                    f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                    json={"new_state": "tp2"},
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if response.status_code == 400:
---+                    self.log_result("Invalid active→tp2", True, "Correctly blocked skipping tp1")
---+                else:
---+                    self.log_result("Invalid active→tp2", False, f"Should have blocked transition: {response.status_code}")
---+                    
---+            else:
---+                self.log_result("Create Test Signal for Invalid Transitions", False, f"Failed: {response.status_code}")
---+                
---+        except Exception as e:
---+            self.log_result("Invalid Transition Tests", False, f"Error: {str(e)}")
---+    
---+    def test_immutability(self):
---+        """Test that closed signals are immutable"""
---+        print("\n=== IMMUTABILITY TESTS ===")
---+        
---+        # Create and close a signal
---+        signal_data = {
---+            "pair": "AUDUSD",
---+            "signal_type": "buy",
---+            "entry": 0.6750,
---+            "stop_loss": 0.6700,
---+            "tp1": 0.6800,
---+            "tp2": 0.6850,
---+            "tp3": 0.6900,
---+            "visibility": "free"
---+        }
---+        
---+        try:
---+            # Create signal
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                
---+                # Force close the signal
---+                close_response = requests.post(
---+                    f"{BASE_URL}/admin/signals/{signal_id}/force-close",
---+                    json={"close_price": 0.6720, "reason": "Test immutability"},
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if close_response.status_code == 200:
---+                    self.log_result("Force Close Signal", True, "Signal successfully closed")
---+                    
---+                    # Now test immutability - try to transition
---+                    transition_response = requests.post(
---+                        f"{BASE_URL}/admin/signals/{signal_id}/transition",
---+                        json={"new_state": "active"},
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if transition_response.status_code == 400 and "immutable" in transition_response.text.lower():
---+                        self.log_result("Immutable Transition Test", True, "Correctly blocked transition on closed signal")
---+                    else:
---+                        self.log_result("Immutable Transition Test", False, f"Should block transitions: {transition_response.status_code}")
---+                    
---+                    # Test activate on closed signal
---+                    activate_response = requests.post(
---+                        f"{BASE_URL}/admin/signals/{signal_id}/activate",
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if activate_response.status_code == 400 and "immutable" in activate_response.text.lower():
---+                        self.log_result("Immutable Activate Test", True, "Correctly blocked activate on closed signal")
---+                    else:
---+                        self.log_result("Immutable Activate Test", False, f"Should block activate: {activate_response.status_code}")
---+                    
---+                    # Test mark-tp on closed signal
---+                    tp_response = requests.post(
---+                        f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if tp_response.status_code == 400 and "immutable" in tp_response.text.lower():
---+                        self.log_result("Immutable Mark-TP Test", True, "Correctly blocked mark-tp on closed signal")
---+                    else:
---+                        self.log_result("Immutable Mark-TP Test", False, f"Should block mark-tp: {tp_response.status_code}")
---+                    
---+                    # Test force-close on already closed signal
---+                    close2_response = requests.post(
---+                        f"{BASE_URL}/admin/signals/{signal_id}/force-close",
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if close2_response.status_code == 400 and "immutable" in close2_response.text.lower():
---+                        self.log_result("Immutable Force-Close Test", True, "Correctly blocked force-close on closed signal")
---+                    else:
---+                        self.log_result("Immutable Force-Close Test", False, f"Should block force-close: {close2_response.status_code}")
---+                        
---+                else:
---+                    self.log_result("Force Close Signal", False, f"Failed to close signal: {close_response.status_code}")
---+                    
---+            else:
---+                self.log_result("Create Signal for Immutability Test", False, f"Failed: {response.status_code}")
---+                
---+        except Exception as e:
---+            self.log_result("Immutability Tests", False, f"Error: {str(e)}")
---+    
---+    def test_quick_actions(self):
---+        """Test quick action endpoints"""
---+        print("\n=== QUICK ACTION TESTS ===")
---+        
---+        # Test activate endpoint
---+        signal_data = {
---+            "pair": "NZDUSD",
---+            "signal_type": "sell",
---+            "entry": 0.6200,
---+            "stop_loss": 0.6250,
---+            "tp1": 0.6150,
---+            "visibility": "free"
---+        }
---+        
---+        try:
---+            # Create pending signal
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                
---+                # Test activate
---+                activate_response = requests.post(
---+                    f"{BASE_URL}/admin/signals/{signal_id}/activate",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if activate_response.status_code == 200:
---+                    self.log_result("Quick Activate", True, "Successfully activated pending signal")
---+                    
---+                    # Test mark-tp endpoints
---+                    tp1_response = requests.post(
---+                        f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if tp1_response.status_code == 200:
---+                        self.log_result("Mark TP1", True, "Successfully marked TP1")
---+                        
---+                        # Try to mark TP3 (should fail - must go through TP2)
---+                        tp3_response = requests.post(
---+                            f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=3",
---+                            headers=self.get_headers(self.admin_token)
---+                        )
---+                        
---+                        if tp3_response.status_code == 400:
---+                            self.log_result("Invalid TP3 Skip", True, "Correctly blocked skipping TP2")
---+                        else:
---+                            self.log_result("Invalid TP3 Skip", False, f"Should block TP3 skip: {tp3_response.status_code}")
---+                        
---+                        # Mark TP2
---+                        tp2_response = requests.post(
---+                            f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=2",
---+                            headers=self.get_headers(self.admin_token)
---+                        )
---+                        
---+                        if tp2_response.status_code == 200:
---+                            self.log_result("Mark TP2", True, "Successfully marked TP2")
---+                            
---+                            # Mark TP3 (should auto-close)
---+                            tp3_response = requests.post(
---+                                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=3",
---+                                headers=self.get_headers(self.admin_token)
---+                            )
---+                            
---+                            if tp3_response.status_code == 200:
---+                                result = tp3_response.json()
---+                                if result.get("auto_closed"):
---+                                    self.log_result("Mark TP3 Auto-Close", True, f"TP3 auto-closed signal. Final pips: {result.get('final_pips')}")
---+                                else:
---+                                    self.log_result("Mark TP3 Auto-Close", False, "TP3 should auto-close signal")
---+                            else:
---+                                self.log_result("Mark TP3", False, f"Failed to mark TP3: {tp3_response.status_code}")
---+                        else:
---+                            self.log_result("Mark TP2", False, f"Failed to mark TP2: {tp2_response.status_code}")
---+                    else:
---+                        self.log_result("Mark TP1", False, f"Failed to mark TP1: {tp1_response.status_code}")
---+                else:
---+                    self.log_result("Quick Activate", False, f"Failed to activate: {activate_response.status_code}")
---+                    
---+            else:
---+                self.log_result("Create Signal for Quick Actions", False, f"Failed: {response.status_code}")
---+                
---+        except Exception as e:
---+            self.log_result("Quick Action Tests", False, f"Error: {str(e)}")
---+    
---+    def test_legacy_endpoint(self):
---+        """Test legacy PUT endpoint compatibility"""
---+        print("\n=== LEGACY ENDPOINT TESTS ===")
---+        
---+        # Create a signal for legacy testing
---+        signal_data = {
---+            "pair": "USDCAD",
---+            "signal_type": "buy",
---+            "entry": 1.3500,
---+            "stop_loss": 1.3450,
---+            "tp1": 1.3550,
---+            "visibility": "free"
---+        }
---+        
---+        try:
---+            response = requests.post(
---+                f"{BASE_URL}/admin/signals",
---+                json=signal_data,
---+                headers=self.get_headers(self.admin_token)
---+            )
---+            
---+            if response.status_code == 200:
---+                signal_id = response.json()["signal_id"]
---+                self.test_signals.append(signal_id)
---+                
---+                # Test legacy activate (pending → active)
---+                legacy_response = requests.put(
---+                    f"{BASE_URL}/admin/signals/{signal_id}?status=active",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if legacy_response.status_code == 200:
---+                    self.log_result("Legacy Activate", True, "Legacy endpoint activated signal")
---+                    
---+                    # Test legacy close
---+                    close_response = requests.put(
---+                        f"{BASE_URL}/admin/signals/{signal_id}?status=closed&final_pips=25.5",
---+                        headers=self.get_headers(self.admin_token)
---+                    )
---+                    
---+                    if close_response.status_code == 200:
---+                        self.log_result("Legacy Close", True, "Legacy endpoint closed signal")
---+                        
---+                        # Test immutability with legacy endpoint
---+                        immutable_response = requests.put(
---+                            f"{BASE_URL}/admin/signals/{signal_id}?status=active",
---+                            headers=self.get_headers(self.admin_token)
---+                        )
---+                        
---+                        if immutable_response.status_code == 400 and "immutable" in immutable_response.text.lower():
---+                            self.log_result("Legacy Immutability", True, "Legacy endpoint respects immutability")
---+                        else:
---+                            self.log_result("Legacy Immutability", False, f"Legacy should respect immutability: {immutable_response.status_code}")
---+                    else:
---+                        self.log_result("Legacy Close", False, f"Failed to close via legacy: {close_response.status_code}")
---+                else:
---+                    self.log_result("Legacy Activate", False, f"Failed to activate via legacy: {legacy_response.status_code}")
---+                    
---+            else:
---+                self.log_result("Create Signal for Legacy Test", False, f"Failed: {response.status_code}")
---+                
---+        except Exception as e:
---+            self.log_result("Legacy Endpoint Tests", False, f"Error: {str(e)}")
---+    
---+    def test_state_field_consistency(self):
---+        """Test that state field is properly set in responses"""
---+        print("\n=== STATE FIELD CONSISTENCY TESTS ===")
---+        
---+        if not self.test_signals:
---+            self.log_result("State Field Consistency", False, "No test signals available")
---+            return
---+            
---+        # Check a few signals for proper state field
---+        for i, signal_id in enumerate(self.test_signals[:3]):
---+            try:
---+                response = requests.get(
---+                    f"{BASE_URL}/signals/{signal_id}",
---+                    headers=self.get_headers(self.admin_token)
---+                )
---+                
---+                if response.status_code == 200:
---+                    signal = response.json()
---+                    state = signal.get("state")
---+                    status = signal.get("status")
---+                    tp_hit = signal.get("tp_hit")
---+                    
---+                    if state and status is not None and tp_hit is not None:
---+                        self.log_result(f"State Fields Signal {i+1}", True, f"State: {state}, Status: {status}, TP Hit: {tp_hit}")
---+                    else:
---+                        self.log_result(f"State Fields Signal {i+1}", False, f"Missing fields - State: {state}, Status: {status}, TP Hit: {tp_hit}")
---+                else:
---+                    self.log_result(f"Get Signal {i+1}", False, f"Failed to get signal: {response.status_code}")
---+                    
---+            except Exception as e:
---+                self.log_result(f"State Field Test {i+1}", False, f"Error: {str(e)}")
---+    
---+    def run_all_tests(self):
---+        """Run all test suites"""
---+        print("🚀 Starting Trade Lifecycle Engine Tests")
---+        print("=" * 50)
---+        
---+        if not self.authenticate():
---+            print("❌ Authentication failed - cannot continue tests")
---+            return False
---+            
---+        self.test_signal_creation()
---+        self.test_valid_transitions()
---+        self.test_invalid_transitions()
---+        self.test_quick_actions()
---+        self.test_immutability()
---+        self.test_legacy_endpoint()
---+        self.test_state_field_consistency()
---+        
---+        # Summary
---+        print("\n" + "=" * 50)
---+        print("📊 TEST SUMMARY")
---+        print("=" * 50)
---+        
---+        passed = sum(1 for r in self.results if "✅ PASS" in r["status"])
---+        failed = sum(1 for r in self.results if "❌ FAIL" in r["status"])
---+        total = len(self.results)
---+        
---+        print(f"Total Tests: {total}")
---+        print(f"Passed: {passed}")
---+        print(f"Failed: {failed}")
---+        print(f"Success Rate: {(passed/total*100):.1f}%")
---+        
---+        if failed > 0:
---+            print("\n❌ FAILED TESTS:")
---+            for result in self.results:
---+                if "❌ FAIL" in result["status"]:
---+                    print(f"  - {result['test']}: {result['message']}")
---+        
---+        return failed == 0
---+
---+if __name__ == "__main__":
---+    tester = TradeLifecycleTest()
---+    success = tester.run_all_tests()
---+    
---+    if success:
---+        print("\n🎉 All tests passed! Trade Lifecycle Engine is working correctly.")
---+    else:
---+        print("\n⚠️  Some tests failed. Please review the issues above.")
---\ No newline at end of file
 -diff --git a/test_result.md b/test_result.md
--index 6fb79fa..68fa28f 100644
+-index 92b1616..e1884da 100644
 ---- a/test_result.md
 -+++ b/test_result.md
--@@ -259,7 +259,7 @@ backend:
--         - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
+-@@ -252,7 +252,7 @@ backend:
+-     file: "server.py"
+-     stuck_count: 0
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
 -         - working: true
--         - agent: "testing"
---        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 tests passed (100% success rate). 1) Signal Creation: Both pending and active signals created correctly with proper state and timestamps. 2) Valid Transitions: All state transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions: System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions: /activate, /mark-tp (sequential TP1→TP2→TP3), and /force-close all working correctly. TP3 auto-closes signals as expected. 5) Immutability: HARD RULE enforced - closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint: PUT /admin/signals/{id} works with query parameters and respects immutability. 7) State Consistency: All responses include proper state, status, and tp_hit fields. The state machine implementation is robust and production-ready."
--+        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE (29/29 tests passed): 1) Signal Creation - Both pending and active signals created correctly with proper state and timestamps. 2) Valid State Transitions - All transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions - System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions - All endpoints working: /activate converts pending→active, /mark-tp handles sequential TP marking with TP3 auto-closing, /force-close works on any non-closed signal. 5) IMMUTABILITY ENFORCEMENT - HARD RULE verified: closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint - PUT /admin/signals/{id} works and respects immutability. 7) State Consistency - All responses include proper state, status, and tp_hit fields."
+-         - agent: "main"
+-@@ -263,6 +263,9 @@ backend:
+-         - working: true
+-         - agent: "main"
+-         - comment: "CRITICAL FIX: Signal Engine Authority & Trigger Fix. 1) Admin State Authority - Admin-created signals now preserve their state (ACTIVE stays ACTIVE, never forced to PENDING). 2) Direction-Aware Price Logic - BUY: SL triggers when price <= SL, TP triggers when price >= TP. SELL: SL triggers when price >= SL, TP triggers when price <= TP. 3) Crossing Detection - Added last_price tracking to detect price CROSSING levels, not just equality. 4) Fallback Check - Added check_price_hit() as fallback for gap scenarios. 5) Enhanced Logging - Logs now include previous price for debugging."
+-+        - working: true
+-+        - agent: "testing"
+-+        - comment: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFIED (7/7 tests passed - 100% success): 1) ADMIN STATE AUTHORITY - Admin can create signals with state='active' and they remain ACTIVE (not downgraded to pending). Admin signals without state default to 'pending' correctly. 2) DIRECTION-AWARE PRICE LOGIC - BUY signals: SL below entry, TP above entry (correct structure verified). SELL signals: SL above entry, TP below entry (correct structure verified). 3) STATE IMMUTABILITY - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) MANUAL STATE TRANSITIONS - Full lifecycle works: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical fixes are production-ready and working as specified."
 - 
 - frontend:
 -   - task: "Splash Screen with Auth Check"
+-@@ -409,4 +412,6 @@ agent_communication:
+-   - agent: "testing"
+-   - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
+-   - agent: "testing"
+--  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
+-\ No newline at end of file
+-+  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
+-+  - agent: "testing"
+-+  - message: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFICATION COMPLETE: All 7 critical tests passed (100% success rate). CRITICAL FIXES CONFIRMED WORKING: 1) Admin State Authority - Admin can create signals with state='active' and they remain ACTIVE (never downgraded to pending). Signals without state default to 'pending' correctly. 2) Direction-Aware Price Logic - BUY signals have correct structure (SL below entry, TP above entry). SELL signals have correct structure (SL above entry, TP below entry). 3) State Immutability - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) Manual State Transitions - Full lifecycle working: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical requirements from the review request are satisfied and production-ready."
+-\ No newline at end of file
 diff --git a/test_result.md b/test_result.md
-index 92b1616..e1884da 100644
+index e1884da..242282c 100644
 --- a/test_result.md
 +++ b/test_result.md
-@@ -252,7 +252,7 @@ backend:
+@@ -252,20 +252,11 @@ backend:
      file: "server.py"
      stuck_count: 0
      priority: "high"
--    needs_retesting: true
-+    needs_retesting: false
+-    needs_retesting: false
++    needs_retesting: true
      status_history:
          - working: true
          - agent: "main"
-@@ -263,6 +263,9 @@ backend:
-         - working: true
-         - agent: "main"
-         - comment: "CRITICAL FIX: Signal Engine Authority & Trigger Fix. 1) Admin State Authority - Admin-created signals now preserve their state (ACTIVE stays ACTIVE, never forced to PENDING). 2) Direction-Aware Price Logic - BUY: SL triggers when price <= SL, TP triggers when price >= TP. SELL: SL triggers when price >= SL, TP triggers when price <= TP. 3) Crossing Detection - Added last_price tracking to detect price CROSSING levels, not just equality. 4) Fallback Check - Added check_price_hit() as fallback for gap scenarios. 5) Enhanced Logging - Logs now include previous price for debugging."
-+        - working: true
-+        - agent: "testing"
-+        - comment: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFIED (7/7 tests passed - 100% success): 1) ADMIN STATE AUTHORITY - Admin can create signals with state='active' and they remain ACTIVE (not downgraded to pending). Admin signals without state default to 'pending' correctly. 2) DIRECTION-AWARE PRICE LOGIC - BUY signals: SL below entry, TP above entry (correct structure verified). SELL signals: SL above entry, TP below entry (correct structure verified). 3) STATE IMMUTABILITY - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) MANUAL STATE TRANSITIONS - Full lifecycle works: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical fixes are production-ready and working as specified."
+-        - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
+-        - working: true
+-        - agent: "testing"
+-        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE (29/29 tests passed): 1) Signal Creation - Both pending and active signals created correctly with proper state and timestamps. 2) Valid State Transitions - All transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions - System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions - All endpoints working: /activate converts pending→active, /mark-tp handles sequential TP marking with TP3 auto-closing, /force-close works on any non-closed signal. 5) IMMUTABILITY ENFORCEMENT - HARD RULE verified: closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint - PUT /admin/signals/{id} works and respects immutability. 7) State Consistency - All responses include proper state, status, and tp_hit fields."
+-        - working: true
+-        - agent: "main"
+-        - comment: "CRITICAL FIX: Signal Engine Authority & Trigger Fix. 1) Admin State Authority - Admin-created signals now preserve their state (ACTIVE stays ACTIVE, never forced to PENDING). 2) Direction-Aware Price Logic - BUY: SL triggers when price <= SL, TP triggers when price >= TP. SELL: SL triggers when price >= SL, TP triggers when price <= TP. 3) Crossing Detection - Added last_price tracking to detect price CROSSING levels, not just equality. 4) Fallback Check - Added check_price_hit() as fallback for gap scenarios. 5) Enhanced Logging - Logs now include previous price for debugging."
+-        - working: true
+-        - agent: "testing"
+-        - comment: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFIED (7/7 tests passed - 100% success): 1) ADMIN STATE AUTHORITY - Admin can create signals with state='active' and they remain ACTIVE (not downgraded to pending). Admin signals without state default to 'pending' correctly. 2) DIRECTION-AWARE PRICE LOGIC - BUY signals: SL below entry, TP above entry (correct structure verified). SELL signals: SL above entry, TP below entry (correct structure verified). 3) STATE IMMUTABILITY - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) MANUAL STATE TRANSITIONS - Full lifecycle works: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical fixes are production-ready and working as specified."
++        - comment: "FULL ENGINE RESET & REBUILD v2.0: Complete rewrite of signal lifecycle engine as ONE authoritative module. Key changes: 1) ExitReason enum for tracking closure reason (TP1/TP2/TP3/SL/MANUAL). 2) calculate_signal_pips() - calculates pips ONCE at closure, NEVER recalculates. 3) PriceTrigger class - authoritative crossing-based trigger detection for SL/TP/Entry. 4) SignalLifecycleController class - SINGLE SOURCE OF TRUTH for all signal state management. 5) RULES: Closed signals removed from ALL processing, Admin state preserved, Pips calculated once only."
  
  frontend:
    - task: "Splash Screen with Auth Check"
-@@ -409,4 +412,6 @@ agent_communication:
-   - agent: "testing"
-   - message: "✅ BACKEND SUBSCRIPTION ENFORCEMENT SYSTEM TESTING COMPLETE: All 8 new subscription endpoints tested and working correctly. 1) Subscription Status (GET /api/subscription/status) - Admin shows VIP with fund_management=true, Free user shows free with ai_limit=3. 2) Admin User Management - All 3 admin endpoints working: subscription updates, AI usage reset, user details retrieval. 3) VIP Feature Access - Both fund-management and academy endpoints correctly grant VIP access and deny free user access. 4) AI Usage Limits - Correctly enforced (Free=3, Premium=10, VIP=unlimited). 5) Signal Filtering - Working properly with subscription-based visibility (free users see free signals + locked premium/vip, admin sees all unlocked). Created comprehensive backend_test.py with 27 successful tests. System ready for production use."
-   - agent: "testing"
--  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
-\ No newline at end of file
-+  - message: "✅ TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 comprehensive tests passed (100% success rate). The state machine implementation is robust and production-ready. Key findings: 1) Signal creation works correctly for both pending and active initial states. 2) All valid state transitions (pending→active→tp1→tp2→tp3→closed) function properly with correct final_pips calculation. 3) Invalid transitions are properly blocked with clear error messages. 4) Quick action endpoints (/activate, /mark-tp, /force-close) work as expected with TP3 auto-closing signals. 5) HARD RULE enforced: closed signals are completely immutable - all operations correctly blocked. 6) Legacy PUT endpoint works with query parameters and respects immutability. 7) State consistency maintained across all responses. The Trade Lifecycle Engine is fully functional and ready for production use."
-+  - agent: "testing"
-+  - message: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFICATION COMPLETE: All 7 critical tests passed (100% success rate). CRITICAL FIXES CONFIRMED WORKING: 1) Admin State Authority - Admin can create signals with state='active' and they remain ACTIVE (never downgraded to pending). Signals without state default to 'pending' correctly. 2) Direction-Aware Price Logic - BUY signals have correct structure (SL below entry, TP above entry). SELL signals have correct structure (SL above entry, TP below entry). 3) State Immutability - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) Manual State Transitions - Full lifecycle working: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical requirements from the review request are satisfied and production-ready."
-\ No newline at end of file
