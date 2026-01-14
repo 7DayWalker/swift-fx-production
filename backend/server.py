@@ -2702,11 +2702,23 @@ def check_price_condition(price: float, target: float, signal_type: str, conditi
 
 
 async def process_pending_signal(signal: dict, current_price: float) -> bool:
-    """Process a pending signal - activate if entry price is reached"""
+    """
+    Process a pending signal - activate if entry price is reached.
+    State transition: pending → active
+    """
     signal_id = signal["signal_id"]
+    current_state = signal.get("state", signal.get("status", "pending"))
     entry = signal.get("entry", 0)
     signal_type = signal.get("signal_type", "buy")
     pair = signal.get("pair", "")
+    
+    # HARD LOCK: Skip if already closed
+    if is_signal_closed(current_state):
+        return False
+    
+    # Only process pending signals
+    if current_state != "pending":
+        return False
     
     if not entry or not current_price:
         return False
@@ -2715,29 +2727,44 @@ async def process_pending_signal(signal: dict, current_price: float) -> bool:
     if check_price_condition(current_price, entry, signal_type, "entry"):
         logger.info(f"[AutoExec] Signal {signal_id} ({pair}): Entry hit at {current_price} (entry: {entry})")
         
-        # Activate the signal
-        await db.signals.update_one(
-            {"signal_id": signal_id, "status": "pending"},
+        # Atomic state transition with condition check
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": "pending"},
             {"$set": {
+                "state": SignalState.ACTIVE.value,
                 "status": "active",
-                "activated_at": datetime.now(timezone.utc)
+                "tp_hit": 0,
+                "activated_at": datetime.now(timezone.utc),
+                "entry_price_actual": current_price
             }}
         )
         
-        # Send push notification
-        visibility = SignalVisibility(signal.get("visibility", "free"))
-        asyncio.create_task(send_signal_notification(
-            signal_id, pair, SignalType(signal_type), visibility
-        ))
-        
-        return True
+        if result.modified_count > 0:
+            # Send push notification
+            visibility = SignalVisibility(signal.get("visibility", "free"))
+            asyncio.create_task(send_signal_notification(
+                signal_id, pair, SignalType(signal_type), visibility
+            ))
+            return True
     
     return False
 
 
 async def process_active_signal(signal: dict, current_price: float) -> bool:
-    """Process an active signal - check TP levels and SL"""
+    """
+    Process an active/tp1/tp2 signal - check TP levels and SL.
+    
+    State transitions:
+    - active → tp1 (TP1 hit)
+    - active → closed (SL hit)
+    - tp1 → tp2 (TP2 hit)
+    - tp1 → closed (SL hit)
+    - tp2 → tp3 (TP3 hit)
+    - tp2 → closed (SL hit)
+    - tp3 → closed (auto-close)
+    """
     signal_id = signal["signal_id"]
+    current_state = signal.get("state", signal.get("status", "active"))
     signal_type = signal.get("signal_type", "buy")
     pair = signal.get("pair", "")
     entry = signal.get("entry", 0)
@@ -2745,82 +2772,137 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
     tp1 = signal.get("tp1")
     tp2 = signal.get("tp2")
     tp3 = signal.get("tp3")
-    current_tp_hit = signal.get("tp_hit", 0)
+    
+    # HARD LOCK: Skip if already closed
+    if is_signal_closed(current_state):
+        return False
+    
+    # Only process active states (active, tp1, tp2, tp3)
+    if current_state not in ["active", "tp1", "tp2", "tp3"]:
+        return False
     
     if not current_price:
         return False
     
-    # Check Stop Loss first (highest priority)
-    if stop_loss and check_price_condition(current_price, stop_loss, signal_type, "sl"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price}")
+    # Auto-close tp3 state immediately
+    if current_state == "tp3":
+        tp3_price = tp3 or tp2 or tp1
+        final_pips = calculate_pips(entry, tp3_price, signal_type, pair)
         
-        final_pips = calculate_pips(entry, current_price, signal_type, pair)
-        
-        await db.signals.update_one(
-            {"signal_id": signal_id, "status": "active"},
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": "tp3"},
             {"$set": {
+                "state": SignalState.CLOSED.value,
                 "status": "closed",
+                "tp_hit": 3,
                 "closed_at": datetime.now(timezone.utc),
-                "final_pips": final_pips,
-                "tp_hit": current_tp_hit
+                "exit_price": tp3_price,
+                "final_pips": final_pips
             }}
         )
         
-        # Send close notification
-        visibility = SignalVisibility(signal.get("visibility", "free"))
-        asyncio.create_task(send_signal_close_notification(
-            signal_id, pair, signal_type, final_pips, visibility
-        ))
-        
-        return True
+        if result.modified_count > 0:
+            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 auto-closed with {final_pips} pips")
+            visibility = SignalVisibility(signal.get("visibility", "free"))
+            asyncio.create_task(send_signal_close_notification(
+                signal_id, pair, signal_type, final_pips, visibility
+            ))
+            return True
+        return False
     
-    # Check TP levels in order (TP1 → TP2 → TP3)
-    # TP1
-    if current_tp_hit < 1 and tp1 and check_price_condition(current_price, tp1, signal_type, "tp"):
+    # Check Stop Loss (applies to active, tp1, tp2 states)
+    if stop_loss and check_price_condition(current_price, stop_loss, signal_type, "sl"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price} (state: {current_state})")
+        
+        final_pips = calculate_pips(entry, current_price, signal_type, pair)
+        current_tp_hit = get_tp_hit_from_state(current_state)
+        
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": current_state},
+            {"$set": {
+                "state": SignalState.CLOSED.value,
+                "status": "closed",
+                "tp_hit": current_tp_hit,  # Preserve TP hit level
+                "closed_at": datetime.now(timezone.utc),
+                "exit_price": current_price,
+                "final_pips": final_pips
+            }}
+        )
+        
+        if result.modified_count > 0:
+            visibility = SignalVisibility(signal.get("visibility", "free"))
+            asyncio.create_task(send_signal_close_notification(
+                signal_id, pair, signal_type, final_pips, visibility
+            ))
+            return True
+        return False
+    
+    # Check TP levels based on current state
+    
+    # From ACTIVE: Check TP1
+    if current_state == "active" and tp1 and check_price_condition(current_price, tp1, signal_type, "tp"):
         logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP1 hit at {current_price}")
         
-        await db.signals.update_one(
-            {"signal_id": signal_id},
-            {"$set": {"tp_hit": 1}}
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": "active"},
+            {"$set": {
+                "state": SignalState.TP1.value,
+                "status": "active",
+                "tp_hit": 1
+            }}
         )
-        
-        # Notification for TP1 hit (not close yet)
-        # Could add a specific notification here if needed
-        return True
+        return result.modified_count > 0
     
-    # TP2
-    if current_tp_hit < 2 and tp2 and check_price_condition(current_price, tp2, signal_type, "tp"):
+    # From TP1: Check TP2
+    if current_state == "tp1" and tp2 and check_price_condition(current_price, tp2, signal_type, "tp"):
         logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP2 hit at {current_price}")
         
-        await db.signals.update_one(
-            {"signal_id": signal_id},
-            {"$set": {"tp_hit": 2}}
-        )
-        return True
-    
-    # TP3 - This closes the signal as a WIN
-    if current_tp_hit < 3 and tp3 and check_price_condition(current_price, tp3, signal_type, "tp"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit - CLOSING as WIN at {current_price}")
-        
-        final_pips = calculate_pips(entry, tp3, signal_type, pair)
-        
-        await db.signals.update_one(
-            {"signal_id": signal_id, "status": "active"},
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": "tp1"},
             {"$set": {
-                "status": "closed",
-                "closed_at": datetime.now(timezone.utc),
-                "final_pips": final_pips,
+                "state": SignalState.TP2.value,
+                "status": "active",
+                "tp_hit": 2
+            }}
+        )
+        return result.modified_count > 0
+    
+    # From TP2: Check TP3
+    if current_state == "tp2" and tp3 and check_price_condition(current_price, tp3, signal_type, "tp"):
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit at {current_price}")
+        
+        # Transition to tp3 first (will auto-close on next cycle or immediately)
+        result = await db.signals.update_one(
+            {"signal_id": signal_id, "state": "tp2"},
+            {"$set": {
+                "state": SignalState.TP3.value,
+                "status": "active",
                 "tp_hit": 3
             }}
         )
         
-        # Send close notification
-        visibility = SignalVisibility(signal.get("visibility", "free"))
-        asyncio.create_task(send_signal_close_notification(
-            signal_id, pair, signal_type, final_pips, visibility
-        ))
-        
-        return True
+        if result.modified_count > 0:
+            # Immediately close the signal
+            final_pips = calculate_pips(entry, tp3, signal_type, pair)
+            
+            await db.signals.update_one(
+                {"signal_id": signal_id, "state": "tp3"},
+                {"$set": {
+                    "state": SignalState.CLOSED.value,
+                    "status": "closed",
+                    "closed_at": datetime.now(timezone.utc),
+                    "exit_price": tp3,
+                    "final_pips": final_pips
+                }}
+            )
+            
+            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit - CLOSED with {final_pips} pips")
+            
+            visibility = SignalVisibility(signal.get("visibility", "free"))
+            asyncio.create_task(send_signal_close_notification(
+                signal_id, pair, signal_type, final_pips, visibility
+            ))
+            return True
     
     return False
 
