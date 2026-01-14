@@ -620,12 +620,12 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
         signal_data.signal_type
     )
     
-    # Determine status from request (default: pending)
-    initial_status = signal_data.status if signal_data.status else SignalStatus.PENDING
+    # Determine initial state from request (default: pending)
+    initial_state = signal_data.state if signal_data.state else SignalState.PENDING
     activated_at = None
     
-    # If created as active, set activated_at
-    if initial_status == SignalStatus.ACTIVE:
+    # If created as active, set activated_at and entry_price_actual
+    if initial_state == SignalState.ACTIVE:
         activated_at = datetime.now(timezone.utc)
     
     signal_doc = {
@@ -637,12 +637,19 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
         "tp1": signal_data.tp1,
         "tp2": signal_data.tp2,
         "tp3": signal_data.tp3,
-        "tp_hit": 0,
+        # NEW: Single authoritative state field
+        "state": initial_state.value,
+        # Legacy fields for backward compatibility
+        "status": get_status_from_state(initial_state.value),
+        "tp_hit": get_tp_hit_from_state(initial_state.value),
         "risk_reward": risk_reward,
-        "status": initial_status,
         "visibility": signal_data.visibility,
         "analysis": signal_data.analysis,
+        # Price tracking
+        "entry_price_actual": signal_data.entry if initial_state == SignalState.ACTIVE else None,
+        "exit_price": None,
         "final_pips": None,
+        # Timestamps
         "created_at": datetime.now(timezone.utc),
         "activated_at": activated_at,
         "closed_at": None
@@ -653,7 +660,7 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     # Queue push notification with visibility for role-based filtering
     background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
     
-    return {"signal_id": signal_id, "message": f"Signal created as {initial_status.value}"}
+    return {"signal_id": signal_id, "message": f"Signal created with state: {initial_state.value}"}
 
 def calculate_pips(entry: float, close: float, signal_type: str, pair: str) -> float:
     """Calculate pips based on price movement and pair type"""
