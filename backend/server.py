@@ -2916,11 +2916,21 @@ async def run_price_automation():
     
     while price_automation_running:
         try:
-            # Get all pending and active signals
-            pending_signals = await db.signals.find({"status": "pending"}).to_list(100)
-            active_signals = await db.signals.find({"status": "active"}).to_list(100)
+            # Get all non-closed signals using the new state field
+            # Query for: pending, active, tp1, tp2, tp3 (not closed)
+            non_closed_query = {
+                "$or": [
+                    {"state": {"$in": ["pending", "active", "tp1", "tp2", "tp3"]}},
+                    # Fallback for signals without state field (legacy)
+                    {"state": {"$exists": False}, "status": {"$in": ["pending", "active"]}}
+                ]
+            }
             
-            all_signals = pending_signals + active_signals
+            all_signals = await db.signals.find(non_closed_query).to_list(200)
+            
+            # Separate by state
+            pending_signals = [s for s in all_signals if s.get("state", s.get("status")) == "pending"]
+            active_signals = [s for s in all_signals if s.get("state", s.get("status")) in ["active", "tp1", "tp2", "tp3"]]
             
             if not all_signals:
                 logger.debug("[AutoExec] No pending/active signals to process")
@@ -2944,7 +2954,7 @@ async def run_price_automation():
                 if pair in prices:
                     await process_pending_signal(signal, prices[pair])
             
-            # Process active signals
+            # Process active signals (including tp1, tp2, tp3 states)
             for signal in active_signals:
                 pair = signal.get("pair", "")
                 if pair in prices:
