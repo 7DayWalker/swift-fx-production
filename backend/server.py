@@ -2562,423 +2562,494 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
     return prices
 
 
-def check_price_condition(
-    current_price: float, 
-    target: float, 
-    signal_type: str, 
-    condition: str,
-    previous_price: Optional[float] = None
-) -> bool:
+# ==============================================================================
+# SIGNAL LIFECYCLE ENGINE v2.0 - COMPLETE REBUILD
+# ==============================================================================
+# SINGLE SOURCE OF TRUTH for all signal state management
+# 
+# AUTHORITATIVE RULES:
+# 1. Admin-defined state on creation is PRESERVED
+# 2. Closed signals are IMMUTABLE - removed from all processing
+# 3. Pips calculated ONCE at closure - NEVER recalculated
+# 4. Exit handled ONCE - no further processing after closure
+# ==============================================================================
+
+
+class ExitReason(str, Enum):
+    """Exit reason for closed signals"""
+    TP1 = "tp1"
+    TP2 = "tp2"
+    TP3 = "tp3"
+    SL = "sl"
+    MANUAL = "manual"
+
+
+# ==============================================================================
+# CORE CALCULATION: PIP CALCULATOR (CALCULATE ONCE ONLY)
+# ==============================================================================
+
+def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: str, pair: str) -> float:
     """
-    Check if price CROSSES target level based on signal type and condition.
+    Calculate pips EXACTLY ONCE at closure.
     
-    CROSSING LOGIC (when previous_price is provided):
-    - Detects when price moves FROM one side of target TO the other
-    - More reliable than simple >= or <= which can miss quick moves
+    FORMULA:
+    - SELL: pips = entry_price - exit_price (profit when price goes DOWN)
+    - BUY: pips = exit_price - entry_price (profit when price goes UP)
     
-    DIRECTION-AWARE RULES:
-    
-    For BUY signals:
-        - Entry hit: price rises TO or THROUGH entry (price >= entry)
-        - TP hit: price rises TO or THROUGH TP (price >= TP)
-        - SL hit: price falls TO or THROUGH SL (price <= SL)
-    
-    For SELL signals:
-        - Entry hit: price falls TO or THROUGH entry (price <= entry)
-        - TP hit: price falls TO or THROUGH TP (price <= TP)
-        - SL hit: price rises TO or THROUGH SL (price >= SL)
-    
-    When previous_price is provided, we check for CROSSING:
-    - BUY SL: was above SL, now at or below SL
-    - SELL SL: was below SL, now at or above SL
-    - BUY TP: was below TP, now at or above TP
-    - SELL TP: was above TP, now at or below TP
+    This result is stored and NEVER recalculated.
     """
-    if not target or not current_price:
-        return False
+    if not entry_price or not exit_price:
+        return 0.0
     
-    # Add small tolerance for floating point comparison (0.00001 = 0.1 pip for forex)
-    tolerance = target * 0.00001
+    # Determine pip multiplier based on pair
+    pair_upper = pair.upper().replace("/", "")
     
-    if condition == "entry":
-        if signal_type == "buy":
-            # BUY entry: price rises to entry level
-            if previous_price is not None:
-                # Crossing: was below, now at or above
-                return previous_price < target and current_price >= target - tolerance
-            return current_price >= target - tolerance
-        else:  # sell
-            # SELL entry: price falls to entry level
-            if previous_price is not None:
-                # Crossing: was above, now at or below
-                return previous_price > target and current_price <= target + tolerance
-            return current_price <= target + tolerance
+    if "JPY" in pair_upper:
+        pip_multiplier = 100  # JPY pairs: 2 decimal places
+    elif "XAU" in pair_upper or "GOLD" in pair_upper:
+        pip_multiplier = 10  # Gold: measured in $0.10
+    elif "BTC" in pair_upper or "ETH" in pair_upper:
+        pip_multiplier = 1  # Crypto: whole units
+    else:
+        pip_multiplier = 10000  # Standard forex: 4 decimal places
     
-    elif condition == "tp":
-        if signal_type == "buy":
-            # BUY TP: price rises to/through TP
-            if previous_price is not None:
-                # Crossing: was below TP, now at or above
-                return previous_price < target and current_price >= target - tolerance
-            return current_price >= target - tolerance
-        else:  # sell
-            # SELL TP: price falls to/through TP
-            if previous_price is not None:
-                # Crossing: was above TP, now at or below
-                return previous_price > target and current_price <= target + tolerance
-            return current_price <= target + tolerance
+    # Calculate based on signal type
+    if signal_type.lower() == "sell":
+        # SELL profits when price goes DOWN
+        pips = (entry_price - exit_price) * pip_multiplier
+    else:
+        # BUY profits when price goes UP
+        pips = (exit_price - entry_price) * pip_multiplier
     
-    elif condition == "sl":
-        if signal_type == "buy":
-            # BUY SL: price falls to/through SL (loss for buyer)
-            if previous_price is not None:
-                # Crossing: was above SL, now at or below
-                return previous_price > target and current_price <= target + tolerance
-            return current_price <= target + tolerance
-        else:  # sell
-            # SELL SL: price rises to/through SL (loss for seller)
-            if previous_price is not None:
+    return round(pips, 1)
+
+
+# ==============================================================================
+# PRICE TRIGGER ENGINE (AUTHORITATIVE)
+# ==============================================================================
+
+class PriceTrigger:
+    """
+    Authoritative price trigger checker.
+    Uses tick-level price with crossing detection.
+    """
+    
+    @staticmethod
+    def check_sl_triggered(
+        current_price: float,
+        stop_loss: float,
+        signal_type: str,
+        last_price: Optional[float] = None
+    ) -> bool:
+        """
+        Check if Stop Loss is triggered.
+        
+        RULES:
+        - SELL: SL triggers when price >= SL (price rises against us)
+        - BUY: SL triggers when price <= SL (price falls against us)
+        
+        Uses crossing detection when last_price available.
+        """
+        if not stop_loss or not current_price:
+            return False
+        
+        sig_type = signal_type.lower()
+        
+        if sig_type == "sell":
+            # SELL SL: triggered when price RISES to or above SL
+            if last_price is not None:
                 # Crossing: was below SL, now at or above
-                return previous_price < target and current_price >= target - tolerance
-            return current_price >= target - tolerance
-    
-    return False
-
-
-def check_price_hit(
-    current_price: float,
-    target: float,
-    signal_type: str,
-    condition: str
-) -> bool:
-    """
-    Simple price hit check - does current price satisfy the condition?
-    Used when we don't have previous price but need to check if currently at/past target.
-    
-    This is a fallback that checks if price is CURRENTLY at or past the target,
-    regardless of crossing. Useful for:
-    - Initial state on newly activated signals
-    - Recovery after system restart
-    """
-    if not target or not current_price:
-        return False
-    
-    tolerance = target * 0.00001
-    
-    if condition == "entry":
-        if signal_type == "buy":
-            return current_price >= target - tolerance
+                return last_price < stop_loss and current_price >= stop_loss
+            return current_price >= stop_loss
         else:
-            return current_price <= target + tolerance
+            # BUY SL: triggered when price FALLS to or below SL
+            if last_price is not None:
+                # Crossing: was above SL, now at or below
+                return last_price > stop_loss and current_price <= stop_loss
+            return current_price <= stop_loss
     
-    elif condition == "tp":
-        if signal_type == "buy":
-            return current_price >= target - tolerance
+    @staticmethod
+    def check_tp_triggered(
+        current_price: float,
+        take_profit: float,
+        signal_type: str,
+        last_price: Optional[float] = None
+    ) -> bool:
+        """
+        Check if Take Profit is triggered.
+        
+        RULES:
+        - SELL: TP triggers when price <= TP (price falls in our favor)
+        - BUY: TP triggers when price >= TP (price rises in our favor)
+        
+        Uses crossing detection when last_price available.
+        """
+        if not take_profit or not current_price:
+            return False
+        
+        sig_type = signal_type.lower()
+        
+        if sig_type == "sell":
+            # SELL TP: triggered when price FALLS to or below TP
+            if last_price is not None:
+                # Crossing: was above TP, now at or below
+                return last_price > take_profit and current_price <= take_profit
+            return current_price <= take_profit
         else:
-            return current_price <= target + tolerance
+            # BUY TP: triggered when price RISES to or above TP
+            if last_price is not None:
+                # Crossing: was below TP, now at or above
+                return last_price < take_profit and current_price >= take_profit
+            return current_price >= take_profit
     
-    elif condition == "sl":
-        if signal_type == "buy":
-            return current_price <= target + tolerance
+    @staticmethod
+    def check_entry_triggered(
+        current_price: float,
+        entry_price: float,
+        signal_type: str,
+        last_price: Optional[float] = None
+    ) -> bool:
+        """
+        Check if Entry price is reached for pending signals.
+        
+        RULES:
+        - SELL: Entry triggers when price rises TO entry (we sell at high)
+        - BUY: Entry triggers when price falls TO entry (we buy at low)
+        
+        Note: In reality, limit orders fill when price reaches entry.
+        """
+        if not entry_price or not current_price:
+            return False
+        
+        sig_type = signal_type.lower()
+        
+        if sig_type == "sell":
+            # SELL entry: we want to sell high
+            if last_price is not None:
+                return last_price < entry_price and current_price >= entry_price
+            return current_price >= entry_price
         else:
-            return current_price >= target - tolerance
-    
-    return False
+            # BUY entry: we want to buy low
+            if last_price is not None:
+                return last_price > entry_price and current_price <= entry_price
+            return current_price <= entry_price
 
 
-async def process_pending_signal(signal: dict, current_price: float) -> bool:
-    """
-    Process a pending signal - activate if entry price is reached.
-    State transition: pending → active
-    
-    RESPECTS ADMIN AUTHORITY: This function only processes signals in 'pending' state.
-    If admin created signal as 'active', this function will skip it (not downgrade).
-    """
-    signal_id = signal["signal_id"]
-    current_state = signal.get("state", signal.get("status", "pending"))
-    entry = signal.get("entry", 0)
-    signal_type = signal.get("signal_type", "buy")
-    pair = signal.get("pair", "")
-    last_price = signal.get("last_price")  # Previous price for crossing detection
-    
-    # HARD LOCK: Skip if already closed
-    if is_signal_closed(current_state):
-        return False
-    
-    # Only process pending signals - NEVER touch active/tp1/tp2/tp3 signals
-    # This ensures admin-created ACTIVE signals stay ACTIVE
-    if current_state != "pending":
-        return False
-    
-    if not entry or not current_price:
-        return False
-    
-    # Update last_price tracking for next iteration
-    await db.signals.update_one(
-        {"signal_id": signal_id},
-        {"$set": {"last_price": current_price}}
-    )
-    
-    # Check if entry price is hit (using crossing logic when we have previous price)
-    entry_hit = check_price_condition(current_price, entry, signal_type, "entry", last_price)
-    
-    # Also use simple hit check as fallback (in case we're already past entry)
-    if not entry_hit:
-        entry_hit = check_price_hit(current_price, entry, signal_type, "entry")
-    
-    if entry_hit:
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): Entry hit at {current_price} (entry: {entry}, prev: {last_price})")
-        
-        # Atomic state transition with condition check
-        result = await db.signals.update_one(
-            {"signal_id": signal_id, "state": "pending"},
-            {"$set": {
-                "state": SignalState.ACTIVE.value,
-                "status": "active",
-                "tp_hit": 0,
-                "activated_at": datetime.now(timezone.utc),
-                "entry_price_actual": current_price,
-                "last_price": current_price
-            }}
-        )
-        
-        if result.modified_count > 0:
-            # Send push notification
-            visibility = SignalVisibility(signal.get("visibility", "free"))
-            asyncio.create_task(send_signal_notification(
-                signal_id, pair, SignalType(signal_type), visibility
-            ))
-            return True
-    
-    return False
+# ==============================================================================
+# SIGNAL LIFECYCLE CONTROLLER (SINGLE SOURCE OF TRUTH)
+# ==============================================================================
 
-
-async def process_active_signal(signal: dict, current_price: float) -> bool:
+class SignalLifecycleController:
     """
-    Process an active/tp1/tp2 signal - check TP levels and SL.
+    THE authoritative controller for signal state management.
     
-    DIRECTION-AWARE CROSSING LOGIC:
-    - Uses previous price (last_price) to detect when price CROSSES levels
-    - BUY signals: SL when price falls through SL, TP when price rises through TP
-    - SELL signals: SL when price rises through SL, TP when price falls through TP
-    
-    State transitions:
-    - active → tp1 (TP1 hit)
-    - active → closed (SL hit)
-    - tp1 → tp2 (TP2 hit)
-    - tp1 → closed (SL hit)
-    - tp2 → tp3 (TP3 hit)
-    - tp2 → closed (SL hit)
-    - tp3 → closed (auto-close)
-    
-    NEVER modifies admin-set states except through valid transitions.
+    RULES:
+    1. Closed signals are NEVER processed
+    2. Admin state is NEVER overridden
+    3. State transitions follow strict rules
+    4. Pips calculated ONCE at closure
     """
-    signal_id = signal["signal_id"]
-    current_state = signal.get("state", signal.get("status", "active"))
-    signal_type = signal.get("signal_type", "buy")
-    pair = signal.get("pair", "")
-    entry = signal.get("entry", 0)
-    stop_loss = signal.get("stop_loss")
-    tp1 = signal.get("tp1")
-    tp2 = signal.get("tp2")
-    tp3 = signal.get("tp3")
-    last_price = signal.get("last_price")  # Previous price for crossing detection
     
-    # HARD LOCK: Skip if already closed - NEVER reopen or modify closed signals
-    if is_signal_closed(current_state):
-        return False
+    def __init__(self, db_instance):
+        self.db = db_instance
+        self.trigger = PriceTrigger()
     
-    # Only process active states (active, tp1, tp2, tp3)
-    if current_state not in ["active", "tp1", "tp2", "tp3"]:
-        return False
+    def is_closed(self, signal: dict) -> bool:
+        """Check if signal is closed (IMMUTABLE)"""
+        state = signal.get("state", signal.get("status", "pending"))
+        return state == "closed"
     
-    if not current_price:
-        return False
+    def get_current_state(self, signal: dict) -> str:
+        """Get the authoritative state of a signal"""
+        return signal.get("state", signal.get("status", "pending"))
     
-    # Update last_price tracking for next iteration (atomic update)
-    await db.signals.update_one(
-        {"signal_id": signal_id},
-        {"$set": {"last_price": current_price}}
-    )
-    
-    # Auto-close tp3 state immediately
-    if current_state == "tp3":
-        tp3_price = tp3 or tp2 or tp1
-        final_pips = calculate_pips(entry, tp3_price, signal_type, pair)
+    def get_next_tp_target(self, signal: dict) -> tuple:
+        """
+        Get the next TP target based on current state.
+        Returns (tp_price, exit_reason, new_state)
+        """
+        state = self.get_current_state(signal)
         
-        result = await db.signals.update_one(
-            {"signal_id": signal_id, "state": "tp3"},
-            {"$set": {
-                "state": SignalState.CLOSED.value,
-                "status": "closed",
-                "tp_hit": 3,
-                "closed_at": datetime.now(timezone.utc),
-                "exit_price": tp3_price,
-                "final_pips": final_pips
-            }}
-        )
+        if state == "active":
+            return (signal.get("tp1"), ExitReason.TP1, "tp1")
+        elif state == "tp1":
+            tp2 = signal.get("tp2")
+            if tp2:
+                return (tp2, ExitReason.TP2, "tp2")
+            return (None, None, None)  # No TP2, stay in tp1
+        elif state == "tp2":
+            tp3 = signal.get("tp3")
+            if tp3:
+                return (tp3, ExitReason.TP3, "tp3")
+            return (None, None, None)  # No TP3, stay in tp2
+        elif state == "tp3":
+            # TP3 hit means we should close
+            return (signal.get("tp3"), ExitReason.TP3, "closed")
         
-        if result.modified_count > 0:
-            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 auto-closed with {final_pips} pips")
-            visibility = SignalVisibility(signal.get("visibility", "free"))
-            asyncio.create_task(send_signal_close_notification(
-                signal_id, pair, signal_type, final_pips, visibility
-            ))
-            return True
-        return False
+        return (None, None, None)
     
-    # Check Stop Loss first (applies to active, tp1, tp2 states)
-    # Uses crossing logic: price must cross FROM safe side TO stop loss side
-    sl_hit = check_price_condition(current_price, stop_loss, signal_type, "sl", last_price)
-    
-    # Also check simple hit as fallback (e.g., if price gaps through SL)
-    if not sl_hit and stop_loss:
-        sl_hit = check_price_hit(current_price, stop_loss, signal_type, "sl")
-    
-    if sl_hit:
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price} (SL: {stop_loss}, prev: {last_price}, type: {signal_type})")
+    async def close_signal(
+        self,
+        signal_id: str,
+        current_state: str,
+        exit_price: float,
+        exit_reason: str,
+        signal: dict
+    ) -> bool:
+        """
+        CLOSE a signal. This is FINAL - no further processing.
         
-        final_pips = calculate_pips(entry, current_price, signal_type, pair)
-        current_tp_hit = get_tp_hit_from_state(current_state)
+        Actions:
+        1. Set state = closed
+        2. Set exit_price
+        3. Set exit_reason
+        4. Calculate pips ONCE
+        5. Set closed_at timestamp
+        """
+        entry_price = signal.get("entry_price_actual") or signal.get("entry")
+        signal_type = signal.get("signal_type", "buy")
+        pair = signal.get("pair", "")
         
-        result = await db.signals.update_one(
+        # Calculate pips EXACTLY ONCE
+        final_pips = calculate_signal_pips(entry_price, exit_price, signal_type, pair)
+        
+        # Determine tp_hit from exit_reason
+        tp_hit_map = {
+            "sl": 0,
+            "tp1": 1,
+            "tp2": 2,
+            "tp3": 3,
+            "manual": 0
+        }
+        tp_hit = tp_hit_map.get(exit_reason.lower() if isinstance(exit_reason, str) else exit_reason.value, 0)
+        
+        # Preserve existing tp_hit if closing from SL after hitting some TPs
+        if exit_reason in ["sl", ExitReason.SL, "manual", ExitReason.MANUAL]:
+            existing_tp = signal.get("tp_hit", 0)
+            if existing_tp > tp_hit:
+                tp_hit = existing_tp
+        
+        # Update signal - ATOMIC operation
+        result = await self.db.signals.update_one(
             {"signal_id": signal_id, "state": current_state},
             {"$set": {
-                "state": SignalState.CLOSED.value,
+                "state": "closed",
                 "status": "closed",
-                "tp_hit": current_tp_hit,  # Preserve TP hit level
-                "closed_at": datetime.now(timezone.utc),
-                "exit_price": current_price,
-                "final_pips": final_pips
+                "exit_price": exit_price,
+                "exit_reason": exit_reason if isinstance(exit_reason, str) else exit_reason.value,
+                "final_pips": final_pips,
+                "tp_hit": tp_hit,
+                "closed_at": datetime.now(timezone.utc)
             }}
         )
         
         if result.modified_count > 0:
-            visibility = SignalVisibility(signal.get("visibility", "free"))
-            asyncio.create_task(send_signal_close_notification(
-                signal_id, pair, signal_type, final_pips, visibility
-            ))
+            logger.info(
+                f"[Engine] CLOSED signal {signal_id}: "
+                f"exit_reason={exit_reason}, exit_price={exit_price}, pips={final_pips}"
+            )
             return True
+        
         return False
     
-    # Check TP levels based on current state (only if SL not hit)
-    # Uses crossing logic for reliable detection
-    
-    # From ACTIVE: Check TP1
-    if current_state == "active" and tp1:
-        tp1_hit = check_price_condition(current_price, tp1, signal_type, "tp", last_price)
-        if not tp1_hit:
-            tp1_hit = check_price_hit(current_price, tp1, signal_type, "tp")
+    async def advance_tp_state(
+        self,
+        signal_id: str,
+        current_state: str,
+        new_state: str,
+        tp_hit: int
+    ) -> bool:
+        """Advance signal to next TP state (e.g., active → tp1)"""
+        result = await self.db.signals.update_one(
+            {"signal_id": signal_id, "state": current_state},
+            {"$set": {
+                "state": new_state,
+                "status": "active",  # Still active until closed
+                "tp_hit": tp_hit
+            }}
+        )
         
-        if tp1_hit:
-            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP1 hit at {current_price} (TP1: {tp1}, prev: {last_price})")
-            
-            result = await db.signals.update_one(
-                {"signal_id": signal_id, "state": "active"},
-                {"$set": {
-                    "state": SignalState.TP1.value,
-                    "status": "active",
-                    "tp_hit": 1
-                }}
-            )
-            return result.modified_count > 0
-    
-    # From TP1: Check TP2
-    if current_state == "tp1" and tp2:
-        tp2_hit = check_price_condition(current_price, tp2, signal_type, "tp", last_price)
-        if not tp2_hit:
-            tp2_hit = check_price_hit(current_price, tp2, signal_type, "tp")
+        if result.modified_count > 0:
+            logger.info(f"[Engine] Signal {signal_id} advanced: {current_state} → {new_state}")
+            return True
         
-        if tp2_hit:
-            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP2 hit at {current_price} (TP2: {tp2}, prev: {last_price})")
-            
-            result = await db.signals.update_one(
-                {"signal_id": signal_id, "state": "tp1"},
-                {"$set": {
-                    "state": SignalState.TP2.value,
-                    "status": "active",
-                    "tp_hit": 2
-                }}
-            )
-            return result.modified_count > 0
+        return False
     
-    # From TP2: Check TP3
-    if current_state == "tp2" and tp3:
-        tp3_hit = check_price_condition(current_price, tp3, signal_type, "tp", last_price)
-        if not tp3_hit:
-            tp3_hit = check_price_hit(current_price, tp3, signal_type, "tp")
+    async def activate_signal(
+        self,
+        signal_id: str,
+        entry_price_actual: float
+    ) -> bool:
+        """Activate a pending signal"""
+        result = await self.db.signals.update_one(
+            {"signal_id": signal_id, "state": "pending"},
+            {"$set": {
+                "state": "active",
+                "status": "active",
+                "tp_hit": 0,
+                "entry_price_actual": entry_price_actual,
+                "activated_at": datetime.now(timezone.utc)
+            }}
+        )
         
-        if tp3_hit:
-            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit at {current_price} (TP3: {tp3}, prev: {last_price})")
+        if result.modified_count > 0:
+            logger.info(f"[Engine] Signal {signal_id} ACTIVATED at {entry_price_actual}")
+            return True
+        
+        return False
+    
+    async def process_signal(
+        self,
+        signal: dict,
+        current_price: float
+    ) -> Optional[dict]:
+        """
+        MAIN ENTRY POINT: Process a single signal with current price.
+        
+        Returns dict with action taken, or None if no action.
+        """
+        signal_id = signal["signal_id"]
+        current_state = self.get_current_state(signal)
+        signal_type = signal.get("signal_type", "buy")
+        pair = signal.get("pair", "")
+        last_price = signal.get("last_price")
+        
+        # RULE 1: NEVER process closed signals
+        if self.is_closed(signal):
+            return None
+        
+        # Update last_price for next iteration
+        await self.db.signals.update_one(
+            {"signal_id": signal_id},
+            {"$set": {"last_price": current_price}}
+        )
+        
+        # === PENDING SIGNALS ===
+        if current_state == "pending":
+            entry = signal.get("entry")
             
-            # Transition to tp3 first (will auto-close on next cycle or immediately)
-            result = await db.signals.update_one(
-                {"signal_id": signal_id, "state": "tp2"},
-                {"$set": {
-                    "state": SignalState.TP3.value,
-                    "status": "active",
-                    "tp_hit": 3
-                }}
-            )
+            # Check if entry price hit
+            if self.trigger.check_entry_triggered(current_price, entry, signal_type, last_price):
+                success = await self.activate_signal(signal_id, current_price)
+                if success:
+                    # Send notification
+                    visibility = SignalVisibility(signal.get("visibility", "free"))
+                    asyncio.create_task(send_signal_notification(
+                        signal_id, pair, SignalType(signal_type), visibility
+                    ))
+                    return {"action": "activated", "signal_id": signal_id}
+            return None
+        
+        # === ACTIVE/TP1/TP2/TP3 SIGNALS ===
+        if current_state in ["active", "tp1", "tp2", "tp3"]:
+            stop_loss = signal.get("stop_loss")
+            entry = signal.get("entry_price_actual") or signal.get("entry")
             
-            if result.modified_count > 0:
-                # Immediately close the signal
-                final_pips = calculate_pips(entry, tp3, signal_type, pair)
+            # Auto-close TP3 state immediately
+            if current_state == "tp3":
+                tp3_price = signal.get("tp3") or signal.get("tp2") or signal.get("tp1")
+                success = await self.close_signal(
+                    signal_id, current_state, tp3_price, ExitReason.TP3, signal
+                )
+                if success:
+                    pips = calculate_signal_pips(entry, tp3_price, signal_type, pair)
+                    visibility = SignalVisibility(signal.get("visibility", "free"))
+                    asyncio.create_task(send_signal_close_notification(
+                        signal_id, pair, signal_type, pips, visibility
+                    ))
+                    return {"action": "closed", "reason": "tp3", "signal_id": signal_id}
+                return None
+            
+            # CHECK STOP LOSS FIRST (priority over TP)
+            if stop_loss and self.trigger.check_sl_triggered(current_price, stop_loss, signal_type, last_price):
+                logger.info(f"[Engine] SL TRIGGERED for {signal_id} at {current_price} (SL={stop_loss})")
                 
-                await db.signals.update_one(
-                    {"signal_id": signal_id, "state": "tp3"},
-                    {"$set": {
-                        "state": SignalState.CLOSED.value,
-                        "status": "closed",
-                        "closed_at": datetime.now(timezone.utc),
-                        "exit_price": tp3,
-                        "final_pips": final_pips
-                    }}
+                success = await self.close_signal(
+                    signal_id, current_state, current_price, ExitReason.SL, signal
                 )
                 
-                logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit - CLOSED with {final_pips} pips")
+                if success:
+                    pips = calculate_signal_pips(entry, current_price, signal_type, pair)
+                    visibility = SignalVisibility(signal.get("visibility", "free"))
+                    asyncio.create_task(send_signal_close_notification(
+                        signal_id, pair, signal_type, pips, visibility
+                    ))
+                    return {"action": "closed", "reason": "sl", "pips": pips, "signal_id": signal_id}
+                return None
+            
+            # CHECK TP LEVELS
+            tp_target, exit_reason, new_state = self.get_next_tp_target(signal)
+            
+            if tp_target and self.trigger.check_tp_triggered(current_price, tp_target, signal_type, last_price):
+                logger.info(f"[Engine] TP TRIGGERED for {signal_id} at {current_price} (TP={tp_target})")
                 
-                visibility = SignalVisibility(signal.get("visibility", "free"))
-                asyncio.create_task(send_signal_close_notification(
-                    signal_id, pair, signal_type, final_pips, visibility
-                ))
-                return True
-    
-    return False
+                # Determine TP level
+                tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(new_state, 1)
+                
+                # If TP3 or no more TPs, close the signal
+                if new_state == "closed" or new_state == "tp3":
+                    # Close at TP
+                    success = await self.close_signal(
+                        signal_id, current_state, tp_target, exit_reason, signal
+                    )
+                    if success:
+                        pips = calculate_signal_pips(entry, tp_target, signal_type, pair)
+                        visibility = SignalVisibility(signal.get("visibility", "free"))
+                        asyncio.create_task(send_signal_close_notification(
+                            signal_id, pair, signal_type, pips, visibility
+                        ))
+                        return {"action": "closed", "reason": str(exit_reason), "pips": pips, "signal_id": signal_id}
+                else:
+                    # Advance to next TP state
+                    success = await self.advance_tp_state(signal_id, current_state, new_state, tp_level)
+                    if success:
+                        return {"action": "tp_hit", "level": tp_level, "signal_id": signal_id}
+        
+        return None
 
+
+# ==============================================================================
+# MAIN AUTOMATION LOOP
+# ==============================================================================
 
 async def run_price_automation():
-    """Main automation loop - runs every 30 seconds"""
+    """
+    Main automation loop - SINGLE ENTRY POINT for all signal processing.
+    
+    Runs every PRICE_POLL_INTERVAL seconds.
+    """
     global price_automation_running
     
-    logger.info("[AutoExec] Starting price-based signal automation...")
+    logger.info("[Engine] Starting Signal Lifecycle Engine v2.0...")
     price_automation_running = True
+    
+    # Initialize the controller
+    controller = SignalLifecycleController(db)
     
     while price_automation_running:
         try:
-            # Get all non-closed signals using the new state field
-            # Query for: pending, active, tp1, tp2, tp3 (not closed)
-            non_closed_query = {
-                "$or": [
-                    {"state": {"$in": ["pending", "active", "tp1", "tp2", "tp3"]}},
-                    # Fallback for signals without state field (legacy)
-                    {"state": {"$exists": False}, "status": {"$in": ["pending", "active"]}}
-                ]
+            # Query: Get ALL non-closed signals
+            # CRITICAL: Closed signals are EXCLUDED from processing
+            active_query = {
+                "state": {"$in": ["pending", "active", "tp1", "tp2", "tp3"]}
             }
             
-            all_signals = await db.signals.find(non_closed_query).to_list(200)
+            # Fallback for legacy signals without state field
+            legacy_query = {
+                "state": {"$exists": False},
+                "status": {"$in": ["pending", "active"]}
+            }
             
-            # Separate by state
-            pending_signals = [s for s in all_signals if s.get("state", s.get("status")) == "pending"]
-            active_signals = [s for s in all_signals if s.get("state", s.get("status")) in ["active", "tp1", "tp2", "tp3"]]
+            signals = await db.signals.find({
+                "$or": [active_query, legacy_query]
+            }).to_list(200)
             
-            if not all_signals:
-                logger.debug("[AutoExec] No pending/active signals to process")
+            if not signals:
                 await asyncio.sleep(PRICE_POLL_INTERVAL)
                 continue
             
             # Get unique symbols
-            symbols = list(set([s.get("pair", "") for s in all_signals if s.get("pair")]))
+            symbols = list(set([s.get("pair", "") for s in signals if s.get("pair")]))
             
             if not symbols:
                 await asyncio.sleep(PRICE_POLL_INTERVAL)
@@ -2986,26 +3057,27 @@ async def run_price_automation():
             
             # Fetch live prices
             prices = await fetch_live_prices(symbols)
-            logger.info(f"[AutoExec] Fetched prices for {len(prices)} symbols: {prices}")
             
-            # Process pending signals
-            for signal in pending_signals:
+            if prices:
+                logger.info(f"[Engine] Processing {len(signals)} signals with prices: {prices}")
+            
+            # Process each signal through the controller
+            for signal in signals:
                 pair = signal.get("pair", "")
                 if pair in prices:
-                    await process_pending_signal(signal, prices[pair])
-            
-            # Process active signals (including tp1, tp2, tp3 states)
-            for signal in active_signals:
-                pair = signal.get("pair", "")
-                if pair in prices:
-                    await process_active_signal(signal, prices[pair])
+                    try:
+                        result = await controller.process_signal(signal, prices[pair])
+                        if result:
+                            logger.info(f"[Engine] Action: {result}")
+                    except Exception as e:
+                        logger.error(f"[Engine] Error processing signal {signal.get('signal_id')}: {e}")
             
         except Exception as e:
-            logger.error(f"[AutoExec] Error in automation loop: {e}")
+            logger.error(f"[Engine] Loop error: {e}")
         
         await asyncio.sleep(PRICE_POLL_INTERVAL)
     
-    logger.info("[AutoExec] Price automation stopped")
+    logger.info("[Engine] Signal Lifecycle Engine stopped")
 
 
 # Start automation on app startup
