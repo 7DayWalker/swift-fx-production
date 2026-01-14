@@ -2562,34 +2562,127 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
     return prices
 
 
-def check_price_condition(price: float, target: float, signal_type: str, condition: str) -> bool:
-    """Check if price meets condition based on signal type
+def check_price_condition(
+    current_price: float, 
+    target: float, 
+    signal_type: str, 
+    condition: str,
+    previous_price: Optional[float] = None
+) -> bool:
+    """
+    Check if price CROSSES target level based on signal type and condition.
+    
+    CROSSING LOGIC (when previous_price is provided):
+    - Detects when price moves FROM one side of target TO the other
+    - More reliable than simple >= or <= which can miss quick moves
+    
+    DIRECTION-AWARE RULES:
     
     For BUY signals:
-        - Entry hit: price >= entry
-        - TP hit: price >= TP
-        - SL hit: price <= SL
+        - Entry hit: price rises TO or THROUGH entry (price >= entry)
+        - TP hit: price rises TO or THROUGH TP (price >= TP)
+        - SL hit: price falls TO or THROUGH SL (price <= SL)
     
     For SELL signals:
-        - Entry hit: price <= entry
-        - TP hit: price <= TP
-        - SL hit: price >= SL
+        - Entry hit: price falls TO or THROUGH entry (price <= entry)
+        - TP hit: price falls TO or THROUGH TP (price <= TP)
+        - SL hit: price rises TO or THROUGH SL (price >= SL)
+    
+    When previous_price is provided, we check for CROSSING:
+    - BUY SL: was above SL, now at or below SL
+    - SELL SL: was below SL, now at or above SL
+    - BUY TP: was below TP, now at or above TP
+    - SELL TP: was above TP, now at or below TP
     """
+    if not target or not current_price:
+        return False
+    
+    # Add small tolerance for floating point comparison (0.00001 = 0.1 pip for forex)
+    tolerance = target * 0.00001
+    
     if condition == "entry":
         if signal_type == "buy":
-            return price >= target
+            # BUY entry: price rises to entry level
+            if previous_price is not None:
+                # Crossing: was below, now at or above
+                return previous_price < target and current_price >= target - tolerance
+            return current_price >= target - tolerance
         else:  # sell
-            return price <= target
+            # SELL entry: price falls to entry level
+            if previous_price is not None:
+                # Crossing: was above, now at or below
+                return previous_price > target and current_price <= target + tolerance
+            return current_price <= target + tolerance
+    
     elif condition == "tp":
         if signal_type == "buy":
-            return price >= target
+            # BUY TP: price rises to/through TP
+            if previous_price is not None:
+                # Crossing: was below TP, now at or above
+                return previous_price < target and current_price >= target - tolerance
+            return current_price >= target - tolerance
         else:  # sell
-            return price <= target
+            # SELL TP: price falls to/through TP
+            if previous_price is not None:
+                # Crossing: was above TP, now at or below
+                return previous_price > target and current_price <= target + tolerance
+            return current_price <= target + tolerance
+    
     elif condition == "sl":
         if signal_type == "buy":
-            return price <= target
+            # BUY SL: price falls to/through SL (loss for buyer)
+            if previous_price is not None:
+                # Crossing: was above SL, now at or below
+                return previous_price > target and current_price <= target + tolerance
+            return current_price <= target + tolerance
         else:  # sell
-            return price >= target
+            # SELL SL: price rises to/through SL (loss for seller)
+            if previous_price is not None:
+                # Crossing: was below SL, now at or above
+                return previous_price < target and current_price >= target - tolerance
+            return current_price >= target - tolerance
+    
+    return False
+
+
+def check_price_hit(
+    current_price: float,
+    target: float,
+    signal_type: str,
+    condition: str
+) -> bool:
+    """
+    Simple price hit check - does current price satisfy the condition?
+    Used when we don't have previous price but need to check if currently at/past target.
+    
+    This is a fallback that checks if price is CURRENTLY at or past the target,
+    regardless of crossing. Useful for:
+    - Initial state on newly activated signals
+    - Recovery after system restart
+    """
+    if not target or not current_price:
+        return False
+    
+    tolerance = target * 0.00001
+    
+    if condition == "entry":
+        if signal_type == "buy":
+            return current_price >= target - tolerance
+        else:
+            return current_price <= target + tolerance
+    
+    elif condition == "tp":
+        if signal_type == "buy":
+            return current_price >= target - tolerance
+        else:
+            return current_price <= target + tolerance
+    
+    elif condition == "sl":
+        if signal_type == "buy":
+            return current_price <= target + tolerance
+        else:
+            return current_price >= target - tolerance
+    
     return False
 
 
