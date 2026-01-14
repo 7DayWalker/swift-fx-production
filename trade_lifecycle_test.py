@@ -542,8 +542,7 @@ class TradeLifecycleTest:
                         
                         # Test immutability with legacy endpoint
                         immutable_response = requests.put(
-                            f"{BASE_URL}/admin/signals/{signal_id}",
-                            json={"status": "active"},
+                            f"{BASE_URL}/admin/signals/{signal_id}?status=active",
                             headers=self.get_headers(self.admin_token)
                         )
                         
