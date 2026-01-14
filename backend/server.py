@@ -2690,27 +2690,44 @@ async def process_pending_signal(signal: dict, current_price: float) -> bool:
     """
     Process a pending signal - activate if entry price is reached.
     State transition: pending → active
+    
+    RESPECTS ADMIN AUTHORITY: This function only processes signals in 'pending' state.
+    If admin created signal as 'active', this function will skip it (not downgrade).
     """
     signal_id = signal["signal_id"]
     current_state = signal.get("state", signal.get("status", "pending"))
     entry = signal.get("entry", 0)
     signal_type = signal.get("signal_type", "buy")
     pair = signal.get("pair", "")
+    last_price = signal.get("last_price")  # Previous price for crossing detection
     
     # HARD LOCK: Skip if already closed
     if is_signal_closed(current_state):
         return False
     
-    # Only process pending signals
+    # Only process pending signals - NEVER touch active/tp1/tp2/tp3 signals
+    # This ensures admin-created ACTIVE signals stay ACTIVE
     if current_state != "pending":
         return False
     
     if not entry or not current_price:
         return False
     
-    # Check if entry price is reached
-    if check_price_condition(current_price, entry, signal_type, "entry"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): Entry hit at {current_price} (entry: {entry})")
+    # Update last_price tracking for next iteration
+    await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": {"last_price": current_price}}
+    )
+    
+    # Check if entry price is hit (using crossing logic when we have previous price)
+    entry_hit = check_price_condition(current_price, entry, signal_type, "entry", last_price)
+    
+    # Also use simple hit check as fallback (in case we're already past entry)
+    if not entry_hit:
+        entry_hit = check_price_hit(current_price, entry, signal_type, "entry")
+    
+    if entry_hit:
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): Entry hit at {current_price} (entry: {entry}, prev: {last_price})")
         
         # Atomic state transition with condition check
         result = await db.signals.update_one(
@@ -2720,7 +2737,8 @@ async def process_pending_signal(signal: dict, current_price: float) -> bool:
                 "status": "active",
                 "tp_hit": 0,
                 "activated_at": datetime.now(timezone.utc),
-                "entry_price_actual": current_price
+                "entry_price_actual": current_price,
+                "last_price": current_price
             }}
         )
         
@@ -2728,6 +2746,11 @@ async def process_pending_signal(signal: dict, current_price: float) -> bool:
             # Send push notification
             visibility = SignalVisibility(signal.get("visibility", "free"))
             asyncio.create_task(send_signal_notification(
+                signal_id, pair, SignalType(signal_type), visibility
+            ))
+            return True
+    
+    return False
                 signal_id, pair, SignalType(signal_type), visibility
             ))
             return True
