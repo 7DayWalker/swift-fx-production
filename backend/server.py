@@ -2751,16 +2751,16 @@ async def process_pending_signal(signal: dict, current_price: float) -> bool:
             return True
     
     return False
-                signal_id, pair, SignalType(signal_type), visibility
-            ))
-            return True
-    
-    return False
 
 
 async def process_active_signal(signal: dict, current_price: float) -> bool:
     """
     Process an active/tp1/tp2 signal - check TP levels and SL.
+    
+    DIRECTION-AWARE CROSSING LOGIC:
+    - Uses previous price (last_price) to detect when price CROSSES levels
+    - BUY signals: SL when price falls through SL, TP when price rises through TP
+    - SELL signals: SL when price rises through SL, TP when price falls through TP
     
     State transitions:
     - active → tp1 (TP1 hit)
@@ -2770,6 +2770,8 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
     - tp2 → tp3 (TP3 hit)
     - tp2 → closed (SL hit)
     - tp3 → closed (auto-close)
+    
+    NEVER modifies admin-set states except through valid transitions.
     """
     signal_id = signal["signal_id"]
     current_state = signal.get("state", signal.get("status", "active"))
@@ -2780,8 +2782,9 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
     tp1 = signal.get("tp1")
     tp2 = signal.get("tp2")
     tp3 = signal.get("tp3")
+    last_price = signal.get("last_price")  # Previous price for crossing detection
     
-    # HARD LOCK: Skip if already closed
+    # HARD LOCK: Skip if already closed - NEVER reopen or modify closed signals
     if is_signal_closed(current_state):
         return False
     
@@ -2791,6 +2794,12 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
     
     if not current_price:
         return False
+    
+    # Update last_price tracking for next iteration (atomic update)
+    await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": {"last_price": current_price}}
+    )
     
     # Auto-close tp3 state immediately
     if current_state == "tp3":
