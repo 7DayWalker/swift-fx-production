@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Optional
 
 # Backend URL from environment
-BACKEND_URL = "https://swift-trader-9.preview.emergentagent.com/api"
+BACKEND_URL = "https://signallifecycle.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@swiftfx.com"

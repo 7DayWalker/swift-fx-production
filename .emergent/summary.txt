@@ -1,197 +1,181 @@
 <analysis>
 
 **original_problem_statement**:
-The user wants to build a production-ready mobile trading signals application called **Swift FX Signals** for Forex, Gold, and Crypto traders.
+The user wants to build a production-ready mobile trading signals application called **Swift FX Signals**. The most recent set of tasks focuses on implementing a robust, secure, backend-enforced subscription and paywall system, followed by a detailed trade lifecycle engine.
 
-The last request was to implement a backend-enforced subscription system.
-
-**PRODUCT REQUIREMENTS (for the current task):**
--   **Subscription Model**: Extend the User model with  (free, premium, vip), , , and .
--   **Signal Access Control**: The  endpoint must filter signals based on the user's subscription plan (Free sees free, Premium sees free+premium, VIP sees all).
--   **AI Analyzer Limits**: Enforce weekly usage limits (Free: 3, Premium: 10, VIP: unlimited) at the account level. The system must automatically reset the weekly counter.
--   **VIP Feature Lock**: The Fund Management feature should be accessible only to VIP users.
--   **Admin Controls**: Admins need endpoints to manage user subscriptions (plan, expiry) and reset AI usage.
--   **Real-Time Sync**: When an admin changes a user's subscription, the UI must update and unlock/lock features immediately without requiring a user logout.
--   **UI Badge**: Display the user's current plan (Free / Premium / VIP) in the app header.
+**PRODUCT REQUIREMENTS (for the current and recent tasks):**
+-   **Backend-Enforced Subscriptions**: User access to features (Signals, AI Analyzer, VIP modules) must be controlled by the backend based on their subscription plan (               total        used        free      shared  buff/cache   available
+Mem:        16359156     8139760     3553912       45796     4963988     8219396
+Swap:              0           0           0, , ) and an expiry date.
+-   **Secure Payment Flow**: Users cannot upgrade themselves. All upgrades must go through a Stripe-ready payment session flow, where a subscription is only activated after a (simulated) webhook confirmation.
+-   **Canonical Upgrade Page**: All Upgrade CTAs throughout the app must lead to a single, canonical  page.
+-   **Preview-First UX**: Users on lower tiers should be able to view premium sections (like Academy, Fund Management) in a read-only preview mode. Actions within these sections that require a higher tier must be locked and redirect to the  page upon interaction.
+-   **Advanced Trade Lifecycle Engine**: The signal processing logic must be upgraded from a simple  field to a more granular  machine ( ->  ->  ->  ->  -> ) to handle multi-stage trades correctly. The  state must be immutable.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI application with a MongoDB database. The app features role-based authentication, a comprehensive signals module with a full lifecycle (pending, active, closed), an AI chart analyzer, community features, and more.
+A full-stack Expo (React Native) and FastAPI application with a MongoDB database. The app has role-based authentication, an AI chart analyzer, and a signals module.
 
-Two major systems were added in the last session:
-1.  **Real-Time Frontend Updates**: A  was created to manage a global state for signals, stats, and history. It uses a 5-second polling mechanism to keep all components (, , ) in sync. Admin actions on signals now trigger context refreshes.
-2.  **Automatic Signal Execution**: A FastAPI  was implemented in . It runs every 30 seconds, fetches live market prices for active/pending symbols from public APIs, and automatically activates pending signals or closes active signals when price targets (Entry, SL, TP) are met.
+A comprehensive, secure, and backend-enforced subscription system has been implemented. This includes:
+-   Admin-only endpoints for managing user subscriptions.
+-   A placeholder payment flow using checkout sessions and a simulated webhook (, ).
+-   A canonical  page for all upgrades.
+-   A Preview-First UI where users can see gated content but actions are locked.
+-   Real-time frontend updates via  which polls the backend every 5 seconds.
+
+The agent was in the middle of a major backend refactoring to implement the **Advanced Trade Lifecycle Engine**.
 
 **Last working item**:
--   Last item agent was working: The agent began implementing the backend-enforced subscription system. It started modifying  by adding new Pydantic models for subscriptions (, ), updating the main  model, and beginning to modify the  endpoint to filter signals based on the user's subscription plan.
+-   Last item agent was working: Implementing the Advanced Trade Lifecycle Engine in the backend. The agent was refactoring the signal model and business logic in  to replace the simple  field with a more robust  machine to handle sequential take-profit levels (TP1, TP2, TP3) and stop-loss (SL) triggers correctly.
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **backend testing agent**. After the backend work is complete, the agent needs to test the following:
-    1.  Create users with                total        used        free      shared  buff/cache   available
-Mem:        16359160     5791156     5352684       45088     5533236    10568004
-Swap:              0           0           0, , and  subscriptions.
-    2.  Test the  endpoint with each user to verify they only receive signals appropriate for their plan.
-    3.  Test the  endpoint to verify usage limits are enforced.
-    4.  Test the admin endpoints for updating user subscriptions.
+-   Which testing method agent to use? **backend testing agent**. This is a critical backend change. The agent must test the entire signal lifecycle:
+    1.  Signal creation ( state).
+    2.  Automatic activation to .
+    3.  Sequential state progression from  ->  ->  -> .
+    4.  State transition to  when Stop Loss is hit from any active state.
+    5.  State transition to  after  is hit.
+    6.  The immutability of  signals.
+    7.  All manual admin override endpoints to ensure they respect the state transition rules.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: Bottom tab navigation is clipped on iOS (P2, FROZEN)
+-   Issue 1: Implement Advanced Trade Lifecycle Engine (P0)
+-   Issue 2: Bottom tab navigation is clipped on iOS (P2, FROZEN)
 
   Issues Detail:
-  - **Issue 1: Bottom tab navigation is clipped on iOS.**
-     -   Attempted fixes: Multiple failed attempts in  during a previous session.
-     -   Next debug checklist: **DO NOT work on this unless explicitly instructed by the user.** The user has frozen all work on this issue.
-     -   Why fix this issue and what will be achieved with the fix?: Fixes a critical UI bug on modern iPhones, making the app's primary navigation look unprofessional.
-     -   Status: **NOT STARTED** (Work was frozen by the user).
+  - **Issue 1: Implement Advanced Trade Lifecycle Engine**
+     -   Attempted fixes: The agent started refactoring the backend by introducing a  enum, updating Pydantic models, and rewriting the admin override and automatic execution logic in . The work is incomplete.
+     -   Next debug checklist:
+        1.  Resume work in .
+        2.  Complete the rewrite of the  and  functions to use the new  model and its strict transition rules.
+        3.  Ensure the main  loop correctly queries for signals based on their new states (e.g., ).
+        4.  After backend completion and testing, update the frontend (, ) to correctly display the new states (, , ).
+     -   Why fix this issue and what will be achieved with the fix?: This will create a reliable and accurate trade execution engine that properly manages multi-target trades, which is a core feature for a professional trading app.
+     -   Status: **IN PROGRESS**
+     -   Is recurring issue?: N
+     -   Should Test frontend/backend/both after fix?: Both (Backend first, then Frontend for UI).
+     -   Blocked on other issue: None.
+
+  - **Issue 2: Bottom tab navigation is clipped on iOS**
+     -   Attempted fixes: Multiple failed attempts in  in a previous session.
+     -   Next debug checklist: **DO NOT WORK ON THIS.** The user has frozen all work on this issue.
+     -   Why fix this issue and what will be achieved with the fix?: Fixes a critical UI bug on modern iPhones.
+     -   Status: **NOT STARTED** (Work is frozen).
      -   Is recurring issue?: Y
      -   Should Test frontend/backend/both after fix?: Frontend.
      -   Blocked on other issue: None.
 
 **In progress Task List**:
--   Task 1: Implement Backend-Enforced Subscription System (P0)
-
- Task Detail:
-  - **Task 1: Implement Backend-Enforced Subscription System**
-     -   Where to resume: Continue editing . The agent has added the models and started modifying .
-     -   **Remaining Backend work**:
-        1.  Finalize the subscription filtering logic in the  endpoint.
-        2.  Implement the AI Analyzer weekly usage limit logic in the  endpoint, including the weekly reset mechanism.
-        3.  Implement the VIP feature lock for the Fund Management module.
-        4.  Create the admin endpoints to manage user subscriptions and AI usage.
-     -   **Frontend work (Not Started)**:
-        1.  Add a UI badge to the header to display the user's current subscription plan.
-        2.  Implement the real-time UI update when an admin changes a user's subscription. This will likely involve updating the  or  to re-fetch user data.
-        3.  Show an upgrade prompt when a user hits their AI analyzer limit.
-     -   What will be achieved with this?: This will add a core monetization and access control layer to the application.
-     -   Status: **IN PROGRESS**
-     -   Should Test frontend/backend/both after fix?: Both.
-     -   Blocked on something: None.
+The Implement Advanced Trade Lifecycle Engine is the only active in-progress task and is detailed under All Pending/In progress Issue list.
 
 **Upcoming and Future Tasks**
--   **Future Tasks**:
-    -   (P1) Integrate a real payment provider (e.g., Stripe) to replace the mock/manual subscription flow.
-    -   (P2) Expand Dark/Light mode theme to all screens.
-    -   (P2) Implement remaining Community features (liking, commenting).
-    -   (P2) Implement mock AdMob banners for Free users.
-    -   (P3) Add actual content (videos, text) to the Academy module and implement progress tracking.
+- **Upcoming Tasks**:
+    - (P1) Frontend UI for Trade Lifecycle: Update signal cards and views in  and  to visually represent the new , , and  states.
+- **Future Tasks**:
+    - (P1) Integrate a real payment provider (e.g., Stripe) to replace the placeholder payment flow.
+    - (P2) Expand Dark/Light mode theme to all screens.
+    - (P2) Implement remaining Community features (liking, commenting).
+    - (P2) Implement mock AdMob banners for Free users.
+    - (P3) Add actual content (videos, text) to the Academy module and implement progress tracking.
 
 **Completed work in this session**
-- **Critical Crash Fix (COMPLETED)**
-  - Resolved an app boot failure caused by a database-user mismatch in the forked environment. The agent corrected the admin user's password hash and role in MongoDB.
-
-- **Signal Creation & Viewing Bugs (RESOLVED)**
-  - Fixed a Pydantic validation error by adding the  role to the  enum in .
-  - Fixed a display bug by updating the  function to grant admins full access.
-
-- **Delete Signal Functionality (VERIFIED)**
-  - Confirmed via API and UI testing that the delete signal functionality was working as intended.
-
-- **AI Chart Analyzer Mobile Upgrade (COMPLETED)**
-  - Added a Camera option to the UI for taking photos of charts.
-  - Fixed the mobile image upload process by correctly converting image URIs to binary  objects.
-  - Resolved a Claude Vision error by resizing all images to a max dimension of 1024px and converting them to PNG format before upload.
-
-- **Real-Time System Implementation (v1 COMPLETED)**
-  - Created , a centralized state manager with a 5-second polling mechanism to keep the frontend in sync.
-  - Refactored the Dashboard, Signals, and History screens to be fully reactive to the new context.
-
-- **Price-Based Signal Automation (COMPLETED)**
-  - Implemented a FastAPI  in  that runs every 30 seconds.
-  - The task fetches live market prices from public APIs (Forex, Gold, Crypto).
-  - It automatically activates pending signals and closes active signals based on entry, stop-loss, and take-profit price triggers.
+- **Subscription System Implementation (VERIFIED)**: A full backend-enforced subscription system was built, including signal filtering, AI limits, and admin management endpoints.
+- **Subscription Frontend UI (VERIFIED)**: A new  and  component were created to display real-time subscription status in the Dashboard and Profile screens.
+- **Critical Security Fix (VERIFIED)**: A vulnerability allowing users to upgrade their own subscriptions was found and patched by making all subscription modification endpoints admin-only.
+- **SaaS-Grade Payment Flow (VERIFIED)**: The simple upgrade mechanism was replaced with a professional, Stripe-ready flow using payment sessions (), a placeholder payment page (), and a simulated webhook for activation.
+- **Paywall UX Lockdown (VERIFIED)**: A canonical  page was created, and all Upgrade CTAs were routed to it, creating a single, clean upsell funnel.
+- **Preview-First Paywall Model (VERIFIED)**: Gated pages like  and  were updated to allow free users to browse content in a preview mode, with paid actions being locked and leading to the  page.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Bottom tab navigation is clipped on iOS.**
-    -   Debug checklist: See All Pending/In progress Issue list above. Work is frozen.
-    -   Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug.
-    -   Should Test frontend/backend/both after fix: Frontend.
-    -   Is recurring issue?: Y.
+   - **Issue 1: Bottom tab navigation is clipped on iOS.**
+     - Debug checklist: See All Pending/In progress Issue list. **Work is frozen**.
+     - Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug on modern iPhones, making the app's primary navigation look unprofessional.
+     - Should Test frontend/backend/both after fix: Frontend.
+     - Is recurring issue? Y
 
 **Known issue recurrence from previous fork**
--   None.
+  - **Issue recurrence in previous fork:** The iOS tab bar clipping issue is a known recurring problem from previous sessions.
+  - **Recurrence count:** Multiple.
+  - **Status:** NOT STARTED (frozen by user).
 
 **Code Architecture**
-
+expo-clipboard
 
 **Key Technical Concepts**
--   **Frontend**: React Native, Expo, Expo Router, TypeScript, Zustand, 
--   **Backend**: Python, FastAPI, **FastAPI BackgroundTasks**
--   **Database**: MongoDB
--   **State Management**:  for Signals (), Zustand for Auth
--   **Real-time Strategy**: Frontend polling via , Backend price-based automation via .
+-   **Frontend**: React Native, Expo, Expo Router, TypeScript
+-   **Backend**: Python, FastAPI, Pydantic, MongoDB (with )
+-   **State Management**:  is used for Auth, Signals, and Subscriptions.
+-   **Real-time Strategy**: A dual system of frontend polling (for subscriptions and signals) and a backend  (for price-based trade automation).
+-   **Monetization**: A secure, backend-enforced paywall with a Stripe-ready payment session flow.
+-   **Trade Logic**: Currently being upgraded to a state machine ( ->  ->  ->  ->  -> ).
 
 **key DB schema**
--   **users**: About to be modified to include:
-    -    ('free', 'premium', 'vip')
-    -   
-    -   
-    -   
--   **signals**: Now includes:
-    -    ('pending', 'active', 'closed')
-    -   
-    -   
-    -   
+-   **users**: { , , , , , ,  }
+-   **signals**: **(BEING MODIFIED)** { , , , , , , , , **** }
+-   **payment_sessions**: { , , ,  ('pending' | 'paid'),  }
 
 **changes in tech stack**
--   No new packages were added, but core application architecture was changed with the introduction of  on the frontend and  on the backend.
+-    was added to the frontend .
 
 **All files of reference**
--   : **Most critical file.** Contains all API logic, the new price automation system, and the in-progress subscription logic.
--   : New file, central to the frontend's real-time functionality.
--   : Heavily modified to support mobile camera/gallery uploads and robust image preprocessing.
--   : Refactored to be fully reactive to .
+-   : **The most critical file.** It contains all API logic and is the focus of the current refactoring for the trade lifecycle engine.
+-   : The new canonical page for handling all user subscription upgrades.
+-   : The new context that provides real-time subscription status to all frontend components.
 
 **Areas that need refactoring**:
--   The  file contains commented-out code from failed attempts to fix the tab bar bug. It should be cleaned up when the bug is eventually addressed.
+-   Once the backend trade lifecycle engine is complete, frontend components like  and  will need to be refactored to correctly interpret and display the new , , and  states.
 
 **key api endpoints**
--    (GET): Being modified to enforce subscription-based access.
--    (POST): Will be modified to enforce weekly usage limits.
--    (GET): New endpoint to check the status of the price automation background task.
--   **New Admin Endpoints (to be created)**: for managing user subscriptions.
+-    (GET): Filters signals based on user subscription.
+-    (POST): Enforces weekly AI usage limits.
+-    (GET): Provides real-time subscription details.
+-    (POST): Creates a new payment session for upgrades.
+-    (POST): Placeholder to confirm payment and grant subscription.
+-    (PUT): Endpoints for admins to manually change a signal's state. **(CURRENTLY BEING REWRITTEN)**.
 
 **Critical Info for New Agent**
--   **DO NOT WORK ON THE TAB BAR:** The user has explicitly frozen all work on the bottom navigation layout ().
--   **Subscription Logic is the Priority:** The current task is to finish the backend-enforced subscription system. This is the single source of truth for access control.
--   **Two New Core Systems**: The app now has two major asynchronous systems.
-    1.  **Frontend Polling**:  polls  every 5 seconds to update the UI.
-    2.  **Backend Automation**: A  in  polls public price APIs every 30 seconds to update signal statuses in the database. These two systems work together to create a real-time experience.
+-   **Top Priority:** Your main task is to complete the implementation of the **Advanced Trade Lifecycle Engine** in . The backend is currently in an incomplete state due to this refactoring.
+-   **State Machine is Strict:** You must adhere to the specified state transition logic:  ->  ->  ->  ->  -> . The  state must be final and immutable.
+-   **DO NOT WORK ON THE iOS TAB BAR BUG.** Work on this UI issue is explicitly frozen by the user.
+-   **Test Thoroughly:** After completing the backend refactor, you must use the backend testing agent to verify the entire lifecycle of a signal, from  to , including all automatic and manual state changes.
 
 **documents created in this job**
 -   
+-   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Msg 599)**: Requested the backend-enforced subscription system with specific requirements for signals, AI limits, and admin controls. **(IN PROGRESS)**
-2.  **User (Msg 565)**: Confirmed AI analyzer works and requested implementation of price-based automatic signal execution. (Completed)
-3.  **User (Msg 541)**: Reported AI analysis still fails on mobile due to tall images and requested a 1024px resize limit. (Completed)
-4.  **User (Msg 513)**: Reported AI analysis fails on mobile due to image upload format (URI string vs. binary) and requested a fix. (Completed)
-5.  **User (Msg 435)**: Confirmed dashboard is working and requested an upgrade to the AI Analyzer for mobile users (camera support, portrait images). (Completed)
-6.  **User (Msg 407)**: Reported the Dashboard was not updating from SignalContext, suspecting a provider scope issue. (Completed, was likely a caching issue)
-7.  **User (Msg 381)**: Requested a fix for the Dashboard not updating in real-time. (Completed)
-8.  **User (Msg 321)**: Requested a fix for dashboard stat calculation errors and reactivity. (Completed)
-9.  **User (Msg 233)**: Requested real-time signal event propagation across the app. (Completed)
-10. **User (Msg 203)**: Froze work on the Delete button and requested a fix for the broken AI Chart Analyzer. (Completed)
+1.  **User (Msg 416):** Requested the new Trade Lifecycle Engine with , , , and  logic. **(IN PROGRESS)**
+2.  **User (Msg 371):** Requested a Preview-First paywall UX instead of hard-blocking users from pages. (Completed)
+3.  **User (Msg 320):** Requested a final lockdown of the paywall UX with a canonical  page and unified routing. (Completed)
+4.  **User (Msg 268):** Re-iterated the need for a fully backend-enforced subscription system. (Completed)
+5.  **User (Msg 207):** Requested a proper SaaS-grade payment flow with checkout sessions and a webhook placeholder. (Completed)
+6.  **User (Msg 167):** Reported a critical security bug that allowed users to upgrade themselves for free. (Completed)
+7.  **User (Msg 5):** Confirmed the agent's plan to implement the subscription system, starting with the backend. (Completed)
 
 **Project Health Check:**
 -   **Broken**:
+    -   The core signal execution engine in  is non-functional due to the in-progress refactor to the new  model.
     -   Bottom tab navigation UI on iOS (). Work is frozen.
 -   **Mocked**:
-    -   Payment/Subscription system (payment gateway is missing, but backend logic is being built now).
+    -   The payment system is a placeholder (Stripe-ready) and does not integrate with a real payment provider.
     -   Ad system.
 
 **3rd Party Integrations**
--   **Anthropic Claude Vision**: Used for the AI Chart Analyzer via . Uses **Emergent LLM Key**.
--   **Frankfurter API**: Used for live Forex price data in the backend automation.
--   **CoinGecko API**: Used for live Gold (PAXG) and Crypto (BTC, ETH) price data in the backend automation.
+-   **Anthropic Claude Vision**: Used for the AI Chart Analyzer. Uses **Emergent LLM Key**.
+-   **Frankfurter API**: Provides live Forex price data for the backend automation task.
+-   **CoinGecko API**: Provides live Gold (PAXG) and Crypto (BTC, ETH) price data for the backend automation task.
 -   **Expo Push Notifications**: Integrated for sending alerts.
+-   **expo-clipboard**: v14.0.1, used on the payment page.
 
 **Testing status**
--   Testing agent used after significant changes: NO (Agent used manual , screenshot testing, and log inspection).
+-   Testing agent used after significant changes: YES. The backend agent verified the subscription system security and payment flow logic.
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: None.
--   Known regressions: None from this session; many bugs were fixed.
+-   Test files created: None are persisted.
+-   Known regressions: None.
 
 **Credentials to test flow:**
 -   **Admin**:  / 
@@ -199,6 +183,7 @@ Swap:              0           0           0, , and  subscriptions.
 -   **Free User**:  / 
 
 **What agent forgot to execute**
--   The current task (subscription system) is only partially complete. The agent has not yet implemented the frontend UI badge or the real-time sync when an admin changes a user's subscription. These were part of the user's request (Msg 599).
+-   The implementation of the Trade Lifecycle Engine is the main outstanding task and is currently incomplete.
+-   The frontend has not yet been updated to display the new signal states (, , ). This is a necessary follow-up task after the backend is finished.
 
 </analysis>
