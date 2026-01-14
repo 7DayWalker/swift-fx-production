@@ -246,6 +246,18 @@ backend:
         - agent: "testing"
         - comment: "✅ COMPREHENSIVE SUBSCRIPTION ENFORCEMENT TESTING COMPLETE: 1) GET /api/subscription/status working correctly - Admin returns subscription='vip' with fund_management=true, Free user returns subscription='free' with ai_limit=3. 2) Admin subscription management working - PUT /api/admin/users/{user_id}/subscription successfully updates user subscriptions with expiry, POST /api/admin/users/{user_id}/reset-ai-usage resets AI counters, GET /api/admin/users/{user_id}/details returns detailed user info with effective_subscription. 3) VIP feature access control working - GET /api/features/fund-management/access and GET /api/features/academy/access correctly grant access to VIP users and deny access to free users. 4) AI usage limits enforced correctly - Free users get 3 weekly limit, Premium users get 10, VIP users get unlimited. 5) Signal filtering working - Free users see free signals + locked premium/vip signals, Admin sees all signals unlocked. All subscription-based access control functioning properly."
 
+  - task: "Trade Lifecycle Engine"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
+
 frontend:
   - task: "Splash Screen with Auth Check"
     implemented: true
