@@ -252,11 +252,14 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
         - comment: "FULL ENGINE RESET & REBUILD v2.0: Complete rewrite of signal lifecycle engine as ONE authoritative module. Key changes: 1) ExitReason enum for tracking closure reason (TP1/TP2/TP3/SL/MANUAL). 2) calculate_signal_pips() - calculates pips ONCE at closure, NEVER recalculates. 3) PriceTrigger class - authoritative crossing-based trigger detection for SL/TP/Entry. 4) SignalLifecycleController class - SINGLE SOURCE OF TRUTH for all signal state management. 5) RULES: Closed signals removed from ALL processing, Admin state preserved, Pips calculated once only."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ SIGNAL LIFECYCLE ENGINE v2.0 COMPREHENSIVE TESTING COMPLETE: All 16 critical tests passed (100% success rate). VERIFIED: 1) Admin State Authority - Admin can create signals with state='active' and they remain ACTIVE (never downgraded to pending). Default signals correctly set to 'pending'. 2) Pip Calculation Logic - SELL signals: entry=1.1000, exit=1.0950 → +50 pips (profit when price goes DOWN), exit=1.1050 → -50 pips (loss when price goes UP). BUY signals: entry=1.1000, exit=1.1050 → +50 pips (profit when price goes UP), exit=1.0950 → -50 pips (loss when price goes DOWN). Formula working correctly: SELL pips = entry - exit, BUY pips = exit - entry. 3) State Immutability - Closed signals are completely immutable: ALL operations (/transition, /activate, /mark-tp, /force-close) correctly blocked with 'immutable' error messages. 4) Exit Handling - When signals are closed: state='closed', exit_price set correctly, final_pips calculated accurately, closed_at timestamp populated. The Signal Lifecycle Engine v2.0 is production-ready and all critical requirements satisfied."
 
 frontend:
   - task: "Splash Screen with Auth Check"
