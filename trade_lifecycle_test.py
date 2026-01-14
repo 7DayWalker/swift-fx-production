@@ -533,8 +533,7 @@ class TradeLifecycleTest:
                     
                     # Test legacy close
                     close_response = requests.put(
-                        f"{BASE_URL}/admin/signals/{signal_id}",
-                        json={"status": "closed", "final_pips": 25.5},
+                        f"{BASE_URL}/admin/signals/{signal_id}?status=closed&final_pips=25.5",
                         headers=self.get_headers(self.admin_token)
                     )
                     
