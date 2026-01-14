@@ -252,7 +252,7 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
         - agent: "main"
@@ -260,6 +260,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE (29/29 tests passed): 1) Signal Creation - Both pending and active signals created correctly with proper state and timestamps. 2) Valid State Transitions - All transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions - System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions - All endpoints working: /activate converts pending→active, /mark-tp handles sequential TP marking with TP3 auto-closing, /force-close works on any non-closed signal. 5) IMMUTABILITY ENFORCEMENT - HARD RULE verified: closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint - PUT /admin/signals/{id} works and respects immutability. 7) State Consistency - All responses include proper state, status, and tp_hit fields."
+        - working: true
+        - agent: "main"
+        - comment: "CRITICAL FIX: Signal Engine Authority & Trigger Fix. 1) Admin State Authority - Admin-created signals now preserve their state (ACTIVE stays ACTIVE, never forced to PENDING). 2) Direction-Aware Price Logic - BUY: SL triggers when price <= SL, TP triggers when price >= TP. SELL: SL triggers when price >= SL, TP triggers when price <= TP. 3) Crossing Detection - Added last_price tracking to detect price CROSSING levels, not just equality. 4) Fallback Check - Added check_price_hit() as fallback for gap scenarios. 5) Enhanced Logging - Logs now include previous price for debugging."
 
 frontend:
   - task: "Splash Screen with Auth Check"
