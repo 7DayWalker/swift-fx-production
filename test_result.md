@@ -252,11 +252,14 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
         - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE: All 29 tests passed (100% success rate). 1) Signal Creation: Both pending and active signals created correctly with proper state and timestamps. 2) Valid Transitions: All state transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions: System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions: /activate, /mark-tp (sequential TP1→TP2→TP3), and /force-close all working correctly. TP3 auto-closes signals as expected. 5) Immutability: HARD RULE enforced - closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint: PUT /admin/signals/{id} works with query parameters and respects immutability. 7) State Consistency: All responses include proper state, status, and tp_hit fields. The state machine implementation is robust and production-ready."
 
 frontend:
   - task: "Splash Screen with Auth Check"
