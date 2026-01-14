@@ -2827,9 +2827,16 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
             return True
         return False
     
-    # Check Stop Loss (applies to active, tp1, tp2 states)
-    if stop_loss and check_price_condition(current_price, stop_loss, signal_type, "sl"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price} (state: {current_state})")
+    # Check Stop Loss first (applies to active, tp1, tp2 states)
+    # Uses crossing logic: price must cross FROM safe side TO stop loss side
+    sl_hit = check_price_condition(current_price, stop_loss, signal_type, "sl", last_price)
+    
+    # Also check simple hit as fallback (e.g., if price gaps through SL)
+    if not sl_hit and stop_loss:
+        sl_hit = check_price_hit(current_price, stop_loss, signal_type, "sl")
+    
+    if sl_hit:
+        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): STOP LOSS hit at {current_price} (SL: {stop_loss}, prev: {last_price}, type: {signal_type})")
         
         final_pips = calculate_pips(entry, current_price, signal_type, pair)
         current_tp_hit = get_tp_hit_from_state(current_state)
@@ -2854,39 +2861,55 @@ async def process_active_signal(signal: dict, current_price: float) -> bool:
             return True
         return False
     
-    # Check TP levels based on current state
+    # Check TP levels based on current state (only if SL not hit)
+    # Uses crossing logic for reliable detection
     
     # From ACTIVE: Check TP1
-    if current_state == "active" and tp1 and check_price_condition(current_price, tp1, signal_type, "tp"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP1 hit at {current_price}")
+    if current_state == "active" and tp1:
+        tp1_hit = check_price_condition(current_price, tp1, signal_type, "tp", last_price)
+        if not tp1_hit:
+            tp1_hit = check_price_hit(current_price, tp1, signal_type, "tp")
         
-        result = await db.signals.update_one(
-            {"signal_id": signal_id, "state": "active"},
-            {"$set": {
-                "state": SignalState.TP1.value,
-                "status": "active",
-                "tp_hit": 1
-            }}
-        )
-        return result.modified_count > 0
+        if tp1_hit:
+            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP1 hit at {current_price} (TP1: {tp1}, prev: {last_price})")
+            
+            result = await db.signals.update_one(
+                {"signal_id": signal_id, "state": "active"},
+                {"$set": {
+                    "state": SignalState.TP1.value,
+                    "status": "active",
+                    "tp_hit": 1
+                }}
+            )
+            return result.modified_count > 0
     
     # From TP1: Check TP2
-    if current_state == "tp1" and tp2 and check_price_condition(current_price, tp2, signal_type, "tp"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP2 hit at {current_price}")
+    if current_state == "tp1" and tp2:
+        tp2_hit = check_price_condition(current_price, tp2, signal_type, "tp", last_price)
+        if not tp2_hit:
+            tp2_hit = check_price_hit(current_price, tp2, signal_type, "tp")
         
-        result = await db.signals.update_one(
-            {"signal_id": signal_id, "state": "tp1"},
-            {"$set": {
-                "state": SignalState.TP2.value,
-                "status": "active",
-                "tp_hit": 2
-            }}
-        )
-        return result.modified_count > 0
+        if tp2_hit:
+            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP2 hit at {current_price} (TP2: {tp2}, prev: {last_price})")
+            
+            result = await db.signals.update_one(
+                {"signal_id": signal_id, "state": "tp1"},
+                {"$set": {
+                    "state": SignalState.TP2.value,
+                    "status": "active",
+                    "tp_hit": 2
+                }}
+            )
+            return result.modified_count > 0
     
     # From TP2: Check TP3
-    if current_state == "tp2" and tp3 and check_price_condition(current_price, tp3, signal_type, "tp"):
-        logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit at {current_price}")
+    if current_state == "tp2" and tp3:
+        tp3_hit = check_price_condition(current_price, tp3, signal_type, "tp", last_price)
+        if not tp3_hit:
+            tp3_hit = check_price_hit(current_price, tp3, signal_type, "tp")
+        
+        if tp3_hit:
+            logger.info(f"[AutoExec] Signal {signal_id} ({pair}): TP3 hit at {current_price} (TP3: {tp3}, prev: {last_price})")
         
         # Transition to tp3 first (will auto-close on next cycle or immediately)
         result = await db.signals.update_one(
