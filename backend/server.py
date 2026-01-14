@@ -663,23 +663,11 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     return {"signal_id": signal_id, "message": f"Signal created with state: {initial_state.value}"}
 
 def calculate_pips(entry: float, close: float, signal_type: str, pair: str) -> float:
-    """Calculate pips based on price movement and pair type"""
-    # Determine pip value based on pair
-    if "JPY" in pair:
-        pip_multiplier = 100  # JPY pairs have 2 decimal places
-    elif "XAU" in pair or "GOLD" in pair:
-        pip_multiplier = 10  # Gold is measured in $0.10
-    elif "BTC" in pair or "ETH" in pair:
-        pip_multiplier = 1  # Crypto measured in whole units
-    else:
-        pip_multiplier = 10000  # Standard forex pairs
-    
-    if signal_type == "buy":
-        pips = (close - entry) * pip_multiplier
-    else:  # sell
-        pips = (entry - close) * pip_multiplier
-    
-    return round(pips, 1)
+    """
+    Legacy wrapper for pip calculation.
+    Delegates to the authoritative calculate_signal_pips function.
+    """
+    return calculate_signal_pips(entry, close, signal_type, pair)
 
 
 # ===================== TRADE LIFECYCLE MANUAL OVERRIDES =====================
