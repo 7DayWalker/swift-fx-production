@@ -185,7 +185,7 @@ class SignalCreate(BaseModel):
     tp1: float
     tp2: Optional[float] = None
     tp3: Optional[float] = None
-    status: Optional[SignalStatus] = SignalStatus.PENDING  # Can be PENDING or ACTIVE at creation
+    state: Optional[SignalState] = SignalState.PENDING  # Uses new state system
     visibility: SignalVisibility = SignalVisibility.FREE
     analysis: Optional[str] = None
 
@@ -198,22 +198,53 @@ class Signal(BaseModel):
     tp1: float
     tp2: Optional[float] = None
     tp3: Optional[float] = None
-    tp_hit: int = 0  # 0 = none, 1 = tp1, 2 = tp2, 3 = tp3
     risk_reward: float
+    # NEW: Single authoritative state field
+    state: SignalState = SignalState.PENDING
+    # Legacy field for backward compatibility (maps to state)
     status: SignalStatus = SignalStatus.PENDING
+    tp_hit: int = 0  # 0 = none, 1 = tp1, 2 = tp2, 3 = tp3 (derived from state)
     visibility: SignalVisibility
     analysis: Optional[str] = None
+    # Price tracking for final results
+    entry_price_actual: Optional[float] = None  # Actual entry price when activated
+    exit_price: Optional[float] = None  # Exit price when closed
     final_pips: Optional[float] = None
+    # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     activated_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
 
 class SignalUpdate(BaseModel):
     """Admin signal update - for manual overrides"""
-    status: Optional[SignalStatus] = None
+    state: Optional[SignalState] = None  # New: Use state for transitions
+    status: Optional[SignalStatus] = None  # Legacy: kept for backward compat
     tp_hit: Optional[int] = None
     final_pips: Optional[float] = None
     close_price: Optional[float] = None  # For calculating final_pips on manual close
+
+# Helper function to get tp_hit from state
+def get_tp_hit_from_state(state: str) -> int:
+    """Convert state to tp_hit value"""
+    state_to_tp = {
+        "pending": 0,
+        "active": 0,
+        "tp1": 1,
+        "tp2": 2,
+        "tp3": 3,
+        "closed": 3,  # If closed after tp3
+    }
+    return state_to_tp.get(state, 0)
+
+# Helper function to get status from state
+def get_status_from_state(state: str) -> str:
+    """Convert state to legacy status"""
+    if state == "pending":
+        return "pending"
+    elif state in ["active", "tp1", "tp2", "tp3"]:
+        return "active"
+    else:
+        return "closed"
 
 class PostCreate(BaseModel):
     content: str
