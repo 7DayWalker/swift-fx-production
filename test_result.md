@@ -252,20 +252,11 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: true
         - agent: "main"
-        - comment: "Implemented advanced trade lifecycle state machine: pending → active → tp1 → tp2 → tp3 → closed. Features: 1) VALID_STATE_TRANSITIONS map enforces correct flow, 2) is_signal_closed() ensures immutability of closed signals, 3) process_pending_signal() handles pending→active, 4) process_active_signal() handles all TP/SL transitions, 5) Admin endpoints: /transition, /activate, /mark-tp, /force-close all respect state rules. Removed duplicate legacy endpoints."
-        - working: true
-        - agent: "testing"
-        - comment: "✅ COMPREHENSIVE TRADE LIFECYCLE ENGINE TESTING COMPLETE (29/29 tests passed): 1) Signal Creation - Both pending and active signals created correctly with proper state and timestamps. 2) Valid State Transitions - All transitions work correctly (pending→active→tp1→tp2→tp3→closed) with proper final_pips calculation. 3) Invalid Transitions - System correctly blocks invalid transitions (pending→tp1, active→tp2) with appropriate error messages. 4) Quick Actions - All endpoints working: /activate converts pending→active, /mark-tp handles sequential TP marking with TP3 auto-closing, /force-close works on any non-closed signal. 5) IMMUTABILITY ENFORCEMENT - HARD RULE verified: closed signals are completely immutable, all operations correctly blocked with 'immutable' error messages. 6) Legacy Endpoint - PUT /admin/signals/{id} works and respects immutability. 7) State Consistency - All responses include proper state, status, and tp_hit fields."
-        - working: true
-        - agent: "main"
-        - comment: "CRITICAL FIX: Signal Engine Authority & Trigger Fix. 1) Admin State Authority - Admin-created signals now preserve their state (ACTIVE stays ACTIVE, never forced to PENDING). 2) Direction-Aware Price Logic - BUY: SL triggers when price <= SL, TP triggers when price >= TP. SELL: SL triggers when price >= SL, TP triggers when price <= TP. 3) Crossing Detection - Added last_price tracking to detect price CROSSING levels, not just equality. 4) Fallback Check - Added check_price_hit() as fallback for gap scenarios. 5) Enhanced Logging - Logs now include previous price for debugging."
-        - working: true
-        - agent: "testing"
-        - comment: "✅ SIGNAL ENGINE AUTHORITY & TRIGGER FIXES VERIFIED (7/7 tests passed - 100% success): 1) ADMIN STATE AUTHORITY - Admin can create signals with state='active' and they remain ACTIVE (not downgraded to pending). Admin signals without state default to 'pending' correctly. 2) DIRECTION-AWARE PRICE LOGIC - BUY signals: SL below entry, TP above entry (correct structure verified). SELL signals: SL above entry, TP below entry (correct structure verified). 3) STATE IMMUTABILITY - Closed signals are completely immutable: all operations (/transition, /activate, /mark-tp) correctly blocked with 'immutable' error messages. 4) MANUAL STATE TRANSITIONS - Full lifecycle works: pending→active→tp1→tp2→tp3→closed with TP3 auto-closing. All critical fixes are production-ready and working as specified."
+        - comment: "FULL ENGINE RESET & REBUILD v2.0: Complete rewrite of signal lifecycle engine as ONE authoritative module. Key changes: 1) ExitReason enum for tracking closure reason (TP1/TP2/TP3/SL/MANUAL). 2) calculate_signal_pips() - calculates pips ONCE at closure, NEVER recalculates. 3) PriceTrigger class - authoritative crossing-based trigger detection for SL/TP/Entry. 4) SignalLifecycleController class - SINGLE SOURCE OF TRUTH for all signal state management. 5) RULES: Closed signals removed from ALL processing, Admin state preserved, Pips calculated once only."
 
 frontend:
   - task: "Splash Screen with Auth Check"
