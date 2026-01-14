@@ -60,6 +60,38 @@ class SignalStatus(str, Enum):
     ACTIVE = "active"
     CLOSED = "closed"
 
+# NEW: Trade Lifecycle States for TP1, TP2, TP3 tracking
+class SignalState(str, Enum):
+    PENDING = "pending"    # Waiting for entry price
+    ACTIVE = "active"      # Entry hit, watching for TP1 or SL
+    TP1 = "tp1"           # TP1 hit, watching for TP2 or SL
+    TP2 = "tp2"           # TP2 hit, watching for TP3 or SL
+    TP3 = "tp3"           # TP3 hit, auto-transition to closed
+    CLOSED = "closed"      # Trade complete - immutable
+
+# Valid state transitions map
+VALID_STATE_TRANSITIONS = {
+    SignalState.PENDING: [SignalState.ACTIVE],
+    SignalState.ACTIVE: [SignalState.TP1, SignalState.CLOSED],
+    SignalState.TP1: [SignalState.TP2, SignalState.CLOSED],
+    SignalState.TP2: [SignalState.TP3, SignalState.CLOSED],
+    SignalState.TP3: [SignalState.CLOSED],
+    SignalState.CLOSED: [],  # No transitions allowed from closed
+}
+
+def is_valid_transition(current_state: str, new_state: str) -> bool:
+    """Check if a state transition is valid"""
+    try:
+        current = SignalState(current_state)
+        new = SignalState(new_state)
+        return new in VALID_STATE_TRANSITIONS.get(current, [])
+    except ValueError:
+        return False
+
+def is_signal_closed(state: str) -> bool:
+    """Check if signal is in closed state (immutable)"""
+    return state == SignalState.CLOSED.value
+
 class SignalType(str, Enum):
     BUY = "buy"
     SELL = "sell"
