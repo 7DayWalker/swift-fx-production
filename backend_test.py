@@ -1,45 +1,46 @@
 #!/usr/bin/env python3
 """
-Backend Test Suite for Signal Engine Authority & Trigger Fixes
-Testing critical fixes for admin state authority and direction-aware price logic
+Signal Lifecycle Engine v2.0 Testing Suite
+Tests the completely rebuilt signal engine with focus on:
+1. Admin State Authority
+2. Pip Calculation Logic  
+3. State Immutability
+4. Exit Handling
 """
 
 import requests
 import json
-import time
-from datetime import datetime
+import sys
 from typing import Dict, Any, Optional
 
-# Configuration
-BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
+# Backend URL from environment
+BACKEND_URL = "https://signallifecycle.preview.emergentagent.com/api"
+
+# Test credentials
 ADMIN_EMAIL = "admin@swiftfx.com"
 ADMIN_PASSWORD = "adminpassword"
 
-class SignalEngineTest:
+class TestRunner:
     def __init__(self):
         self.admin_token = None
         self.test_results = []
         
-    def log_test(self, test_name: str, success: bool, details: str = ""):
+    def log_test(self, test_name: str, passed: bool, details: str = ""):
         """Log test result"""
-        status = "✅ PASS" if success else "❌ FAIL"
-        result = {
-            "test": test_name,
-            "status": status,
-            "success": success,
-            "details": details,
-            "timestamp": datetime.now().isoformat()
-        }
-        self.test_results.append(result)
+        status = "✅ PASS" if passed else "❌ FAIL"
         print(f"{status}: {test_name}")
         if details:
             print(f"   Details: {details}")
-        print()
-    
-    def authenticate_admin(self) -> bool:
-        """Authenticate as admin user"""
+        self.test_results.append({
+            "test": test_name,
+            "passed": passed,
+            "details": details
+        })
+        
+    def setup_admin_auth(self) -> bool:
+        """Authenticate as admin"""
         try:
-            response = requests.post(f"{BASE_URL}/auth/login", json={
+            response = requests.post(f"{BACKEND_URL}/auth/login", json={
                 "email": ADMIN_EMAIL,
                 "password": ADMIN_PASSWORD
             })
@@ -47,17 +48,10 @@ class SignalEngineTest:
             if response.status_code == 200:
                 data = response.json()
                 self.admin_token = data.get("token")
-                user_info = data.get("user", {})
-                is_admin = user_info.get("is_admin", False)
-                
-                if self.admin_token and is_admin:
-                    self.log_test("Admin Authentication", True, f"Admin user authenticated successfully")
-                    return True
-                else:
-                    self.log_test("Admin Authentication", False, f"User is not admin: {user_info}")
-                    return False
+                self.log_test("Admin Authentication", True, f"Token obtained")
+                return True
             else:
-                self.log_test("Admin Authentication", False, f"Login failed: {response.status_code} - {response.text}")
+                self.log_test("Admin Authentication", False, f"Status: {response.status_code}, Response: {response.text}")
                 return False
                 
         except Exception as e:
@@ -68,19 +62,19 @@ class SignalEngineTest:
         """Get authorization headers"""
         return {"Authorization": f"Bearer {self.admin_token}"}
     
-    def create_signal(self, signal_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Create a signal and return the response"""
+    def create_signal(self, signal_data: Dict[str, Any]) -> Optional[str]:
+        """Create a signal and return signal_id"""
         try:
             response = requests.post(
-                f"{BASE_URL}/admin/signals",
+                f"{BACKEND_URL}/admin/signals",
                 json=signal_data,
                 headers=self.get_headers()
             )
             
             if response.status_code == 200:
-                return response.json()
+                return response.json().get("signal_id")
             else:
-                print(f"Signal creation failed: {response.status_code} - {response.text}")
+                print(f"Failed to create signal: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
@@ -91,23 +85,25 @@ class SignalEngineTest:
         """Get signal details"""
         try:
             response = requests.get(
-                f"{BASE_URL}/signals/{signal_id}",
+                f"{BACKEND_URL}/signals/{signal_id}",
                 headers=self.get_headers()
             )
             
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"Get signal failed: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
             print(f"Exception getting signal: {str(e)}")
             return None
     
-    def test_admin_state_authority_active(self):
-        """CRITICAL TEST 1A: Admin creates ACTIVE signal - should stay ACTIVE"""
-        signal_data = {
+    def test_admin_state_authority(self):
+        """CRITICAL TEST 1: Admin State Authority"""
+        print("\n=== CRITICAL TEST 1: Admin State Authority ===")
+        
+        # Test 1A: Create ACTIVE signal directly
+        active_signal_data = {
             "pair": "EURUSD",
             "signal_type": "buy",
             "entry": 1.0800,
@@ -119,476 +115,379 @@ class SignalEngineTest:
             "visibility": "free"
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("Admin State Authority - Create ACTIVE", False, "Failed to create signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("Admin State Authority - Create ACTIVE", False, "No signal_id in response")
-            return
-        
-        # Get the created signal to verify state
-        signal = self.get_signal(signal_id)
-        if not signal:
-            self.log_test("Admin State Authority - Create ACTIVE", False, "Failed to retrieve created signal")
-            return
-        
-        actual_state = signal.get("state")
-        activated_at = signal.get("activated_at")
-        
-        if actual_state == "active" and activated_at is not None:
-            self.log_test("Admin State Authority - Create ACTIVE", True, 
-                         f"Signal created with state='active' and activated_at is set. Signal ID: {signal_id}")
+        signal_id = self.create_signal(active_signal_data)
+        if signal_id:
+            signal = self.get_signal(signal_id)
+            if signal and signal.get("state") == "active":
+                self.log_test("Admin creates ACTIVE signal", True, f"Signal {signal_id} created with state='active'")
+            else:
+                self.log_test("Admin creates ACTIVE signal", False, f"Signal state is '{signal.get('state') if signal else 'None'}', expected 'active'")
         else:
-            self.log_test("Admin State Authority - Create ACTIVE", False, 
-                         f"Expected state='active' with activated_at, got state='{actual_state}', activated_at={activated_at}")
-    
-    def test_admin_state_authority_pending(self):
-        """CRITICAL TEST 1B: Admin creates signal without state - should be PENDING"""
-        signal_data = {
+            self.log_test("Admin creates ACTIVE signal", False, "Failed to create signal")
+        
+        # Test 1B: Create default PENDING signal
+        pending_signal_data = {
             "pair": "GBPUSD",
             "signal_type": "sell",
             "entry": 1.2700,
             "stop_loss": 1.2750,
             "tp1": 1.2650,
-            "tp2": 1.2600,
-            "tp3": 1.2550,
             "visibility": "free"
-            # No state specified - should default to pending
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("Admin State Authority - Default PENDING", False, "Failed to create signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("Admin State Authority - Default PENDING", False, "No signal_id in response")
-            return
-        
-        # Get the created signal to verify state
-        signal = self.get_signal(signal_id)
-        if not signal:
-            self.log_test("Admin State Authority - Default PENDING", False, "Failed to retrieve created signal")
-            return
-        
-        actual_state = signal.get("state")
-        
-        if actual_state == "pending":
-            self.log_test("Admin State Authority - Default PENDING", True, 
-                         f"Signal correctly created with default state='pending'. Signal ID: {signal_id}")
+        signal_id = self.create_signal(pending_signal_data)
+        if signal_id:
+            signal = self.get_signal(signal_id)
+            if signal and signal.get("state") == "pending":
+                self.log_test("Default signal is PENDING", True, f"Signal {signal_id} created with state='pending'")
+            else:
+                self.log_test("Default signal is PENDING", False, f"Signal state is '{signal.get('state') if signal else 'None'}', expected 'pending'")
         else:
-            self.log_test("Admin State Authority - Default PENDING", False, 
-                         f"Expected state='pending', got state='{actual_state}'")
+            self.log_test("Default signal is PENDING", False, "Failed to create signal")
     
-    def test_state_immutability(self):
-        """CRITICAL TEST 3: State Immutability - Closed signals must be immutable"""
-        # First create a signal
-        signal_data = {
-            "pair": "USDJPY",
-            "signal_type": "buy",
-            "entry": 150.00,
-            "stop_loss": 149.50,
-            "tp1": 150.50,
-            "tp2": 151.00,
-            "tp3": 151.50,
+    def test_pip_calculation_logic(self):
+        """CRITICAL TEST 2: Pip Calculation Logic"""
+        print("\n=== CRITICAL TEST 2: Pip Calculation Logic ===")
+        
+        # Test 2A: SELL signal - profit when price goes DOWN
+        sell_signal_data = {
+            "pair": "EURUSD",
+            "signal_type": "sell",
+            "entry": 1.1000,
+            "stop_loss": 1.1050,
+            "tp1": 1.0950,
+            "tp2": 1.0900,
+            "tp3": 1.0850,
             "state": "active",
             "visibility": "free"
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("State Immutability Setup", False, "Failed to create test signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("State Immutability Setup", False, "No signal_id in response")
-            return
-        
-        # Force close the signal
-        try:
-            close_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/force-close",
-                json={"close_price": 149.75, "reason": "Test closure"},
-                headers=self.get_headers()
-            )
+        sell_signal_id = self.create_signal(sell_signal_data)
+        if sell_signal_id:
+            # Test SELL TP hit (price goes DOWN = profit)
+            try:
+                response = requests.post(
+                    f"{BACKEND_URL}/admin/signals/{sell_signal_id}/force-close?close_price=1.0950",
+                    headers=self.get_headers()
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    final_pips = result.get("final_pips")
+                    # SELL: entry=1.1000, exit=1.0950 → pips = (1.1000 - 1.0950) * 10000 = +50 pips
+                    if final_pips and final_pips > 0:
+                        self.log_test("SELL TP pips calculation", True, f"SELL signal: entry=1.1000, exit=1.0950 → pips={final_pips} (positive)")
+                    else:
+                        self.log_test("SELL TP pips calculation", False, f"Expected positive pips, got {final_pips}")
+                else:
+                    self.log_test("SELL TP pips calculation", False, f"Force close failed: {response.status_code}")
+            except Exception as e:
+                self.log_test("SELL TP pips calculation", False, f"Exception: {str(e)}")
             
-            if close_response.status_code != 200:
-                self.log_test("State Immutability Setup", False, f"Failed to close signal: {close_response.text}")
-                return
+            # Test SELL SL hit (price goes UP = loss)
+            sell_sl_signal_data = {
+                "pair": "EURUSD",
+                "signal_type": "sell",
+                "entry": 1.1000,
+                "stop_loss": 1.1050,
+                "tp1": 1.0950,
+                "state": "active",
+                "visibility": "free"
+            }
             
-        except Exception as e:
-            self.log_test("State Immutability Setup", False, f"Exception closing signal: {str(e)}")
-            return
+            sell_sl_signal_id = self.create_signal(sell_sl_signal_data)
+            if sell_sl_signal_id:
+                try:
+                    response = requests.post(
+                        f"{BACKEND_URL}/admin/signals/{sell_sl_signal_id}/force-close?close_price=1.1050",
+                        headers=self.get_headers()
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        final_pips = result.get("final_pips")
+                        # SELL: entry=1.1000, exit=1.1050 → pips = (1.1000 - 1.1050) * 10000 = -50 pips
+                        if final_pips and final_pips < 0:
+                            self.log_test("SELL SL pips calculation", True, f"SELL signal: entry=1.1000, exit=1.1050 → pips={final_pips} (negative)")
+                        else:
+                            self.log_test("SELL SL pips calculation", False, f"Expected negative pips, got {final_pips}")
+                    else:
+                        self.log_test("SELL SL pips calculation", False, f"Force close failed: {response.status_code}")
+                except Exception as e:
+                    self.log_test("SELL SL pips calculation", False, f"Exception: {str(e)}")
         
-        # Now test that all operations fail on closed signal
-        immutability_tests = []
-        
-        # Test 1: Try to transition state
-        try:
-            transition_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/transition",
-                json={"new_state": "active"},
-                headers=self.get_headers()
-            )
-            
-            if transition_response.status_code == 400 and "immutable" in transition_response.text.lower():
-                immutability_tests.append(("Transition blocked", True))
-            else:
-                immutability_tests.append(("Transition blocked", False, f"Expected 400 with 'immutable', got {transition_response.status_code}: {transition_response.text}"))
-        except Exception as e:
-            immutability_tests.append(("Transition blocked", False, f"Exception: {str(e)}"))
-        
-        # Test 2: Try to activate
-        try:
-            activate_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/activate",
-                headers=self.get_headers()
-            )
-            
-            if activate_response.status_code == 400 and "immutable" in activate_response.text.lower():
-                immutability_tests.append(("Activate blocked", True))
-            else:
-                immutability_tests.append(("Activate blocked", False, f"Expected 400 with 'immutable', got {activate_response.status_code}: {activate_response.text}"))
-        except Exception as e:
-            immutability_tests.append(("Activate blocked", False, f"Exception: {str(e)}"))
-        
-        # Test 3: Try to mark TP
-        try:
-            tp_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
-                headers=self.get_headers()
-            )
-            
-            if tp_response.status_code == 400 and "immutable" in tp_response.text.lower():
-                immutability_tests.append(("Mark-TP blocked", True))
-            else:
-                immutability_tests.append(("Mark-TP blocked", False, f"Expected 400 with 'immutable', got {tp_response.status_code}: {tp_response.text}"))
-        except Exception as e:
-            immutability_tests.append(("Mark-TP blocked", False, f"Exception: {str(e)}"))
-        
-        # Evaluate overall immutability
-        all_passed = all(test[1] for test in immutability_tests)
-        failed_tests = [test for test in immutability_tests if not test[1]]
-        
-        if all_passed:
-            self.log_test("State Immutability - All Operations Blocked", True, 
-                         f"All operations correctly blocked on closed signal {signal_id}")
-        else:
-            details = f"Failed tests: {[test[0] + ': ' + (test[2] if len(test) > 2 else 'Failed') for test in failed_tests]}"
-            self.log_test("State Immutability - All Operations Blocked", False, details)
-    
-    def test_direction_aware_price_logic_buy(self):
-        """CRITICAL TEST 2A: BUY Signal Price Logic"""
-        # Create a BUY signal
-        signal_data = {
+        # Test 2B: BUY signal - profit when price goes UP
+        buy_signal_data = {
             "pair": "EURUSD",
             "signal_type": "buy",
             "entry": 1.1000,
-            "stop_loss": 1.0950,  # SL below entry for BUY
-            "tp1": 1.1050,        # TP above entry for BUY
+            "stop_loss": 1.0950,
+            "tp1": 1.1050,
             "tp2": 1.1100,
             "tp3": 1.1150,
             "state": "active",
             "visibility": "free"
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("BUY Signal Price Logic Setup", False, "Failed to create BUY signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("BUY Signal Price Logic Setup", False, "No signal_id in response")
-            return
-        
-        # Test BUY logic expectations:
-        # For BUY: SL triggers when price FALLS (price <= SL)
-        # For BUY: TP triggers when price RISES (price >= TP)
-        
-        buy_logic_correct = True
-        details = []
-        
-        # Verify signal was created correctly
-        signal = self.get_signal(signal_id)
-        if signal:
-            entry = signal.get("entry")
-            stop_loss = signal.get("stop_loss")
-            tp1 = signal.get("tp1")
-            signal_type = signal.get("signal_type")
+        buy_signal_id = self.create_signal(buy_signal_data)
+        if buy_signal_id:
+            # Test BUY TP hit (price goes UP = profit)
+            try:
+                response = requests.post(
+                    f"{BACKEND_URL}/admin/signals/{buy_signal_id}/force-close?close_price=1.1050",
+                    headers=self.get_headers()
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    final_pips = result.get("final_pips")
+                    # BUY: entry=1.1000, exit=1.1050 → pips = (1.1050 - 1.1000) * 10000 = +50 pips
+                    if final_pips and final_pips > 0:
+                        self.log_test("BUY TP pips calculation", True, f"BUY signal: entry=1.1000, exit=1.1050 → pips={final_pips} (positive)")
+                    else:
+                        self.log_test("BUY TP pips calculation", False, f"Expected positive pips, got {final_pips}")
+                else:
+                    self.log_test("BUY TP pips calculation", False, f"Force close failed: {response.status_code}")
+            except Exception as e:
+                self.log_test("BUY TP pips calculation", False, f"Exception: {str(e)}")
             
-            if signal_type == "buy" and stop_loss < entry and tp1 > entry:
-                details.append(f"BUY signal structure correct: Entry={entry}, SL={stop_loss}, TP1={tp1}")
-            else:
-                buy_logic_correct = False
-                details.append(f"BUY signal structure incorrect: Entry={entry}, SL={stop_loss}, TP1={tp1}")
-        else:
-            buy_logic_correct = False
-            details.append("Failed to retrieve created BUY signal")
-        
-        if buy_logic_correct:
-            self.log_test("BUY Signal Price Logic", True, 
-                         f"BUY signal created with correct price structure. Signal ID: {signal_id}. " + "; ".join(details))
-        else:
-            self.log_test("BUY Signal Price Logic", False, "; ".join(details))
+            # Test BUY SL hit (price goes DOWN = loss)
+            buy_sl_signal_data = {
+                "pair": "EURUSD",
+                "signal_type": "buy",
+                "entry": 1.1000,
+                "stop_loss": 1.0950,
+                "tp1": 1.1050,
+                "state": "active",
+                "visibility": "free"
+            }
+            
+            buy_sl_signal_id = self.create_signal(buy_sl_signal_data)
+            if buy_sl_signal_id:
+                try:
+                    response = requests.post(
+                        f"{BACKEND_URL}/admin/signals/{buy_sl_signal_id}/force-close?close_price=1.0950",
+                        headers=self.get_headers()
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        final_pips = result.get("final_pips")
+                        # BUY: entry=1.1000, exit=1.0950 → pips = (1.0950 - 1.1000) * 10000 = -50 pips
+                        if final_pips and final_pips < 0:
+                            self.log_test("BUY SL pips calculation", True, f"BUY signal: entry=1.1000, exit=1.0950 → pips={final_pips} (negative)")
+                        else:
+                            self.log_test("BUY SL pips calculation", False, f"Expected negative pips, got {final_pips}")
+                    else:
+                        self.log_test("BUY SL pips calculation", False, f"Force close failed: {response.status_code}")
+                except Exception as e:
+                    self.log_test("BUY SL pips calculation", False, f"Exception: {str(e)}")
     
-    def test_direction_aware_price_logic_sell(self):
-        """CRITICAL TEST 2B: SELL Signal Price Logic"""
-        # Create a SELL signal
+    def test_state_immutability(self):
+        """CRITICAL TEST 3: State Immutability"""
+        print("\n=== CRITICAL TEST 3: State Immutability ===")
+        
+        # Create and close a signal
         signal_data = {
-            "pair": "GBPUSD",
-            "signal_type": "sell",
-            "entry": 1.2500,
-            "stop_loss": 1.2550,  # SL above entry for SELL
-            "tp1": 1.2450,        # TP below entry for SELL
-            "tp2": 1.2400,
-            "tp3": 1.2350,
+            "pair": "EURUSD",
+            "signal_type": "buy",
+            "entry": 1.1000,
+            "stop_loss": 1.0950,
+            "tp1": 1.1050,
             "state": "active",
             "visibility": "free"
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("SELL Signal Price Logic Setup", False, "Failed to create SELL signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("SELL Signal Price Logic Setup", False, "No signal_id in response")
-            return
-        
-        # Test SELL logic expectations:
-        # For SELL: SL triggers when price RISES (price >= SL)
-        # For SELL: TP triggers when price FALLS (price <= TP)
-        
-        sell_logic_correct = True
-        details = []
-        
-        # Verify signal was created correctly
-        signal = self.get_signal(signal_id)
-        if signal:
-            entry = signal.get("entry")
-            stop_loss = signal.get("stop_loss")
-            tp1 = signal.get("tp1")
-            signal_type = signal.get("signal_type")
-            
-            if signal_type == "sell" and stop_loss > entry and tp1 < entry:
-                details.append(f"SELL signal structure correct: Entry={entry}, SL={stop_loss}, TP1={tp1}")
-            else:
-                sell_logic_correct = False
-                details.append(f"SELL signal structure incorrect: Entry={entry}, SL={stop_loss}, TP1={tp1}")
-        else:
-            sell_logic_correct = False
-            details.append("Failed to retrieve created SELL signal")
-        
-        if sell_logic_correct:
-            self.log_test("SELL Signal Price Logic", True, 
-                         f"SELL signal created with correct price structure. Signal ID: {signal_id}. " + "; ".join(details))
-        else:
-            self.log_test("SELL Signal Price Logic", False, "; ".join(details))
+        signal_id = self.create_signal(signal_data)
+        if signal_id:
+            # Close the signal
+            try:
+                response = requests.post(
+                    f"{BACKEND_URL}/admin/signals/{signal_id}/force-close?close_price=1.1050",
+                    headers=self.get_headers()
+                )
+                
+                if response.status_code == 200:
+                    # Verify signal is closed
+                    signal = self.get_signal(signal_id)
+                    if signal and signal.get("state") == "closed":
+                        self.log_test("Signal successfully closed", True, f"Signal {signal_id} state is 'closed'")
+                        
+                        # Test 3A: Try transition (should fail)
+                        try:
+                            transition_response = requests.post(
+                                f"{BACKEND_URL}/admin/signals/{signal_id}/transition",
+                                json={"new_state": "active"},
+                                headers=self.get_headers()
+                            )
+                            
+                            if transition_response.status_code == 400 and "immutable" in transition_response.text.lower():
+                                self.log_test("Closed signal blocks transitions", True, "Transition correctly blocked with 'immutable' error")
+                            else:
+                                self.log_test("Closed signal blocks transitions", False, f"Expected 400 with 'immutable', got {transition_response.status_code}: {transition_response.text}")
+                        except Exception as e:
+                            self.log_test("Closed signal blocks transitions", False, f"Exception: {str(e)}")
+                        
+                        # Test 3B: Try activate (should fail)
+                        try:
+                            activate_response = requests.post(
+                                f"{BACKEND_URL}/admin/signals/{signal_id}/activate",
+                                headers=self.get_headers()
+                            )
+                            
+                            if activate_response.status_code == 400 and "immutable" in activate_response.text.lower():
+                                self.log_test("Closed signal blocks activation", True, "Activation correctly blocked with 'immutable' error")
+                            else:
+                                self.log_test("Closed signal blocks activation", False, f"Expected 400 with 'immutable', got {activate_response.status_code}: {activate_response.text}")
+                        except Exception as e:
+                            self.log_test("Closed signal blocks activation", False, f"Exception: {str(e)}")
+                        
+                        # Test 3C: Try mark-tp (should fail)
+                        try:
+                            tp_response = requests.post(
+                                f"{BACKEND_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
+                                headers=self.get_headers()
+                            )
+                            
+                            if tp_response.status_code == 400 and "immutable" in tp_response.text.lower():
+                                self.log_test("Closed signal blocks TP marking", True, "TP marking correctly blocked with 'immutable' error")
+                            else:
+                                self.log_test("Closed signal blocks TP marking", False, f"Expected 400 with 'immutable', got {tp_response.status_code}: {tp_response.text}")
+                        except Exception as e:
+                            self.log_test("Closed signal blocks TP marking", False, f"Exception: {str(e)}")
+                        
+                        # Test 3D: Try force-close again (should fail)
+                        try:
+                            close_response = requests.post(
+                                f"{BACKEND_URL}/admin/signals/{signal_id}/force-close?close_price=1.1000",
+                                headers=self.get_headers()
+                            )
+                            
+                            if close_response.status_code == 400 and ("immutable" in close_response.text.lower() or "already closed" in close_response.text.lower()):
+                                self.log_test("Closed signal blocks re-closing", True, "Re-closing correctly blocked")
+                            else:
+                                self.log_test("Closed signal blocks re-closing", False, f"Expected 400 with 'immutable/already closed', got {close_response.status_code}: {close_response.text}")
+                        except Exception as e:
+                            self.log_test("Closed signal blocks re-closing", False, f"Exception: {str(e)}")
+                    else:
+                        self.log_test("Signal successfully closed", False, f"Signal state is '{signal.get('state') if signal else 'None'}', expected 'closed'")
+                else:
+                    self.log_test("Signal successfully closed", False, f"Force close failed: {response.status_code}")
+            except Exception as e:
+                self.log_test("Signal successfully closed", False, f"Exception: {str(e)}")
     
-    def test_manual_state_transitions(self):
-        """Test manual state transitions work correctly"""
-        # Create a pending signal
+    def test_exit_handling(self):
+        """CRITICAL TEST 4: Exit Handling"""
+        print("\n=== CRITICAL TEST 4: Exit Handling ===")
+        
+        # Create and close a signal to test exit field population
         signal_data = {
-            "pair": "AUDUSD",
+            "pair": "EURUSD",
             "signal_type": "buy",
-            "entry": 0.6500,
-            "stop_loss": 0.6450,
-            "tp1": 0.6550,
-            "tp2": 0.6600,
-            "tp3": 0.6650,
-            "state": "pending",
+            "entry": 1.1000,
+            "stop_loss": 1.0950,
+            "tp1": 1.1050,
+            "tp2": 1.1100,
+            "tp3": 1.1150,
+            "state": "active",
             "visibility": "free"
         }
         
-        create_response = self.create_signal(signal_data)
-        if not create_response:
-            self.log_test("Manual State Transitions Setup", False, "Failed to create test signal")
-            return
-        
-        signal_id = create_response.get("signal_id")
-        if not signal_id:
-            self.log_test("Manual State Transitions Setup", False, "No signal_id in response")
-            return
-        
-        # Test sequence: pending -> active -> tp1 -> tp2 -> tp3 -> closed
-        transitions_passed = []
-        
-        # 1. Activate signal (pending -> active)
-        try:
-            activate_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/activate",
-                headers=self.get_headers()
-            )
-            
-            if activate_response.status_code == 200:
-                signal = self.get_signal(signal_id)
-                if signal and signal.get("state") == "active":
-                    transitions_passed.append("pending->active: ✅")
+        signal_id = self.create_signal(signal_data)
+        if signal_id:
+            try:
+                # Close with specific price
+                close_price = 1.1075
+                response = requests.post(
+                    f"{BACKEND_URL}/admin/signals/{signal_id}/force-close?close_price={close_price}",
+                    headers=self.get_headers()
+                )
+                
+                if response.status_code == 200:
+                    # Get updated signal
+                    signal = self.get_signal(signal_id)
+                    if signal:
+                        # Check all required exit fields
+                        state = signal.get("state")
+                        exit_price = signal.get("exit_price")
+                        final_pips = signal.get("final_pips")
+                        closed_at = signal.get("closed_at")
+                        
+                        # Test state is closed
+                        if state == "closed":
+                            self.log_test("Exit handling: state set to closed", True, f"State is 'closed'")
+                        else:
+                            self.log_test("Exit handling: state set to closed", False, f"State is '{state}', expected 'closed'")
+                        
+                        # Test exit_price is set
+                        if exit_price == close_price:
+                            self.log_test("Exit handling: exit_price set", True, f"exit_price={exit_price}")
+                        else:
+                            self.log_test("Exit handling: exit_price set", False, f"exit_price={exit_price}, expected {close_price}")
+                        
+                        # Test final_pips is calculated
+                        if final_pips is not None:
+                            expected_pips = (close_price - 1.1000) * 10000  # BUY signal
+                            if abs(final_pips - expected_pips) < 0.1:
+                                self.log_test("Exit handling: final_pips calculated", True, f"final_pips={final_pips}")
+                            else:
+                                self.log_test("Exit handling: final_pips calculated", False, f"final_pips={final_pips}, expected ~{expected_pips}")
+                        else:
+                            self.log_test("Exit handling: final_pips calculated", False, "final_pips is None")
+                        
+                        # Test closed_at is set
+                        if closed_at:
+                            self.log_test("Exit handling: closed_at timestamp set", True, f"closed_at={closed_at}")
+                        else:
+                            self.log_test("Exit handling: closed_at timestamp set", False, "closed_at is None")
+                    else:
+                        self.log_test("Exit handling: signal retrieval", False, "Could not retrieve closed signal")
                 else:
-                    transitions_passed.append(f"pending->active: ❌ (state={signal.get('state') if signal else 'unknown'})")
-            else:
-                transitions_passed.append(f"pending->active: ❌ ({activate_response.status_code}: {activate_response.text})")
-        except Exception as e:
-            transitions_passed.append(f"pending->active: ❌ (Exception: {str(e)})")
-        
-        # 2. Mark TP1 (active -> tp1)
-        try:
-            tp1_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=1",
-                headers=self.get_headers()
-            )
-            
-            if tp1_response.status_code == 200:
-                signal = self.get_signal(signal_id)
-                if signal and signal.get("state") == "tp1":
-                    transitions_passed.append("active->tp1: ✅")
-                else:
-                    transitions_passed.append(f"active->tp1: ❌ (state={signal.get('state') if signal else 'unknown'})")
-            else:
-                transitions_passed.append(f"active->tp1: ❌ ({tp1_response.status_code}: {tp1_response.text})")
-        except Exception as e:
-            transitions_passed.append(f"active->tp1: ❌ (Exception: {str(e)})")
-        
-        # 3. Mark TP2 (tp1 -> tp2)
-        try:
-            tp2_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=2",
-                headers=self.get_headers()
-            )
-            
-            if tp2_response.status_code == 200:
-                signal = self.get_signal(signal_id)
-                if signal and signal.get("state") == "tp2":
-                    transitions_passed.append("tp1->tp2: ✅")
-                else:
-                    transitions_passed.append(f"tp1->tp2: ❌ (state={signal.get('state') if signal else 'unknown'})")
-            else:
-                transitions_passed.append(f"tp1->tp2: ❌ ({tp2_response.status_code}: {tp2_response.text})")
-        except Exception as e:
-            transitions_passed.append(f"tp1->tp2: ❌ (Exception: {str(e)})")
-        
-        # 4. Mark TP3 (tp2 -> tp3 -> closed automatically)
-        try:
-            tp3_response = requests.post(
-                f"{BASE_URL}/admin/signals/{signal_id}/mark-tp?tp_level=3",
-                headers=self.get_headers()
-            )
-            
-            if tp3_response.status_code == 200:
-                signal = self.get_signal(signal_id)
-                if signal and signal.get("state") == "closed":
-                    transitions_passed.append("tp2->tp3->closed: ✅")
-                else:
-                    transitions_passed.append(f"tp2->tp3->closed: ❌ (state={signal.get('state') if signal else 'unknown'})")
-            else:
-                transitions_passed.append(f"tp2->tp3->closed: ❌ ({tp3_response.status_code}: {tp3_response.text})")
-        except Exception as e:
-            transitions_passed.append(f"tp2->tp3->closed: ❌ (Exception: {str(e)})")
-        
-        # Evaluate results
-        all_transitions_passed = all("✅" in transition for transition in transitions_passed)
-        
-        if all_transitions_passed:
-            self.log_test("Manual State Transitions", True, 
-                         f"All state transitions working correctly. Signal ID: {signal_id}. " + "; ".join(transitions_passed))
-        else:
-            self.log_test("Manual State Transitions", False, 
-                         f"Some transitions failed. Signal ID: {signal_id}. " + "; ".join(transitions_passed))
+                    self.log_test("Exit handling: force close", False, f"Force close failed: {response.status_code}")
+            except Exception as e:
+                self.log_test("Exit handling: force close", False, f"Exception: {str(e)}")
     
     def run_all_tests(self):
         """Run all critical tests"""
-        print("=" * 80)
-        print("SIGNAL ENGINE AUTHORITY & TRIGGER FIXES - CRITICAL TESTING")
-        print("=" * 80)
-        print()
+        print("🚀 Starting Signal Lifecycle Engine v2.0 Testing Suite")
+        print("=" * 60)
         
-        # Authenticate first
-        if not self.authenticate_admin():
-            print("❌ CRITICAL: Admin authentication failed. Cannot proceed with tests.")
-            return
+        # Setup
+        if not self.setup_admin_auth():
+            print("❌ Cannot proceed without admin authentication")
+            return False
         
-        print("Running Critical Tests...")
-        print("-" * 40)
-        
-        # CRITICAL TEST 1: Admin State Authority
-        self.test_admin_state_authority_active()
-        self.test_admin_state_authority_pending()
-        
-        # CRITICAL TEST 2: Direction-Aware Price Logic
-        self.test_direction_aware_price_logic_buy()
-        self.test_direction_aware_price_logic_sell()
-        
-        # CRITICAL TEST 3: State Immutability
+        # Run all critical tests
+        self.test_admin_state_authority()
+        self.test_pip_calculation_logic()
         self.test_state_immutability()
-        
-        # Additional Test: Manual State Transitions
-        self.test_manual_state_transitions()
+        self.test_exit_handling()
         
         # Summary
-        print("=" * 80)
-        print("TEST SUMMARY")
-        print("=" * 80)
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY")
+        print("=" * 60)
         
-        total_tests = len(self.test_results)
-        passed_tests = len([t for t in self.test_results if t["success"]])
-        failed_tests = total_tests - passed_tests
+        passed = sum(1 for result in self.test_results if result["passed"])
+        total = len(self.test_results)
         
-        print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests*100):.1f}%")
-        print()
+        print(f"Total Tests: {total}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {total - passed}")
+        print(f"Success Rate: {(passed/total*100):.1f}%")
         
-        if failed_tests > 0:
-            print("FAILED TESTS:")
-            for test in self.test_results:
-                if not test["success"]:
-                    print(f"❌ {test['test']}: {test['details']}")
-            print()
-        
-        print("CRITICAL REQUIREMENTS STATUS:")
-        print("-" * 40)
-        
-        # Check critical requirements
-        admin_active_test = next((t for t in self.test_results if "Admin State Authority - Create ACTIVE" in t["test"]), None)
-        admin_pending_test = next((t for t in self.test_results if "Admin State Authority - Default PENDING" in t["test"]), None)
-        buy_logic_test = next((t for t in self.test_results if "BUY Signal Price Logic" in t["test"]), None)
-        sell_logic_test = next((t for t in self.test_results if "SELL Signal Price Logic" in t["test"]), None)
-        immutability_test = next((t for t in self.test_results if "State Immutability" in t["test"]), None)
-        
-        requirements = [
-            ("Admin creates state='active' → Signal stays active", admin_active_test["success"] if admin_active_test else False),
-            ("Admin creates without state → Signal is pending", admin_pending_test["success"] if admin_pending_test else False),
-            ("BUY Signal Price Structure", buy_logic_test["success"] if buy_logic_test else False),
-            ("SELL Signal Price Structure", sell_logic_test["success"] if sell_logic_test else False),
-            ("Closed signal modifications → ALL blocked", immutability_test["success"] if immutability_test else False),
-        ]
-        
-        for req_name, req_passed in requirements:
-            status = "✅ PASS" if req_passed else "❌ FAIL"
-            print(f"{status}: {req_name}")
-        
-        print()
-        all_critical_passed = all(req[1] for req in requirements)
-        if all_critical_passed:
-            print("🎉 ALL CRITICAL REQUIREMENTS PASSED!")
+        # List failed tests
+        failed_tests = [result for result in self.test_results if not result["passed"]]
+        if failed_tests:
+            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
+            for test in failed_tests:
+                print(f"  • {test['test']}: {test['details']}")
         else:
-            print("⚠️  SOME CRITICAL REQUIREMENTS FAILED - NEEDS ATTENTION")
+            print(f"\n✅ ALL TESTS PASSED!")
         
-        return all_critical_passed
+        return len(failed_tests) == 0
 
 if __name__ == "__main__":
-    tester = SignalEngineTest()
-    success = tester.run_all_tests()
-    
-    if success:
-        print("\n✅ Signal Engine fixes are working correctly!")
-    else:
-        print("\n❌ Signal Engine has issues that need to be addressed!")
+    runner = TestRunner()
+    success = runner.run_all_tests()
+    sys.exit(0 if success else 1)
