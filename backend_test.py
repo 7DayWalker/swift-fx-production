@@ -298,12 +298,33 @@ class RBACTester:
             self.log_test("Permission Enforcement - Login", False, "No signal admin created")
             return False
             
+        # Get the email from the created admin ID (we need to construct it)
+        import time
+        # We need to find the actual email used - let's get it from the admin list
+        response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token)
+        
+        if response and response.status_code == 200:
+            admins = response.json().get('admins', [])
+            signal_admin_email = None
+            
+            for admin in admins:
+                if admin.get('user_id') == self.created_admin_id:
+                    signal_admin_email = admin.get('email')
+                    break
+            
+            if not signal_admin_email:
+                self.log_test("Permission Enforcement - Login", False, "Could not find signal admin email")
+                return False
+        else:
+            self.log_test("Permission Enforcement - Login", False, "Could not retrieve admin list")
+            return False
+            
         # Login as signal admin
         response = self.make_request(
             'POST', 
             '/auth/login',
             json={
-                "email": "signaltest@swiftfx.com",
+                "email": signal_admin_email,
                 "password": "TestPassword123!"
             }
         )
