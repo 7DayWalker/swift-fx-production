@@ -218,6 +218,158 @@ const NotificationService = {
   isNotificationEnabled,
   setNotificationEnabled,
   unregisterToken,
+  // Calendar notifications
+  isCalendarNotificationEnabled,
+  setCalendarNotificationEnabled,
+  getCalendarNotificationMinutes,
+  setCalendarNotificationMinutes,
+  scheduleCalendarEventNotification,
+  cancelAllCalendarNotifications,
 };
 
 export default NotificationService;
+
+// =====================================================
+// CALENDAR EVENT NOTIFICATIONS (High-Impact Only)
+// =====================================================
+
+/**
+ * Check if calendar notifications are enabled
+ */
+export async function isCalendarNotificationEnabled(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(CALENDAR_NOTIFICATION_KEY);
+    // Default to false - opt-in only
+    return value === 'true';
+  } catch (error) {
+    console.error('Error reading calendar notification setting:', error);
+    return false;
+  }
+}
+
+/**
+ * Set calendar notification enabled state
+ */
+export async function setCalendarNotificationEnabled(enabled: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CALENDAR_NOTIFICATION_KEY, enabled.toString());
+    
+    if (!enabled) {
+      // Cancel all scheduled calendar notifications
+      await cancelAllCalendarNotifications();
+    }
+    
+    console.log(`Calendar notifications ${enabled ? 'enabled' : 'disabled'}`);
+  } catch (error) {
+    console.error('Error saving calendar notification setting:', error);
+  }
+}
+
+/**
+ * Get minutes before event to notify (default: 15)
+ */
+export async function getCalendarNotificationMinutes(): Promise<number> {
+  try {
+    const value = await AsyncStorage.getItem(CALENDAR_NOTIFICATION_MINUTES_KEY);
+    return value ? parseInt(value, 10) : 15;
+  } catch (error) {
+    console.error('Error reading notification minutes:', error);
+    return 15;
+  }
+}
+
+/**
+ * Set minutes before event to notify
+ */
+export async function setCalendarNotificationMinutes(minutes: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CALENDAR_NOTIFICATION_MINUTES_KEY, minutes.toString());
+  } catch (error) {
+    console.error('Error saving notification minutes:', error);
+  }
+}
+
+/**
+ * Schedule a local notification for a high-impact calendar event
+ * INFORMATIONAL ONLY - No trading advice
+ */
+export async function scheduleCalendarEventNotification(event: {
+  id: string;
+  title: string;
+  country: string;
+  date: string;
+  impact: string;
+}): Promise<string | null> {
+  try {
+    // Only schedule for high-impact events
+    if (event.impact.toLowerCase() !== 'high') {
+      return null;
+    }
+
+    // Check if calendar notifications are enabled
+    const isEnabled = await isCalendarNotificationEnabled();
+    if (!isEnabled) {
+      return null;
+    }
+
+    // Get notification timing
+    const minutesBefore = await getCalendarNotificationMinutes();
+    const eventDate = new Date(event.date);
+    const notificationDate = new Date(eventDate.getTime() - minutesBefore * 60 * 1000);
+
+    // Don't schedule if notification time has passed
+    if (notificationDate <= new Date()) {
+      console.log('Event notification time has passed, skipping:', event.title);
+      return null;
+    }
+
+    // Currency flag mapping
+    const flags: { [key: string]: string } = {
+      USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵',
+      AUD: '🇦🇺', NZD: '🇳🇿', CAD: '🇨🇦', CHF: '🇨🇭', CNY: '🇨🇳',
+    };
+    const flag = flags[event.country] || '🌍';
+
+    // Schedule the notification
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `${flag} High-Impact Event`,
+        body: `${event.country}: ${event.title} in ${minutesBefore} minutes`,
+        data: { 
+          type: 'calendar_event',
+          eventId: event.id,
+        },
+        sound: true,
+      },
+      trigger: {
+        date: notificationDate,
+      },
+    });
+
+    console.log(`Scheduled notification for ${event.title} at ${notificationDate.toISOString()}`);
+    return notificationId;
+  } catch (error) {
+    console.error('Error scheduling calendar notification:', error);
+    return null;
+  }
+}
+
+/**
+ * Cancel all scheduled calendar notifications
+ */
+export async function cancelAllCalendarNotifications(): Promise<void> {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const calendarNotifications = scheduled.filter(
+      n => n.content.data?.type === 'calendar_event'
+    );
+    
+    for (const notification of calendarNotifications) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+    
+    console.log(`Cancelled ${calendarNotifications.length} calendar notifications`);
+  } catch (error) {
+    console.error('Error cancelling calendar notifications:', error);
+  }
+}
