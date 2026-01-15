@@ -3196,10 +3196,10 @@ async def submit_fund_application(
 
 
 @api_router.get("/fund/my-application")
-async def get_my_fund_application(current_user: dict = Depends(get_current_user)):
+async def get_my_fund_application(current_user: User = Depends(require_auth)):
     """Get the current user's fund management application status."""
     application = await db.fund_applications.find_one(
-        {"user_id": current_user["user_id"]},
+        {"user_id": current_user.user_id},
         sort=[("created_at", -1)]  # Get most recent
     )
     
@@ -3208,13 +3208,11 @@ async def get_my_fund_application(current_user: dict = Depends(get_current_user)
     
     return {
         "has_application": True,
-        "application": {
-            "application_id": application["application_id"],
-            "status": application["status"],
-            "investment_tier": application["investment_tier"],
-            "intended_amount": application["intended_amount"],
-            "created_at": application["created_at"],
-        }
+        "application_id": application["application_id"],
+        "status": application["status"],
+        "investment_tier": application["investment_tier"],
+        "intended_amount": application["intended_amount"],
+        "created_at": application["created_at"],
     }
 
 
