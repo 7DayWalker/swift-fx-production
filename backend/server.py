@@ -248,6 +248,53 @@ def get_status_from_state(state: str) -> str:
 
 class PostCreate(BaseModel):
     content: str
+
+
+# ==============================================================================
+# FUND MANAGEMENT MODELS
+# ==============================================================================
+
+class FundApplicationStatus(str, Enum):
+    PENDING_REVIEW = "pending_review"
+    CONTACTED = "contacted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+class InvestmentTier(str, Enum):
+    STARTER = "starter"
+    PROFESSIONAL = "professional"
+    ELITE = "elite"
+
+class TradingExperience(str, Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+class FundApplicationCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: str
+    country: str
+    investment_tier: InvestmentTier
+    intended_amount: float
+    trading_experience: TradingExperience
+    risk_agreement: bool = False
+
+class FundApplication(BaseModel):
+    application_id: str
+    user_id: str
+    full_name: str
+    email: str
+    phone: str
+    country: str
+    investment_tier: InvestmentTier
+    intended_amount: float
+    trading_experience: TradingExperience
+    risk_agreement: bool
+    status: FundApplicationStatus = FundApplicationStatus.PENDING_REVIEW
+    admin_notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
     post_type: str = "analysis"  # analysis, results, question
 
 class Post(BaseModel):
