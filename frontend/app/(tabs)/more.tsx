@@ -72,7 +72,7 @@ export default function MoreScreen() {
         { icon: 'briefcase-outline', label: 'Fund Management', badge: 'VIP', locked: false, action: () => router.push('/fund-management') },
         { icon: 'business-outline', label: 'Recommended Brokers', badge: null, locked: false, action: () => router.push('/brokers') },
         { icon: 'calendar-outline', label: 'Economic Calendar', badge: null, locked: false, action: () => router.push('/calendar') },
-        { icon: 'newspaper-outline', label: 'News', badge: null, locked: false },
+        { icon: 'newspaper-outline', label: 'News', badge: null, locked: false, action: () => router.push('/news') },
       ],
     },
     {
