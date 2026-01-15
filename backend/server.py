@@ -298,6 +298,51 @@ class FundApplication(BaseModel):
     updated_at: Optional[datetime] = None
     post_type: str = "analysis"  # analysis, results, question
 
+# ==============================================================================
+# INVESTOR DASHBOARD MODELS
+# ==============================================================================
+
+class InvestorAccountStatus(str, Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CLOSED = "closed"
+
+class WithdrawalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    PAID = "paid"
+    REJECTED = "rejected"
+
+class InvestorPortfolioCreate(BaseModel):
+    user_id: str
+    application_id: str
+    invested_capital: float
+    current_equity: float
+    investment_tier: str
+    performance_fee: float = 20.0  # Default 20%
+    lockup_months: int = 3  # Default 3 months
+
+class InvestorPortfolioUpdate(BaseModel):
+    invested_capital: Optional[float] = None
+    current_equity: Optional[float] = None
+    account_status: Optional[InvestorAccountStatus] = None
+    performance_fee: Optional[float] = None
+    lockup_months: Optional[int] = None
+
+class WithdrawalRequest(BaseModel):
+    amount: float
+    notes: Optional[str] = None
+
+class FundPerformanceEntry(BaseModel):
+    month: str  # Format: "2025-01"
+    return_percentage: float
+    notes: Optional[str] = None
+
+class FundNoticeCreate(BaseModel):
+    title: str
+    content: str
+    notice_type: str = "general"  # general, risk, update
+
 class Post(BaseModel):
     post_id: str
     user_id: str
