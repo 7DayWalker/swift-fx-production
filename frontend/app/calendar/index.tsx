@@ -310,6 +310,36 @@ export default function EconomicCalendarScreen() {
         </Text>
       </View>
 
+      {/* Notification Settings Card */}
+      {Platform.OS !== 'web' && (
+        <View style={[styles.notificationCard, dynamicStyles.card, dynamicStyles.border]}>
+          <View style={styles.notificationCardLeft}>
+            <View style={[styles.notificationIcon, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+              <Ionicons name="notifications" size={18} color="#EF4444" />
+            </View>
+            <View style={styles.notificationTextContainer}>
+              <Text style={[styles.notificationTitle, dynamicStyles.text]}>
+                High-Impact Alerts
+              </Text>
+              <TouchableOpacity 
+                onPress={() => notificationsEnabled && setShowNotificationModal(true)}
+                disabled={!notificationsEnabled}
+              >
+                <Text style={[styles.notificationSubtitle, dynamicStyles.textSecondary]}>
+                  {notificationsEnabled ? `${notificationMinutes} min before • Tap to change` : 'Get notified before major events'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={handleNotificationToggle}
+            trackColor={{ false: theme.border, true: '#EF4444' }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      )}
+
       {/* Time Filter Tabs */}
       <View style={[styles.filterContainer, dynamicStyles.card]}>
         {(['today', 'week'] as TimeFilterType[]).map((filter) => (
