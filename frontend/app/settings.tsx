@@ -719,6 +719,37 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Logout Confirmation Modal (for web) */}
+      <Modal
+        visible={showLogoutModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={[styles.confirmIconBox, { backgroundColor: `${COLORS.danger}15` }]}>
+              <Ionicons name="log-out-outline" size={48} color={COLORS.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>Logout</Text>
+            <Text style={styles.confirmDescription}>
+              Are you sure you want to logout?
+            </Text>
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity style={styles.confirmButtonCancel} onPress={() => setShowLogoutModal(false)}>
+                <Text style={styles.confirmButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButtonAction, { backgroundColor: COLORS.danger }]}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.confirmButtonActionText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
