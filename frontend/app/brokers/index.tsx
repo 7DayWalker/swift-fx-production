@@ -174,16 +174,11 @@ export default function RecommendedBrokersScreen() {
 
         {/* Broker Cards */}
         {BROKERS.map((broker) => {
-          const logo = getBrokerLogo(broker);
           return (
             <View key={broker.id} style={[styles.brokerCard, dynamicStyles.card]}>
               {/* Broker Header */}
               <View style={styles.brokerHeader}>
-                <View style={[styles.brokerLogo, { backgroundColor: `${logo.color}20` }]}>
-                  <Text style={[styles.brokerLogoText, { color: logo.color }]}>
-                    {logo.letter}
-                  </Text>
-                </View>
+                <BrokerLogo broker={broker} size={52} />
                 <View style={styles.brokerInfo}>
                   <Text style={[styles.brokerName, dynamicStyles.text]}>{broker.name}</Text>
                   <Text style={[styles.brokerTagline, dynamicStyles.textSecondary]}>
