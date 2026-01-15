@@ -20,31 +20,20 @@ def test_complete_rbac_sequence():
     # Step 1: Verify Super Admin Setup
     print("\n=== STEP 1: Verify Super Admin Setup ===")
     
-    # Try the provided credentials first
+    # Use the correct super admin credentials
     login_response = requests.post(f"{BASE_URL}/auth/login", json={
-        "email": "admin@swiftfx.com",
-        "password": "adminpassword"
+        "email": "ellaniswell@gmail.com",
+        "password": "SuperAdmin_c4e25774!"
     })
     
     if login_response.status_code == 200:
         super_admin_token = login_response.json()["token"]
-        print("✅ Super Admin Login (admin@swiftfx.com) - SUCCESS")
+        print("✅ Super Admin Login (ellaniswell@gmail.com) - SUCCESS")
         results.append("✅ Step 1: Super Admin Login - SUCCESS")
     else:
-        # Try alternative credentials
-        login_response = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": "ellaniswell@gmail.com",
-            "password": "SuperAdmin_c4e25774!"
-        })
-        
-        if login_response.status_code == 200:
-            super_admin_token = login_response.json()["token"]
-            print("✅ Super Admin Login (ellaniswell@gmail.com) - SUCCESS")
-            results.append("✅ Step 1: Super Admin Login (alternative) - SUCCESS")
-        else:
-            print("❌ Super Admin Login - FAILED")
-            results.append("❌ Step 1: Super Admin Login - FAILED")
-            return results
+        print("❌ Super Admin Login - FAILED")
+        results.append("❌ Step 1: Super Admin Login - FAILED")
+        return results
     
     # GET /api/admin/rbac/me
     me_response = requests.get(f"{BASE_URL}/admin/rbac/me",
