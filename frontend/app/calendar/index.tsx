@@ -8,12 +8,22 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
+import {
+  isCalendarNotificationEnabled,
+  setCalendarNotificationEnabled,
+  getCalendarNotificationMinutes,
+  setCalendarNotificationMinutes,
+  scheduleCalendarEventNotification,
+  cancelAllCalendarNotifications,
+} from '../../src/services/notificationService';
 
 // Types for economic events
 interface EconomicEvent {
@@ -35,6 +45,7 @@ type TimeFilterType = 'today' | 'week';
 // Available currencies
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF', 'CNY'];
 const IMPACT_LEVELS = ['High', 'Medium', 'Low', 'Holiday'];
+const NOTIFICATION_MINUTES_OPTIONS = [5, 15, 30, 60];
 
 export default function EconomicCalendarScreen() {
   const { theme } = useTheme();
@@ -49,6 +60,64 @@ export default function EconomicCalendarScreen() {
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
   const [selectedImpacts, setSelectedImpacts] = useState<string[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  
+  // Notifications
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationMinutes, setNotificationMinutesState] = useState(15);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+
+  // Load notification settings
+  useEffect(() => {
+    const loadNotificationSettings = async () => {
+      const enabled = await isCalendarNotificationEnabled();
+      const minutes = await getCalendarNotificationMinutes();
+      setNotificationsEnabled(enabled);
+      setNotificationMinutesState(minutes);
+    };
+    loadNotificationSettings();
+  }, []);
+
+  // Schedule notifications for high-impact events when enabled
+  useEffect(() => {
+    const scheduleNotifications = async () => {
+      if (!notificationsEnabled || events.length === 0) return;
+      
+      // Cancel existing notifications first
+      await cancelAllCalendarNotifications();
+      
+      // Schedule notifications for high-impact events
+      const highImpactEvents = events.filter(e => e.impact.toLowerCase() === 'high');
+      for (const event of highImpactEvents) {
+        await scheduleCalendarEventNotification(event);
+      }
+    };
+    
+    scheduleNotifications();
+  }, [notificationsEnabled, events]);
+
+  const handleNotificationToggle = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    await setCalendarNotificationEnabled(value);
+    
+    if (!value) {
+      await cancelAllCalendarNotifications();
+    }
+  };
+
+  const handleNotificationMinutesChange = async (minutes: number) => {
+    setNotificationMinutesState(minutes);
+    await setCalendarNotificationMinutes(minutes);
+    setShowNotificationModal(false);
+    
+    // Re-schedule notifications with new timing
+    if (notificationsEnabled) {
+      await cancelAllCalendarNotifications();
+      const highImpactEvents = events.filter(e => e.impact.toLowerCase() === 'high');
+      for (const event of highImpactEvents) {
+        await scheduleCalendarEventNotification(event);
+      }
+    }
+  };
 
   const fetchEvents = useCallback(async (isRefresh = false) => {
     try {
