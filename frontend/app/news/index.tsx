@@ -300,41 +300,57 @@ export default function MarketNewsScreen() {
               onPress={() => navigateToDetail(item)}
               activeOpacity={0.7}
             >
-              {/* Category Badge */}
-              <View style={styles.newsCardTop}>
-                <View style={[styles.categoryBadge, { backgroundColor: `${getCategoryColor(item.category)}20` }]}>
-                  <Ionicons
-                    name={getCategoryIcon(item.category) as any}
-                    size={12}
-                    color={getCategoryColor(item.category)}
-                  />
-                  <Text style={[styles.categoryText, { color: getCategoryColor(item.category) }]}>
-                    {item.category}
+              {/* Image + Content Row */}
+              <View style={styles.newsCardContent}>
+                {/* Text Content */}
+                <View style={styles.newsCardText}>
+                  {/* Category Badge */}
+                  <View style={styles.newsCardTop}>
+                    <View style={[styles.categoryBadge, { backgroundColor: `${getCategoryColor(item.category)}20` }]}>
+                      <Ionicons
+                        name={getCategoryIcon(item.category) as any}
+                        size={10}
+                        color={getCategoryColor(item.category)}
+                      />
+                      <Text style={[styles.categoryText, { color: getCategoryColor(item.category) }]}>
+                        {item.category}
+                      </Text>
+                    </View>
+                    <Text style={[styles.newsTime, dynamicStyles.textSecondary]}>
+                      {getRelativeTime(item.pubDate)}
+                    </Text>
+                  </View>
+
+                  {/* Title */}
+                  <Text style={[styles.newsTitle, dynamicStyles.text]} numberOfLines={item.thumbnail ? 2 : 3}>
+                    {item.title}
                   </Text>
+
+                  {/* Footer */}
+                  <View style={styles.newsFooter}>
+                    <Text style={[styles.newsSource, dynamicStyles.textSecondary]}>
+                      {item.source}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color={theme.textSecondary} />
+                  </View>
                 </View>
-                <Text style={[styles.newsTime, dynamicStyles.textSecondary]}>
-                  {getRelativeTime(item.pubDate)}
-                </Text>
-              </View>
 
-              {/* Title */}
-              <Text style={[styles.newsTitle, dynamicStyles.text]} numberOfLines={3}>
-                {item.title}
-              </Text>
-
-              {/* Description */}
-              {item.description && (
-                <Text style={[styles.newsDescription, dynamicStyles.textSecondary]} numberOfLines={2}>
-                  {item.description}
-                </Text>
-              )}
-
-              {/* Footer */}
-              <View style={styles.newsFooter}>
-                <Text style={[styles.newsSource, dynamicStyles.textSecondary]}>
-                  {item.source}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                {/* Thumbnail Image */}
+                {item.thumbnail ? (
+                  <Image
+                    source={{ uri: item.thumbnail }}
+                    style={styles.newsThumbnail}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.newsPlaceholder, { backgroundColor: `${getCategoryColor(item.category)}15` }]}>
+                    <Ionicons
+                      name={getCategoryIcon(item.category) as any}
+                      size={28}
+                      color={getCategoryColor(item.category)}
+                    />
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           ))}
