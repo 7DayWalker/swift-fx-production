@@ -4156,6 +4156,345 @@ async def delete_notice(
     return {"success": True, "message": "Notice deleted successfully"}
 
 
+# ==============================================================================
+# ADMIN ROLE MANAGEMENT API - SUPER ADMIN ONLY
+# ==============================================================================
+
+class AdminCreate(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
+    admin_role: AdminRole
+
+class AdminUpdate(BaseModel):
+    admin_role: Optional[AdminRole] = None
+    admin_enabled: Optional[bool] = None
+    name: Optional[str] = None
+
+def require_super_admin(current_user: User = Depends(require_admin)):
+    """Dependency that requires Super Admin role"""
+    if not is_super_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="This action requires Super Admin privileges"
+        )
+    return current_user
+
+def require_permission(resource: str, action: str):
+    """Create a dependency that checks for specific permission"""
+    def check_permission(current_user: User = Depends(require_admin)):
+        if not has_permission(current_user, resource, action):
+            raise HTTPException(
+                status_code=403,
+                detail=f"You don't have permission to {action} {resource}"
+            )
+        return current_user
+    return check_permission
+
+
+@api_router.get("/admin/rbac/me")
+async def get_my_admin_info(current_user: User = Depends(require_admin)):
+    """Get current admin's role and permissions"""
+    admin_role = current_user.admin_role.value if current_user.admin_role else None
+    
+    # Get permissions for this role
+    permissions = {}
+    if current_user.admin_role:
+        permissions = ADMIN_PERMISSIONS.get(current_user.admin_role, {})
+    
+    return {
+        "user_id": current_user.user_id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "admin_role": admin_role,
+        "admin_enabled": current_user.admin_enabled,
+        "is_super_admin": is_super_admin(current_user),
+        "is_protected": is_protected_super_admin(current_user.email),
+        "permissions": permissions,
+    }
+
+
+@api_router.get("/admin/rbac/admins")
+async def list_all_admins(super_admin: User = Depends(require_super_admin)):
+    """List all admin accounts. Super Admin only."""
+    admins = await db.users.find({"role": "admin"}).to_list(100)
+    
+    result = []
+    for admin in admins:
+        result.append({
+            "user_id": admin["user_id"],
+            "email": admin["email"],
+            "name": admin.get("name", "Unknown"),
+            "admin_role": admin.get("admin_role"),
+            "admin_enabled": admin.get("admin_enabled", True),
+            "is_protected": is_protected_super_admin(admin["email"]),
+            "created_at": admin.get("created_at"),
+        })
+    
+    await log_admin_action(
+        super_admin.user_id,
+        super_admin.admin_role.value if super_admin.admin_role else "admin",
+        "list",
+        "admins",
+        "all"
+    )
+    
+    return {"admins": result, "total": len(result)}
+
+
+@api_router.post("/admin/rbac/admins")
+async def create_admin(
+    admin_data: AdminCreate,
+    super_admin: User = Depends(require_super_admin)
+):
+    """Create a new admin account. Super Admin only."""
+    # Check if email already exists
+    existing = await db.users.find_one({"email": admin_data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Cannot create Super Admin through API (they're protected)
+    if admin_data.admin_role == AdminRole.SUPER_ADMIN:
+        if not is_protected_super_admin(admin_data.email):
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot create Super Admin accounts. Only protected emails can be Super Admins."
+            )
+    
+    # Create admin user
+    user_id = f"admin_{uuid.uuid4().hex[:12]}"
+    password_hash = bcrypt.hashpw(admin_data.password.encode(), bcrypt.gensalt()).decode()
+    now = datetime.now(timezone.utc)
+    
+    user_doc = {
+        "user_id": user_id,
+        "name": admin_data.name,
+        "email": admin_data.email.lower(),
+        "password_hash": password_hash,
+        "role": UserRole.ADMIN.value,
+        "admin_role": admin_data.admin_role.value,
+        "admin_enabled": True,
+        "subscription": "vip",
+        "subscription_expiry": None,
+        "subscription_status": "active",
+        "ai_weekly_used": 0,
+        "notification_preferences": {"signals": True, "community": True},
+        "created_at": now.isoformat(),
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    await log_admin_action(
+        super_admin.user_id,
+        super_admin.admin_role.value,
+        "create",
+        "admin",
+        user_id,
+        {"email": admin_data.email, "admin_role": admin_data.admin_role.value}
+    )
+    
+    # Notify Super Admins
+    await create_admin_notification(
+        [AdminRole.SUPER_ADMIN],
+        "admin_created",
+        "New Admin Created",
+        f"Admin '{admin_data.name}' ({admin_data.admin_role.value}) was created by {super_admin.name}",
+        user_id
+    )
+    
+    return {
+        "success": True,
+        "user_id": user_id,
+        "message": f"Admin account created with role: {admin_data.admin_role.value}"
+    }
+
+
+@api_router.put("/admin/rbac/admins/{user_id}")
+async def update_admin(
+    user_id: str,
+    update_data: AdminUpdate,
+    super_admin: User = Depends(require_super_admin)
+):
+    """Update an admin's role or status. Super Admin only."""
+    admin = await db.users.find_one({"user_id": user_id, "role": "admin"})
+    
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    # Cannot modify protected Super Admins (except by another Super Admin to disable temporarily)
+    if is_protected_super_admin(admin["email"]):
+        if update_data.admin_role is not None and update_data.admin_role != AdminRole.SUPER_ADMIN:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot change role of protected Super Admin"
+            )
+    
+    # Cannot promote to Super Admin unless protected email
+    if update_data.admin_role == AdminRole.SUPER_ADMIN:
+        if not is_protected_super_admin(admin["email"]):
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot promote to Super Admin. Only protected emails can be Super Admins."
+            )
+    
+    update_fields = {}
+    if update_data.admin_role is not None:
+        update_fields["admin_role"] = update_data.admin_role.value
+    if update_data.admin_enabled is not None:
+        update_fields["admin_enabled"] = update_data.admin_enabled
+    if update_data.name is not None:
+        update_fields["name"] = update_data.name
+    
+    if update_fields:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": update_fields}
+        )
+        
+        await log_admin_action(
+            super_admin.user_id,
+            super_admin.admin_role.value,
+            "update",
+            "admin",
+            user_id,
+            update_fields
+        )
+    
+    return {"success": True, "message": "Admin updated successfully"}
+
+
+@api_router.delete("/admin/rbac/admins/{user_id}")
+async def delete_admin(
+    user_id: str,
+    super_admin: User = Depends(require_super_admin)
+):
+    """Delete an admin account. Super Admin only. Cannot delete protected Super Admins."""
+    admin = await db.users.find_one({"user_id": user_id, "role": "admin"})
+    
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    # Cannot delete protected Super Admins
+    if is_protected_super_admin(admin["email"]):
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete protected Super Admin accounts"
+        )
+    
+    # Cannot delete self
+    if user_id == super_admin.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete your own account"
+        )
+    
+    await db.users.delete_one({"user_id": user_id})
+    
+    await log_admin_action(
+        super_admin.user_id,
+        super_admin.admin_role.value,
+        "delete",
+        "admin",
+        user_id,
+        {"email": admin["email"]}
+    )
+    
+    return {"success": True, "message": "Admin deleted successfully"}
+
+
+# ==============================================================================
+# AUDIT LOG API - SUPER ADMIN ONLY
+# ==============================================================================
+
+@api_router.get("/admin/rbac/audit-logs")
+async def get_audit_logs(
+    limit: int = 100,
+    admin_id: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    super_admin: User = Depends(require_super_admin)
+):
+    """Get audit logs. Super Admin only."""
+    query = {}
+    if admin_id:
+        query["admin_id"] = admin_id
+    if resource_type:
+        query["resource_type"] = resource_type
+    
+    logs = await db.audit_logs.find(query).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    for log in logs:
+        log.pop("_id", None)
+    
+    return {"logs": logs, "total": len(logs)}
+
+
+# ==============================================================================
+# ADMIN NOTIFICATIONS API
+# ==============================================================================
+
+@api_router.get("/admin/notifications")
+async def get_admin_notifications(
+    unread_only: bool = False,
+    current_user: User = Depends(require_admin)
+):
+    """Get notifications for current admin based on their role"""
+    admin_role = current_user.admin_role.value if current_user.admin_role else None
+    
+    query = {}
+    if admin_role:
+        # Super Admins see all, others see role-specific
+        if admin_role != AdminRole.SUPER_ADMIN.value:
+            query["target_roles"] = admin_role
+    
+    if unread_only:
+        query["read_by"] = {"$ne": current_user.user_id}
+    
+    notifications = await db.admin_notifications.find(query).sort("created_at", -1).limit(50).to_list(50)
+    
+    for n in notifications:
+        n.pop("_id", None)
+        n["is_read"] = current_user.user_id in n.get("read_by", [])
+    
+    return {"notifications": notifications, "total": len(notifications)}
+
+
+@api_router.put("/admin/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: User = Depends(require_admin)
+):
+    """Mark a notification as read"""
+    await db.admin_notifications.update_one(
+        {"notification_id": notification_id},
+        {"$addToSet": {"read_by": current_user.user_id}}
+    )
+    return {"success": True}
+
+
+# ==============================================================================
+# ADMIN ROLE PERMISSIONS ENDPOINT
+# ==============================================================================
+
+@api_router.get("/admin/rbac/roles")
+async def get_all_roles_permissions(current_user: User = Depends(require_admin)):
+    """Get all admin roles and their permissions"""
+    roles = []
+    for role in AdminRole:
+        roles.append({
+            "role": role.value,
+            "permissions": ADMIN_PERMISSIONS.get(role, {}),
+            "description": {
+                AdminRole.SUPER_ADMIN: "Full system access, permanently protected",
+                AdminRole.SIGNAL_ADMIN: "Manages trading signals only",
+                AdminRole.FUND_ADMIN: "Manages fund performance & portfolios",
+                AdminRole.ACCOUNT_MANAGER: "Handles user accounts & subscriptions",
+                AdminRole.CUSTOMER_SUPPORT: "Support & read-only access",
+            }.get(role, "")
+        })
+    
+    return {"roles": roles}
+
+
 # Include router
 app.include_router(api_router)
 
