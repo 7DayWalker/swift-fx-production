@@ -3219,12 +3219,9 @@ async def get_my_fund_application(current_user: User = Depends(require_auth)):
 @api_router.get("/admin/fund/applications")
 async def get_all_fund_applications(
     status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+    admin: User = Depends(require_admin)
 ):
     """Get all fund management applications. Admin only."""
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     query = {}
     if status:
         query["status"] = status
@@ -3235,10 +3232,7 @@ async def get_all_fund_applications(
     for app in applications:
         app.pop("_id", None)
     
-    return {
-        "applications": applications,
-        "total": len(applications)
-    }
+    return applications
 
 
 @api_router.put("/admin/fund/applications/{application_id}")
