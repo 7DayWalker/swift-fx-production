@@ -583,10 +583,29 @@ async def require_auth(authorization: Optional[str] = Header(None)) -> User:
 
 async def require_admin(authorization: Optional[str] = Header(None)) -> User:
     user = await require_auth(authorization)
-    # Check if user is admin (for now, check if email contains 'admin')
     user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
-    if not user_doc or not user_doc.get("is_admin", False):
+    
+    if not user_doc:
+        raise HTTPException(status_code=403, detail="User not found")
+    
+    # Check if user has admin role
+    if user_doc.get("role") != UserRole.ADMIN.value:
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if admin is enabled
+    if not user_doc.get("admin_enabled", True):
+        raise HTTPException(status_code=403, detail="Admin account is disabled")
+    
+    # Populate admin_role in user object
+    admin_role_str = user_doc.get("admin_role")
+    if admin_role_str:
+        try:
+            user.admin_role = AdminRole(admin_role_str)
+        except ValueError:
+            user.admin_role = None
+    
+    user.admin_enabled = user_doc.get("admin_enabled", True)
+    
     return user
 
 def calculate_risk_reward(entry: float, stop_loss: float, take_profit: float, signal_type: SignalType) -> float:
