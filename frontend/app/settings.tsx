@@ -86,6 +86,7 @@ export default function SettingsScreen() {
   const [showLegalDocument, setShowLegalDocument] = useState<string | null>(null);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   
   // Form states
   const [editName, setEditName] = useState('');
