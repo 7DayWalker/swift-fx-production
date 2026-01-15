@@ -172,11 +172,20 @@ class TestRunner:
         
         if self.assert_response(response, 200, "Get Notification Preferences"):
             data = response.json()
+            
+            # Check if preferences object exists
+            if "preferences" not in data:
+                self.log("❌ Missing 'preferences' object in response", "ERROR")
+                self.failed_tests += 1
+                self.passed_tests -= 1
+                return
+            
+            preferences = data["preferences"]
             required_fields = ["push_enabled", "email_enabled", "signals", "fund_updates", "referral_rewards", "support_replies"]
             
             missing_fields = []
             for field in required_fields:
-                if field not in data:
+                if field not in preferences:
                     missing_fields.append(field)
             
             if missing_fields:
@@ -185,7 +194,7 @@ class TestRunner:
                 self.passed_tests -= 1
             else:
                 self.log(f"✅ All notification preference fields present")
-                self.log(f"   Preferences: {data}")
+                self.log(f"   Preferences: {preferences}")
     
     def test_update_notification_preferences(self):
         """Test 5: Update Notification Preferences (PUT /api/settings/notifications)"""
