@@ -309,16 +309,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  brokerLogo: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+  brokerLogoContainer: {
+    marginRight: 14,
+    backgroundColor: '#1A1F2E',
+    overflow: 'hidden',
+  },
+  brokerLogoImage: {
+    backgroundColor: '#1A1F2E',
+  },
+  brokerLogoFallback: {
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   brokerLogoText: {
-    fontSize: 24,
     fontWeight: 'bold',
   },
   brokerInfo: {
