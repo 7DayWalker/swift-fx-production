@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Backend URL from frontend .env
-BASE_URL = "https://friendboost.preview.emergentagent.com/api"
+BASE_URL = "https://settings-theme-mode.preview.emergentagent.com/api"
 
 # Test credentials from review request
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
