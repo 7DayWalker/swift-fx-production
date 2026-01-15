@@ -93,6 +93,13 @@ export default function AdminDashboard() {
       color: '#F59E0B',
     },
     {
+      icon: 'shield-checkmark',
+      label: 'Admin Management',
+      description: 'Manage admin accounts & roles',
+      route: '/(admin)/admin-management',
+      color: '#8B5CF6',
+    },
+    {
       icon: 'analytics',
       label: 'AI Usage Metrics',
       description: 'View AI analysis statistics',
