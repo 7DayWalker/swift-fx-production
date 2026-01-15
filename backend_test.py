@@ -1,384 +1,383 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Testing for Swift FX Signals - Referral Program
-Tests all referral program endpoints with proper authentication and role-based access control.
+Backend Testing Suite for User Settings System
+Tests all User Settings System endpoints with proper authentication
 """
 
 import requests
 import json
 import sys
-from datetime import datetime
-import time
+from typing import Dict, Optional
 
 # Backend URL from frontend .env
 BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
-# Test credentials from review request
-TEST_CREDENTIALS = {
-    "super_admin": {
-        "email": "ellapauledache@gmail.com",
-        "password": "SuperAdmin2025!"
-    },
-    "vip_user": {
-        "email": "fundtest@test.com", 
-        "password": "password"
-    },
-    "free_user": {
-        "email": "freeuser@test.com",
-        "password": "password"
-    }
-}
+# Test credentials
+SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
+SUPER_ADMIN_PASSWORD = "SuperAdmin2025!"
+VIP_USER_EMAIL = "fundtest@test.com"
+VIP_USER_PASSWORD = "password"
 
-class TestResults:
+class TestRunner:
     def __init__(self):
-        self.passed = 0
-        self.failed = 0
-        self.errors = []
+        self.super_admin_token = None
+        self.vip_user_token = None
+        self.vip_user_id = None
+        self.test_user_id = None  # For deactivate/restore tests
+        self.passed_tests = 0
+        self.failed_tests = 0
         
-    def success(self, test_name):
-        print(f"✅ {test_name}")
-        self.passed += 1
+    def log(self, message: str, level: str = "INFO"):
+        """Log test messages"""
+        print(f"[{level}] {message}")
         
-    def failure(self, test_name, error):
-        print(f"❌ {test_name}: {error}")
-        self.failed += 1
-        self.errors.append(f"{test_name}: {error}")
-        
-    def summary(self):
-        total = self.passed + self.failed
-        print(f"\n{'='*60}")
-        print(f"REFERRAL PROGRAM BACKEND TEST RESULTS")
-        print(f"{'='*60}")
-        print(f"✅ Passed: {self.passed}/{total}")
-        print(f"❌ Failed: {self.failed}/{total}")
-        if self.errors:
-            print(f"\nFAILED TESTS:")
-            for error in self.errors:
-                print(f"  - {error}")
-        print(f"{'='*60}")
-
-def login_user(email, password):
-    """Login and return auth token"""
-    try:
-        response = requests.post(f"{BASE_URL}/auth/login", json={
-            "email": email,
-            "password": password
-        })
-        if response.status_code == 200:
-            return response.json().get("token")
-        else:
-            print(f"Login failed for {email}: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        print(f"Login error for {email}: {e}")
-        return None
-
-def register_new_user(name, email, password, referral_code=None):
-    """Register a new user with optional referral code"""
-    try:
-        payload = {
-            "name": name,
-            "email": email,
-            "password": password
-        }
-        
-        url = f"{BASE_URL}/auth/register"
-        if referral_code:
-            url += f"?referral_code={referral_code}"
+    def login_user(self, email: str, password: str) -> Optional[Dict]:
+        """Login and return token + user info"""
+        try:
+            response = requests.post(f"{BASE_URL}/auth/login", json={
+                "email": email,
+                "password": password
+            })
             
-        response = requests.post(url, json=payload)
-        return response
-    except Exception as e:
-        print(f"Registration error: {e}")
-        return None
-
-def make_authenticated_request(method, endpoint, token, data=None, params=None):
-    """Make authenticated API request"""
-    try:
-        headers = {"Authorization": f"Bearer {token}"}
+            if response.status_code == 200:
+                data = response.json()
+                self.log(f"✅ Login successful for {email}")
+                return {
+                    "token": data["token"],
+                    "user": data["user"]
+                }
+            else:
+                self.log(f"❌ Login failed for {email}: {response.status_code} - {response.text}", "ERROR")
+                return None
+        except Exception as e:
+            self.log(f"❌ Login error for {email}: {str(e)}", "ERROR")
+            return None
+    
+    def make_request(self, method: str, endpoint: str, token: str = None, data: dict = None, params: dict = None) -> requests.Response:
+        """Make authenticated API request"""
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        
         url = f"{BASE_URL}{endpoint}"
         
-        if method.upper() == "GET":
-            response = requests.get(url, headers=headers, params=params)
-        elif method.upper() == "POST":
-            response = requests.post(url, headers=headers, json=data, params=params)
-        elif method.upper() == "PUT":
-            response = requests.put(url, headers=headers, json=data, params=params)
+        try:
+            if method.upper() == "GET":
+                return requests.get(url, headers=headers, params=params)
+            elif method.upper() == "POST":
+                return requests.post(url, headers=headers, json=data, params=params)
+            elif method.upper() == "PUT":
+                return requests.put(url, headers=headers, json=data, params=params)
+            elif method.upper() == "DELETE":
+                return requests.delete(url, headers=headers, params=params)
+        except Exception as e:
+            self.log(f"❌ Request error: {str(e)}", "ERROR")
+            raise
+    
+    def assert_response(self, response: requests.Response, expected_status: int, test_name: str) -> bool:
+        """Assert response status and log result"""
+        if response.status_code == expected_status:
+            self.log(f"✅ {test_name}: PASSED (Status: {response.status_code})")
+            self.passed_tests += 1
+            return True
         else:
-            raise ValueError(f"Unsupported method: {method}")
+            self.log(f"❌ {test_name}: FAILED (Expected: {expected_status}, Got: {response.status_code})", "ERROR")
+            self.log(f"   Response: {response.text}", "ERROR")
+            self.failed_tests += 1
+            return False
+    
+    def test_get_user_profile(self):
+        """Test 1: Get User Profile (GET /api/settings/profile)"""
+        self.log("\n=== Test 1: Get User Profile ===")
+        
+        response = self.make_request("GET", "/settings/profile", self.vip_user_token)
+        
+        if self.assert_response(response, 200, "Get User Profile"):
+            data = response.json()
+            required_fields = ["user_id", "name", "email", "phone", "role", "subscription", "account_status", "created_at", "last_login"]
             
-        return response
-    except Exception as e:
-        print(f"Request error: {e}")
-        return None
-
-def test_referral_program():
-    """Main test function for referral program"""
-    results = TestResults()
+            missing_fields = []
+            for field in required_fields:
+                if field not in data:
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                self.log(f"❌ Missing required fields: {missing_fields}", "ERROR")
+                self.failed_tests += 1
+                self.passed_tests -= 1
+            else:
+                self.log(f"✅ All required fields present: {list(data.keys())}")
+                self.log(f"   User: {data.get('name')} ({data.get('email')})")
+                self.log(f"   Role: {data.get('role')}, Subscription: {data.get('subscription')}")
     
-    print("🚀 Starting Referral Program Backend Tests...")
-    print(f"Backend URL: {BASE_URL}")
-    
-    # Step 1: Login all test users
-    print("\n📋 Step 1: Authentication Tests")
-    
-    super_admin_token = login_user(TEST_CREDENTIALS["super_admin"]["email"], 
-                                 TEST_CREDENTIALS["super_admin"]["password"])
-    if super_admin_token:
-        results.success("Super Admin Login")
-    else:
-        results.failure("Super Admin Login", "Failed to authenticate")
-        return results
-    
-    vip_token = login_user(TEST_CREDENTIALS["vip_user"]["email"], 
-                          TEST_CREDENTIALS["vip_user"]["password"])
-    if vip_token:
-        results.success("VIP User Login")
-    else:
-        results.failure("VIP User Login", "Failed to authenticate")
-        return results
-    
-    free_token = login_user(TEST_CREDENTIALS["free_user"]["email"], 
-                           TEST_CREDENTIALS["free_user"]["password"])
-    if free_token:
-        results.success("Free User Login")
-    else:
-        results.failure("Free User Login", "Failed to authenticate")
-        return results
-    
-    # Step 2: Test User Referral Code Endpoint
-    print("\n📋 Step 2: User Referral Code Tests")
-    
-    # Test GET /api/referral/my-code with VIP user
-    response = make_authenticated_request("GET", "/referral/my-code", vip_token)
-    if response and response.status_code == 200:
-        data = response.json()
-        required_fields = ["referral_code", "referral_link", "stats", "referrals"]
-        stats_fields = ["total_referrals", "successful_referrals", "pending_rewards", "total_reward_days"]
+    def test_update_profile(self):
+        """Test 2: Update Profile (PUT /api/settings/profile)"""
+        self.log("\n=== Test 2: Update Profile ===")
         
-        if all(field in data for field in required_fields):
-            if all(field in data["stats"] for field in stats_fields):
-                if isinstance(data["referral_code"], str) and len(data["referral_code"]) > 0:
-                    results.success("GET /api/referral/my-code - VIP User")
-                    vip_referral_code = data["referral_code"]
-                    print(f"   VIP Referral Code: {vip_referral_code}")
+        # Update name
+        new_name = "Fund Test Updated"
+        response = self.make_request("PUT", "/settings/profile", self.vip_user_token, {
+            "name": new_name
+        })
+        
+        if self.assert_response(response, 200, "Update Profile"):
+            # Verify the update by getting profile again
+            verify_response = self.make_request("GET", "/settings/profile", self.vip_user_token)
+            if verify_response.status_code == 200:
+                data = verify_response.json()
+                if data.get("name") == new_name:
+                    self.log(f"✅ Profile update verified: name changed to '{new_name}'")
                 else:
-                    results.failure("GET /api/referral/my-code - VIP User", "Invalid referral code format")
-            else:
-                results.failure("GET /api/referral/my-code - VIP User", f"Missing stats fields: {stats_fields}")
-        else:
-            results.failure("GET /api/referral/my-code - VIP User", f"Missing required fields: {required_fields}")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        if response:
-            error_msg += f", Response: {response.text}"
-        results.failure("GET /api/referral/my-code - VIP User", error_msg)
-        return results
+                    self.log(f"❌ Profile update failed: name is '{data.get('name')}', expected '{new_name}'", "ERROR")
+                    self.failed_tests += 1
+                    self.passed_tests -= 1
     
-    # Step 3: Test Validate Referral Code
-    print("\n📋 Step 3: Referral Code Validation Tests")
-    
-    # Test valid code
-    response = make_authenticated_request("GET", f"/referral/validate/{vip_referral_code}", None)
-    if response and response.status_code == 200:
-        data = response.json()
-        if data.get("valid") == True:
-            results.success("GET /api/referral/validate/{code} - Valid Code")
-        else:
-            results.failure("GET /api/referral/validate/{code} - Valid Code", f"Expected valid=true, got {data}")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        results.failure("GET /api/referral/validate/{code} - Valid Code", error_msg)
-    
-    # Test invalid code
-    response = make_authenticated_request("GET", "/referral/validate/INVALID123", None)
-    if response and response.status_code == 200:
-        data = response.json()
-        if data.get("valid") == False:
-            results.success("GET /api/referral/validate/{code} - Invalid Code")
-        else:
-            results.failure("GET /api/referral/validate/{code} - Invalid Code", f"Expected valid=false, got {data}")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        results.failure("GET /api/referral/validate/{code} - Invalid Code", error_msg)
-    
-    # Step 4: Test Registration with Referral Code
-    print("\n📋 Step 4: Registration with Referral Code Tests")
-    
-    # Generate unique email for new user
-    timestamp = int(time.time())
-    new_user_email = f"testuser{timestamp}@test.com"
-    
-    response = register_new_user("Test User", new_user_email, "password123", vip_referral_code)
-    if response and response.status_code == 200:
-        data = response.json()
-        if "user" in data and "token" in data:
-            results.success("Registration with Referral Code")
-            new_user_token = data["token"]
-            new_user_id = data["user"]["user_id"]
-            print(f"   New User ID: {new_user_id}")
-        else:
-            results.failure("Registration with Referral Code", f"Missing user/token in response: {data}")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        if response:
-            error_msg += f", Response: {response.text}"
-        results.failure("Registration with Referral Code", error_msg)
-        return results
-    
-    # Verify referral record was created
-    time.sleep(1)  # Allow time for referral record creation
-    response = make_authenticated_request("GET", "/referral/my-code", vip_token)
-    if response and response.status_code == 200:
-        data = response.json()
-        if data["stats"]["total_referrals"] > 0:
-            results.success("Referral Record Creation Verification")
-        else:
-            results.failure("Referral Record Creation Verification", "No referrals found after registration")
-    else:
-        results.failure("Referral Record Creation Verification", "Failed to fetch referral stats")
-    
-    # Step 5: Test Admin List Referrals
-    print("\n📋 Step 5: Admin Referral Management Tests")
-    
-    # Test GET /api/admin/referrals
-    response = make_authenticated_request("GET", "/admin/referrals", super_admin_token)
-    if response and response.status_code == 200:
-        data = response.json()
-        required_fields = ["referrals", "stats"]
-        stats_fields = ["total", "pending", "completed", "expired", "flagged"]
+    def test_change_password(self):
+        """Test 3: Change Password (PUT /api/settings/password)"""
+        self.log("\n=== Test 3: Change Password ===")
         
-        if all(field in data for field in required_fields):
-            if all(field in data["stats"] for field in stats_fields):
-                results.success("GET /api/admin/referrals - Super Admin")
-                referrals_list = data["referrals"]
-                print(f"   Total Referrals: {len(referrals_list)}")
-                
-                # Find a referral to test with
-                test_referral_id = None
-                if referrals_list:
-                    test_referral_id = referrals_list[0]["referral_id"]
-                    print(f"   Test Referral ID: {test_referral_id}")
-            else:
-                results.failure("GET /api/admin/referrals - Super Admin", f"Missing stats fields: {stats_fields}")
-        else:
-            results.failure("GET /api/admin/referrals - Super Admin", f"Missing required fields: {required_fields}")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        if response:
-            error_msg += f", Response: {response.text}"
-        results.failure("GET /api/admin/referrals - Super Admin", error_msg)
-        return results
-    
-    # Test filtering with status parameter
-    response = make_authenticated_request("GET", "/admin/referrals", super_admin_token, params={"status": "pending"})
-    if response and response.status_code == 200:
-        data = response.json()
-        if "referrals" in data:
-            results.success("GET /api/admin/referrals?status=pending - Filter Test")
-        else:
-            results.failure("GET /api/admin/referrals?status=pending - Filter Test", "Missing referrals field")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        results.failure("GET /api/admin/referrals?status=pending - Filter Test", error_msg)
-    
-    # Step 6: Test Admin Approve Referral
-    print("\n📋 Step 6: Admin Referral Actions Tests")
-    
-    if test_referral_id:
-        # Test approve referral
-        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/approve", super_admin_token)
-        if response and response.status_code == 200:
-            data = response.json()
-            if "message" in data:
-                results.success("PUT /api/admin/referrals/{id}/approve - Super Admin")
-            else:
-                results.failure("PUT /api/admin/referrals/{id}/approve - Super Admin", f"Unexpected response: {data}")
-        else:
-            error_msg = f"Status: {response.status_code if response else 'No response'}"
-            if response:
-                error_msg += f", Response: {response.text}"
-            results.failure("PUT /api/admin/referrals/{id}/approve - Super Admin", error_msg)
+        # Test with wrong current password
+        response = self.make_request("PUT", "/settings/password", self.vip_user_token, {
+            "current_password": "wrongpassword",
+            "new_password": "newpassword123"
+        })
         
-        # Test revoke referral
-        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/revoke", 
-                                            super_admin_token, data={"reason": "Test revocation"})
-        if response and response.status_code == 200:
+        if self.assert_response(response, 400, "Change Password - Wrong Current Password"):
             data = response.json()
-            if "message" in data:
-                results.success("PUT /api/admin/referrals/{id}/revoke - Super Admin")
+            if "Current password is incorrect" in data.get("detail", ""):
+                self.log("✅ Correct error message for wrong password")
             else:
-                results.failure("PUT /api/admin/referrals/{id}/revoke - Super Admin", f"Unexpected response: {data}")
-        else:
-            error_msg = f"Status: {response.status_code if response else 'No response'}"
-            if response:
-                error_msg += f", Response: {response.text}"
-            results.failure("PUT /api/admin/referrals/{id}/revoke - Super Admin", error_msg)
+                self.log(f"❌ Unexpected error message: {data.get('detail')}", "ERROR")
         
-        # Test flag referral
-        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/flag", 
-                                            super_admin_token, data={"reason": "Test flagging"})
-        if response and response.status_code == 200:
+        # Test with correct current password
+        response = self.make_request("PUT", "/settings/password", self.vip_user_token, {
+            "current_password": VIP_USER_PASSWORD,
+            "new_password": "newpassword123"
+        })
+        
+        if self.assert_response(response, 200, "Change Password - Correct Current Password"):
+            self.log("✅ Password change successful")
+            
+            # Change it back for other tests
+            self.make_request("PUT", "/settings/password", self.vip_user_token, {
+                "current_password": "newpassword123",
+                "new_password": VIP_USER_PASSWORD
+            })
+    
+    def test_get_notification_preferences(self):
+        """Test 4: Get Notification Preferences (GET /api/settings/notifications)"""
+        self.log("\n=== Test 4: Get Notification Preferences ===")
+        
+        response = self.make_request("GET", "/settings/notifications", self.vip_user_token)
+        
+        if self.assert_response(response, 200, "Get Notification Preferences"):
             data = response.json()
-            if "message" in data:
-                results.success("PUT /api/admin/referrals/{id}/flag - Super Admin")
+            required_fields = ["push_enabled", "email_enabled", "signals", "fund_updates", "referral_rewards", "support_replies"]
+            
+            missing_fields = []
+            for field in required_fields:
+                if field not in data:
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                self.log(f"❌ Missing notification preference fields: {missing_fields}", "ERROR")
+                self.failed_tests += 1
+                self.passed_tests -= 1
             else:
-                results.failure("PUT /api/admin/referrals/{id}/flag - Super Admin", f"Unexpected response: {data}")
+                self.log(f"✅ All notification preference fields present")
+                self.log(f"   Preferences: {data}")
+    
+    def test_update_notification_preferences(self):
+        """Test 5: Update Notification Preferences (PUT /api/settings/notifications)"""
+        self.log("\n=== Test 5: Update Notification Preferences ===")
+        
+        # Update signals to false
+        response = self.make_request("PUT", "/settings/notifications", self.vip_user_token, {
+            "signals": False
+        })
+        
+        if self.assert_response(response, 200, "Update Notification Preferences"):
+            # Verify the update
+            verify_response = self.make_request("GET", "/settings/notifications", self.vip_user_token)
+            if verify_response.status_code == 200:
+                data = verify_response.json()
+                if data.get("signals") == False:
+                    self.log("✅ Notification preferences update verified: signals set to false")
+                else:
+                    self.log(f"❌ Notification update failed: signals is {data.get('signals')}, expected False", "ERROR")
+                    self.failed_tests += 1
+                    self.passed_tests -= 1
+    
+    def test_get_legal_documents(self):
+        """Test 6: Get Legal Documents (GET /api/settings/legal/{doc_type})"""
+        self.log("\n=== Test 6: Get Legal Documents ===")
+        
+        # Test privacy_policy
+        response = self.make_request("GET", "/settings/legal/privacy_policy", self.vip_user_token)
+        if self.assert_response(response, 200, "Get Privacy Policy"):
+            data = response.json()
+            required_fields = ["title", "last_updated", "content"]
+            if all(field in data for field in required_fields):
+                self.log("✅ Privacy policy has all required fields")
+            else:
+                self.log(f"❌ Privacy policy missing fields: {[f for f in required_fields if f not in data]}", "ERROR")
+        
+        # Test terms_of_service
+        response = self.make_request("GET", "/settings/legal/terms_of_service", self.vip_user_token)
+        if self.assert_response(response, 200, "Get Terms of Service"):
+            data = response.json()
+            if "content" in data:
+                self.log("✅ Terms of service has content")
+            else:
+                self.log("❌ Terms of service missing content", "ERROR")
+        
+        # Test risk_disclaimer
+        response = self.make_request("GET", "/settings/legal/risk_disclaimer", self.vip_user_token)
+        if self.assert_response(response, 200, "Get Risk Disclaimer"):
+            data = response.json()
+            if "content" in data and "trading" in data["content"].lower():
+                self.log("✅ Risk disclaimer has trading warnings")
+            else:
+                self.log("❌ Risk disclaimer missing trading warnings", "ERROR")
+        
+        # Test invalid doc type
+        response = self.make_request("GET", "/settings/legal/invalid_doc", self.vip_user_token)
+        self.assert_response(response, 404, "Get Invalid Document Type")
+    
+    def test_get_sessions_info(self):
+        """Test 7: Get Sessions Info (GET /api/settings/sessions)"""
+        self.log("\n=== Test 7: Get Sessions Info ===")
+        
+        response = self.make_request("GET", "/settings/sessions", self.vip_user_token)
+        
+        if self.assert_response(response, 200, "Get Sessions Info"):
+            data = response.json()
+            if "current_session" in data and "last_login" in data["current_session"]:
+                self.log("✅ Sessions info contains current_session with last_login")
+            else:
+                self.log("❌ Sessions info missing required fields", "ERROR")
+                self.failed_tests += 1
+                self.passed_tests -= 1
+    
+    def test_admin_get_user_settings(self):
+        """Test 8: Admin Get User Settings (GET /api/admin/users/{user_id}/settings)"""
+        self.log("\n=== Test 8: Admin Get User Settings ===")
+        
+        response = self.make_request("GET", f"/admin/users/{self.vip_user_id}/settings", self.super_admin_token)
+        
+        if self.assert_response(response, 200, "Admin Get User Settings"):
+            data = response.json()
+            if "user" in data and "password_hash" not in str(data):
+                self.log("✅ Admin user settings returned without password_hash")
+            else:
+                self.log("❌ Admin user settings contains sensitive data or missing user info", "ERROR")
+                self.failed_tests += 1
+                self.passed_tests -= 1
+    
+    def test_admin_deactivate_user(self):
+        """Test 9: Admin Deactivate User (POST /api/admin/users/{user_id}/deactivate?reason=test)"""
+        self.log("\n=== Test 9: Admin Deactivate User ===")
+        
+        # First create a test user to deactivate
+        test_user_response = requests.post(f"{BASE_URL}/auth/register", json={
+            "name": "Test User for Deactivation",
+            "email": f"testuser_{hash('test')}@test.com",
+            "password": "testpassword123"
+        })
+        
+        if test_user_response.status_code == 200:
+            self.test_user_id = test_user_response.json()["user"]["user_id"]
+            self.log(f"✅ Created test user: {self.test_user_id}")
+            
+            # Now deactivate the user
+            response = self.make_request("POST", f"/admin/users/{self.test_user_id}/deactivate", 
+                                       self.super_admin_token, params={"reason": "test"})
+            
+            if self.assert_response(response, 200, "Admin Deactivate User"):
+                # Verify account_status changed
+                settings_response = self.make_request("GET", f"/admin/users/{self.test_user_id}/settings", 
+                                                    self.super_admin_token)
+                if settings_response.status_code == 200:
+                    data = settings_response.json()
+                    if data.get("account_status") == "deactivated":
+                        self.log("✅ User account status changed to deactivated")
+                    else:
+                        self.log(f"❌ Account status is {data.get('account_status')}, expected 'deactivated'", "ERROR")
         else:
-            error_msg = f"Status: {response.status_code if response else 'No response'}"
-            if response:
-                error_msg += f", Response: {response.text}"
-            results.failure("PUT /api/admin/referrals/{id}/flag - Super Admin", error_msg)
-    else:
-        results.failure("Admin Referral Actions", "No test referral ID available")
+            self.log("❌ Failed to create test user for deactivation test", "ERROR")
+            self.failed_tests += 1
     
-    # Step 7: Test Role-Based Access Control
-    print("\n📋 Step 7: Role-Based Access Control Tests")
-    
-    # Test VIP user trying to access admin endpoints (should fail)
-    response = make_authenticated_request("GET", "/admin/referrals", vip_token)
-    if response and response.status_code == 403:
-        results.success("RBAC Test - VIP User Blocked from Admin Referrals")
-    else:
-        error_msg = f"Expected 403, got {response.status_code if response else 'No response'}"
-        results.failure("RBAC Test - VIP User Blocked from Admin Referrals", error_msg)
-    
-    # Test Free user trying to access admin endpoints (should fail)
-    response = make_authenticated_request("GET", "/admin/referrals", free_token)
-    if response and response.status_code == 403:
-        results.success("RBAC Test - Free User Blocked from Admin Referrals")
-    else:
-        error_msg = f"Expected 403, got {response.status_code if response else 'No response'}"
-        results.failure("RBAC Test - Free User Blocked from Admin Referrals", error_msg)
-    
-    # Test Free user can access their own referral code
-    response = make_authenticated_request("GET", "/referral/my-code", free_token)
-    if response and response.status_code == 200:
-        data = response.json()
-        if "referral_code" in data:
-            results.success("RBAC Test - Free User Can Access Own Referral Code")
+    def test_admin_restore_user(self):
+        """Test 10: Admin Restore User (POST /api/admin/users/{user_id}/restore)"""
+        self.log("\n=== Test 10: Admin Restore User ===")
+        
+        if self.test_user_id:
+            response = self.make_request("POST", f"/admin/users/{self.test_user_id}/restore", 
+                                       self.super_admin_token)
+            
+            if self.assert_response(response, 200, "Admin Restore User"):
+                # Verify account_status changed back to active
+                settings_response = self.make_request("GET", f"/admin/users/{self.test_user_id}/settings", 
+                                                    self.super_admin_token)
+                if settings_response.status_code == 200:
+                    data = settings_response.json()
+                    if data.get("account_status") == "active":
+                        self.log("✅ User account status restored to active")
+                    else:
+                        self.log(f"❌ Account status is {data.get('account_status')}, expected 'active'", "ERROR")
         else:
-            results.failure("RBAC Test - Free User Can Access Own Referral Code", "Missing referral_code")
-    else:
-        error_msg = f"Status: {response.status_code if response else 'No response'}"
-        results.failure("RBAC Test - Free User Can Access Own Referral Code", error_msg)
+            self.log("❌ No test user available for restore test", "ERROR")
+            self.failed_tests += 1
     
-    return results
+    def run_all_tests(self):
+        """Run all User Settings System tests"""
+        self.log("🚀 Starting User Settings System Backend Tests")
+        self.log(f"Backend URL: {BASE_URL}")
+        
+        # Login users
+        self.log("\n=== Authentication Setup ===")
+        
+        # Login Super Admin
+        super_admin_auth = self.login_user(SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD)
+        if not super_admin_auth:
+            self.log("❌ Failed to login Super Admin. Aborting tests.", "ERROR")
+            return
+        self.super_admin_token = super_admin_auth["token"]
+        
+        # Login VIP User
+        vip_user_auth = self.login_user(VIP_USER_EMAIL, VIP_USER_PASSWORD)
+        if not vip_user_auth:
+            self.log("❌ Failed to login VIP User. Aborting tests.", "ERROR")
+            return
+        self.vip_user_token = vip_user_auth["token"]
+        self.vip_user_id = vip_user_auth["user"]["user_id"]
+        
+        # Run all tests
+        self.test_get_user_profile()
+        self.test_update_profile()
+        self.test_change_password()
+        self.test_get_notification_preferences()
+        self.test_update_notification_preferences()
+        self.test_get_legal_documents()
+        self.test_get_sessions_info()
+        self.test_admin_get_user_settings()
+        self.test_admin_deactivate_user()
+        self.test_admin_restore_user()
+        
+        # Final results
+        self.log(f"\n🏁 Test Results Summary:")
+        self.log(f"✅ Passed: {self.passed_tests}")
+        self.log(f"❌ Failed: {self.failed_tests}")
+        self.log(f"📊 Success Rate: {(self.passed_tests / (self.passed_tests + self.failed_tests) * 100):.1f}%")
+        
+        if self.failed_tests == 0:
+            self.log("🎉 All User Settings System tests PASSED!")
+            return True
+        else:
+            self.log("⚠️  Some tests FAILED. Check logs above for details.")
+            return False
 
 if __name__ == "__main__":
-    print("🔧 Swift FX Signals - Referral Program Backend Testing")
-    print("=" * 60)
-    
-    try:
-        results = test_referral_program()
-        results.summary()
-        
-        # Exit with appropriate code
-        sys.exit(0 if results.failed == 0 else 1)
-        
-    except KeyboardInterrupt:
-        print("\n⚠️  Tests interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n💥 Unexpected error: {e}")
-        sys.exit(1)
+    runner = TestRunner()
+    success = runner.run_all_tests()
+    sys.exit(0 if success else 1)
