@@ -180,28 +180,37 @@ class RBACTester:
         """Step 5: Test Create New Admin"""
         print("\n=== Step 5: Test Create New Admin ===")
         
+        # Use a unique email with timestamp to avoid conflicts
+        import time
+        timestamp = int(time.time())
+        
         admin_data = {
-            "email": "signaltest@swiftfx.com",
+            "email": f"signaltest{timestamp}@swiftfx.com",
             "name": "Signal Admin Test",
             "password": "TestPassword123!",
             "admin_role": "signal_admin"
         }
         
-        response = self.make_request('POST', '/admin/rbac/admins', token=self.super_admin_token, json=admin_data)
-        
-        if response and response.status_code == 200:
-            data = response.json()
+        try:
+            response = self.make_request('POST', '/admin/rbac/admins', token=self.super_admin_token, 
+                                       json=admin_data, timeout=30)
             
-            if data.get('success') and data.get('user_id'):
-                self.created_admin_id = data.get('user_id')
-                self.log_test("Create New Admin", True, f"Created admin with ID: {self.created_admin_id}")
-                return True
+            if response and response.status_code == 200:
+                data = response.json()
+                
+                if data.get('success') and data.get('user_id'):
+                    self.created_admin_id = data.get('user_id')
+                    self.log_test("Create New Admin", True, f"Created admin with ID: {self.created_admin_id}")
+                    return True
+                else:
+                    self.log_test("Create New Admin", False, f"Success: {data.get('success')}, User ID: {data.get('user_id')}")
+                    return False
             else:
-                self.log_test("Create New Admin", False, f"Success: {data.get('success')}, User ID: {data.get('user_id')}")
+                error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
+                self.log_test("Create New Admin", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
                 return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Create New Admin", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
+        except Exception as e:
+            self.log_test("Create New Admin", False, f"Exception: {str(e)}")
             return False
             
     def test_6_update_admin_role(self):
