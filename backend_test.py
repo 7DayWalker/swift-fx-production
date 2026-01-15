@@ -46,6 +46,10 @@ class RBACTester:
             
         kwargs['headers'] = headers
         
+        # Set default timeout if not provided
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = 30
+        
         try:
             response = self.session.request(method, url, **kwargs)
             return response
