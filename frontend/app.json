@@ -1,22 +1,53 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Swift FX Signals",
+    "slug": "swiftfx",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.swiftfx.app",
+      "associatedDomains": [
+        "applinks:swiftfx.app",
+        "webcredentials:swiftfx.app"
+      ],
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["swiftfx"]
+          }
+        ]
+      }
     },
     "android": {
+      "package": "com.swiftfx.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "swiftfx.app",
+              "pathPrefix": "/register"
+            },
+            {
+              "scheme": "swiftfx",
+              "host": "*"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
