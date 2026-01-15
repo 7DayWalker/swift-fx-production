@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../src/context/ThemeContext';
 import { useSubscription } from '../src/context/SubscriptionContext';
+import { useAuth } from '../src/context/AuthContext';
 
 // Investment tiers configuration
 const INVESTMENT_TIERS = [
@@ -79,24 +81,44 @@ const FUND_MANAGER_PHONE = '2348169427440';
 export default function FundManagementScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const { subscription } = useSubscription();
+  const { user } = useAuth();
+  const { status, refreshStatus } = useSubscription();
 
-  // Check if user can apply (Premium or VIP)
+  // Get subscription from backend status (authoritative source)
+  const subscription = status?.subscription || 'free';
+  
+  // Entitlement check: Premium and VIP users can apply
   const canApply = subscription === 'premium' || subscription === 'vip';
 
-  // Get user plan display name
-  const getUserPlanName = () => {
+  // Re-check subscription on screen focus (not only on mount)
+  useFocusEffect(
+    useCallback(() => {
+      refreshStatus();
+    }, [refreshStatus])
+  );
+
+  // Get user plan display name (uppercase for message)
+  const getUserPlanUpperCase = (): string => {
     if (subscription === 'vip') return 'VIP';
-    if (subscription === 'premium') return 'Premium';
-    return 'Free';
+    if (subscription === 'premium') return 'PREMIUM';
+    return 'FREE';
   };
 
-  // Open WhatsApp with pre-filled message
-  const handleWhatsAppContact = () => {
-    const userPlan = getUserPlanName();
+  // Get user email
+  const getUserEmail = (): string => {
+    return user?.email || 'Not available';
+  };
+
+  // Open WhatsApp with pre-filled message (per spec)
+  const handleWhatsAppApplication = () => {
+    const userPlan = getUserPlanUpperCase();
+    const userEmail = getUserEmail();
+    
+    // Message template as per spec
     const message = encodeURIComponent(
-      `Hello Swift FX Team, I'm interested in your Fund Management service. My plan is ${userPlan}. Please guide me on the next steps.`
+      `Hello Swift FX Team 👋\nI'm a ${userPlan} member and I'd like to apply for Fund Management.\nMy registered email is: ${userEmail}`
     );
+    
     const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE}?text=${message}`;
     Linking.openURL(whatsappUrl);
   };
@@ -166,28 +188,29 @@ export default function FundManagementScreen() {
           ))}
         </View>
 
-        {/* Action Buttons - Based on Subscription */}
+        {/* Action Section - Based on Subscription Entitlement */}
         {canApply ? (
-          // Premium/VIP users see Apply Now + Contact buttons (both open WhatsApp)
+          // Premium/VIP users: Show Apply + Contact buttons (both open WhatsApp)
+          // IMPORTANT: Do NOT show upgrade CTA for premium/vip users
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
               style={[styles.applyButton, { backgroundColor: theme.primary }]}
-              onPress={handleWhatsAppContact}
+              onPress={handleWhatsAppApplication}
             >
-              <Ionicons name="paper-plane" size={20} color="#0A0E17" />
-              <Text style={styles.applyButtonText}>Apply Now</Text>
+              <Ionicons name="logo-whatsapp" size={20} color="#0A0E17" />
+              <Text style={styles.applyButtonText}>Apply via WhatsApp</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.contactButton, { backgroundColor: '#25D366' }]}
-              onPress={handleWhatsAppContact}
+              onPress={handleWhatsAppApplication}
             >
-              <Ionicons name="logo-whatsapp" size={22} color="#FFFFFF" />
+              <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
               <Text style={styles.contactButtonText}>Contact Fund Manager</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          // Free users see Upgrade CTA
+          // Free users only: Show locked section with Upgrade CTA
           <View style={[styles.upgradeCard, { backgroundColor: `${theme.primary}15` }]}>
             <Ionicons name="lock-closed" size={24} color={theme.primary} />
             <Text style={[styles.upgradeText, dynamicStyles.text]}>
@@ -202,7 +225,7 @@ export default function FundManagementScreen() {
           </View>
         )}
 
-        {/* Legal Disclaimers */}
+        {/* Legal Disclaimers - Always visible */}
         <View style={[styles.disclaimerCard, { backgroundColor: `${theme.border}30` }]}>
           <View style={styles.disclaimerHeader}>
             <Ionicons name="warning-outline" size={18} color={theme.textSecondary} />
@@ -278,7 +301,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  // Metric Cards Grid - Same style as YTD Return, Win Rate, etc.
+  // Metric Cards Grid
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -351,7 +374,7 @@ const styles = StyleSheet.create({
   tierInvestment: {
     fontSize: 12,
   },
-  // Action Buttons
+  // Action Buttons (Premium/VIP users)
   actionButtonsContainer: {
     marginBottom: 16,
     gap: 12,
