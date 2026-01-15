@@ -282,9 +282,14 @@ export default function SettingsScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => logout() },
+        { text: 'Logout', style: 'destructive', onPress: confirmLogout },
       ]
     );
+  };
+
+  const confirmLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
   };
 
   const formatDate = (dateString?: string) => {
