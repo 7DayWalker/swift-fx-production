@@ -278,17 +278,22 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: confirmLogout },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      setShowLogoutModal(true);
+    } else {
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Logout', style: 'destructive', onPress: confirmLogout },
+        ]
+      );
+    }
   };
 
   const confirmLogout = async () => {
+    setShowLogoutModal(false);
     await logout();
     router.replace('/(auth)/login');
   };
