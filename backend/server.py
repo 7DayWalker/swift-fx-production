@@ -3519,6 +3519,10 @@ async def update_fund_application(
     admin: User = Depends(require_admin)
 ):
     """Update fund application status. Admin only."""
+    # Check permission: only fund_admin and super_admin can update
+    if not has_permission(admin, "fund_applications", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update fund applications")
+    
     # Validate status
     valid_statuses = ["pending_review", "contacted", "approved", "rejected"]
     if status not in valid_statuses:
