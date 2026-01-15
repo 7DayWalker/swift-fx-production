@@ -207,6 +207,20 @@ export default function AdminFundApplicationsScreen() {
               <Text style={[styles.detailValue, dynamicStyles.text]}>{formatDate(selectedApp.created_at)}</Text>
             </View>
             
+            <View style={styles.detailSection}>
+              <Text style={[styles.detailLabel, dynamicStyles.textSecondary]}>Source</Text>
+              <View style={styles.sourceRow}>
+                <Ionicons 
+                  name={selectedApp.source === 'whatsapp' ? 'logo-whatsapp' : 'phone-portrait-outline'} 
+                  size={16} 
+                  color={selectedApp.source === 'whatsapp' ? '#25D366' : theme.primary} 
+                />
+                <Text style={[styles.detailValue, dynamicStyles.text, { textTransform: 'capitalize' }]}>
+                  {selectedApp.source || 'App'}
+                </Text>
+              </View>
+            </View>
+            
             {/* Action Buttons */}
             <Text style={[styles.actionTitle, dynamicStyles.text]}>Update Status</Text>
             <View style={styles.actionButtons}>
