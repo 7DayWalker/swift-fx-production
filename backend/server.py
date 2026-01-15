@@ -494,6 +494,30 @@ class FundNoticeCreate(BaseModel):
     content: str
     notice_type: str = "general"  # general, risk, update
 
+
+# ==============================================================================
+# REFERRAL PROGRAM MODELS
+# ==============================================================================
+
+class ReferralStatus(str, Enum):
+    PENDING = "pending"           # Referred user registered, not subscribed yet
+    COMPLETED = "completed"       # Reward unlocked after 7 days
+    EXPIRED = "expired"           # No subscription after 30 days
+    FLAGGED = "flagged"           # Flagged for fraud
+
+class RewardStatus(str, Enum):
+    LOCKED = "locked"             # Waiting for 7-day subscription period
+    PENDING = "pending"           # Ready to be claimed/applied
+    APPLIED = "applied"           # Reward has been applied
+    REVOKED = "revoked"           # Admin revoked the reward
+
+def generate_referral_code(user_id: str) -> str:
+    """Generate a unique referral code for a user"""
+    # Take first 4 chars of user_id hash + 4 random chars
+    hash_part = hashlib.md5(user_id.encode()).hexdigest()[:4].upper()
+    random_part = uuid.uuid4().hex[:4].upper()
+    return f"SWIFT{hash_part}{random_part}"
+
 class Post(BaseModel):
     post_id: str
     user_id: str
