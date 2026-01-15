@@ -373,6 +373,10 @@ class InvestorDashboardTester:
             return False
         
         withdrawals = response.json()
+        # Handle both direct array and object with withdrawals key
+        if isinstance(withdrawals, dict) and "withdrawals" in withdrawals:
+            withdrawals = withdrawals["withdrawals"]
+        
         self.log_test("Get All Withdrawals", True, f"Retrieved {len(withdrawals)} withdrawals")
         
         # Find our test withdrawal
