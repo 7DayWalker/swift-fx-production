@@ -114,8 +114,12 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <View style={styles.iconWrapper}>
-              <Text style={styles.logoIcon}>⚡</Text>
+            <View style={styles.logoWrapper}>
+              <Image 
+                source={require('../../assets/images/logo.png')} 
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue trading</Text>
