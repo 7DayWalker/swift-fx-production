@@ -228,7 +228,7 @@ def test_whatsapp_fund_management_flow():
     headers = {"Authorization": f"Bearer {free_token}"}
     free_payload = {
         "full_name": "Test Free User",
-        "email": "freeuser@test.com",
+        "email": "freetestuser@test.com",
         "phone": "WhatsApp",
         "country": "Nigeria",
         "investment_tier": "starter",
