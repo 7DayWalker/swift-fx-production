@@ -46,6 +46,79 @@ class UserRole(str, Enum):
     VIP = "vip"
     ADMIN = "admin"
 
+# NEW: Admin Role Types for RBAC
+class AdminRole(str, Enum):
+    SUPER_ADMIN = "super_admin"      # Full system access, permanently protected
+    SIGNAL_ADMIN = "signal_admin"    # Manages trading signals only
+    FUND_ADMIN = "fund_admin"        # Manages fund performance & portfolios
+    ACCOUNT_MANAGER = "account_manager"  # Handles user accounts & subscriptions
+    CUSTOMER_SUPPORT = "customer_support"  # Support & read-only access
+
+# Protected Super Admin emails - cannot be modified or downgraded
+PROTECTED_SUPER_ADMINS = [
+    "ellapauledache@gmail.com",
+    "ellaniswell@gmail.com"
+]
+
+# Admin Role Permissions Map
+ADMIN_PERMISSIONS = {
+    AdminRole.SUPER_ADMIN: {
+        "signals": ["create", "read", "update", "delete"],
+        "users": ["create", "read", "update", "delete"],
+        "fund_applications": ["create", "read", "update", "delete"],
+        "investor_portfolios": ["create", "read", "update", "delete"],
+        "withdrawals": ["create", "read", "update", "delete"],
+        "admin_management": ["create", "read", "update", "delete"],
+        "audit_logs": ["read"],
+        "notices": ["create", "read", "update", "delete"],
+        "subscriptions": ["read", "update"],
+    },
+    AdminRole.SIGNAL_ADMIN: {
+        "signals": ["create", "read", "update", "delete"],
+        "users": [],
+        "fund_applications": [],
+        "investor_portfolios": [],
+        "withdrawals": [],
+        "admin_management": [],
+        "audit_logs": [],
+        "notices": [],
+        "subscriptions": [],
+    },
+    AdminRole.FUND_ADMIN: {
+        "signals": [],
+        "users": ["read"],
+        "fund_applications": ["read", "update"],
+        "investor_portfolios": ["read", "update"],
+        "withdrawals": ["read", "update"],
+        "admin_management": [],
+        "audit_logs": [],
+        "notices": ["create", "read", "update", "delete"],
+        "subscriptions": [],
+    },
+    AdminRole.ACCOUNT_MANAGER: {
+        "signals": ["read"],
+        "users": ["read", "update"],
+        "fund_applications": ["read"],
+        "investor_portfolios": ["read"],
+        "withdrawals": ["read"],
+        "admin_management": [],
+        "audit_logs": [],
+        "notices": [],
+        "subscriptions": ["read", "update"],
+    },
+    AdminRole.CUSTOMER_SUPPORT: {
+        "signals": ["read"],
+        "users": ["read"],
+        "fund_applications": ["read"],
+        "investor_portfolios": ["read"],
+        "withdrawals": ["read"],
+        "admin_management": [],
+        "audit_logs": [],
+        "notices": [],
+        "subscriptions": [],
+    },
+}
+
 class BillingCycle(str, Enum):
     WEEKLY = "weekly"
     MONTHLY = "monthly"
