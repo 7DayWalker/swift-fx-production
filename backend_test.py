@@ -154,7 +154,7 @@ def test_fund_management_endpoints():
     }
     
     response = make_request("POST", "/fund/apply", vip_token, vip_application_data)
-    if response:
+    if response is not None:
         if response.status_code == 200:
             results.log_pass("VIP User Fund Application Submission")
             application_id = response.json().get("application_id")
@@ -171,7 +171,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 4: Duplicate Application Prevention")
     
     response = make_request("POST", "/fund/apply", vip_token, vip_application_data)
-    if response:
+    if response is not None:
         if response.status_code in [400, 409]:
             results.log_pass("Duplicate Application Prevention")
         else:
@@ -184,7 +184,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 5: VIP User Application Status Check")
     
     response = make_request("GET", "/fund/my-application", vip_token)
-    if response:
+    if response is not None:
         if response.status_code == 200:
             app_data = response.json()
             if app_data.get("has_application") or app_data.get("application_id"):
@@ -202,7 +202,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 6: Free User Application Status Check")
     
     response = make_request("GET", "/fund/my-application", free_token)
-    if response:
+    if response is not None:
         if response.status_code == 200:
             app_data = response.json()
             if app_data.get("has_application") == False or not app_data.get("application_id"):
@@ -219,7 +219,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 7: Admin List All Applications")
     
     response = make_request("GET", "/admin/fund/applications", admin_token)
-    if response:
+    if response is not None:
         if response.status_code == 200:
             applications = response.json()
             if isinstance(applications, list):
@@ -246,7 +246,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 8: VIP User Admin Access Control")
     
     response = make_request("GET", "/admin/fund/applications", vip_token)
-    if response:
+    if response is not None:
         if response.status_code == 403:
             results.log_pass("VIP User Blocked from Admin Endpoint")
         else:
@@ -261,7 +261,7 @@ def test_fund_management_endpoints():
     if vip_app_id:
         response = make_request("PUT", f"/admin/fund/applications/{vip_app_id}", 
                               admin_token, params={"status": "contacted"})
-        if response:
+        if response is not None:
             if response.status_code == 200:
                 results.log_pass("Admin Update Application Status")
             else:
@@ -278,7 +278,7 @@ def test_fund_management_endpoints():
     if vip_app_id:
         response = make_request("PUT", f"/admin/fund/applications/{vip_app_id}", 
                               vip_token, params={"status": "approved"})
-        if response:
+        if response is not None:
             if response.status_code == 403:
                 results.log_pass("VIP User Blocked from Update Endpoint")
             else:
@@ -293,7 +293,7 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 11: Verify Status Update")
     
     response = make_request("GET", "/fund/my-application", vip_token)
-    if response:
+    if response is not None:
         if response.status_code == 200:
             app_data = response.json()
             current_status = app_data.get("status")
