@@ -5,14 +5,16 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
-  Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { WebView } from 'react-native-webview';
 import { useAuth } from '../../src/context/AuthContext';
-import { getCourseContent, getLessonContent, LessonContent } from '../../src/data/academyContent';
+import { getCourseContent, LessonContent } from '../../src/data/academyContent';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Lesson {
   id: number;
@@ -25,10 +27,10 @@ const COURSE_LESSONS: Record<string, { title: string; lessons: Lesson[] }> = {
   'intro-trading': {
     title: 'Introduction to Trading',
     lessons: [
-      { id: 1, title: 'What is Trading?', duration: '8 min', type: 'video' },
-      { id: 2, title: 'Types of Financial Markets', duration: '10 min', type: 'video' },
+      { id: 1, title: 'What is Trading?', duration: '5 min', type: 'video' },
+      { id: 2, title: 'Types of Financial Markets', duration: '6 min', type: 'video' },
       { id: 3, title: 'Understanding Market Participants', duration: '7 min', type: 'text' },
-      { id: 4, title: 'How Prices Move', duration: '12 min', type: 'video' },
+      { id: 4, title: 'How Prices Move', duration: '5 min', type: 'video' },
       { id: 5, title: 'Course Quiz: Trading Basics', duration: '5 min', type: 'quiz' },
     ],
   },
@@ -36,19 +38,19 @@ const COURSE_LESSONS: Record<string, { title: string; lessons: Lesson[] }> = {
     title: 'Chart Reading Basics',
     lessons: [
       { id: 1, title: 'Introduction to Charts', duration: '6 min', type: 'video' },
-      { id: 2, title: 'Candlestick Anatomy', duration: '10 min', type: 'video' },
-      { id: 3, title: 'Common Candlestick Patterns', duration: '12 min', type: 'video' },
+      { id: 2, title: 'Candlestick Anatomy', duration: '7 min', type: 'video' },
+      { id: 3, title: 'Common Candlestick Patterns', duration: '8 min', type: 'video' },
       { id: 4, title: 'Timeframes Explained', duration: '8 min', type: 'text' },
-      { id: 5, title: 'Reading Price Action', duration: '10 min', type: 'video' },
+      { id: 5, title: 'Reading Price Action', duration: '6 min', type: 'video' },
       { id: 6, title: 'Chart Patterns Quiz', duration: '5 min', type: 'quiz' },
     ],
   },
   'risk-management': {
     title: 'Risk Management 101',
     lessons: [
-      { id: 1, title: 'Why Risk Management Matters', duration: '8 min', type: 'video' },
-      { id: 2, title: 'Position Sizing', duration: '10 min', type: 'video' },
-      { id: 3, title: 'Stop Losses and Take Profits', duration: '10 min', type: 'video' },
+      { id: 1, title: 'Why Risk Management Matters', duration: '5 min', type: 'video' },
+      { id: 2, title: 'Position Sizing', duration: '6 min', type: 'video' },
+      { id: 3, title: 'Stop Losses and Take Profits', duration: '7 min', type: 'video' },
       { id: 4, title: 'The 1% Rule', duration: '7 min', type: 'text' },
       { id: 5, title: 'Risk Management Quiz', duration: '5 min', type: 'quiz' },
     ],
@@ -56,21 +58,21 @@ const COURSE_LESSONS: Record<string, { title: string; lessons: Lesson[] }> = {
   'trading-psychology': {
     title: 'Trading Psychology',
     lessons: [
-      { id: 1, title: 'The Trader\'s Mindset', duration: '8 min', type: 'video' },
-      { id: 2, title: 'Fear and Greed', duration: '10 min', type: 'video' },
+      { id: 1, title: 'The Trader\'s Mindset', duration: '6 min', type: 'video' },
+      { id: 2, title: 'Fear and Greed', duration: '5 min', type: 'video' },
       { id: 3, title: 'Dealing with Losses', duration: '8 min', type: 'text' },
-      { id: 4, title: 'Building Discipline', duration: '10 min', type: 'video' },
+      { id: 4, title: 'Building Discipline', duration: '6 min', type: 'video' },
       { id: 5, title: 'Psychology Quiz', duration: '5 min', type: 'quiz' },
     ],
   },
   'forex-basics': {
     title: 'Forex Fundamentals',
     lessons: [
-      { id: 1, title: 'What is Forex?', duration: '8 min', type: 'video' },
-      { id: 2, title: 'Currency Pairs Explained', duration: '10 min', type: 'video' },
-      { id: 3, title: 'Pips, Lots, and Leverage', duration: '12 min', type: 'video' },
+      { id: 1, title: 'What is Forex?', duration: '5 min', type: 'video' },
+      { id: 2, title: 'Currency Pairs Explained', duration: '6 min', type: 'video' },
+      { id: 3, title: 'Pips, Lots, and Leverage', duration: '7 min', type: 'video' },
       { id: 4, title: 'What Moves Currency Prices', duration: '10 min', type: 'text' },
-      { id: 5, title: 'Forex Trading Sessions', duration: '8 min', type: 'video' },
+      { id: 5, title: 'Forex Trading Sessions', duration: '5 min', type: 'video' },
       { id: 6, title: 'Forex Fundamentals Quiz', duration: '5 min', type: 'quiz' },
     ],
   },
@@ -84,6 +86,176 @@ const DEFAULT_LESSONS: Lesson[] = [
   { id: 4, title: 'Advanced Techniques', duration: '15 min', type: 'video' },
   { id: 5, title: 'Final Assessment', duration: '5 min', type: 'quiz' },
 ];
+
+// Quiz Answer Component
+interface QuizQuestionProps {
+  question: {
+    question: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+  };
+  questionNumber: number;
+  color: string;
+}
+
+function QuizQuestion({ question, questionNumber, color }: QuizQuestionProps) {
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+
+  const handleSelectAnswer = (index: number) => {
+    setSelectedAnswer(index);
+    setShowExplanation(true);
+  };
+
+  const isCorrect = selectedAnswer === question.correctIndex;
+
+  return (
+    <View style={styles.quizQuestion}>
+      <Text style={styles.questionNumber}>Question {questionNumber}</Text>
+      <Text style={styles.questionText}>{question.question}</Text>
+      
+      <View style={styles.optionsContainer}>
+        {question.options.map((option, index) => {
+          const isSelected = selectedAnswer === index;
+          const isCorrectOption = index === question.correctIndex;
+          
+          let optionStyle = styles.optionButton;
+          let textStyle = styles.optionText;
+          
+          if (showExplanation) {
+            if (isCorrectOption) {
+              optionStyle = { ...styles.optionButton, ...styles.optionCorrect };
+              textStyle = { ...styles.optionText, color: '#00D4AA' };
+            } else if (isSelected && !isCorrectOption) {
+              optionStyle = { ...styles.optionButton, ...styles.optionWrong };
+              textStyle = { ...styles.optionText, color: '#FF6B6B' };
+            }
+          } else if (isSelected) {
+            optionStyle = { ...styles.optionButton, borderColor: color, borderWidth: 2 };
+          }
+
+          return (
+            <TouchableOpacity
+              key={index}
+              style={optionStyle}
+              onPress={() => handleSelectAnswer(index)}
+              disabled={showExplanation}
+            >
+              <View style={[styles.optionLetter, { backgroundColor: showExplanation && isCorrectOption ? '#00D4AA20' : `${color}20` }]}>
+                <Text style={[styles.optionLetterText, { color: showExplanation && isCorrectOption ? '#00D4AA' : color }]}>
+                  {String.fromCharCode(65 + index)}
+                </Text>
+              </View>
+              <Text style={textStyle}>{option}</Text>
+              {showExplanation && isCorrectOption && (
+                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" style={{ marginLeft: 'auto' }} />
+              )}
+              {showExplanation && isSelected && !isCorrectOption && (
+                <Ionicons name="close-circle" size={20} color="#FF6B6B" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {showExplanation && (
+        <View style={[styles.explanationBox, { borderLeftColor: isCorrect ? '#00D4AA' : '#FFD700' }]}>
+          <View style={styles.explanationHeader}>
+            <Ionicons 
+              name={isCorrect ? "checkmark-circle" : "information-circle"} 
+              size={18} 
+              color={isCorrect ? '#00D4AA' : '#FFD700'} 
+            />
+            <Text style={[styles.explanationTitle, { color: isCorrect ? '#00D4AA' : '#FFD700' }]}>
+              {isCorrect ? 'Correct!' : 'Explanation'}
+            </Text>
+          </View>
+          <Text style={styles.explanationText}>{question.explanation}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Embedded YouTube Player Component
+interface YouTubePlayerProps {
+  videoId: string;
+  color: string;
+}
+
+function YouTubePlayer({ videoId, color }: YouTubePlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const embedHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { background: #1A1F2E; }
+          .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+          }
+          .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="video-container">
+          <iframe 
+            src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&autoplay=1"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen>
+          </iframe>
+        </div>
+      </body>
+    </html>
+  `;
+
+  if (!isPlaying) {
+    return (
+      <TouchableOpacity 
+        style={[styles.videoThumbnail, { borderColor: color }]}
+        onPress={() => setIsPlaying(true)}
+        activeOpacity={0.9}
+      >
+        <View style={styles.thumbnailOverlay}>
+          <View style={[styles.playButtonLarge, { backgroundColor: `${color}` }]}>
+            <Ionicons name="play" size={32} color="#0A0E17" style={{ marginLeft: 4 }} />
+          </View>
+          <Text style={styles.tapToPlay}>Tap to play video</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.videoContainer}>
+      <WebView
+        source={{ html: embedHtml }}
+        style={styles.webview}
+        allowsFullscreenVideo={true}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        scrollEnabled={false}
+      />
+    </View>
+  );
+}
 
 export default function LessonScreen() {
   const { user } = useAuth();
@@ -124,23 +296,13 @@ export default function LessonScreen() {
     setShowContent(true);
   };
 
-  const handleWatchVideo = async (url: string) => {
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
-    } catch (error) {
-      console.log('Error opening video:', error);
-    }
-  };
-
   const color = getCategoryColor();
 
   // Content view for selected lesson
   if (showContent && selectedLesson) {
     const lesson = courseData.lessons.find(l => l.id === selectedLesson);
     const lessonContent = courseContent?.lessons.find(l => l.id === selectedLesson);
+    const isQuiz = lesson?.type === 'quiz';
     
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -162,69 +324,72 @@ export default function LessonScreen() {
           style={styles.scrollView}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         >
-          {/* Video/Content Area */}
-          {lessonContent?.youtubeUrl ? (
-            <TouchableOpacity 
-              style={[styles.videoCard, { borderColor: color }]}
-              onPress={() => handleWatchVideo(lessonContent.youtubeUrl!)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.playButton, { backgroundColor: `${color}30` }]}>
-                <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+          {/* Video Player - Embedded */}
+          {lesson?.type === 'video' && lessonContent?.youtubeId && (
+            <YouTubePlayer videoId={lessonContent.youtubeId} color={color} />
+          )}
+
+          {/* Text Lesson Icon */}
+          {lesson?.type === 'text' && (
+            <View style={[styles.textLessonHeader, { backgroundColor: `${color}15` }]}>
+              <View style={[styles.textIcon, { backgroundColor: `${color}30` }]}>
+                <Ionicons name="document-text" size={32} color={color} />
               </View>
-              <Text style={styles.videoTitle}>{lessonContent.youtubeTitle || 'Watch Video'}</Text>
-              <View style={styles.watchButton}>
-                <Ionicons name="play" size={16} color="#0A0E17" />
-                <Text style={styles.watchButtonText}>Watch on YouTube</Text>
+              <Text style={styles.textLessonLabel}>Reading Material</Text>
+            </View>
+          )}
+
+          {/* Quiz Header */}
+          {isQuiz && (
+            <View style={[styles.quizHeader, { backgroundColor: `${color}15` }]}>
+              <View style={[styles.quizIcon, { backgroundColor: `${color}30` }]}>
+                <Ionicons name="help-circle" size={32} color={color} />
               </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={[styles.contentPlaceholder, { borderColor: color }]}>
-              <View style={[styles.playButton, { backgroundColor: `${color}30` }]}>
-                <Ionicons 
-                  name={getLessonIcon(lesson?.type || 'video')} 
-                  size={48} 
-                  color={color} 
-                />
-              </View>
-              <Text style={styles.placeholderText}>
-                {lesson?.type === 'video' ? 'Video Content' : lesson?.type === 'quiz' ? 'Quiz' : 'Reading Material'}
-              </Text>
-              <Text style={styles.placeholderSubtext}>{lesson?.duration}</Text>
+              <Text style={styles.quizTitle}>Knowledge Check</Text>
+              <Text style={styles.quizSubtitle}>Test your understanding of this course</Text>
             </View>
           )}
 
           {/* Lesson Info */}
-          <View style={styles.lessonInfo}>
-            <Text style={styles.lessonTitle}>{lesson?.title}</Text>
-            <View style={styles.lessonMeta}>
-              <View style={[styles.typeBadge, { backgroundColor: `${color}20` }]}>
-                <Ionicons name={getLessonIcon(lesson?.type || 'video')} size={14} color={color} />
-                <Text style={[styles.typeBadgeText, { color }]}>
-                  {lesson?.type?.charAt(0).toUpperCase() + lesson?.type?.slice(1)}
-                </Text>
+          {!isQuiz && (
+            <View style={styles.lessonInfo}>
+              <Text style={styles.lessonTitle}>{lesson?.title}</Text>
+              <View style={styles.lessonMeta}>
+                <View style={[styles.typeBadge, { backgroundColor: `${color}20` }]}>
+                  <Ionicons name={getLessonIcon(lesson?.type || 'video')} size={14} color={color} />
+                  <Text style={[styles.typeBadgeText, { color }]}>
+                    {lesson?.type?.charAt(0).toUpperCase() + lesson?.type?.slice(1)}
+                  </Text>
+                </View>
+                <Text style={styles.durationText}>{lesson?.duration}</Text>
               </View>
-              <Text style={styles.durationText}>{lesson?.duration}</Text>
             </View>
-          </View>
+          )}
 
-          {/* Lesson Overview */}
-          {lessonContent?.overview ? (
+          {/* Quiz Questions */}
+          {isQuiz && lessonContent?.quizQuestions && (
+            <View style={styles.quizContainer}>
+              {lessonContent.quizQuestions.map((q, index) => (
+                <QuizQuestion 
+                  key={index} 
+                  question={q} 
+                  questionNumber={index + 1}
+                  color={color}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Lesson Overview (non-quiz) */}
+          {!isQuiz && lessonContent?.overview && (
             <View style={styles.contentSection}>
               <Text style={styles.sectionTitle}>Lesson Overview</Text>
               <Text style={styles.overviewText}>{lessonContent.overview}</Text>
             </View>
-          ) : (
-            <View style={styles.contentSection}>
-              <Text style={styles.sectionTitle}>Lesson Overview</Text>
-              <Text style={styles.contentText}>
-                This lesson covers important concepts that will help you on your trading journey.
-              </Text>
-            </View>
           )}
 
-          {/* Key Takeaways */}
-          {lessonContent?.keyTakeaways && lessonContent.keyTakeaways.length > 0 && (
+          {/* Key Takeaways (non-quiz) */}
+          {!isQuiz && lessonContent?.keyTakeaways && lessonContent.keyTakeaways.length > 0 && (
             <View style={styles.contentSection}>
               <Text style={styles.sectionTitle}>Key Takeaways</Text>
               <View style={styles.bulletList}>
@@ -333,7 +498,11 @@ export default function LessonScreen() {
                 <Text style={styles.lessonCardMetaText}>{lesson.duration}</Text>
               </View>
             </View>
-            <Ionicons name="play-circle" size={24} color={color} />
+            <Ionicons 
+              name={lesson.type === 'quiz' ? 'help-circle' : 'play-circle'} 
+              size={24} 
+              color={color} 
+            />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -469,63 +638,174 @@ const styles = StyleSheet.create({
     color: '#8A8D98',
     marginLeft: 4,
   },
-  // Content view styles
-  videoCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
+  // Video player styles
+  videoContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: 'hidden',
     marginBottom: 20,
-  },
-  contentPlaceholder: {
     backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    marginBottom: 20,
   },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  webview: {
+    flex: 1,
+    backgroundColor: '#1A1F2E',
+  },
+  videoThumbnail: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    backgroundColor: '#1A1F2E',
+    marginBottom: 20,
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  thumbnailOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  playButtonLarge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  videoTitle: {
+  tapToPlay: {
     fontSize: 14,
-    fontWeight: '600',
     color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 16,
+    fontWeight: '500',
   },
-  watchButton: {
-    flexDirection: 'row',
+  // Text lesson styles
+  textLessonHeader: {
     alignItems: 'center',
-    backgroundColor: '#FF0000',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+    padding: 24,
+    borderRadius: 12,
+    marginBottom: 20,
   },
-  watchButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginLeft: 6,
+  textIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  placeholderText: {
+  textLessonLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Quiz styles
+  quizHeader: {
+    alignItems: 'center',
+    padding: 24,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  quizIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quizTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
-  placeholderSubtext: {
-    fontSize: 13,
+  quizSubtitle: {
+    fontSize: 14,
     color: '#8A8D98',
   },
+  quizContainer: {
+    gap: 24,
+  },
+  quizQuestion: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 12,
+    padding: 16,
+  },
+  questionNumber: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8A8D98',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  questionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    lineHeight: 24,
+  },
+  optionsContainer: {
+    gap: 10,
+  },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0A0E17',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  optionCorrect: {
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    borderColor: '#00D4AA',
+  },
+  optionWrong: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderColor: '#FF6B6B',
+  },
+  optionLetter: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  optionLetterText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  explanationBox: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#0A0E17',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+  },
+  explanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  explanationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  explanationText: {
+    fontSize: 13,
+    color: '#C0C4CC',
+    lineHeight: 20,
+  },
+  // Content styles
   lessonInfo: {
     marginBottom: 20,
   },
@@ -566,12 +846,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#C0C4CC',
     lineHeight: 24,
-  },
-  contentText: {
-    fontSize: 14,
-    color: '#8A8D98',
-    lineHeight: 22,
-    marginBottom: 16,
   },
   bulletList: {
     gap: 12,
