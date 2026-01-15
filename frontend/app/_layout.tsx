@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import NotificationService from '../src/services/notificationService';
+import { initDeepLinkListener } from '../src/services/referralService';
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
@@ -25,6 +26,15 @@ function RootLayoutContent() {
     };
   }, [user]);
   
+  // Initialize deep link listener for referrals
+  useEffect(() => {
+    const cleanup = initDeepLinkListener((code) => {
+      console.log('[App] Referral code detected from deep link:', code);
+    });
+    
+    return cleanup;
+  }, []);
+  
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -39,6 +49,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="register" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
       </Stack>
