@@ -246,17 +246,17 @@ backend:
         - agent: "testing"
         - comment: "✅ COMPREHENSIVE SUBSCRIPTION ENFORCEMENT TESTING COMPLETE: 1) GET /api/subscription/status working correctly - Admin returns subscription='vip' with fund_management=true, Free user returns subscription='free' with ai_limit=3. 2) Admin subscription management working - PUT /api/admin/users/{user_id}/subscription successfully updates user subscriptions with expiry, POST /api/admin/users/{user_id}/reset-ai-usage resets AI counters, GET /api/admin/users/{user_id}/details returns detailed user info with effective_subscription. 3) VIP feature access control working - GET /api/features/fund-management/access and GET /api/features/academy/access correctly grant access to VIP users and deny access to free users. 4) AI usage limits enforced correctly - Free users get 3 weekly limit, Premium users get 10, VIP users get unlimited. 5) Signal filtering working - Free users see free signals + locked premium/vip signals, Admin sees all signals unlocked. All subscription-based access control functioning properly."
 
-  - task: "Academy Content Finalization"
+  - task: "Academy Full Population"
     implemented: true
     working: true
-    file: "academyContent.ts, lesson.tsx"
+    file: "academyContent.ts"
     stuck_count: 0
     priority: "medium"
     needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
-        - comment: "Academy content finalized: 1) EMBEDDED VIDEO PLAYBACK - Videos play inside app via WebView, no external redirect, 'Tap to play video' button. 2) SHORT RELEVANT VIDEOS - All YouTube videos are 5-8 minutes, beginner-friendly, topic-matched. 3) STATIC QUIZZES - Each quiz has 5 multiple-choice questions with A/B/C/D options, correct answer highlighting (green), explanation text on answer. 4) All 5 beginner courses have full content (video lessons, text lessons, quizzes)."
+        - comment: "Academy FULLY POPULATED with all tiers. INTERMEDIATE (Premium): 6 courses - Technical Analysis, Support & Resistance, Fibonacci Trading, Moving Averages, RSI & MACD, Breakout Trading. ADVANCED (VIP): 4 courses - Institutional Trading, Order Flow Analysis, Smart Money Concepts, Liquidity Trading. Each course has 5 lessons with overview, key takeaways, YouTube video, and quiz. Total: 5 Beginner + 6 Intermediate + 4 Advanced = 15 courses. Access control unchanged."
         - working: true
         - agent: "testing"
         - comment: "✅ SIGNAL LIFECYCLE ENGINE v2.0 COMPREHENSIVE TESTING COMPLETE: All 16 critical tests passed (100% success rate). VERIFIED: 1) Admin State Authority - Admin can create signals with state='active' and they remain ACTIVE (never downgraded to pending). Default signals correctly set to 'pending'. 2) Pip Calculation Logic - SELL signals: entry=1.1000, exit=1.0950 → +50 pips (profit when price goes DOWN), exit=1.1050 → -50 pips (loss when price goes UP). BUY signals: entry=1.1000, exit=1.1050 → +50 pips (profit when price goes UP), exit=1.0950 → -50 pips (loss when price goes DOWN). Formula working correctly: SELL pips = entry - exit, BUY pips = exit - entry. 3) State Immutability - Closed signals are completely immutable: ALL operations (/transition, /activate, /mark-tp, /force-close) correctly blocked with 'immutable' error messages. 4) Exit Handling - When signals are closed: state='closed', exit_price set correctly, final_pips calculated accurately, closed_at timestamp populated. The Signal Lifecycle Engine v2.0 is production-ready and all critical requirements satisfied."
