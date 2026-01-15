@@ -236,51 +236,63 @@ backend:
 
   - task: "Fund Management Application (User Submit)"
     implemented: true
-    working: NA
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
         - comment: "NEW: POST /api/fund/apply endpoint - allows Premium/VIP users to submit fund management applications"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ TESTED: Fund application submission working correctly. Free users blocked with 403 Forbidden (correct behavior). VIP users can submit applications successfully. Duplicate application prevention working - returns 400 Bad Request when user already has active application. All access control and validation functioning properly."
 
   - task: "Fund Management Application (User Status)"
     implemented: true
-    working: NA
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
         - comment: "NEW: GET /api/fund/my-application endpoint - allows users to check their application status"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ TESTED: User application status retrieval working correctly. VIP users with applications get their status and details. Free users without applications get has_application: false. Endpoint returns proper application data including status, investment tier, and creation date."
 
   - task: "Fund Management Admin (List Applications)"
     implemented: true
-    working: NA
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
         - comment: "NEW: GET /api/admin/fund/applications endpoint - allows admin to view all applications"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ TESTED: Admin application listing working correctly. Admin can view all fund applications with full details. VIP users blocked with 403 Forbidden (correct access control). Returns array of applications with all required fields."
 
   - task: "Fund Management Admin (Update Status)"
     implemented: true
-    working: NA
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: NA
         - agent: "main"
         - comment: "NEW: PUT /api/admin/fund/applications/{id}?status=X endpoint - allows admin to update application status"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ TESTED: Admin status update working correctly. Admin can update application status to contacted/approved/rejected. VIP users blocked with 403 Forbidden (correct access control). Status updates are reflected immediately when users check their application status. All CRUD operations functioning properly."
 
   - task: "Backend Subscription Enforcement System"
     implemented: true
