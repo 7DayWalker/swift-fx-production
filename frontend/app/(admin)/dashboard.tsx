@@ -86,6 +86,13 @@ export default function AdminDashboard() {
       color: '#10B981',
     },
     {
+      icon: 'cash-outline',
+      label: 'Withdrawal Requests',
+      description: 'Review & approve withdrawals',
+      route: '/(admin)/withdrawals',
+      color: '#F59E0B',
+    },
+    {
       icon: 'analytics',
       label: 'AI Usage Metrics',
       description: 'View AI analysis statistics',
