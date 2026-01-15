@@ -127,11 +127,14 @@ def test_fund_management_endpoints():
     }
     
     response = make_request("POST", "/fund/apply", free_token, application_data)
-    if response and response.status_code == 403:
-        results.log_pass("Free User Blocked from Fund Application")
+    if response:
+        if response.status_code == 403:
+            results.log_pass("Free User Blocked from Fund Application")
+        else:
+            results.log_fail("Free User Blocked from Fund Application", 
+                            f"Expected 403, got {response.status_code}")
     else:
-        results.log_fail("Free User Blocked from Fund Application", 
-                        f"Expected 403, got {response.status_code if response else 'No response'}")
+        results.log_fail("Free User Blocked from Fund Application", "No response received")
     
     # Step 3: Test VIP User Can Apply Successfully
     print("\n📋 STEP 3: VIP User Fund Application")
