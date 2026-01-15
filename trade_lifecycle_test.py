@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://signallifecycle.preview.emergentagent.com/api"
+BASE_URL = "https://forexedu-1.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {
