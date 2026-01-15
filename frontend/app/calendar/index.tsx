@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +30,11 @@ interface GroupedEvents {
   [date: string]: EconomicEvent[];
 }
 
-type FilterType = 'today' | 'week' | 'high';
+type TimeFilterType = 'today' | 'week';
+
+// Available currencies
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF', 'CNY'];
+const IMPACT_LEVELS = ['High', 'Medium', 'Low', 'Holiday'];
 
 export default function EconomicCalendarScreen() {
   const { theme } = useTheme();
@@ -38,7 +43,12 @@ export default function EconomicCalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('week');
+  
+  // Filters
+  const [timeFilter, setTimeFilter] = useState<TimeFilterType>('week');
+  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
+  const [selectedImpacts, setSelectedImpacts] = useState<string[]>([]);
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   const fetchEvents = useCallback(async (isRefresh = false) => {
     try {
@@ -46,7 +56,7 @@ export default function EconomicCalendarScreen() {
       setError(null);
 
       const response = await api.get('/calendar/events', {
-        params: { filter: activeFilter }
+        params: { filter: timeFilter }
       });
 
       setEvents(response.data.events || []);
@@ -57,7 +67,7 @@ export default function EconomicCalendarScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeFilter]);
+  }, [timeFilter]);
 
   useEffect(() => {
     fetchEvents();
@@ -68,8 +78,21 @@ export default function EconomicCalendarScreen() {
     fetchEvents(true);
   };
 
+  // Apply local filters (currency and impact)
+  const filteredEvents = events.filter(event => {
+    // Currency filter
+    if (selectedCurrencies.length > 0 && !selectedCurrencies.includes(event.country)) {
+      return false;
+    }
+    // Impact filter
+    if (selectedImpacts.length > 0 && !selectedImpacts.includes(event.impact)) {
+      return false;
+    }
+    return true;
+  });
+
   // Group events by date
-  const groupedEvents: GroupedEvents = events.reduce((acc, event) => {
+  const groupedEvents: GroupedEvents = filteredEvents.reduce((acc, event) => {
     const eventDate = new Date(event.date);
     const dateKey = eventDate.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -151,6 +174,32 @@ export default function EconomicCalendarScreen() {
     });
   };
 
+  // Toggle currency selection
+  const toggleCurrency = (currency: string) => {
+    setSelectedCurrencies(prev => 
+      prev.includes(currency) 
+        ? prev.filter(c => c !== currency)
+        : [...prev, currency]
+    );
+  };
+
+  // Toggle impact selection
+  const toggleImpact = (impact: string) => {
+    setSelectedImpacts(prev => 
+      prev.includes(impact) 
+        ? prev.filter(i => i !== impact)
+        : [...prev, impact]
+    );
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSelectedCurrencies([]);
+    setSelectedImpacts([]);
+  };
+
+  const activeFilterCount = selectedCurrencies.length + selectedImpacts.length;
+
   const dynamicStyles = {
     container: { backgroundColor: theme.background },
     surface: { backgroundColor: theme.surface },
@@ -171,7 +220,17 @@ export default function EconomicCalendarScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, dynamicStyles.text]}>Economic Calendar</Text>
-        <View style={styles.headerRight} />
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Ionicons name="options-outline" size={24} color={theme.text} />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Info Banner */}
@@ -182,28 +241,68 @@ export default function EconomicCalendarScreen() {
         </Text>
       </View>
 
-      {/* Filter Tabs */}
+      {/* Time Filter Tabs */}
       <View style={[styles.filterContainer, dynamicStyles.card]}>
-        {(['today', 'week', 'high'] as FilterType[]).map((filter) => (
+        {(['today', 'week'] as TimeFilterType[]).map((filter) => (
           <TouchableOpacity
             key={filter}
             style={[
               styles.filterTab,
-              activeFilter === filter && { backgroundColor: theme.primary },
+              timeFilter === filter && { backgroundColor: theme.primary },
             ]}
-            onPress={() => setActiveFilter(filter)}
+            onPress={() => setTimeFilter(filter)}
           >
             <Text
               style={[
                 styles.filterTabText,
-                { color: activeFilter === filter ? '#0A0E17' : theme.textSecondary },
+                { color: timeFilter === filter ? '#0A0E17' : theme.textSecondary },
               ]}
             >
-              {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : 'High Impact'}
+              {filter === 'today' ? 'Today' : 'This Week'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Active Filters Display */}
+      {activeFilterCount > 0 && (
+        <View style={styles.activeFiltersContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {selectedCurrencies.map(currency => (
+              <TouchableOpacity
+                key={currency}
+                style={[styles.activeFilterChip, { backgroundColor: `${theme.primary}20` }]}
+                onPress={() => toggleCurrency(currency)}
+              >
+                <Text style={[styles.activeFilterText, { color: theme.primary }]}>
+                  {getCurrencyFlag(currency)} {currency}
+                </Text>
+                <Ionicons name="close" size={14} color={theme.primary} />
+              </TouchableOpacity>
+            ))}
+            {selectedImpacts.map(impact => (
+              <TouchableOpacity
+                key={impact}
+                style={[styles.activeFilterChip, { backgroundColor: `${getImpactColor(impact)}20` }]}
+                onPress={() => toggleImpact(impact)}
+              >
+                <Text style={[styles.activeFilterText, { color: getImpactColor(impact) }]}>
+                  {impact}
+                </Text>
+                <Ionicons name="close" size={14} color={getImpactColor(impact)} />
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[styles.clearFiltersButton]}
+              onPress={clearFilters}
+            >
+              <Text style={[styles.clearFiltersText, { color: theme.textSecondary }]}>
+                Clear all
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
 
       {/* Content */}
       {loading ? (
@@ -221,12 +320,20 @@ export default function EconomicCalendarScreen() {
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="calendar-outline" size={48} color={theme.textSecondary} />
           <Text style={[styles.emptyText, dynamicStyles.textSecondary]}>
-            No events found for this filter
+            No events match your filters
           </Text>
+          {activeFilterCount > 0 && (
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: theme.primary }]} 
+              onPress={clearFilters}
+            >
+              <Text style={styles.retryButtonText}>Clear Filters</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -341,6 +448,116 @@ export default function EconomicCalendarScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, dynamicStyles.text]}>Filter Events</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Impact Level Filter */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, dynamicStyles.text]}>Impact Level</Text>
+                <Text style={[styles.filterSectionSubtitle, dynamicStyles.textSecondary]}>
+                  Select one or more impact levels
+                </Text>
+                <View style={styles.filterChipsContainer}>
+                  {IMPACT_LEVELS.map(impact => (
+                    <TouchableOpacity
+                      key={impact}
+                      style={[
+                        styles.filterChip,
+                        { borderColor: getImpactColor(impact) },
+                        selectedImpacts.includes(impact) && { 
+                          backgroundColor: `${getImpactColor(impact)}20`,
+                          borderWidth: 2,
+                        },
+                      ]}
+                      onPress={() => toggleImpact(impact)}
+                    >
+                      <Ionicons
+                        name={getImpactIcon(impact) as any}
+                        size={16}
+                        color={getImpactColor(impact)}
+                      />
+                      <Text style={[styles.filterChipText, { color: getImpactColor(impact) }]}>
+                        {impact}
+                      </Text>
+                      {selectedImpacts.includes(impact) && (
+                        <Ionicons name="checkmark" size={16} color={getImpactColor(impact)} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Currency Filter */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, dynamicStyles.text]}>Currency</Text>
+                <Text style={[styles.filterSectionSubtitle, dynamicStyles.textSecondary]}>
+                  Select one or more currencies
+                </Text>
+                <View style={styles.filterChipsContainer}>
+                  {CURRENCIES.map(currency => (
+                    <TouchableOpacity
+                      key={currency}
+                      style={[
+                        styles.filterChip,
+                        { borderColor: theme.border },
+                        selectedCurrencies.includes(currency) && { 
+                          backgroundColor: `${theme.primary}20`,
+                          borderColor: theme.primary,
+                          borderWidth: 2,
+                        },
+                      ]}
+                      onPress={() => toggleCurrency(currency)}
+                    >
+                      <Text style={styles.currencyFlagSmall}>{getCurrencyFlag(currency)}</Text>
+                      <Text style={[
+                        styles.filterChipText, 
+                        { color: selectedCurrencies.includes(currency) ? theme.primary : theme.text }
+                      ]}>
+                        {currency}
+                      </Text>
+                      {selectedCurrencies.includes(currency) && (
+                        <Ionicons name="checkmark" size={16} color={theme.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.clearButton, { borderColor: theme.border }]}
+                onPress={clearFilters}
+              >
+                <Text style={[styles.clearButtonText, dynamicStyles.textSecondary]}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.applyButton, { backgroundColor: theme.primary }]}
+                onPress={() => setShowFilterModal(false)}
+              >
+                <Text style={styles.applyButtonText}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -363,8 +580,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  headerRight: {
-    width: 40,
+  filterButton: {
+    padding: 8,
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   infoBanner: {
     flexDirection: 'row',
@@ -384,7 +618,7 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     padding: 4,
     borderRadius: 12,
   },
@@ -397,6 +631,30 @@ const styles = StyleSheet.create({
   filterTabText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  activeFiltersContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    gap: 6,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  clearFiltersButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  clearFiltersText: {
+    fontSize: 12,
   },
   scrollView: {
     flex: 1,
@@ -544,5 +802,89 @@ const styles = StyleSheet.create({
   disclaimerText: {
     fontSize: 11,
     textAlign: 'center',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  filterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  filterSectionSubtitle: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  filterChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  currencyFlagSmall: {
+    fontSize: 16,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  clearButton: {
+    borderWidth: 1,
+  },
+  clearButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  applyButton: {},
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0A0E17',
   },
 });
