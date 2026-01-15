@@ -232,19 +232,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  iconWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 212, 170, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 25,
+    overflow: 'hidden',
     marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#00D4AA',
   },
-  logoIcon: {
-    fontSize: 40,
+  logo: {
+    width: 100,
+    height: 100,
   },
   title: {
     fontSize: 28,
