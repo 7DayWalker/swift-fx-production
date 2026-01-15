@@ -29,8 +29,12 @@ export default function SplashScreen() {
   return (
     <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
       <View style={styles.logoContainer}>
-        <View style={styles.iconWrapper}>
-          <Text style={styles.logoIcon}>⚡</Text>
+        <View style={styles.logoWrapper}>
+          <Image 
+            source={require('../assets/images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>Swift FX</Text>
         <Text style={styles.subtitle}>SIGNALS</Text>
@@ -56,19 +60,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 60,
   },
-  iconWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0, 212, 170, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 30,
+    overflow: 'hidden',
     marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#00D4AA',
   },
-  logoIcon: {
-    fontSize: 50,
+  logo: {
+    width: 120,
+    height: 120,
   },
   title: {
     fontSize: 42,
