@@ -1043,4 +1043,83 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0A0E17',
   },
+  // Notification Card Styles
+  notificationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  notificationCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  notificationIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notificationSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // Notification Modal Styles
+  notificationModalContent: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    paddingBottom: 20,
+    maxWidth: 400,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  notificationModalSubtitle: {
+    fontSize: 14,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  timingOptions: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  timingOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  timingOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  notificationNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  notificationNoteText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+  },
 });
