@@ -79,6 +79,13 @@ export default function AdminDashboard() {
       color: '#3B82F6',
     },
     {
+      icon: 'stats-chart',
+      label: 'Fund Performance',
+      description: 'Manage investor portfolios',
+      route: '/(admin)/fund-performance',
+      color: '#10B981',
+    },
+    {
       icon: 'analytics',
       label: 'AI Usage Metrics',
       description: 'View AI analysis statistics',
