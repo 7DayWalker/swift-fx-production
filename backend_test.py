@@ -76,8 +76,11 @@ def make_request(method, endpoint, token=None, json_data=None, params=None):
             
         print(f"   DEBUG: {method} {endpoint} -> {response.status_code}")
         return response
+    except requests.exceptions.RequestException as e:
+        print(f"   DEBUG: Request exception for {method} {endpoint}: {e}")
+        return None
     except Exception as e:
-        print(f"   DEBUG: Request error for {method} {endpoint}: {e}")
+        print(f"   DEBUG: General error for {method} {endpoint}: {e}")
         return None
 
 def test_fund_management_endpoints():
