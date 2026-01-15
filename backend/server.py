@@ -3153,15 +3153,17 @@ async def submit_fund_application(
             detail="You must agree to the risk disclaimer to submit an application"
         )
     
-    # Check if user already has a pending application
+    # Check if user already has a pending/contacted application for this tier
+    # User cannot resubmit same tier while status ≠ Rejected
     existing = await db.fund_applications.find_one({
         "user_id": current_user.user_id,
-        "status": {"$in": ["pending_review", "contacted"]}
+        "investment_tier": application.investment_tier.value,
+        "status": {"$in": ["pending_review", "contacted", "approved"]}
     })
     if existing:
         raise HTTPException(
             status_code=400,
-            detail="You already have an active application under review"
+            detail=f"You already have an active application for the {application.investment_tier.value} tier. Status: {existing['status']}"
         )
     
     # Create application
