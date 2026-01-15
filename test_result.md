@@ -327,6 +327,18 @@ backend:
         - agent: "testing"
         - comment: "✅ MANUAL SIGNAL MODE TESTING COMPLETE: All 10 tests passed (100% success rate). VERIFIED: 1) Automation Status - GET /api/automation/status returns mode='MANUAL' and auto_engine_running=false. 2) Admin State Authority - Admin can create ACTIVE signals directly (state='active') and they remain active (no auto-downgrade). Default signals correctly set to 'pending'. 3) Manual State Control - Manual activation (pending→active), manual TP marking (active→tp1), and manual force-close all working correctly. 4) Pip Calculation - BUY signals: entry=1.0000, close=1.0050 → +50 pips (positive). SELL signals: entry=1.0000, close=0.9950 → +50 pips (positive). Correct directional logic confirmed. 5) Closed Signal Immutability - All operations on closed signals (activate, mark-tp, force-close) correctly blocked with 'immutable' error messages. Manual signal mode is fully functional and production-ready."
 
+  - task: "Admin Withdrawal Management System"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ ADMIN WITHDRAWAL MANAGEMENT SYSTEM TESTING COMPLETE: All 7 critical tests passed (100% success rate). VERIFIED CRITICAL TEST SEQUENCE: 1) Admin Login - Admin authentication working with admin@swiftfx.com credentials ✅. 2) List All Withdrawals - GET /api/admin/investor/withdrawals returns withdrawals array with proper structure, retrieved 3 withdrawals successfully ✅. 3) Filter by Status (Pending) - GET /api/admin/investor/withdrawals?status=pending correctly filters and returns only pending withdrawals ✅. 4) Filter by Status (Approved) - GET /api/admin/investor/withdrawals?status=approved filtering works correctly ✅. 5) Process Withdrawal (Approve) - PUT /api/admin/investor/withdrawal/{withdrawal_id}?status=approved&admin_notes=Test%20approval successfully approves withdrawals ✅. 6) Mark as Paid - PUT /api/admin/investor/withdrawal/{withdrawal_id}?status=paid successfully marks withdrawals as paid ✅. 7) Verify Dashboard Sync - GET /api/investor/dashboard shows updated withdrawal status, confirming real-time sync between admin actions and user dashboard ✅. The complete Admin Withdrawal Management System is production-ready and meets all requirements from the review request."
+
 frontend:
   - task: "Splash Screen with Auth Check"
     implemented: true
