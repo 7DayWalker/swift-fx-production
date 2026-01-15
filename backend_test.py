@@ -137,6 +137,10 @@ class InvestorDashboardTester:
             return False
         
         applications = response.json()
+        # Handle both direct array and object with applications key
+        if isinstance(applications, dict) and "applications" in applications:
+            applications = applications["applications"]
+        
         self.log_test("Get Fund Applications", True, f"Retrieved {len(applications)} applications")
         
         # Look for VIP user application
