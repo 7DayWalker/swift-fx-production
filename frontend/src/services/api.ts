@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Use relative URL for web, full URL for native
 const getBaseUrl = () => {
@@ -24,6 +25,24 @@ export const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor to include auth token
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Failed to get auth token:', error);
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Add response interceptor for error handling
 api.interceptors.response.use(
