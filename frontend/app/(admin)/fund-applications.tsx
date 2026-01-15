@@ -52,6 +52,7 @@ interface FundApplication {
   intended_amount: number;
   trading_experience: string;
   status: string;
+  source: string;
   admin_notes: string | null;
   created_at: string;
   updated_at: string | null;
