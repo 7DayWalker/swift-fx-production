@@ -1339,6 +1339,120 @@ Optimal Trade Entry (OTE): the zone between 61.8% and 78.6% Fibonacci retracemen
         ]
       }
     ]
+  },
+  {
+    id: 'market-structure',
+    title: 'Market Structure Analysis',
+    description: 'Advanced price action',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'Market Structure Deep Dive', duration: '10 min', type: 'video', overview: 'Market structure is the backbone of price action trading. It shows who is in control - buyers or sellers - and when that control shifts.\n\nKey elements: Swing highs/lows, Break of Structure (BOS), Change of Character (ChoCH), and structural liquidity.\n\nMastering structure lets you read market intent, not just react to price.', keyTakeaways: ['Structure shows who controls the market', 'Key: swing points, BOS, ChoCH', 'Structure reveals market intent', 'Foundation for all price action'], youtubeId: 'xE1F0R6SBco', youtubeTitle: 'Market Structure Deep Dive' },
+      { id: 2, title: 'Multi-Timeframe Structure', duration: '11 min', type: 'video', overview: 'Higher timeframes dictate the overall direction. Lower timeframes provide entries.\n\nDaily/Weekly shows the trend. 4H shows swing moves. 1H/15M provides entry timing.\n\nAlways align lower timeframe entries with higher timeframe direction. Trading against HTF structure has low probability.', keyTakeaways: ['Higher TF = direction, Lower TF = entries', 'Daily/Weekly for trend, 4H for swings', '1H/15M for precise entries', 'Never trade against HTF structure'], youtubeId: 'RY_PLyWvMfY', youtubeTitle: 'Multi-Timeframe Structure' },
+      { id: 3, title: 'Internal vs External Structure', duration: '9 min', type: 'video', overview: 'External structure: Major swing points that define the trend. Breaking these is significant.\n\nInternal structure: Minor swings within the trend. These create trading opportunities without changing trend direction.\n\nTrade internal structure breaks for entries, but only in direction of external structure.', keyTakeaways: ['External = major swing points', 'Internal = minor swings within trend', 'External breaks change trends', 'Trade internal in direction of external'], youtubeId: 'YH4JhMNwpwc', youtubeTitle: 'Internal vs External Structure' },
+      { id: 4, title: 'Structure-Based Trading', duration: '9 min', type: 'text', overview: 'A complete structure trading approach:\n\n1. Identify HTF trend (daily/weekly external structure)\n2. Wait for LTF pullback to key level\n3. Look for LTF internal BOS in trend direction\n4. Enter after BOS confirmation\n5. Target HTF structure levels\n\nThis aligns all timeframes for high-probability setups.', keyTakeaways: ['Start with HTF trend identification', 'Wait for pullback to key level', 'Confirm with LTF structure break', 'Target HTF structural levels'] },
+      { id: 5, title: 'Market Structure Quiz', duration: '5 min', type: 'quiz', overview: 'Test your market structure knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What does BOS stand for?', options: ['Buy or Sell', 'Break of Structure', 'Bearish or Strong', 'Base of Support'], correctIndex: 1, explanation: 'BOS = Break of Structure, confirms trend.' },
+        { question: 'Which timeframe dictates direction?', options: ['1 minute', '15 minute', 'Higher timeframes', 'All equal'], correctIndex: 2, explanation: 'Higher TFs show overall direction.' },
+        { question: 'What is external structure?', options: ['Minor swings', 'Major swing points defining trend', 'Indicators', 'News events'], correctIndex: 1, explanation: 'External = major structural points.' },
+        { question: 'When to enter trades?', options: ['Against HTF structure', 'With HTF structure direction', 'Random timing', 'Only on news'], correctIndex: 1, explanation: 'Always align with HTF structure.' },
+        { question: 'What is ChoCH?', options: ['Chart pattern', 'Change of Character', 'Choppy market', 'Channel breakout'], correctIndex: 1, explanation: 'ChoCH signals potential trend change.' }
+      ]}
+    ]
+  },
+  {
+    id: 'algorithmic',
+    title: 'Algorithmic Trading Intro',
+    description: 'Automated trading basics',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'What is Algorithmic Trading?', duration: '8 min', type: 'video', overview: 'Algorithmic trading uses computer programs to execute trades based on predefined rules. The computer follows your strategy without emotion.\n\nAdvantages: No emotional decisions, can trade 24/7, faster execution, backtesting capability.\n\nIt\'s not a magic solution - the algorithm is only as good as the strategy programmed into it.', keyTakeaways: ['Computers execute predefined rules', 'No emotional interference', 'Can trade 24/7 automatically', 'Only as good as the strategy'], youtubeId: 'nd7aN8-8vEQ', youtubeTitle: 'Algorithmic Trading Intro' },
+      { id: 2, title: 'Types of Trading Algorithms', duration: '10 min', type: 'video', overview: 'Common algo types:\n\nTrend Following: Buy when price is above MA, sell below.\nMean Reversion: Buy oversold, sell overbought.\nArbitrage: Exploit price differences across markets.\nHigh-Frequency: Many small trades exploiting tiny edges.\n\nMost retail algos focus on trend following or mean reversion strategies.', keyTakeaways: ['Trend following = trade with momentum', 'Mean reversion = trade extremes', 'Arbitrage exploits price differences', 'HFT requires infrastructure'], youtubeId: 'EaGc1KHLFwQ', youtubeTitle: 'Types of Trading Algos' },
+      { id: 3, title: 'Building Your First Algorithm', duration: '12 min', type: 'video', overview: 'Start simple. A basic algo might be:\n\nBuy: When 20 EMA crosses above 50 EMA\nSell: When 20 EMA crosses below 50 EMA\nRisk: 1% per trade\n\nPlatforms like TradingView (Pine Script), MT4/MT5 (MQL), or Python let you code and test strategies.\n\nAlways backtest extensively before live trading.', keyTakeaways: ['Start with simple rules', 'Use platforms: TradingView, MT4, Python', 'Include risk management in code', 'Backtest before going live'], youtubeId: 'GwPPMnvDp20', youtubeTitle: 'Building First Algorithm' },
+      { id: 4, title: 'Risks of Automated Trading', duration: '8 min', type: 'text', overview: 'Algorithmic trading has unique risks:\n\nOver-optimization: Algorithm works perfectly on historical data but fails live (curve fitting).\nTechnical failures: Internet outage, broker disconnect, software bugs can cause unexpected losses.\nMarket changes: Strategy that worked may stop working as market conditions change.\n\nAlways monitor your algo and have kill switches for emergencies.', keyTakeaways: ['Over-optimization = curve fitting risk', 'Technical failures can cause losses', 'Markets change, strategies can fail', 'Always monitor and have kill switches'] },
+      { id: 5, title: 'Algorithmic Trading Quiz', duration: '5 min', type: 'quiz', overview: 'Test your algorithmic trading knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'Main advantage of algo trading?', options: ['Guaranteed profits', 'No emotional decisions', 'No risk', 'Free money'], correctIndex: 1, explanation: 'Algos eliminate emotional trading decisions.' },
+        { question: 'What is mean reversion?', options: ['Following trends', 'Trading price extremes back to average', 'News trading', 'Random entries'], correctIndex: 1, explanation: 'Mean reversion trades oversold/overbought conditions.' },
+        { question: 'What is curve fitting?', options: ['Drawing curves', 'Over-optimizing to past data', 'Chart pattern', 'Trend lines'], correctIndex: 1, explanation: 'Curve fitting = strategy only works on historical data.' },
+        { question: 'Why monitor running algos?', options: ['Not necessary', 'Technical failures and market changes', 'Fun to watch', 'Broker requirement'], correctIndex: 1, explanation: 'Algos can fail due to technical issues or market changes.' },
+        { question: 'Best practice before live algo trading?', options: ['Trade immediately', 'Extensive backtesting', 'Guess and check', 'Skip testing'], correctIndex: 1, explanation: 'Always backtest extensively before live trading.' }
+      ]}
+    ]
+  },
+  {
+    id: 'portfolio',
+    title: 'Portfolio Management',
+    description: 'Diversification strategies',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'Portfolio Theory Basics', duration: '9 min', type: 'video', overview: 'Portfolio management is about balancing risk and return across multiple positions. Don\'t put all eggs in one basket.\n\nDiversification reduces overall risk. When one asset loses, others may gain, smoothing your equity curve.\n\nKey concepts: correlation, asset allocation, risk-adjusted returns (Sharpe ratio).', keyTakeaways: ['Don\'t put all eggs in one basket', 'Diversification reduces overall risk', 'Correlation affects portfolio risk', 'Sharpe ratio measures risk-adjusted return'], youtubeId: 'XLF8cFkL_xI', youtubeTitle: 'Portfolio Theory Basics' },
+      { id: 2, title: 'Asset Allocation', duration: '10 min', type: 'video', overview: 'Asset allocation divides capital across different asset classes: currencies, stocks, commodities, bonds, crypto.\n\nAggressive allocation: More in volatile assets for higher potential returns.\nConservative allocation: More in stable assets for capital preservation.\n\nYour allocation should match your risk tolerance and goals.', keyTakeaways: ['Divide capital across asset classes', 'Aggressive = more volatile assets', 'Conservative = more stable assets', 'Match allocation to risk tolerance'], youtubeId: 'DFZKq_2i8AI', youtubeTitle: 'Asset Allocation Explained' },
+      { id: 3, title: 'Position Correlation', duration: '9 min', type: 'video', overview: 'Holding correlated positions multiplies risk. If EUR/USD and GBP/USD both move against USD, losing on both hurts double.\n\nSeek low or negative correlation for diversification. Gold often moves inverse to USD. Bonds may move inverse to stocks.\n\nRegularly review your portfolio correlation and rebalance as needed.', keyTakeaways: ['Correlated positions = multiplied risk', 'Seek low/negative correlation', 'Gold often inverse to USD', 'Regularly review and rebalance'], youtubeId: 'jGU9eHi-kv8', youtubeTitle: 'Portfolio Correlation' },
+      { id: 4, title: 'Risk Budgeting', duration: '8 min', type: 'text', overview: 'Risk budgeting allocates total portfolio risk across positions.\n\nExample: 5% total portfolio risk budget. Three positions get: 2%, 2%, 1%.\n\nHigher conviction trades can get larger risk allocation. But no single trade should dominate your risk.\n\nThis prevents catastrophic losses from any single position.', keyTakeaways: ['Allocate total risk across positions', 'Higher conviction = larger allocation', 'No single trade dominates risk', 'Prevents catastrophic single losses'] },
+      { id: 5, title: 'Portfolio Management Quiz', duration: '5 min', type: 'quiz', overview: 'Test your portfolio management knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What is diversification?', options: ['Focusing on one asset', 'Spreading risk across multiple assets', 'Maximum leverage', 'Day trading only'], correctIndex: 1, explanation: 'Diversification spreads risk across assets.' },
+        { question: 'What does Sharpe ratio measure?', options: ['Total return only', 'Risk-adjusted return', 'Market cap', 'Trading volume'], correctIndex: 1, explanation: 'Sharpe ratio = return relative to risk taken.' },
+        { question: 'How do correlated positions affect risk?', options: ['Reduce risk', 'Multiply risk', 'No effect', 'Guarantee profits'], correctIndex: 1, explanation: 'Correlation multiplies portfolio risk.' },
+        { question: 'What is risk budgeting?', options: ['Ignoring risk', 'Allocating risk across positions', 'Maximum risk', 'Zero risk'], correctIndex: 1, explanation: 'Risk budgeting divides total risk across trades.' },
+        { question: 'Conservative allocation means:', options: ['More volatile assets', 'More stable assets', 'No allocation', 'All in crypto'], correctIndex: 1, explanation: 'Conservative = more stable, lower-risk assets.' }
+      ]}
+    ]
+  },
+  {
+    id: 'options',
+    title: 'Options Trading',
+    description: 'Derivatives and hedging',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'Options Fundamentals', duration: '10 min', type: 'video', overview: 'Options are contracts giving the right (not obligation) to buy or sell an asset at a specific price by a specific date.\n\nCall option: Right to BUY at strike price.\nPut option: Right to SELL at strike price.\n\nYou pay a premium for this right. Options add complexity but also flexibility.', keyTakeaways: ['Right, not obligation, to buy/sell', 'Call = right to buy, Put = right to sell', 'Pay premium for the option', 'Adds flexibility to trading'], youtubeId: 'VJgHkAqohbU', youtubeTitle: 'Options Fundamentals' },
+      { id: 2, title: 'Options Greeks', duration: '11 min', type: 'video', overview: 'Greeks measure option sensitivity:\n\nDelta: How much option price moves with underlying.\nTheta: Time decay - options lose value over time.\nVega: Sensitivity to volatility changes.\nGamma: Rate of delta change.\n\nUnderstanding Greeks helps manage option positions.', keyTakeaways: ['Delta = price sensitivity', 'Theta = time decay', 'Vega = volatility sensitivity', 'Greeks help manage positions'], youtubeId: 'kCJcEOYuuII', youtubeTitle: 'Options Greeks Explained' },
+      { id: 3, title: 'Basic Options Strategies', duration: '10 min', type: 'video', overview: 'Simple strategies for beginners:\n\nLong Call: Buy call when expecting price increase.\nLong Put: Buy put when expecting price decrease.\nCovered Call: Own asset, sell call for income.\nProtective Put: Own asset, buy put for protection.\n\nStart with these before advanced strategies.', keyTakeaways: ['Long call for bullish, put for bearish', 'Covered call generates income', 'Protective put = insurance', 'Start simple before complex'], youtubeId: '7PM4rNDr4oI', youtubeTitle: 'Basic Options Strategies' },
+      { id: 4, title: 'Hedging with Options', duration: '9 min', type: 'text', overview: 'Options are powerful hedging tools. You can protect positions against adverse moves.\n\nExample: Long EUR/USD spot. Buy EUR/USD put option as insurance. If price drops, put gains offset spot losses.\n\nThe cost is the option premium - it\'s like paying an insurance premium for protection.\n\nHedging reduces profit potential but also limits losses.', keyTakeaways: ['Options can protect positions', 'Puts hedge long positions', 'Premium is the cost of protection', 'Hedging limits both profits and losses'] },
+      { id: 5, title: 'Options Trading Quiz', duration: '5 min', type: 'quiz', overview: 'Test your options knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What is a call option?', options: ['Obligation to buy', 'Right to buy', 'Right to sell', 'Obligation to sell'], correctIndex: 1, explanation: 'Call = right (not obligation) to buy.' },
+        { question: 'What is Theta?', options: ['Price sensitivity', 'Time decay', 'Volatility', 'Interest rate'], correctIndex: 1, explanation: 'Theta measures time decay of options.' },
+        { question: 'What is a covered call?', options: ['Buying call', 'Owning asset and selling call', 'Buying put', 'Selling naked call'], correctIndex: 1, explanation: 'Covered call = own asset + sell call for income.' },
+        { question: 'How do options hedge?', options: ['Eliminate all risk', 'Offset losses with option gains', 'Increase leverage', 'Free insurance'], correctIndex: 1, explanation: 'Options gains can offset underlying losses.' },
+        { question: 'What is the cost of hedging?', options: ['Free', 'Option premium', 'Broker fee only', 'No cost'], correctIndex: 1, explanation: 'The premium paid is the cost of protection.' }
+      ]}
+    ]
+  },
+  {
+    id: 'intermarket',
+    title: 'Intermarket Analysis',
+    description: 'Cross-market correlations',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'Intermarket Relationships', duration: '9 min', type: 'video', overview: 'Markets don\'t move in isolation. Stocks, bonds, commodities, and currencies all influence each other.\n\nClassic relationships: Dollar up = Gold down. Bonds up = Stocks down (sometimes). Oil up = CAD up.\n\nUnderstanding these connections provides broader market context for your trades.', keyTakeaways: ['Markets influence each other', 'Dollar and gold often inverse', 'Bond/stock relationship varies', 'Oil affects commodity currencies'], youtubeId: 'sSMT9GPHFQ0', youtubeTitle: 'Intermarket Analysis' },
+      { id: 2, title: 'Currency & Commodity Links', duration: '10 min', type: 'video', overview: 'Commodity currencies are tied to their exports:\n\nAUD/USD correlates with Gold (Australia exports gold).\nUSD/CAD correlates inverse with Oil (Canada exports oil).\nNZD correlates with dairy prices.\n\nWatch commodity prices for clues about commodity currency direction.', keyTakeaways: ['AUD correlates with Gold', 'CAD correlates with Oil', 'NZD tied to dairy prices', 'Commodities guide currency direction'], youtubeId: 'Q0c-TqF-u5g', youtubeTitle: 'Currency Commodity Links' },
+      { id: 3, title: 'Risk-On vs Risk-Off', duration: '9 min', type: 'video', overview: 'Market sentiment shifts between risk-on (bullish) and risk-off (bearish) modes.\n\nRisk-On: Stocks up, high-yield currencies up (AUD, NZD), safe havens down.\nRisk-Off: Stocks down, safe havens up (USD, JPY, CHF), high-yield currencies down.\n\nRecognizing the risk environment helps you pick the right trades.', keyTakeaways: ['Risk-on = bullish sentiment', 'Risk-off = bearish, flight to safety', 'Safe havens: USD, JPY, CHF', 'High-yield: AUD, NZD perform in risk-on'], youtubeId: '_NrhQCbFqcU', youtubeTitle: 'Risk On vs Risk Off' },
+      { id: 4, title: 'Using Intermarket Analysis', duration: '8 min', type: 'text', overview: 'Practical application:\n\n1. Check overall sentiment (stocks, VIX)\n2. Look at correlated markets for confirmation\n3. Identify divergences between related markets\n4. Use as additional filter for trade decisions\n\nIntermarket analysis adds context but shouldn\'t replace your primary analysis.', keyTakeaways: ['Check overall market sentiment', 'Use correlations for confirmation', 'Identify intermarket divergences', 'Additional filter, not replacement'] },
+      { id: 5, title: 'Intermarket Analysis Quiz', duration: '5 min', type: 'quiz', overview: 'Test your intermarket knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'USD and Gold typically move:', options: ['Same direction', 'Opposite directions', 'No relationship', 'Random'], correctIndex: 1, explanation: 'Dollar and gold often move inverse.' },
+        { question: 'Which currency correlates with Oil?', options: ['EUR', 'JPY', 'CAD', 'GBP'], correctIndex: 2, explanation: 'CAD correlates with oil prices.' },
+        { question: 'What happens in risk-off environment?', options: ['Stocks up', 'Safe havens up', 'High-yield up', 'Everything up'], correctIndex: 1, explanation: 'Risk-off = flight to safe havens.' },
+        { question: 'Safe haven currencies include:', options: ['AUD, NZD', 'USD, JPY, CHF', 'EUR, GBP', 'BRL, MXN'], correctIndex: 1, explanation: 'USD, JPY, CHF are classic safe havens.' },
+        { question: 'How to use intermarket analysis?', options: ['Replace primary analysis', 'Additional context and filter', 'Trade only correlations', 'Ignore it'], correctIndex: 1, explanation: 'Intermarket adds context to primary analysis.' }
+      ]}
+    ]
+  },
+  {
+    id: 'pro-psychology',
+    title: 'Pro Trading Psychology',
+    description: 'Elite mental performance',
+    category: 'advanced',
+    lessons: [
+      { id: 1, title: 'Elite Trader Mindset', duration: '10 min', type: 'video', overview: 'Professional traders think differently. They see losses as business expenses, not failures. They focus on process, not outcomes.\n\nKey shifts: From hoping to planning. From emotional to systematic. From outcome-focused to process-focused.\n\nThis mindset takes time to develop but separates consistent winners from the rest.', keyTakeaways: ['Losses are business expenses', 'Process over outcomes', 'Systematic over emotional', 'Mindset separates winners'], youtubeId: 'S4qkn_CFVK4', youtubeTitle: 'Elite Trader Mindset' },
+      { id: 2, title: 'Performance Under Pressure', duration: '9 min', type: 'video', overview: 'Pressure causes mistakes. Large positions, drawdowns, and winning streaks all create pressure.\n\nTechniques: Pre-trade routines, breathing exercises, process checklists, position size limits.\n\nThe goal is to trade the same way whether up or down, large or small. Consistency is everything.', keyTakeaways: ['Pressure causes mistakes', 'Use pre-trade routines', 'Breathing exercises help calm', 'Trade consistently regardless of P&L'], youtubeId: 'lJ1egMKgHOs', youtubeTitle: 'Trading Under Pressure' },
+      { id: 3, title: 'Developing Discipline', duration: '10 min', type: 'video', overview: 'Discipline is a skill that can be developed. It\'s not about willpower - it\'s about systems.\n\nCreate checklists for every trade. Remove temptation (close other tabs, limit screen time). Start with small stakes to build habits.\n\nTrack discipline metrics: Did you follow the plan? This matters more than P&L initially.', keyTakeaways: ['Discipline is a buildable skill', 'Use checklists and systems', 'Remove temptation sources', 'Track discipline, not just P&L'], youtubeId: 'YWgOJLCGEL4', youtubeTitle: 'Developing Discipline' },
+      { id: 4, title: 'Continuous Improvement', duration: '9 min', type: 'text', overview: 'Elite traders never stop improving. They review every trade, identify patterns in their mistakes, and work on weaknesses.\n\nKeep a detailed trading journal. Weekly/monthly reviews identify what\'s working and what\'s not.\n\nTreat trading as a craft. Masters spend years refining their skill. Embrace the journey.', keyTakeaways: ['Elite traders review constantly', 'Detailed trading journal is essential', 'Weekly/monthly reviews', 'Trading is a craft to master'] },
+      { id: 5, title: 'Pro Psychology Quiz', duration: '5 min', type: 'quiz', overview: 'Test your pro psychology knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'How do pros view losses?', options: ['Personal failures', 'Business expenses', 'Should never happen', 'Broker fault'], correctIndex: 1, explanation: 'Losses are normal business expenses.' },
+        { question: 'What should you focus on?', options: ['Daily P&L', 'Winning trades only', 'Process and execution', 'Predictions'], correctIndex: 2, explanation: 'Process focus beats outcome focus.' },
+        { question: 'How to build discipline?', options: ['Willpower alone', 'Systems and checklists', 'Trade more', 'Larger positions'], correctIndex: 1, explanation: 'Systems and structure build discipline.' },
+        { question: 'Why keep a trading journal?', options: ['Broker requirement', 'Identify patterns and improve', 'Show off trades', 'Tax purposes only'], correctIndex: 1, explanation: 'Journals help identify improvement areas.' },
+        { question: 'Elite traders believe trading is:', options: ['Get rich quick', 'A craft requiring years to master', 'Pure luck', 'Easy with right indicator'], correctIndex: 1, explanation: 'Trading is a skill developed over years.' }
+      ]}
+    ]
   }
 ];
 
