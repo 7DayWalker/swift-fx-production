@@ -3179,6 +3179,7 @@ async def submit_fund_application(
         "intended_amount": application.intended_amount,
         "trading_experience": application.trading_experience.value,
         "risk_agreement": application.risk_agreement,
+        "source": application.source,
         "status": FundApplicationStatus.PENDING_REVIEW.value,
         "admin_notes": None,
         "created_at": now.isoformat(),
