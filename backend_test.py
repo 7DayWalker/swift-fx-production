@@ -130,7 +130,7 @@ def test_fund_management_endpoints():
     }
     
     response = make_request("POST", "/fund/apply", free_token, application_data)
-    if response:
+    if response is not None:
         if response.status_code == 403:
             results.log_pass("Free User Blocked from Fund Application")
         else:
