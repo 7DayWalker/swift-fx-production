@@ -2997,101 +2997,78 @@ class SignalLifecycleController:
 
 
 # ==============================================================================
-# MAIN AUTOMATION LOOP
+# MANUAL MODE - AUTO ENGINE DISABLED
+# ==============================================================================
+# 
+# IMPORTANT: All automatic signal processing has been INTENTIONALLY DISABLED.
+# 
+# This is a deliberate downgrade for stability. Signals will NOT:
+# - Auto-activate based on price
+# - Auto-detect TP levels
+# - Auto-detect SL levels
+# - Auto-close trades
+# 
+# All signal state changes must be done MANUALLY via admin endpoints:
+# - POST /api/admin/signals (create)
+# - POST /api/admin/signals/{id}/activate (pending → active)
+# - POST /api/admin/signals/{id}/mark-tp?tp_level=1|2|3 (mark TP hit)
+# - POST /api/admin/signals/{id}/force-close (close with exit_reason)
+# - POST /api/admin/signals/{id}/transition (manual state change)
 # ==============================================================================
 
+# Auto-engine is DISABLED - do not start
 async def run_price_automation():
     """
-    Main automation loop - SINGLE ENTRY POINT for all signal processing.
+    AUTO-ENGINE DISABLED - MANUAL MODE ACTIVE
     
-    Runs every PRICE_POLL_INTERVAL seconds.
+    This function does nothing. It exists only to maintain code structure.
+    All signal processing must be done via manual admin endpoints.
     """
     global price_automation_running
-    
-    logger.info("[Engine] Starting Signal Lifecycle Engine v2.0...")
-    price_automation_running = True
-    
-    # Initialize the controller
-    controller = SignalLifecycleController(db)
-    
-    while price_automation_running:
-        try:
-            # Query: Get ALL non-closed signals
-            # CRITICAL: Closed signals are EXCLUDED from processing
-            active_query = {
-                "state": {"$in": ["pending", "active", "tp1", "tp2", "tp3"]}
-            }
-            
-            # Fallback for legacy signals without state field
-            legacy_query = {
-                "state": {"$exists": False},
-                "status": {"$in": ["pending", "active"]}
-            }
-            
-            signals = await db.signals.find({
-                "$or": [active_query, legacy_query]
-            }).to_list(200)
-            
-            if not signals:
-                await asyncio.sleep(PRICE_POLL_INTERVAL)
-                continue
-            
-            # Get unique symbols
-            symbols = list(set([s.get("pair", "") for s in signals if s.get("pair")]))
-            
-            if not symbols:
-                await asyncio.sleep(PRICE_POLL_INTERVAL)
-                continue
-            
-            # Fetch live prices
-            prices = await fetch_live_prices(symbols)
-            
-            if prices:
-                logger.info(f"[Engine] Processing {len(signals)} signals with prices: {prices}")
-            
-            # Process each signal through the controller
-            for signal in signals:
-                pair = signal.get("pair", "")
-                if pair in prices:
-                    try:
-                        result = await controller.process_signal(signal, prices[pair])
-                        if result:
-                            logger.info(f"[Engine] Action: {result}")
-                    except Exception as e:
-                        logger.error(f"[Engine] Error processing signal {signal.get('signal_id')}: {e}")
-            
-        except Exception as e:
-            logger.error(f"[Engine] Loop error: {e}")
-        
-        await asyncio.sleep(PRICE_POLL_INTERVAL)
-    
-    logger.info("[Engine] Signal Lifecycle Engine stopped")
+    price_automation_running = False
+    logger.info("[MANUAL MODE] Auto-engine is DISABLED. Signals require manual control.")
+    # Do nothing - manual mode
 
 
-# Start automation on app startup
+# Start automation on app startup - DISABLED
 @app.on_event("startup")
 async def startup_event():
-    """Start the price automation background task"""
-    asyncio.create_task(run_price_automation())
-    logger.info("[AutoExec] Background price automation task scheduled")
+    """
+    MANUAL MODE - Auto-engine startup is DISABLED.
+    Signals will not react to price changes automatically.
+    """
+    global price_automation_running
+    price_automation_running = False
+    logger.info("=" * 60)
+    logger.info("[MANUAL MODE] Signal auto-engine is DISABLED")
+    logger.info("[MANUAL MODE] All signal state changes require admin action")
+    logger.info("[MANUAL MODE] Endpoints: /activate, /mark-tp, /force-close")
+    logger.info("=" * 60)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop the price automation on shutdown"""
+    """Stop event - no action needed in manual mode"""
     global price_automation_running
     price_automation_running = False
-    logger.info("[AutoExec] Stopping price automation...")
+    logger.info("[MANUAL MODE] Server shutting down...")
 
 
 # API endpoint to check automation status
 @api_router.get("/automation/status")
 async def get_automation_status():
-    """Get the status of the price automation system"""
+    """Get the status of the signal engine - MANUAL MODE"""
     return {
-        "running": price_automation_running,
-        "poll_interval_seconds": PRICE_POLL_INTERVAL,
-        "supported_symbols": list(SYMBOL_MAP.keys())
+        "mode": "MANUAL",
+        "auto_engine_running": False,
+        "description": "Auto-engine is DISABLED. All signal state changes require manual admin action.",
+        "manual_endpoints": [
+            "POST /api/admin/signals - Create signal",
+            "POST /api/admin/signals/{id}/activate - Activate pending signal",
+            "POST /api/admin/signals/{id}/mark-tp?tp_level=1|2|3 - Mark TP hit",
+            "POST /api/admin/signals/{id}/force-close - Close signal",
+            "POST /api/admin/signals/{id}/transition - Manual state change"
+        ]
     }
 
 
