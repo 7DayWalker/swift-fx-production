@@ -3456,6 +3456,502 @@ async def get_economic_calendar(filter: str = "week"):
     }
 
 
+# ==============================================================================
+# INVESTOR DASHBOARD ENDPOINTS
+# ==============================================================================
+
+ADMIN_WHATSAPP_PHONE = "2348169427440"
+
+@api_router.get("/investor/status")
+async def get_investor_status(current_user: User = Depends(require_auth)):
+    """Check if user is an approved investor."""
+    # Check for approved fund application
+    approved_app = await db.fund_applications.find_one({
+        "user_id": current_user.user_id,
+        "status": "approved"
+    })
+    
+    if not approved_app:
+        return {
+            "is_investor": False,
+            "message": "No approved fund application found"
+        }
+    
+    # Check for investor portfolio
+    portfolio = await db.investor_portfolios.find_one({
+        "user_id": current_user.user_id
+    })
+    
+    return {
+        "is_investor": True,
+        "application_id": approved_app["application_id"],
+        "has_portfolio": portfolio is not None,
+        "portfolio_id": portfolio["portfolio_id"] if portfolio else None
+    }
+
+
+@api_router.get("/investor/dashboard")
+async def get_investor_dashboard(current_user: User = Depends(require_auth)):
+    """Get investor dashboard data. Only for approved investors."""
+    # Check for approved fund application
+    approved_app = await db.fund_applications.find_one({
+        "user_id": current_user.user_id,
+        "status": "approved"
+    })
+    
+    if not approved_app:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. You must have an approved fund application to view the investor dashboard."
+        )
+    
+    # Get or create investor portfolio
+    portfolio = await db.investor_portfolios.find_one({
+        "user_id": current_user.user_id
+    })
+    
+    if not portfolio:
+        # Auto-create portfolio from approved application
+        portfolio_id = f"portfolio_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc)
+        
+        portfolio = {
+            "portfolio_id": portfolio_id,
+            "user_id": current_user.user_id,
+            "application_id": approved_app["application_id"],
+            "full_name": approved_app["full_name"],
+            "email": approved_app["email"],
+            "invested_capital": approved_app["intended_amount"],
+            "current_equity": approved_app["intended_amount"],
+            "total_return_pct": 0.0,
+            "investment_tier": approved_app["investment_tier"],
+            "performance_fee": 20.0,
+            "lockup_months": 3,
+            "account_status": "active",
+            "start_date": now.isoformat(),
+            "created_at": now.isoformat(),
+            "updated_at": None
+        }
+        
+        await db.investor_portfolios.insert_one(portfolio)
+        logger.info(f"[Investor] Auto-created portfolio {portfolio_id} for user {current_user.user_id}")
+    
+    portfolio.pop("_id", None)
+    
+    # Calculate total return percentage
+    if portfolio["invested_capital"] > 0:
+        portfolio["total_return_pct"] = round(
+            ((portfolio["current_equity"] - portfolio["invested_capital"]) / portfolio["invested_capital"]) * 100,
+            2
+        )
+    
+    # Get performance history
+    performance = await db.fund_performance.find({
+        "portfolio_id": portfolio["portfolio_id"]
+    }).sort("month", -1).to_list(12)
+    
+    for p in performance:
+        p.pop("_id", None)
+    
+    # Get withdrawal history
+    withdrawals = await db.withdrawal_requests.find({
+        "user_id": current_user.user_id
+    }).sort("created_at", -1).to_list(20)
+    
+    for w in withdrawals:
+        w.pop("_id", None)
+    
+    # Get fund notices
+    notices = await db.fund_notices.find({}).sort("created_at", -1).to_list(10)
+    
+    for n in notices:
+        n.pop("_id", None)
+    
+    return {
+        "portfolio": portfolio,
+        "performance_history": performance,
+        "withdrawals": withdrawals,
+        "notices": notices
+    }
+
+
+@api_router.post("/investor/withdraw")
+async def request_withdrawal(
+    request: WithdrawalRequest,
+    current_user: User = Depends(require_auth)
+):
+    """Request a withdrawal. Triggers WhatsApp notification to admin."""
+    # Check for approved investor
+    portfolio = await db.investor_portfolios.find_one({
+        "user_id": current_user.user_id
+    })
+    
+    if not portfolio:
+        raise HTTPException(
+            status_code=403,
+            detail="You must be an approved investor to request withdrawals"
+        )
+    
+    if portfolio["account_status"] != "active":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your account is currently {portfolio['account_status']}. Cannot process withdrawals."
+        )
+    
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="Withdrawal amount must be positive")
+    
+    if request.amount > portfolio["current_equity"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient equity. Your current equity is ${portfolio['current_equity']:,.2f}"
+        )
+    
+    # Check for pending withdrawals
+    pending = await db.withdrawal_requests.find_one({
+        "user_id": current_user.user_id,
+        "status": "pending"
+    })
+    
+    if pending:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have a pending withdrawal request"
+        )
+    
+    # Create withdrawal request
+    withdrawal_id = f"withdraw_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    withdrawal_doc = {
+        "withdrawal_id": withdrawal_id,
+        "user_id": current_user.user_id,
+        "portfolio_id": portfolio["portfolio_id"],
+        "full_name": portfolio["full_name"],
+        "email": portfolio["email"],
+        "amount": request.amount,
+        "notes": request.notes,
+        "status": "pending",
+        "admin_notes": None,
+        "created_at": now.isoformat(),
+        "processed_at": None
+    }
+    
+    await db.withdrawal_requests.insert_one(withdrawal_doc)
+    logger.info(f"[Investor] Withdrawal request {withdrawal_id} from user {current_user.user_id} for ${request.amount}")
+    
+    # Generate WhatsApp notification URL for admin
+    whatsapp_message = f"🔔 WITHDRAWAL REQUEST\n\nInvestor: {portfolio['full_name']}\nAmount: ${request.amount:,.2f}\nPortfolio: {portfolio['portfolio_id']}\nRequest ID: {withdrawal_id}\n\nPlease review in Admin Dashboard."
+    whatsapp_url = f"https://wa.me/{ADMIN_WHATSAPP_PHONE}?text={requests.utils.quote(whatsapp_message)}"
+    
+    return {
+        "success": True,
+        "withdrawal_id": withdrawal_id,
+        "amount": request.amount,
+        "status": "pending",
+        "message": "Withdrawal request submitted. Admin will review within 24-48 hours.",
+        "whatsapp_notify_url": whatsapp_url
+    }
+
+
+@api_router.get("/investor/withdrawals")
+async def get_withdrawal_history(current_user: User = Depends(require_auth)):
+    """Get user's withdrawal history."""
+    withdrawals = await db.withdrawal_requests.find({
+        "user_id": current_user.user_id
+    }).sort("created_at", -1).to_list(50)
+    
+    for w in withdrawals:
+        w.pop("_id", None)
+    
+    return {"withdrawals": withdrawals, "total": len(withdrawals)}
+
+
+# ==============================================================================
+# ADMIN - INVESTOR MANAGEMENT ENDPOINTS
+# ==============================================================================
+
+@api_router.get("/admin/investor/portfolios")
+async def get_all_investor_portfolios(
+    status: Optional[str] = None,
+    admin: User = Depends(require_admin)
+):
+    """Get all investor portfolios. Admin only."""
+    query = {}
+    if status:
+        query["account_status"] = status
+    
+    portfolios = await db.investor_portfolios.find(query).sort("created_at", -1).to_list(100)
+    
+    for p in portfolios:
+        p.pop("_id", None)
+        # Calculate return percentage
+        if p["invested_capital"] > 0:
+            p["total_return_pct"] = round(
+                ((p["current_equity"] - p["invested_capital"]) / p["invested_capital"]) * 100,
+                2
+            )
+    
+    return {"portfolios": portfolios, "total": len(portfolios)}
+
+
+@api_router.get("/admin/investor/portfolio/{portfolio_id}")
+async def get_investor_portfolio_detail(
+    portfolio_id: str,
+    admin: User = Depends(require_admin)
+):
+    """Get detailed investor portfolio. Admin only."""
+    portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
+    
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+    portfolio.pop("_id", None)
+    
+    # Get performance history
+    performance = await db.fund_performance.find({
+        "portfolio_id": portfolio_id
+    }).sort("month", -1).to_list(24)
+    
+    for p in performance:
+        p.pop("_id", None)
+    
+    # Get withdrawal history
+    withdrawals = await db.withdrawal_requests.find({
+        "portfolio_id": portfolio_id
+    }).sort("created_at", -1).to_list(50)
+    
+    for w in withdrawals:
+        w.pop("_id", None)
+    
+    return {
+        "portfolio": portfolio,
+        "performance_history": performance,
+        "withdrawals": withdrawals
+    }
+
+
+@api_router.put("/admin/investor/portfolio/{portfolio_id}")
+async def update_investor_portfolio(
+    portfolio_id: str,
+    update: InvestorPortfolioUpdate,
+    admin: User = Depends(require_admin)
+):
+    """Update investor portfolio. Admin only."""
+    portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
+    
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if update.invested_capital is not None:
+        update_data["invested_capital"] = update.invested_capital
+    if update.current_equity is not None:
+        update_data["current_equity"] = update.current_equity
+    if update.account_status is not None:
+        update_data["account_status"] = update.account_status.value
+    if update.performance_fee is not None:
+        update_data["performance_fee"] = update.performance_fee
+    if update.lockup_months is not None:
+        update_data["lockup_months"] = update.lockup_months
+    
+    await db.investor_portfolios.update_one(
+        {"portfolio_id": portfolio_id},
+        {"$set": update_data}
+    )
+    
+    logger.info(f"[Investor] Admin {admin.user_id} updated portfolio {portfolio_id}")
+    
+    return {"success": True, "message": "Portfolio updated successfully"}
+
+
+@api_router.post("/admin/investor/portfolio/{portfolio_id}/performance")
+async def add_performance_entry(
+    portfolio_id: str,
+    entry: FundPerformanceEntry,
+    admin: User = Depends(require_admin)
+):
+    """Add monthly performance entry for an investor. Admin only."""
+    portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
+    
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+    # Check for existing entry for this month
+    existing = await db.fund_performance.find_one({
+        "portfolio_id": portfolio_id,
+        "month": entry.month
+    })
+    
+    if existing:
+        # Update existing entry
+        await db.fund_performance.update_one(
+            {"portfolio_id": portfolio_id, "month": entry.month},
+            {"$set": {
+                "return_percentage": entry.return_percentage,
+                "notes": entry.notes,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        logger.info(f"[Investor] Admin updated performance for {portfolio_id} month {entry.month}")
+        return {"success": True, "message": f"Performance updated for {entry.month}"}
+    
+    # Create new entry
+    performance_id = f"perf_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    # Calculate new equity based on return
+    new_equity = portfolio["current_equity"] * (1 + entry.return_percentage / 100)
+    
+    performance_doc = {
+        "performance_id": performance_id,
+        "portfolio_id": portfolio_id,
+        "user_id": portfolio["user_id"],
+        "month": entry.month,
+        "return_percentage": entry.return_percentage,
+        "equity_before": portfolio["current_equity"],
+        "equity_after": new_equity,
+        "notes": entry.notes,
+        "created_at": now.isoformat(),
+        "updated_at": None
+    }
+    
+    await db.fund_performance.insert_one(performance_doc)
+    
+    # Update portfolio equity
+    await db.investor_portfolios.update_one(
+        {"portfolio_id": portfolio_id},
+        {"$set": {
+            "current_equity": new_equity,
+            "updated_at": now.isoformat()
+        }}
+    )
+    
+    logger.info(f"[Investor] Admin added performance for {portfolio_id} month {entry.month}: {entry.return_percentage}%")
+    
+    return {
+        "success": True,
+        "message": f"Performance entry added for {entry.month}",
+        "new_equity": new_equity
+    }
+
+
+@api_router.get("/admin/investor/withdrawals")
+async def get_all_withdrawal_requests(
+    status: Optional[str] = None,
+    admin: User = Depends(require_admin)
+):
+    """Get all withdrawal requests. Admin only."""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    withdrawals = await db.withdrawal_requests.find(query).sort("created_at", -1).to_list(100)
+    
+    for w in withdrawals:
+        w.pop("_id", None)
+    
+    return {"withdrawals": withdrawals, "total": len(withdrawals)}
+
+
+@api_router.put("/admin/investor/withdrawal/{withdrawal_id}")
+async def process_withdrawal(
+    withdrawal_id: str,
+    status: str,
+    admin_notes: Optional[str] = None,
+    admin: User = Depends(require_admin)
+):
+    """Process a withdrawal request. Admin only."""
+    valid_statuses = ["approved", "paid", "rejected"]
+    if status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {valid_statuses}"
+        )
+    
+    withdrawal = await db.withdrawal_requests.find_one({"withdrawal_id": withdrawal_id})
+    
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="Withdrawal request not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    update_data = {
+        "status": status,
+        "admin_notes": admin_notes,
+        "processed_at": now.isoformat()
+    }
+    
+    await db.withdrawal_requests.update_one(
+        {"withdrawal_id": withdrawal_id},
+        {"$set": update_data}
+    )
+    
+    # If paid, deduct from portfolio equity
+    if status == "paid":
+        await db.investor_portfolios.update_one(
+            {"portfolio_id": withdrawal["portfolio_id"]},
+            {"$inc": {"current_equity": -withdrawal["amount"]}}
+        )
+        logger.info(f"[Investor] Deducted ${withdrawal['amount']} from portfolio {withdrawal['portfolio_id']}")
+    
+    logger.info(f"[Investor] Admin {admin.user_id} {status} withdrawal {withdrawal_id}")
+    
+    return {"success": True, "message": f"Withdrawal {status}"}
+
+
+@api_router.get("/admin/investor/notices")
+async def get_all_notices(admin: User = Depends(require_admin)):
+    """Get all fund notices. Admin only."""
+    notices = await db.fund_notices.find({}).sort("created_at", -1).to_list(50)
+    
+    for n in notices:
+        n.pop("_id", None)
+    
+    return {"notices": notices, "total": len(notices)}
+
+
+@api_router.post("/admin/investor/notice")
+async def create_notice(
+    notice: FundNoticeCreate,
+    admin: User = Depends(require_admin)
+):
+    """Create a fund notice/announcement. Admin only."""
+    notice_id = f"notice_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    notice_doc = {
+        "notice_id": notice_id,
+        "title": notice.title,
+        "content": notice.content,
+        "notice_type": notice.notice_type,
+        "created_by": admin.user_id,
+        "created_at": now.isoformat()
+    }
+    
+    await db.fund_notices.insert_one(notice_doc)
+    logger.info(f"[Investor] Admin {admin.user_id} created notice {notice_id}")
+    
+    return {"success": True, "notice_id": notice_id, "message": "Notice created successfully"}
+
+
+@api_router.delete("/admin/investor/notice/{notice_id}")
+async def delete_notice(
+    notice_id: str,
+    admin: User = Depends(require_admin)
+):
+    """Delete a fund notice. Admin only."""
+    result = await db.fund_notices.delete_one({"notice_id": notice_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Notice not found")
+    
+    logger.info(f"[Investor] Admin {admin.user_id} deleted notice {notice_id}")
+    
+    return {"success": True, "message": "Notice deleted successfully"}
+
+
 # Include router
 app.include_router(api_router)
 
