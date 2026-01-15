@@ -207,8 +207,12 @@ export default function ReferralLandingScreen() {
       <View style={styles.desktopContent}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <View style={[styles.logoBox, { backgroundColor: theme.primary }]}>
-            <Ionicons name="flash" size={64} color="#0A0E17" />
+          <View style={styles.logoWrapperLarge}>
+            <Image 
+              source={require('../assets/images/logo.png')} 
+              style={styles.logoImageLarge}
+              resizeMode="contain"
+            />
           </View>
           <Text style={[styles.appNameLarge, dynamicStyles.text]}>Swift FX Signals</Text>
           <Text style={[styles.tagline, dynamicStyles.textSecondary]}>
