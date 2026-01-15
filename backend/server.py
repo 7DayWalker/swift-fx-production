@@ -3280,6 +3280,7 @@ async def startup_event():
     """
     MANUAL MODE - Auto-engine startup is DISABLED.
     Signals will not react to price changes automatically.
+    Also initializes protected Super Admin accounts.
     """
     global price_automation_running
     price_automation_running = False
@@ -3288,6 +3289,58 @@ async def startup_event():
     logger.info("[MANUAL MODE] All signal state changes require admin action")
     logger.info("[MANUAL MODE] Endpoints: /activate, /mark-tp, /force-close")
     logger.info("=" * 60)
+    
+    # Auto-create protected Super Admin accounts
+    await initialize_super_admins()
+
+
+async def initialize_super_admins():
+    """Create or update protected Super Admin accounts on startup"""
+    for email in PROTECTED_SUPER_ADMINS:
+        existing = await db.users.find_one({"email": email.lower()})
+        
+        if existing:
+            # Ensure they have Super Admin role (cannot be downgraded)
+            if existing.get("role") != UserRole.ADMIN.value or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value:
+                await db.users.update_one(
+                    {"email": email.lower()},
+                    {"$set": {
+                        "role": UserRole.ADMIN.value,
+                        "admin_role": AdminRole.SUPER_ADMIN.value,
+                        "admin_enabled": True,
+                        "subscription": "vip"
+                    }}
+                )
+                logger.info(f"[RBAC] Restored Super Admin role for {email}")
+            else:
+                logger.info(f"[RBAC] Super Admin {email} verified")
+        else:
+            # Create new Super Admin account
+            user_id = f"super_{uuid.uuid4().hex[:12]}"
+            # Generate a secure random password hash (they'll need to reset)
+            temp_password = f"SuperAdmin_{uuid.uuid4().hex[:8]}!"
+            password_hash = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
+            
+            user_doc = {
+                "user_id": user_id,
+                "name": "Super Admin",
+                "email": email.lower(),
+                "password_hash": password_hash,
+                "role": UserRole.ADMIN.value,
+                "admin_role": AdminRole.SUPER_ADMIN.value,
+                "admin_enabled": True,
+                "subscription": "vip",
+                "subscription_expiry": None,
+                "subscription_status": "active",
+                "ai_weekly_used": 0,
+                "notification_preferences": {"signals": True, "community": True},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.users.insert_one(user_doc)
+            logger.info(f"[RBAC] Created Super Admin account for {email}")
+            logger.info(f"[RBAC] Temporary password for {email}: {temp_password}")
+    
+    logger.info("[RBAC] Super Admin initialization complete")
 
 
 @app.on_event("shutdown")
