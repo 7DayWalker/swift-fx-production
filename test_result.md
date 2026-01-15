@@ -342,6 +342,18 @@ backend:
         - agent: "testing"
         - comment: "✅ ADMIN WITHDRAWAL MANAGEMENT SYSTEM TESTING COMPLETE: All 7 critical tests passed (100% success rate). VERIFIED CRITICAL TEST SEQUENCE: 1) Admin Login - Admin authentication working with admin@swiftfx.com credentials ✅. 2) List All Withdrawals - GET /api/admin/investor/withdrawals returns withdrawals array with proper structure, retrieved 3 withdrawals successfully ✅. 3) Filter by Status (Pending) - GET /api/admin/investor/withdrawals?status=pending correctly filters and returns only pending withdrawals ✅. 4) Filter by Status (Approved) - GET /api/admin/investor/withdrawals?status=approved filtering works correctly ✅. 5) Process Withdrawal (Approve) - PUT /api/admin/investor/withdrawal/{withdrawal_id}?status=approved&admin_notes=Test%20approval successfully approves withdrawals ✅. 6) Mark as Paid - PUT /api/admin/investor/withdrawal/{withdrawal_id}?status=paid successfully marks withdrawals as paid ✅. 7) Verify Dashboard Sync - GET /api/investor/dashboard shows updated withdrawal status, confirming real-time sync between admin actions and user dashboard ✅. The complete Admin Withdrawal Management System is production-ready and meets all requirements from the review request."
 
+  - task: "Referral Program Backend"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: Complete referral program backend with endpoints: GET /api/referral/my-code (user's code + stats + referrals), GET /api/referral/validate/{code} (validate code), POST /api/referral/claim-reward/{referral_id} (claim pending reward), GET /api/admin/referrals (list all referrals with stats), PUT /api/admin/referrals/{referral_id}/approve (approve reward), PUT /api/admin/referrals/{referral_id}/revoke (revoke reward), PUT /api/admin/referrals/{referral_id}/flag (flag as fraud). Registration process auto-generates referral codes and tracks referrals. Reward logic: Premium referral → +7 days, VIP referral → +14 days."
+
 frontend:
   - task: "Splash Screen with Auth Check"
     implemented: true
