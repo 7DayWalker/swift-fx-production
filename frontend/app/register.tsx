@@ -341,13 +341,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  logoBox: {
+  logoWrapper: {
     width: 80,
     height: 80,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: 16,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+  },
+  logoWrapperLarge: {
+    width: 120,
+    height: 120,
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  logoImageLarge: {
+    width: 120,
+    height: 120,
   },
   appName: {
     fontSize: 24,
