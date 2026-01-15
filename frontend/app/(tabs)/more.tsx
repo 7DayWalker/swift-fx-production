@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
 import { TAB_BAR_HEIGHT } from './_layout';
+import { api } from '../../src/services/api';
 
 export default function MoreScreen() {
   const { user, logout } = useAuth();
@@ -25,6 +26,20 @@ export default function MoreScreen() {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [isApprovedInvestor, setIsApprovedInvestor] = useState(false);
+  
+  // Check if user is an approved investor
+  useEffect(() => {
+    const checkInvestorStatus = async () => {
+      try {
+        const response = await api.get('/investor/status');
+        setIsApprovedInvestor(response.data.is_investor === true);
+      } catch (error) {
+        setIsApprovedInvestor(false);
+      }
+    };
+    checkInvestorStatus();
+  }, []);
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
