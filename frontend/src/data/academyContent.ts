@@ -1,15 +1,15 @@
 // ==============================================================================
-// SWIFT FX ACADEMY - LESSON CONTENT DATA v2.0
+// SWIFT FX ACADEMY - COMPLETE LESSON CONTENT DATA v3.0
 // ==============================================================================
 // 
 // STRUCTURE:
-// - Beginner courses: FULL content (overview, key takeaways, embedded YouTube video, quizzes)
-// - Intermediate/Advanced: PREVIEW ONLY (title + short description, locked)
+// - BEGINNER courses: FREE access (full content)
+// - INTERMEDIATE courses: PREMIUM access (full content, locked for free users)
+// - ADVANCED courses: VIP access (full content, locked for free/premium users)
 // 
 // VIDEO RULES:
-// - All videos are SHORT (3-8 minutes) and topic-relevant
+// - All videos are SHORT (5-8 minutes) and topic-relevant
 // - youtubeId is the video ID for embedding (not full URL)
-// - Videos are beginner-friendly explainers
 // ==============================================================================
 
 export interface QuizQuestion {
@@ -26,7 +26,7 @@ export interface LessonContent {
   type: 'video' | 'text' | 'quiz';
   overview: string;
   keyTakeaways: string[];
-  youtubeId?: string; // YouTube video ID for embedding
+  youtubeId?: string;
   youtubeTitle?: string;
   quizQuestions?: QuizQuestion[];
 }
@@ -40,13 +40,10 @@ export interface CourseContent {
 }
 
 // ==============================================================================
-// BEGINNER COURSES - FULL CONTENT
+// BEGINNER COURSES - FREE ACCESS (FULL CONTENT)
 // ==============================================================================
 
 export const BEGINNER_COURSES: CourseContent[] = [
-  // ============================================================================
-  // COURSE 1: INTRODUCTION TO TRADING
-  // ============================================================================
   {
     id: 'intro-trading',
     title: 'Introduction to Trading',
@@ -139,602 +136,697 @@ What drives supply and demand is more complex: economic data, news events, and m
         overview: 'Test your understanding of trading fundamentals.',
         keyTakeaways: [],
         quizQuestions: [
-          {
-            question: 'What is the primary goal of trading?',
-            options: ['To hold assets forever', 'To profit from price movements', 'To collect dividends only', 'To avoid all risk'],
-            correctIndex: 1,
-            explanation: 'Trading aims to profit by buying assets at one price and selling at another, capitalizing on price movements.'
-          },
-          {
-            question: 'Which is the largest financial market in the world?',
-            options: ['Stock Market', 'Forex Market', 'Cryptocurrency Market', 'Commodities Market'],
-            correctIndex: 1,
-            explanation: 'The Forex (Foreign Exchange) market is the largest with over $6 trillion traded daily.'
-          },
-          {
-            question: 'What happens to price when there are more buyers than sellers?',
-            options: ['Price goes down', 'Price stays the same', 'Price goes up', 'Market closes'],
-            correctIndex: 2,
-            explanation: 'When demand (buyers) exceeds supply (sellers), prices rise due to competition among buyers.'
-          },
-          {
-            question: 'Who are retail traders?',
-            options: ['Banks and hedge funds', 'Individual traders using their own money', 'Central banks', 'Market makers only'],
-            correctIndex: 1,
-            explanation: 'Retail traders are individuals who trade with their own personal capital, unlike institutional traders.'
-          },
-          {
-            question: 'What role do market makers play?',
-            options: ['They set interest rates', 'They provide liquidity by always being ready to buy/sell', 'They only trade stocks', 'They control currency values'],
-            correctIndex: 1,
-            explanation: 'Market makers ensure there\'s always someone to trade with, providing liquidity to the markets.'
-          }
+          { question: 'What is the primary goal of trading?', options: ['To hold assets forever', 'To profit from price movements', 'To collect dividends only', 'To avoid all risk'], correctIndex: 1, explanation: 'Trading aims to profit by buying assets at one price and selling at another.' },
+          { question: 'Which is the largest financial market in the world?', options: ['Stock Market', 'Forex Market', 'Cryptocurrency Market', 'Commodities Market'], correctIndex: 1, explanation: 'The Forex market trades over $6 trillion daily.' },
+          { question: 'What happens to price when there are more buyers than sellers?', options: ['Price goes down', 'Price stays the same', 'Price goes up', 'Market closes'], correctIndex: 2, explanation: 'When demand exceeds supply, prices rise.' },
+          { question: 'Who are retail traders?', options: ['Banks and hedge funds', 'Individual traders using their own money', 'Central banks', 'Market makers only'], correctIndex: 1, explanation: 'Retail traders are individuals who trade with their own personal capital.' },
+          { question: 'What role do market makers play?', options: ['They set interest rates', 'They provide liquidity by always being ready to buy/sell', 'They only trade stocks', 'They control currency values'], correctIndex: 1, explanation: 'Market makers ensure there\'s always someone to trade with.' }
         ]
       }
     ]
   },
-
-  // ============================================================================
-  // COURSE 2: CHART READING BASICS
-  // ============================================================================
   {
     id: 'chart-basics',
     title: 'Chart Reading Basics',
     description: 'Understanding candlesticks and patterns',
     category: 'beginner',
     lessons: [
-      {
-        id: 1,
-        title: 'Introduction to Charts',
-        duration: '6 min',
-        type: 'video',
-        overview: `Charts are visual representations of price movement over time. They are the primary tool traders use to analyze markets.
-
-There are three main types: Line charts (simplest), Bar charts (showing open, high, low, close), and Candlestick charts (most popular).
-
-Learning to read charts is like learning a new language - once you understand it, you'll see what the market is telling you.`,
-        keyTakeaways: [
-          'Charts visualize price movement over time',
-          'Three main types: Line, Bar, and Candlestick',
-          'Candlestick charts are most popular among traders',
-          'Chart reading is essential for technical analysis'
-        ],
-        youtubeId: 'hU9BkqD3F6U',
-        youtubeTitle: 'Introduction to Trading Charts'
-      },
-      {
-        id: 2,
-        title: 'Candlestick Anatomy',
-        duration: '7 min',
-        type: 'video',
-        overview: `A candlestick shows four prices: Open, High, Low, and Close for a time period.
-
-The body shows the range between open and close. Green means bullish (price went up), red means bearish (price went down).
-
-The thin lines (wicks) show the highest and lowest prices reached. The size and shape tell a story about market sentiment.`,
-        keyTakeaways: [
-          'Each candle shows Open, High, Low, and Close (OHLC)',
-          'Green/white = bullish (price went up)',
-          'Red/black = bearish (price went down)',
-          'Wicks show the extreme prices reached'
-        ],
-        youtubeId: 'C3KRwfj9F8Q',
-        youtubeTitle: 'Candlestick Charts Explained'
-      },
-      {
-        id: 3,
-        title: 'Common Candlestick Patterns',
-        duration: '8 min',
-        type: 'video',
-        overview: `Candlestick patterns can signal potential market moves. Key patterns include:
-
-Doji: A candle with almost no body, showing indecision.
-Hammer: Small body with long lower wick, can signal reversal.
-Engulfing: When a candle completely covers the previous one.
-
-No pattern works 100% of the time - always use them with other analysis.`,
-        keyTakeaways: [
-          'Doji candles show market indecision',
-          'Hammer patterns can signal trend reversals',
-          'Engulfing patterns show strong momentum shifts',
-          'Always confirm patterns with other analysis'
-        ],
-        youtubeId: 'q8MNYg-Y1G8',
-        youtubeTitle: 'Top Candlestick Patterns'
-      },
-      {
-        id: 4,
-        title: 'Timeframes Explained',
-        duration: '8 min',
-        type: 'text',
-        overview: `Timeframes determine how much data each candlestick represents.
-
-Scalpers use 1-5 minute charts for quick trades. Day Traders use 15-minute to 1-hour charts. Swing Traders prefer 4-hour to daily charts for multi-day trades.
-
-A good practice is multi-timeframe analysis: using higher timeframes for trend direction and lower timeframes for entry timing.`,
-        keyTakeaways: [
-          'Scalpers: 1-5 minute charts for quick trades',
-          'Day traders: 15min-1hour charts, same-day trades',
-          'Swing traders: 4hour-daily charts, multi-day trades',
-          'Multi-timeframe analysis combines different views'
-        ]
-      },
-      {
-        id: 5,
-        title: 'Reading Price Action',
-        duration: '6 min',
-        type: 'video',
-        overview: `Price action is the movement of price over time without relying on indicators.
-
-Look for trends: Higher highs and higher lows = uptrend. Lower highs and lower lows = downtrend.
-
-Identify key levels where price has reversed before. Watch for momentum - strong candles show conviction, weak candles show indecision.`,
-        keyTakeaways: [
-          'Price action is pure price movement analysis',
-          'Uptrend = higher highs and higher lows',
-          'Downtrend = lower highs and lower lows',
-          'Key levels act as support and resistance'
-        ],
-        youtubeId: 'gvAJ92Zt9fY',
-        youtubeTitle: 'Price Action Basics'
-      },
-      {
-        id: 6,
-        title: 'Chart Patterns Quiz',
-        duration: '5 min',
-        type: 'quiz',
-        overview: 'Test your understanding of chart reading fundamentals.',
-        keyTakeaways: [],
-        quizQuestions: [
-          {
-            question: 'What does a green candlestick indicate?',
-            options: ['Price went down', 'Price went up (bullish)', 'No price change', 'Market is closed'],
-            correctIndex: 1,
-            explanation: 'A green (or white) candlestick means the closing price was higher than the opening price - bullish movement.'
-          },
-          {
-            question: 'What does OHLC stand for?',
-            options: ['Only High Low Close', 'Open High Low Close', 'Open Hour Low Count', 'Option Hedge Long Call'],
-            correctIndex: 1,
-            explanation: 'OHLC stands for Open, High, Low, Close - the four data points in each candlestick.'
-          },
-          {
-            question: 'What does a Doji candlestick indicate?',
-            options: ['Strong buying pressure', 'Strong selling pressure', 'Market indecision', 'Market closure'],
-            correctIndex: 2,
-            explanation: 'A Doji has nearly equal open and close prices, indicating indecision between buyers and sellers.'
-          },
-          {
-            question: 'What timeframe would a swing trader typically use?',
-            options: ['1-minute charts', '4-hour to daily charts', '1-second charts', 'Yearly charts only'],
-            correctIndex: 1,
-            explanation: 'Swing traders hold positions for days to weeks, so they use 4-hour to daily charts for analysis.'
-          },
-          {
-            question: 'An uptrend is characterized by:',
-            options: ['Lower highs and lower lows', 'Higher highs and higher lows', 'Flat price movement', 'Random price spikes'],
-            correctIndex: 1,
-            explanation: 'An uptrend shows consistently higher highs and higher lows, indicating sustained buying pressure.'
-          }
-        ]
-      }
+      { id: 1, title: 'Introduction to Charts', duration: '6 min', type: 'video', overview: 'Charts are visual representations of price movement over time. There are three main types: Line, Bar, and Candlestick charts. Learning to read charts is essential for technical analysis.', keyTakeaways: ['Charts visualize price movement over time', 'Candlestick charts are most popular', 'Chart reading is essential for technical analysis'], youtubeId: 'hU9BkqD3F6U', youtubeTitle: 'Introduction to Trading Charts' },
+      { id: 2, title: 'Candlestick Anatomy', duration: '7 min', type: 'video', overview: 'A candlestick shows Open, High, Low, and Close. Green means bullish, red means bearish. Wicks show the extreme prices reached.', keyTakeaways: ['Each candle shows OHLC data', 'Green = bullish, Red = bearish', 'Wicks show extreme prices'], youtubeId: 'C3KRwfj9F8Q', youtubeTitle: 'Candlestick Charts Explained' },
+      { id: 3, title: 'Common Candlestick Patterns', duration: '8 min', type: 'video', overview: 'Key patterns include Doji (indecision), Hammer (reversal), and Engulfing (momentum shift). Always confirm patterns with other analysis.', keyTakeaways: ['Doji shows indecision', 'Hammer signals reversals', 'Engulfing shows momentum shifts'], youtubeId: 'q8MNYg-Y1G8', youtubeTitle: 'Top Candlestick Patterns' },
+      { id: 4, title: 'Timeframes Explained', duration: '8 min', type: 'text', overview: 'Scalpers use 1-5 minute charts. Day traders use 15min-1hour. Swing traders use 4hour-daily. Multi-timeframe analysis combines different views.', keyTakeaways: ['Scalpers: 1-5min charts', 'Day traders: 15min-1hour', 'Swing traders: 4hour-daily'] },
+      { id: 5, title: 'Reading Price Action', duration: '6 min', type: 'video', overview: 'Price action is pure price movement without indicators. Uptrend = higher highs and lows. Downtrend = lower highs and lows.', keyTakeaways: ['Uptrend = higher highs and lows', 'Downtrend = lower highs and lows', 'Key levels act as support/resistance'], youtubeId: 'gvAJ92Zt9fY', youtubeTitle: 'Price Action Basics' },
+      { id: 6, title: 'Chart Patterns Quiz', duration: '5 min', type: 'quiz', overview: 'Test your chart reading knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What does a green candlestick indicate?', options: ['Price went down', 'Price went up (bullish)', 'No price change', 'Market is closed'], correctIndex: 1, explanation: 'Green means the close was higher than open.' },
+        { question: 'What does OHLC stand for?', options: ['Only High Low Close', 'Open High Low Close', 'Open Hour Low Count', 'Option Hedge Long Call'], correctIndex: 1, explanation: 'OHLC = Open, High, Low, Close.' },
+        { question: 'What does a Doji indicate?', options: ['Strong buying', 'Strong selling', 'Market indecision', 'Market closure'], correctIndex: 2, explanation: 'Doji shows indecision between buyers and sellers.' },
+        { question: 'What timeframe would a swing trader use?', options: ['1-minute', '4-hour to daily', '1-second', 'Yearly'], correctIndex: 1, explanation: 'Swing traders use 4-hour to daily charts.' },
+        { question: 'An uptrend is characterized by:', options: ['Lower highs and lows', 'Higher highs and lows', 'Flat movement', 'Random spikes'], correctIndex: 1, explanation: 'Uptrend = consistently higher highs and lows.' }
+      ]}
     ]
   },
-
-  // ============================================================================
-  // COURSE 3: RISK MANAGEMENT 101
-  // ============================================================================
   {
     id: 'risk-management',
     title: 'Risk Management 101',
     description: 'Protect your capital effectively',
     category: 'beginner',
     lessons: [
-      {
-        id: 1,
-        title: 'Why Risk Management Matters',
-        duration: '5 min',
-        type: 'video',
-        overview: `Risk management is the most important skill in trading. Even professional traders lose on many trades - what separates winners from losers is how they manage losses.
-
-A common beginner mistake is risking too much per trade. One bad trade can wipe out weeks of gains.
-
-Professional traders typically risk only 1-2% per trade. This ensures survival through losing streaks.`,
-        keyTakeaways: [
-          'Risk management is more important than strategy',
-          'Even professionals lose on many trades',
-          'Never risk more than 1-2% per trade',
-          'Protecting capital keeps you in the game'
-        ],
-        youtubeId: 'wxZ26IOv1-8',
-        youtubeTitle: 'Risk Management Basics'
-      },
-      {
-        id: 2,
-        title: 'Position Sizing',
-        duration: '6 min',
-        type: 'video',
-        overview: `Position sizing determines how much you invest in each trade.
-
-The formula: Decide your risk amount (e.g., 1% of account), calculate stop loss distance, then adjust position size so that if stopped out, you only lose your predetermined amount.
-
-This keeps your dollar risk consistent regardless of the trade setup.`,
-        keyTakeaways: [
-          'Position size controls your dollar risk per trade',
-          'Calculate based on your stop loss distance',
-          'Keep risk consistent across all trades (1-2%)',
-          'Larger stops = smaller position sizes'
-        ],
-        youtubeId: 'dLvAq5YlPCo',
-        youtubeTitle: 'Position Sizing Explained'
-      },
-      {
-        id: 3,
-        title: 'Stop Losses and Take Profits',
-        duration: '7 min',
-        type: 'video',
-        overview: `A stop loss automatically closes your trade if price moves against you. Never trade without one.
-
-A take profit closes your trade when you reach your target.
-
-The Risk-Reward Ratio compares potential profit to risk. Aim for 1:2 or better - risk $1 to make $2. With 1:2 ratio, you only need 33% win rate to break even!`,
-        keyTakeaways: [
-          'Always use a stop loss - no exceptions',
-          'Take profits lock in gains automatically',
-          'Aim for 1:2 or better risk-reward ratio',
-          'With 1:2 ratio, 33% win rate = break even'
-        ],
-        youtubeId: 'FqF9Q9p1Yvg',
-        youtubeTitle: 'Stop Loss and Take Profit'
-      },
-      {
-        id: 4,
-        title: 'The 1% Rule',
-        duration: '7 min',
-        type: 'text',
-        overview: `The 1% Rule: Never risk more than 1% of your account on a single trade.
-
-With a $10,000 account and 1% risk, your maximum loss per trade is $100.
-
-The math is powerful:
-- 10 losses at 1% = ~10% drawdown
-- 10 losses at 5% = ~40% drawdown
-- 10 losses at 10% = ~65% drawdown
-
-When you lose 50% of your account, you need 100% gain just to recover. Protect your capital first.`,
-        keyTakeaways: [
-          'Risk maximum 1% of account per trade',
-          '$10,000 account = $100 max risk per trade',
-          '10 losing trades at 1% = only ~10% drawdown',
-          'Capital preservation is the priority'
-        ]
-      },
-      {
-        id: 5,
-        title: 'Risk Management Quiz',
-        duration: '5 min',
-        type: 'quiz',
-        overview: 'Test your understanding of risk management principles.',
-        keyTakeaways: [],
-        quizQuestions: [
-          {
-            question: 'What is the recommended maximum risk per trade?',
-            options: ['5-10%', '1-2%', '25%', '50%'],
-            correctIndex: 1,
-            explanation: 'Professional traders recommend risking only 1-2% per trade to survive losing streaks and protect capital.'
-          },
-          {
-            question: 'What is a stop loss?',
-            options: ['A profit target', 'An order that closes your trade at a predetermined loss', 'A trading indicator', 'A type of chart'],
-            correctIndex: 1,
-            explanation: 'A stop loss is an automatic order that closes your position when price reaches a level where you want to limit your loss.'
-          },
-          {
-            question: 'With a 1:2 risk-reward ratio, what win rate is needed to break even?',
-            options: ['50%', '75%', '33%', '90%'],
-            correctIndex: 2,
-            explanation: 'With 1:2 ratio, winning 33% of trades means: 1 win = +$2, 2 losses = -$2, so you break even.'
-          },
-          {
-            question: 'If your account is $5,000 and you follow the 1% rule, what is your max risk per trade?',
-            options: ['$500', '$50', '$100', '$250'],
-            correctIndex: 1,
-            explanation: '1% of $5,000 = $50 maximum risk per trade.'
-          },
-          {
-            question: 'Why is position sizing important?',
-            options: ['It makes you rich fast', 'It keeps your dollar risk consistent', 'It eliminates all losses', 'It guarantees profits'],
-            correctIndex: 1,
-            explanation: 'Proper position sizing ensures you risk the same dollar amount on every trade, regardless of stop loss distance.'
-          }
-        ]
-      }
+      { id: 1, title: 'Why Risk Management Matters', duration: '5 min', type: 'video', overview: 'Risk management is the most important skill. Even pros lose many trades - what matters is managing those losses. Never risk more than 1-2% per trade.', keyTakeaways: ['Risk management > strategy', 'Pros lose many trades too', 'Never risk more than 1-2%'], youtubeId: 'wxZ26IOv1-8', youtubeTitle: 'Risk Management Basics' },
+      { id: 2, title: 'Position Sizing', duration: '6 min', type: 'video', overview: 'Position sizing determines how much you invest per trade. Calculate based on your risk amount and stop loss distance.', keyTakeaways: ['Position size controls dollar risk', 'Calculate based on stop loss', 'Keep risk consistent'], youtubeId: 'dLvAq5YlPCo', youtubeTitle: 'Position Sizing Explained' },
+      { id: 3, title: 'Stop Losses and Take Profits', duration: '7 min', type: 'video', overview: 'Stop loss limits your loss. Take profit locks gains. Aim for 1:2 risk-reward ratio minimum.', keyTakeaways: ['Always use stop loss', 'Take profits lock gains', 'Aim for 1:2 risk-reward'], youtubeId: 'FqF9Q9p1Yvg', youtubeTitle: 'Stop Loss and Take Profit' },
+      { id: 4, title: 'The 1% Rule', duration: '7 min', type: 'text', overview: 'Never risk more than 1% per trade. With $10,000 and 1% risk, max loss per trade = $100. This protects you through losing streaks.', keyTakeaways: ['1% max risk per trade', '10 losses at 1% = ~10% drawdown', 'Capital preservation is key'] },
+      { id: 5, title: 'Risk Management Quiz', duration: '5 min', type: 'quiz', overview: 'Test your risk management knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What is the recommended max risk per trade?', options: ['5-10%', '1-2%', '25%', '50%'], correctIndex: 1, explanation: 'Professionals recommend 1-2% max risk.' },
+        { question: 'What is a stop loss?', options: ['A profit target', 'An order that closes at predetermined loss', 'An indicator', 'A chart type'], correctIndex: 1, explanation: 'Stop loss closes your position to limit loss.' },
+        { question: 'With 1:2 risk-reward, what win rate breaks even?', options: ['50%', '75%', '33%', '90%'], correctIndex: 2, explanation: '1 win (+$2) vs 2 losses (-$2) = break even at 33%.' },
+        { question: 'If account is $5,000 with 1% rule, max risk per trade?', options: ['$500', '$50', '$100', '$250'], correctIndex: 1, explanation: '1% of $5,000 = $50.' },
+        { question: 'Why is position sizing important?', options: ['Makes you rich fast', 'Keeps dollar risk consistent', 'Eliminates losses', 'Guarantees profits'], correctIndex: 1, explanation: 'Position sizing ensures consistent risk per trade.' }
+      ]}
     ]
   },
-
-  // ============================================================================
-  // COURSE 4: TRADING PSYCHOLOGY
-  // ============================================================================
   {
     id: 'trading-psychology',
     title: 'Trading Psychology',
     description: 'Master your emotions',
     category: 'beginner',
     lessons: [
-      {
-        id: 1,
-        title: 'The Trader\'s Mindset',
-        duration: '6 min',
-        type: 'video',
-        overview: `Trading is 80% psychology and 20% strategy. Most traders fail because they can't control emotions, not because of bad strategies.
-
-The market doesn't care about your feelings. Successful traders think in probabilities - they know any single trade can lose, but their edge plays out over time.
-
-Developing the right mindset means becoming comfortable with uncertainty and accepting losses as part of the business.`,
-        keyTakeaways: [
-          'Trading is 80% psychology, 20% strategy',
-          'The market doesn\'t care about your emotions',
-          'Think in probabilities, not certainties',
-          'Accept that losses are part of trading'
-        ],
-        youtubeId: '8yVuew50N8g',
-        youtubeTitle: 'Trading Mindset Basics'
-      },
-      {
-        id: 2,
-        title: 'Fear and Greed',
-        duration: '5 min',
-        type: 'video',
-        overview: `Fear and greed are the two dominant trading emotions.
-
-Fear causes: Early exits from winners, avoiding valid setups, moving stop losses, and freezing during key moments.
-
-Greed causes: Holding too long, overtrading, risking too much, and chasing missed entries.
-
-The solution is following your plan mechanically and trusting your edge over time.`,
-        keyTakeaways: [
-          'Fear and greed are the main trading emotions',
-          'Fear makes you exit winners too early',
-          'Greed makes you risk too much and overtrade',
-          'Focus on process, not money, to stay balanced'
-        ],
-        youtubeId: 'Eb1_BIZXmkA',
-        youtubeTitle: 'Fear and Greed in Trading'
-      },
-      {
-        id: 3,
-        title: 'Dealing with Losses',
-        duration: '8 min',
-        type: 'text',
-        overview: `Every trader experiences losses. How you handle them determines success.
-
-Accept that losses are normal - even the best traders lose 40-50% of trades. A losing trade doesn't mean you did something wrong.
-
-Never revenge trade - the temptation to "make it back" usually leads to more losses.
-
-Take breaks after losses. Keep a journal to track emotional patterns and improve over time.`,
-        keyTakeaways: [
-          'Losses are normal - pros lose 40-50% of trades',
-          'Never revenge trade after a loss',
-          'Take breaks to reset emotionally',
-          'Keep a journal to track patterns'
-        ]
-      },
-      {
-        id: 4,
-        title: 'Building Discipline',
-        duration: '6 min',
-        type: 'video',
-        overview: `Discipline bridges your trading plan and results. Without it, even the best strategy is useless.
-
-Create a detailed plan covering: what setups to trade, when to trade, how much to risk, and when to stop.
-
-Commit to following it without exceptions. The plan exists because you made it with a clear head.
-
-Start small - it's easier to follow rules when stakes are low. Treat trading like a business.`,
-        keyTakeaways: [
-          'Discipline connects your plan to results',
-          'Create a detailed, written trading plan',
-          'Follow the plan without exceptions',
-          'Start with small sizes to build habits'
-        ],
-        youtubeId: 'YWgOJLCGEL4',
-        youtubeTitle: 'Building Trading Discipline'
-      },
-      {
-        id: 5,
-        title: 'Psychology Quiz',
-        duration: '5 min',
-        type: 'quiz',
-        overview: 'Test your understanding of trading psychology.',
-        keyTakeaways: [],
-        quizQuestions: [
-          {
-            question: 'What percentage of trading success is attributed to psychology?',
-            options: ['20%', '50%', '80%', '10%'],
-            correctIndex: 2,
-            explanation: 'Trading is commonly described as 80% psychology and 20% strategy - emotional control is crucial.'
-          },
-          {
-            question: 'What does fear typically cause traders to do?',
-            options: ['Hold winning trades longer', 'Exit winning trades too early', 'Take more risks', 'Trade more frequently'],
-            correctIndex: 1,
-            explanation: 'Fear often causes traders to close profitable positions prematurely, missing larger gains.'
-          },
-          {
-            question: 'What is revenge trading?',
-            options: ['Trading against someone else', 'Taking more trades after a loss to recover quickly', 'A profitable strategy', 'Trading during revenge hours'],
-            correctIndex: 1,
-            explanation: 'Revenge trading is emotionally trying to recover losses immediately, which usually leads to more losses.'
-          },
-          {
-            question: 'How should you respond to a losing trade?',
-            options: ['Immediately take another trade', 'Double your position size', 'Take a break and review objectively', 'Quit trading forever'],
-            correctIndex: 2,
-            explanation: 'Taking a break allows emotional reset and objective review of whether you followed your plan.'
-          },
-          {
-            question: 'Why is a trading plan important?',
-            options: ['It guarantees profits', 'It provides rules to follow when emotions run high', 'It eliminates all losses', 'It is required by law'],
-            correctIndex: 1,
-            explanation: 'A trading plan provides structure and rules made with a clear mind, helping you avoid emotional decisions.'
-          }
-        ]
-      }
+      { id: 1, title: 'The Trader\'s Mindset', duration: '6 min', type: 'video', overview: 'Trading is 80% psychology, 20% strategy. Think in probabilities, accept that losses are normal.', keyTakeaways: ['80% psychology, 20% strategy', 'Think in probabilities', 'Losses are normal'], youtubeId: '8yVuew50N8g', youtubeTitle: 'Trading Mindset Basics' },
+      { id: 2, title: 'Fear and Greed', duration: '5 min', type: 'video', overview: 'Fear causes early exits. Greed causes overtrading. Focus on process, not money.', keyTakeaways: ['Fear = early exits', 'Greed = overtrading', 'Focus on process'], youtubeId: 'Eb1_BIZXmkA', youtubeTitle: 'Fear and Greed in Trading' },
+      { id: 3, title: 'Dealing with Losses', duration: '8 min', type: 'text', overview: 'Losses are normal - pros lose 40-50% of trades. Never revenge trade. Take breaks and keep a journal.', keyTakeaways: ['Pros lose 40-50%', 'Never revenge trade', 'Keep a trading journal'] },
+      { id: 4, title: 'Building Discipline', duration: '6 min', type: 'video', overview: 'Create a detailed trading plan. Follow it without exceptions. Start with small positions.', keyTakeaways: ['Create detailed plan', 'Follow without exceptions', 'Start small'], youtubeId: 'YWgOJLCGEL4', youtubeTitle: 'Building Trading Discipline' },
+      { id: 5, title: 'Psychology Quiz', duration: '5 min', type: 'quiz', overview: 'Test your psychology knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'What % of trading is psychology?', options: ['20%', '50%', '80%', '10%'], correctIndex: 2, explanation: 'Trading is 80% psychology.' },
+        { question: 'What does fear cause traders to do?', options: ['Hold longer', 'Exit early', 'Take more risks', 'Trade more'], correctIndex: 1, explanation: 'Fear causes premature exits.' },
+        { question: 'What is revenge trading?', options: ['Trading against someone', 'Taking trades after loss to recover', 'A strategy', 'Trading during specific hours'], correctIndex: 1, explanation: 'Revenge trading is emotionally trying to recover losses.' },
+        { question: 'How should you respond to a loss?', options: ['Trade immediately', 'Double position', 'Take a break and review', 'Quit forever'], correctIndex: 2, explanation: 'Take breaks for emotional reset.' },
+        { question: 'Why is a trading plan important?', options: ['Guarantees profits', 'Provides rules when emotions run high', 'Eliminates losses', 'Required by law'], correctIndex: 1, explanation: 'Plans provide structure during emotional moments.' }
+      ]}
     ]
   },
-
-  // ============================================================================
-  // COURSE 5: FOREX FUNDAMENTALS
-  // ============================================================================
   {
     id: 'forex-basics',
     title: 'Forex Fundamentals',
     description: 'Currency pairs and market structure',
     category: 'beginner',
     lessons: [
+      { id: 1, title: 'What is Forex?', duration: '5 min', type: 'video', overview: 'Forex is the largest market with $6+ trillion daily volume. It operates 24/5 and currencies trade in pairs.', keyTakeaways: ['$6+ trillion daily', '24 hours, 5 days', 'Currencies trade in pairs'], youtubeId: 'aJ8FVhNkqws', youtubeTitle: 'What is Forex Trading?' },
+      { id: 2, title: 'Currency Pairs Explained', duration: '6 min', type: 'video', overview: 'Majors include USD (tightest spreads). Minors don\'t include USD. Exotics have wider spreads.', keyTakeaways: ['Majors = most liquid', 'EUR/USD most traded', 'Beginners: stick to majors'], youtubeId: '4g7c4E8vU2c', youtubeTitle: 'Currency Pairs Explained' },
+      { id: 3, title: 'Pips, Lots, and Leverage', duration: '7 min', type: 'video', overview: 'Pip = smallest price move. Standard lot = 100,000 units. Leverage amplifies gains AND losses.', keyTakeaways: ['Pip = smallest move', 'Standard lot = 100k units', 'Leverage = double-edged sword'], youtubeId: 'TF9zMvJ6x3E', youtubeTitle: 'Pips, Lots and Leverage' },
+      { id: 4, title: 'What Moves Currency Prices', duration: '10 min', type: 'text', overview: 'Interest rates are primary driver. Economic data, political events, and market sentiment also matter.', keyTakeaways: ['Interest rates = main driver', 'Economic data creates volatility', 'Political events matter'] },
+      { id: 5, title: 'Forex Trading Sessions', duration: '5 min', type: 'video', overview: 'Sydney is quietest. London has highest volume. London/New York overlap is best for trading.', keyTakeaways: ['London = highest volume', 'Sydney = quietest', 'London/NY overlap = best'], youtubeId: 'W_r8pS2uQ48', youtubeTitle: 'Forex Trading Sessions' },
+      { id: 6, title: 'Forex Fundamentals Quiz', duration: '5 min', type: 'quiz', overview: 'Test your Forex knowledge.', keyTakeaways: [], quizQuestions: [
+        { question: 'Daily Forex trading volume?', options: ['$1 million', '$1 billion', 'Over $6 trillion', '$100 billion'], correctIndex: 2, explanation: 'Over $6 trillion daily.' },
+        { question: 'What is a pip in EUR/USD?', options: ['0.01', '0.001', '0.0001', '1.0'], correctIndex: 2, explanation: 'One pip = 0.0001 for most pairs.' },
+        { question: 'What does 100:1 leverage mean?', options: ['Need $100', '$1 controls $100', '100x profits only', 'Can only lose $1'], correctIndex: 1, explanation: '$1 controls $100 of currency.' },
+        { question: 'Which session has highest volume?', options: ['Sydney', 'Tokyo', 'London', 'Weekend'], correctIndex: 2, explanation: 'London has highest volume.' },
+        { question: 'What happens when country raises rates?', options: ['Currency weakens', 'Currency strengthens', 'No effect', 'Trading stops'], correctIndex: 1, explanation: 'Higher rates attract investment, strengthening currency.' }
+      ]}
+    ]
+  }
+];
+
+// ==============================================================================
+// INTERMEDIATE COURSES - PREMIUM ACCESS (FULL CONTENT)
+// ==============================================================================
+
+export const INTERMEDIATE_COURSES: CourseContent[] = [
+  {
+    id: 'technical-analysis',
+    title: 'Technical Analysis',
+    description: 'Master advanced chart patterns and indicators',
+    category: 'intermediate',
+    lessons: [
       {
         id: 1,
-        title: 'What is Forex?',
-        duration: '5 min',
+        title: 'Technical Analysis Foundations',
+        duration: '8 min',
         type: 'video',
-        overview: `Forex (Foreign Exchange) is the global marketplace for exchanging currencies. It's the largest and most liquid financial market.
+        overview: `Technical analysis is the study of price action and market behavior to forecast future price movements. Unlike fundamental analysis, which looks at economic data, technical analysis focuses purely on charts and patterns.
 
-Over $6 trillion is traded daily - more than all stock markets combined. This liquidity means easy entry and exit.
+The core principle is that price discounts everything - all known information is already reflected in the current price. Technical analysts believe that history tends to repeat itself, and patterns that worked before will work again.
 
-Forex operates 24 hours, 5 days a week, following global time zones. Currencies are always traded in pairs - when you "buy EUR/USD," you're buying Euros and selling US Dollars.`,
+Key tools include trend analysis, support/resistance levels, chart patterns, and technical indicators. Mastering these tools gives you an edge in timing your entries and exits.`,
         keyTakeaways: [
-          'Forex is the world\'s largest market at $6+ trillion daily',
-          'It operates 24 hours, 5 days a week',
-          'Currencies are always traded in pairs',
-          'High liquidity allows easy entry and exit'
+          'Technical analysis studies price action to forecast movements',
+          'Price discounts all known information',
+          'History tends to repeat - patterns recur',
+          'Key tools: trends, levels, patterns, indicators'
         ],
-        youtubeId: 'aJ8FVhNkqws',
-        youtubeTitle: 'What is Forex Trading?'
+        youtubeId: '08R_TJhAOGo',
+        youtubeTitle: 'Technical Analysis Explained'
       },
       {
         id: 2,
-        title: 'Currency Pairs Explained',
-        duration: '6 min',
+        title: 'Market Structure Analysis',
+        duration: '10 min',
         type: 'video',
-        overview: `Currency pairs are divided into Majors, Minors, and Exotics.
+        overview: `Market structure refers to the pattern of higher highs/lows (uptrend) or lower highs/lows (downtrend). Understanding structure helps you trade with the trend.
 
-Major pairs include USD and are most traded: EUR/USD, GBP/USD, USD/JPY. They have tightest spreads.
+A Break of Structure (BOS) occurs when price breaks the most recent swing point, confirming trend continuation. A Change of Character (ChoCH) signals potential trend reversal when price fails to make new extremes.
 
-Minor pairs (crosses) don't include USD: EUR/GBP, EUR/JPY.
-
-Exotic pairs include emerging market currencies with wider spreads.
-
-For beginners, stick to major pairs - they're most predictable and cheapest to trade.`,
+Trading with structure means buying in uptrends when price pulls back to support, and selling in downtrends when price rallies to resistance.`,
         keyTakeaways: [
-          'Majors include USD and are most liquid',
-          'EUR/USD is the most traded pair globally',
-          'Minor pairs (crosses) don\'t include USD',
-          'Beginners should focus on major pairs'
+          'Uptrend = higher highs and higher lows',
+          'Downtrend = lower highs and lower lows',
+          'BOS confirms trend continuation',
+          'ChoCH signals potential reversal'
         ],
-        youtubeId: '4g7c4E8vU2c',
-        youtubeTitle: 'Currency Pairs Explained'
+        youtubeId: 'xE1F0R6SBco',
+        youtubeTitle: 'Market Structure Basics'
       },
       {
         id: 3,
-        title: 'Pips, Lots, and Leverage',
-        duration: '7 min',
+        title: 'Trend Lines and Channels',
+        duration: '8 min',
         type: 'video',
-        overview: `A PIP is the smallest price move in most pairs. For EUR/USD, one pip = 0.0001.
+        overview: `Trend lines connect swing lows in uptrends or swing highs in downtrends, providing dynamic support and resistance.
 
-LOT sizes: Standard lot = 100,000 units, Mini lot = 10,000, Micro lot = 1,000. One pip on a standard lot = about $10.
+Channels are formed by drawing parallel lines above and below price action. Price often bounces between channel boundaries, creating trading opportunities.
 
-LEVERAGE lets you control large positions with small capital. 100:1 means $1,000 controls $100,000. Use leverage cautiously - it amplifies both gains AND losses!`,
+Valid trend lines need at least 3 touches. The more touches, the more significant the level. Breaks of established trend lines often signal trend changes.`,
         keyTakeaways: [
-          'A pip is the smallest standard price movement',
-          'Standard lot = 100,000 units of currency',
-          'Leverage amplifies both gains AND losses',
-          'Start with low leverage until experienced'
+          'Trend lines provide dynamic support/resistance',
+          'Channels show price boundaries',
+          'Valid trend lines need 3+ touches',
+          'Trend line breaks signal potential reversals'
         ],
-        youtubeId: 'TF9zMvJ6x3E',
-        youtubeTitle: 'Pips, Lots and Leverage'
+        youtubeId: 'nq-UjJNPLYY',
+        youtubeTitle: 'Trend Lines and Channels'
       },
       {
         id: 4,
-        title: 'What Moves Currency Prices',
-        duration: '10 min',
-        type: 'text',
-        overview: `Currency prices are influenced by several factors:
+        title: 'Chart Patterns Deep Dive',
+        duration: '12 min',
+        type: 'video',
+        overview: `Chart patterns are formations that signal potential price movements. Continuation patterns (flags, pennants, wedges) suggest the trend will continue. Reversal patterns (head & shoulders, double tops/bottoms) signal trend changes.
 
-Interest Rates: Higher rates attract foreign investment, strengthening the currency. Central bank decisions are closely watched.
+The Head and Shoulders is one of the most reliable reversal patterns. It consists of three peaks with the middle peak (head) being the highest.
 
-Economic Data: GDP, employment, and inflation reports affect currency strength.
-
-Political Stability: Less political risk = stronger currency. Elections and geopolitical events cause volatility.
-
-Market Sentiment: In "risk-on" environments, traders buy higher-yielding currencies. In "risk-off," they flee to safe havens like USD, JPY, CHF.`,
+Double tops and bottoms form when price fails to break a level twice, suggesting a reversal is likely.`,
         keyTakeaways: [
-          'Interest rates are the primary currency driver',
-          'Central bank decisions cause major moves',
-          'Economic data releases create volatility',
-          'Political events affect currency strength'
+          'Continuation: flags, pennants, wedges',
+          'Reversal: head & shoulders, double tops/bottoms',
+          'Head & Shoulders = reliable reversal pattern',
+          'Double tops/bottoms show failed breakouts'
+        ],
+        youtubeId: 'UMdj1N0r8dM',
+        youtubeTitle: 'Chart Patterns Explained'
+      },
+      {
+        id: 5,
+        title: 'Volume Analysis',
+        duration: '7 min',
+        type: 'text',
+        overview: `Volume confirms price movements. High volume during breakouts suggests genuine moves, while low volume suggests potential false breaks.
+
+Volume should increase in the direction of the trend. In uptrends, volume should be higher on up days. In downtrends, volume should be higher on down days.
+
+Volume divergence (price making new highs while volume decreases) often precedes reversals. Always use volume to validate your technical analysis.`,
+        keyTakeaways: [
+          'Volume confirms price movements',
+          'High volume breakouts = genuine moves',
+          'Volume should increase with trend',
+          'Volume divergence precedes reversals'
+        ]
+      },
+      {
+        id: 6,
+        title: 'Technical Analysis Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your technical analysis knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What does technical analysis focus on?', options: ['Economic data', 'Company earnings', 'Price action and charts', 'News events'], correctIndex: 2, explanation: 'Technical analysis studies price action and chart patterns.' },
+          { question: 'What does a Break of Structure (BOS) indicate?', options: ['Trend reversal', 'Trend continuation', 'Market close', 'No trading'], correctIndex: 1, explanation: 'BOS confirms the current trend is continuing.' },
+          { question: 'How many touches make a valid trend line?', options: ['1', '2', '3 or more', '10+'], correctIndex: 2, explanation: 'Valid trend lines need at least 3 touches.' },
+          { question: 'What does the Head and Shoulders pattern signal?', options: ['Trend continuation', 'Potential reversal', 'Market opening', 'No change'], correctIndex: 1, explanation: 'Head & Shoulders is a reversal pattern.' },
+          { question: 'What does high volume during breakouts suggest?', options: ['False breakout', 'Genuine move', 'Market manipulation', 'No significance'], correctIndex: 1, explanation: 'High volume confirms breakout validity.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'support-resistance',
+    title: 'Support & Resistance',
+    description: 'Identify key price levels',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Understanding S/R Levels',
+        duration: '7 min',
+        type: 'video',
+        overview: `Support is a price level where buying pressure exceeds selling pressure, causing price to bounce. Resistance is where selling pressure exceeds buying, causing price to reverse down.
+
+These levels form because traders have memory - they remember where price previously reversed. Multiple bounces from a level make it more significant.
+
+Support becomes resistance when broken, and vice versa. This "role reversal" is one of the most reliable concepts in trading.`,
+        keyTakeaways: [
+          'Support = buying pressure > selling pressure',
+          'Resistance = selling pressure > buying pressure',
+          'More bounces = stronger level',
+          'Broken support becomes resistance (and vice versa)'
+        ],
+        youtubeId: 'Bj4GXfrxces',
+        youtubeTitle: 'Support and Resistance Basics'
+      },
+      {
+        id: 2,
+        title: 'Identifying Key Levels',
+        duration: '8 min',
+        type: 'video',
+        overview: `Key levels are identified by looking for areas where price has repeatedly reversed or paused. Focus on recent and significant swing points.
+
+Psychological levels (round numbers like 1.2000, 1.2500) often act as support/resistance because traders place orders at these levels.
+
+Historical levels from higher timeframes are more significant than lower timeframe levels. Always analyze multiple timeframes for confluence.`,
+        keyTakeaways: [
+          'Look for repeated reversals and pauses',
+          'Round numbers are psychological levels',
+          'Higher timeframe levels are more significant',
+          'Multi-timeframe analysis improves accuracy'
+        ],
+        youtubeId: 'TWFcK9KQE-o',
+        youtubeTitle: 'Finding Key Levels'
+      },
+      {
+        id: 3,
+        title: 'Trading S/R Bounces',
+        duration: '9 min',
+        type: 'video',
+        overview: `Trading bounces involves entering when price approaches a key level and shows rejection. Wait for confirmation - don't just buy because price reaches support.
+
+Confirmation signals include: rejection candles (pin bars, engulfing), divergence on indicators, or break of minor resistance on lower timeframes.
+
+Always set your stop loss beyond the S/R level with some buffer. Take profit at the next significant level or use risk-reward targets.`,
+        keyTakeaways: [
+          'Wait for rejection confirmation at levels',
+          'Use candlestick patterns for entry signals',
+          'Stop loss beyond the level with buffer',
+          'Target the next significant level'
+        ],
+        youtubeId: 'i6PQoH_M2nE',
+        youtubeTitle: 'Trading S/R Bounces'
+      },
+      {
+        id: 4,
+        title: 'Breakout Trading from S/R',
+        duration: '8 min',
+        type: 'text',
+        overview: `Breakouts occur when price decisively moves through a support or resistance level. True breakouts are often accompanied by increased volume and momentum.
+
+False breakouts are common - price briefly breaks a level then reverses back. To avoid false breaks, wait for a close beyond the level, preferably on a higher timeframe.
+
+After a breakout, price often retests the broken level before continuing. This retest offers a lower-risk entry opportunity.`,
+        keyTakeaways: [
+          'True breakouts have volume and momentum',
+          'Wait for close beyond level to confirm',
+          'False breakouts are common - be patient',
+          'Retest entries offer lower risk'
         ]
       },
       {
         id: 5,
-        title: 'Forex Trading Sessions',
-        duration: '5 min',
-        type: 'video',
-        overview: `Forex operates in three major sessions:
-
-Sydney (10PM-7AM GMT): Quietest, lower volatility.
-Tokyo (12AM-9AM GMT): Asian currencies most active.
-London (8AM-5PM GMT): Most active, highest volume.
-New York (1PM-10PM GMT): Second most active.
-
-Best trading: London/New York overlap (1PM-5PM GMT) has highest liquidity and volatility.`,
-        keyTakeaways: [
-          'Sydney session is quietest',
-          'London session has highest volume',
-          'New York features US data releases',
-          'London/New York overlap offers best opportunities'
-        ],
-        youtubeId: 'W_r8pS2uQ48',
-        youtubeTitle: 'Forex Trading Sessions'
-      },
-      {
-        id: 6,
-        title: 'Forex Fundamentals Quiz',
+        title: 'S/R Quiz',
         duration: '5 min',
         type: 'quiz',
-        overview: 'Test your knowledge of Forex fundamentals.',
+        overview: 'Test your support and resistance knowledge.',
         keyTakeaways: [],
         quizQuestions: [
-          {
-            question: 'How much is traded daily in the Forex market?',
-            options: ['$1 million', '$1 billion', 'Over $6 trillion', '$100 billion'],
-            correctIndex: 2,
-            explanation: 'The Forex market trades over $6 trillion daily, making it the world\'s largest financial market.'
-          },
-          {
-            question: 'What is a pip in EUR/USD?',
-            options: ['0.01', '0.001', '0.0001', '1.0'],
-            correctIndex: 2,
-            explanation: 'For most currency pairs like EUR/USD, one pip equals 0.0001 (the fourth decimal place).'
-          },
-          {
-            question: 'What does 100:1 leverage mean?',
-            options: ['You need $100 to trade', '$1 controls $100 of currency', 'You make 100x profits only', 'You can only lose $1'],
-            correctIndex: 1,
-            explanation: '100:1 leverage means $1 of your capital controls $100 worth of currency - amplifying both gains and losses.'
-          },
-          {
-            question: 'Which trading session has the highest volume?',
-            options: ['Sydney', 'Tokyo', 'London', 'Weekend'],
-            correctIndex: 2,
-            explanation: 'The London session has the highest trading volume as it overlaps with both Asian and US sessions.'
-          },
-          {
-            question: 'What typically happens to a currency when its country raises interest rates?',
-            options: ['It weakens', 'It strengthens', 'No effect', 'Trading stops'],
-            correctIndex: 1,
-            explanation: 'Higher interest rates attract foreign investment, increasing demand for the currency and typically strengthening it.'
-          }
+          { question: 'What is support?', options: ['Where selling exceeds buying', 'Where buying exceeds selling', 'Market close', 'Trading session'], correctIndex: 1, explanation: 'Support is where buying pressure causes bounces.' },
+          { question: 'What happens when support is broken?', options: ['It disappears', 'It becomes resistance', 'Nothing changes', 'Market closes'], correctIndex: 1, explanation: 'Broken support becomes resistance (role reversal).' },
+          { question: 'Why are round numbers significant?', options: ['Computer preference', 'Psychological levels where orders cluster', 'Random coincidence', 'No significance'], correctIndex: 1, explanation: 'Traders place orders at round numbers.' },
+          { question: 'What confirms a breakout?', options: ['Low volume', 'Increased volume and momentum', 'Market news', 'Time of day'], correctIndex: 1, explanation: 'True breakouts have volume and momentum.' },
+          { question: 'What is a retest?', options: ['A failed trade', 'Price returning to broken level', 'Market closure', 'Trading strategy'], correctIndex: 1, explanation: 'Retests offer low-risk entry after breakouts.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'fibonacci',
+    title: 'Fibonacci Trading',
+    description: 'Use mathematical ratios for trading',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Fibonacci Basics',
+        duration: '7 min',
+        type: 'video',
+        overview: `Fibonacci ratios are derived from the Fibonacci sequence (1, 1, 2, 3, 5, 8, 13...). Key ratios used in trading are 23.6%, 38.2%, 50%, 61.8%, and 78.6%.
+
+These ratios appear throughout nature and financial markets. Traders use them to identify potential reversal points during retracements.
+
+The 61.8% level (golden ratio) is considered the most significant. Price often reverses at these mathematical levels with uncanny accuracy.`,
+        keyTakeaways: [
+          'Key ratios: 23.6%, 38.2%, 50%, 61.8%, 78.6%',
+          'Derived from Fibonacci sequence',
+          '61.8% (golden ratio) is most significant',
+          'Ratios identify potential reversal points'
+        ],
+        youtubeId: 'VhNnkSccCMM',
+        youtubeTitle: 'Fibonacci Basics'
+      },
+      {
+        id: 2,
+        title: 'Fibonacci Retracements',
+        duration: '9 min',
+        type: 'video',
+        overview: `Fibonacci retracements measure how far price has pulled back from a swing. In uptrends, draw from swing low to swing high. In downtrends, draw from swing high to swing low.
+
+The tool shows potential support levels where price might bounce and continue the trend. Most significant bounces occur at 38.2%, 50%, and 61.8%.
+
+Use multiple swing points to find confluent levels - when multiple Fibonacci levels align, the zone becomes more significant.`,
+        keyTakeaways: [
+          'Measure pullback depth with retracements',
+          'Uptrend: draw low to high',
+          '38.2%, 50%, 61.8% are key levels',
+          'Confluence increases significance'
+        ],
+        youtubeId: 'aSB7-FBU7_8',
+        youtubeTitle: 'Fibonacci Retracements'
+      },
+      {
+        id: 3,
+        title: 'Fibonacci Extensions',
+        duration: '8 min',
+        type: 'video',
+        overview: `Fibonacci extensions project where price might reach after a retracement. Key extension levels are 127.2%, 161.8%, and 261.8%.
+
+Extensions help set profit targets. If price bounces from a 61.8% retracement, it often extends to 127.2% or 161.8% of the original move.
+
+Draw extensions using three points: the swing start, swing end, and retracement low/high. This projects future targets.`,
+        keyTakeaways: [
+          'Extensions project price targets',
+          'Key levels: 127.2%, 161.8%, 261.8%',
+          'Use for take profit placement',
+          'Requires three-point drawing method'
+        ],
+        youtubeId: 'uGZ_-E8Ykik',
+        youtubeTitle: 'Fibonacci Extensions'
+      },
+      {
+        id: 4,
+        title: 'Fibonacci Confluence',
+        duration: '8 min',
+        type: 'text',
+        overview: `Fibonacci confluence occurs when multiple Fibonacci levels from different swings align at similar prices. These zones are highly significant.
+
+Combine Fibonacci with other technical tools: S/R levels, trend lines, and moving averages. When multiple tools align, the probability of reversal increases.
+
+Look for "kill zones" where Fibonacci levels cluster. These areas often produce the best trading setups with higher win rates.`,
+        keyTakeaways: [
+          'Confluence = multiple levels aligning',
+          'Combine with S/R and trend lines',
+          'Kill zones are high-probability areas',
+          'More confluence = higher probability'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Fibonacci Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your Fibonacci knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What is the "golden ratio"?', options: ['23.6%', '38.2%', '61.8%', '78.6%'], correctIndex: 2, explanation: '61.8% is the golden ratio.' },
+          { question: 'How do you draw uptrend retracements?', options: ['High to low', 'Low to high', 'Random points', 'Horizontal only'], correctIndex: 1, explanation: 'Uptrend retracements go from swing low to swing high.' },
+          { question: 'What do Fibonacci extensions show?', options: ['Entry points', 'Stop losses', 'Price targets', 'Volume'], correctIndex: 2, explanation: 'Extensions project where price might reach.' },
+          { question: 'What is Fibonacci confluence?', options: ['Single level', 'Multiple levels aligning', 'Market close', 'Trading session'], correctIndex: 1, explanation: 'Confluence is when multiple levels align.' },
+          { question: 'Which levels are most significant for retracements?', options: ['10%, 20%, 30%', '38.2%, 50%, 61.8%', '90%, 95%, 100%', 'Random levels'], correctIndex: 1, explanation: '38.2%, 50%, and 61.8% are key retracement levels.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'moving-averages',
+    title: 'Moving Averages Mastery',
+    description: 'Dynamic support, resistance, and signals',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Types of Moving Averages',
+        duration: '7 min',
+        type: 'video',
+        overview: `Moving averages smooth price data to identify trend direction. Simple Moving Average (SMA) gives equal weight to all periods. Exponential Moving Average (EMA) weights recent prices more heavily.
+
+Common periods: 20 for short-term, 50 for medium-term, 200 for long-term trend. The 200 MA is considered the most important for overall trend direction.
+
+EMA reacts faster to price changes, while SMA is smoother. Most traders prefer EMA for shorter timeframes and SMA for longer ones.`,
+        keyTakeaways: [
+          'SMA = equal weight, EMA = recent weight',
+          'Common periods: 20, 50, 200',
+          '200 MA = most important for trend',
+          'EMA faster, SMA smoother'
+        ],
+        youtubeId: 'gf9t3a3Q0xM',
+        youtubeTitle: 'Moving Averages Explained'
+      },
+      {
+        id: 2,
+        title: 'MA as Dynamic S/R',
+        duration: '8 min',
+        type: 'video',
+        overview: `Moving averages act as dynamic support and resistance. In uptrends, price often bounces off the MA from above. In downtrends, price rejects from the MA from below.
+
+The 20 EMA is popular for aggressive entries in strong trends. The 50 EMA works well for swing trading. The 200 MA defines the overall trend.
+
+When price is above the 200 MA, look for long trades. When below, focus on shorts. This simple rule keeps you trading with the trend.`,
+        keyTakeaways: [
+          'MAs provide dynamic support/resistance',
+          '20 EMA = aggressive trend entries',
+          '200 MA defines overall trend',
+          'Above 200 MA = look long, below = look short'
+        ],
+        youtubeId: 'D8QKPwnvmL4',
+        youtubeTitle: 'MA Dynamic Support/Resistance'
+      },
+      {
+        id: 3,
+        title: 'MA Crossover Strategies',
+        duration: '9 min',
+        type: 'video',
+        overview: `MA crossovers generate signals when a faster MA crosses a slower MA. Golden Cross: 50 MA crosses above 200 MA (bullish). Death Cross: 50 MA crosses below 200 MA (bearish).
+
+Shorter-period crossovers (9/21 EMA) generate more signals but more false ones. Longer-period crossovers are more reliable but lag more.
+
+Crossovers work best in trending markets. In ranging markets, they produce many false signals. Always confirm with other tools.`,
+        keyTakeaways: [
+          'Golden Cross = bullish (50 above 200)',
+          'Death Cross = bearish (50 below 200)',
+          'Shorter periods = more signals, more false',
+          'Best in trending markets'
+        ],
+        youtubeId: 'PgQM-CUJzWg',
+        youtubeTitle: 'MA Crossover Strategies'
+      },
+      {
+        id: 4,
+        title: 'Multiple MA Systems',
+        duration: '8 min',
+        type: 'text',
+        overview: `Many traders use multiple MAs together. A common setup is 9, 21, and 50 EMAs. When stacked in order (9 > 21 > 50), the trend is strong bullish. Reversed order (9 < 21 < 50) = strong bearish.
+
+MA ribbon systems use many MAs (8, 13, 21, 34, 55). When ribbons expand, trend is accelerating. When they contract, momentum is slowing.
+
+Use MA slope to gauge trend strength. Steep slopes indicate strong momentum; flat MAs suggest consolidation.`,
+        keyTakeaways: [
+          'Multiple MAs show trend strength',
+          'Stacked MAs confirm trend direction',
+          'Expanding ribbon = accelerating trend',
+          'MA slope indicates momentum'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Moving Averages Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your moving average knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What is the difference between SMA and EMA?', options: ['No difference', 'EMA weights recent prices more', 'SMA is faster', 'EMA uses volume'], correctIndex: 1, explanation: 'EMA gives more weight to recent prices.' },
+          { question: 'What is a Golden Cross?', options: ['50 MA below 200 MA', '50 MA above 200 MA', 'Price above MA', 'Price below MA'], correctIndex: 1, explanation: 'Golden Cross = 50 MA crosses above 200 MA.' },
+          { question: 'Which MA is most important for trend?', options: ['9 MA', '20 MA', '50 MA', '200 MA'], correctIndex: 3, explanation: '200 MA defines overall trend.' },
+          { question: 'How do MAs act as support?', options: ['Fixed levels', 'Dynamic levels that move with price', 'News events', 'Volume spikes'], correctIndex: 1, explanation: 'MAs provide dynamic, moving support/resistance.' },
+          { question: 'When do MA crossovers work best?', options: ['Ranging markets', 'Trending markets', 'News events', 'All times equally'], correctIndex: 1, explanation: 'Crossovers perform best in trending conditions.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'rsi-macd',
+    title: 'RSI & MACD Strategies',
+    description: 'Master momentum indicators',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'RSI Fundamentals',
+        duration: '8 min',
+        type: 'video',
+        overview: `RSI (Relative Strength Index) measures momentum on a 0-100 scale. Above 70 = overbought, below 30 = oversold. Standard setting is 14 periods.
+
+Overbought doesn't mean "sell now" - in strong trends, RSI can stay overbought for extended periods. Use overbought/oversold as alerts, not automatic signals.
+
+RSI divergence is powerful: when price makes new highs but RSI makes lower highs, momentum is weakening. This often precedes reversals.`,
+        keyTakeaways: [
+          'RSI range: 0-100, standard 14 periods',
+          'Above 70 = overbought, below 30 = oversold',
+          'Overbought can persist in strong trends',
+          'RSI divergence precedes reversals'
+        ],
+        youtubeId: 'fSorNdF6MYg',
+        youtubeTitle: 'RSI Indicator Explained'
+      },
+      {
+        id: 2,
+        title: 'RSI Trading Strategies',
+        duration: '9 min',
+        type: 'video',
+        overview: `The 50 level is key for RSI. In uptrends, RSI tends to stay above 50. In downtrends, it stays below. Use 50 as a trend filter.
+
+RSI range trading: buy when RSI drops to 30 in uptrends, sell when it rises to 70 in downtrends. This catches pullbacks within trends.
+
+RSI breakouts: draw trend lines on RSI itself. RSI breaking its trend line often precedes price breaking its trend line.`,
+        keyTakeaways: [
+          '50 level = trend filter',
+          'Buy at 30 in uptrends, sell at 70 in downtrends',
+          'RSI trend lines predict price trend lines',
+          'Combine with price action for confirmation'
+        ],
+        youtubeId: 'wQ-i84kLHBM',
+        youtubeTitle: 'RSI Trading Strategies'
+      },
+      {
+        id: 3,
+        title: 'MACD Fundamentals',
+        duration: '8 min',
+        type: 'video',
+        overview: `MACD (Moving Average Convergence Divergence) shows momentum and trend direction. It consists of MACD line, Signal line, and Histogram.
+
+Standard settings: 12, 26, 9. MACD line = 12 EMA - 26 EMA. Signal line = 9 EMA of MACD. Histogram = MACD - Signal.
+
+MACD crossing above signal line = bullish. Crossing below = bearish. Zero line crossings indicate trend direction changes.`,
+        keyTakeaways: [
+          'MACD = momentum + trend indicator',
+          'Standard: 12, 26, 9',
+          'MACD above signal = bullish',
+          'Zero line shows trend direction'
+        ],
+        youtubeId: 'vuMjcJQ6xxM',
+        youtubeTitle: 'MACD Indicator Explained'
+      },
+      {
+        id: 4,
+        title: 'MACD Divergence Trading',
+        duration: '8 min',
+        type: 'text',
+        overview: `MACD divergence is one of the most reliable reversal signals. Regular divergence: price makes new extreme, MACD doesn't = potential reversal.
+
+Hidden divergence suggests trend continuation. In uptrends, price makes higher low but MACD makes lower low = continuation bullish.
+
+The histogram shows momentum. Growing histogram = increasing momentum. Shrinking histogram = momentum fading. Watch for histogram divergence too.`,
+        keyTakeaways: [
+          'Regular divergence = reversal signal',
+          'Hidden divergence = continuation signal',
+          'Histogram shows momentum strength',
+          'Shrinking histogram = fading momentum'
+        ]
+      },
+      {
+        id: 5,
+        title: 'RSI & MACD Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your RSI and MACD knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What RSI level indicates overbought?', options: ['30', '50', '70', '100'], correctIndex: 2, explanation: 'Above 70 = overbought.' },
+          { question: 'What is RSI divergence?', options: ['RSI matches price', 'RSI contradicts price', 'RSI at zero', 'RSI at 100'], correctIndex: 1, explanation: 'Divergence = price and RSI moving opposite.' },
+          { question: 'What are standard MACD settings?', options: ['9, 21, 50', '12, 26, 9', '20, 50, 200', '5, 10, 15'], correctIndex: 1, explanation: 'Standard MACD: 12, 26, 9.' },
+          { question: 'What does MACD histogram show?', options: ['Volume', 'Momentum strength', 'Price level', 'Time'], correctIndex: 1, explanation: 'Histogram shows momentum intensity.' },
+          { question: 'MACD crossing above signal line is:', options: ['Bearish', 'Neutral', 'Bullish', 'Invalid'], correctIndex: 2, explanation: 'MACD above signal = bullish.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'breakout-trading',
+    title: 'Breakout Trading',
+    description: 'Catch explosive moves',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Breakout Trading Basics',
+        duration: '7 min',
+        type: 'video',
+        overview: `Breakouts occur when price moves beyond established support or resistance with momentum. These moments often lead to explosive moves as orders trigger.
+
+True breakouts need volume confirmation. Without volume, the move lacks conviction and may fail. Look for volume 1.5-2x average.
+
+Breakouts can occur from consolidation ranges, chart patterns (triangles, rectangles), or key S/R levels. Each type has different characteristics.`,
+        keyTakeaways: [
+          'Breakouts = price beyond S/R with momentum',
+          'Volume confirms breakout validity',
+          'Look for 1.5-2x average volume',
+          'Multiple breakout types exist'
+        ],
+        youtubeId: 'Pr90rZL7VF8',
+        youtubeTitle: 'Breakout Trading Basics'
+      },
+      {
+        id: 2,
+        title: 'Identifying Breakout Setups',
+        duration: '9 min',
+        type: 'video',
+        overview: `Best breakouts come from tight consolidations. When price compresses into narrow ranges, energy builds. The subsequent breakout is often powerful.
+
+Look for declining volume during consolidation, then expanding volume on breakout. This pattern shows accumulation before the move.
+
+Higher timeframe breakouts are more reliable. A daily breakout carries more weight than a 5-minute breakout. Always check the bigger picture.`,
+        keyTakeaways: [
+          'Tight consolidations = powerful breakouts',
+          'Declining volume before, expanding on break',
+          'Higher timeframe breakouts more reliable',
+          'Check the bigger picture'
+        ],
+        youtubeId: 'Iz8IJL7rfBM',
+        youtubeTitle: 'Finding Breakout Setups'
+      },
+      {
+        id: 3,
+        title: 'False Breakout Recognition',
+        duration: '8 min',
+        type: 'video',
+        overview: `False breakouts are common - up to 70% of breakouts fail. Price briefly breaks a level then reverses back inside the range.
+
+Signs of false breaks: low volume, quick reversal, wicks beyond level but close inside, occurring against the larger trend.
+
+Trade false breakouts by fading them: when a breakout fails, enter in the opposite direction with stop beyond the false break high/low.`,
+        keyTakeaways: [
+          'Up to 70% of breakouts fail',
+          'Low volume = likely false break',
+          'Wicks beyond, close inside = false',
+          'False breakouts can be traded'
+        ],
+        youtubeId: 'nWPjNWAc5RM',
+        youtubeTitle: 'False Breakout Trading'
+      },
+      {
+        id: 4,
+        title: 'Breakout Entry Techniques',
+        duration: '8 min',
+        type: 'text',
+        overview: `Three entry methods: 1) Aggressive - enter as price breaks level. 2) Moderate - wait for candle close beyond level. 3) Conservative - wait for retest of broken level.
+
+Retest entries offer better risk-reward but you may miss some breakouts that don't retest. Aggressive entries catch more moves but have more false signals.
+
+Stop loss placement: beyond the breakout candle or below the last swing low for longs. Target based on measured move (range height) or next S/R level.`,
+        keyTakeaways: [
+          'Three entries: aggressive, moderate, conservative',
+          'Retest offers better R:R but misses some',
+          'Stop beyond breakout candle',
+          'Target = measured move or next S/R'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Breakout Trading Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your breakout trading knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What confirms a true breakout?', options: ['Low volume', 'High volume', 'News', 'Time of day'], correctIndex: 1, explanation: 'High volume confirms breakout validity.' },
+          { question: 'What percentage of breakouts fail?', options: ['10%', '30%', 'Up to 70%', '90%'], correctIndex: 2, explanation: 'Up to 70% of breakouts fail.' },
+          { question: 'What indicates a false breakout?', options: ['High volume', 'Close beyond level', 'Wick beyond, close inside', 'Strong momentum'], correctIndex: 2, explanation: 'Wicks beyond but closing inside = false break.' },
+          { question: 'What is a retest entry?', options: ['Entering on first break', 'Waiting for return to broken level', 'Trading against breakout', 'Random entry'], correctIndex: 1, explanation: 'Retest = entering when price returns to broken level.' },
+          { question: 'Best breakouts come from:', options: ['Wide ranges', 'Tight consolidations', 'Trending markets', 'News events'], correctIndex: 1, explanation: 'Tight consolidations produce powerful breakouts.' }
         ]
       }
     ]
@@ -742,39 +834,433 @@ Best trading: London/New York overlap (1PM-5PM GMT) has highest liquidity and vo
 ];
 
 // ==============================================================================
-// INTERMEDIATE COURSES - PREVIEW ONLY (LOCKED)
+// ADVANCED COURSES - VIP ACCESS (FULL CONTENT)
 // ==============================================================================
 
-export const INTERMEDIATE_COURSE_PREVIEWS = [
-  { id: 'technical-analysis', title: 'Technical Analysis', preview: 'Master advanced chart patterns, indicators, and market structure analysis.' },
-  { id: 'support-resistance', title: 'Support & Resistance', preview: 'Learn to identify key price levels where markets reverse and pause.' },
-  { id: 'fibonacci', title: 'Fibonacci Trading', preview: 'Use mathematical ratios to predict retracements and extensions.' },
-  { id: 'moving-averages', title: 'Moving Averages Mastery', preview: 'Implement MA strategies, crossovers, and dynamic support/resistance.' },
-  { id: 'rsi-macd', title: 'RSI & MACD Strategies', preview: 'Deep dive into momentum indicators for timing entries and exits.' },
-  { id: 'breakout-trading', title: 'Breakout Trading', preview: 'Catch explosive moves when price breaks through key levels.' },
+export const ADVANCED_COURSES: CourseContent[] = [
+  {
+    id: 'institutional',
+    title: 'Institutional Trading',
+    description: 'Trade like banks and hedge funds',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'How Institutions Trade',
+        duration: '10 min',
+        type: 'video',
+        overview: `Institutional traders (banks, hedge funds) don't trade like retail traders. They can't simply click buy/sell - their orders are too large. They need to accumulate and distribute positions over time without moving price against themselves.
+
+Understanding institutional behavior gives you an edge. They leave footprints in the market: order blocks, fair value gaps, and liquidity sweeps. Learning to read these can put you on the same side as smart money.
+
+Institutions need liquidity to fill orders. They often manipulate price to areas where retail stops cluster, then reverse. This is why many retail traders get stopped out before the market moves in their direction.`,
+        keyTakeaways: [
+          'Institutions can\'t enter/exit quickly like retail',
+          'They accumulate/distribute over time',
+          'They leave footprints: order blocks, FVGs, sweeps',
+          'They hunt retail stop losses for liquidity'
+        ],
+        youtubeId: '5B-RpC3wbsg',
+        youtubeTitle: 'How Institutions Trade'
+      },
+      {
+        id: 2,
+        title: 'Order Blocks',
+        duration: '9 min',
+        type: 'video',
+        overview: `Order blocks are areas where institutions have placed significant orders. They appear as the last opposing candle before a strong move. When price returns to these areas, it often reverses.
+
+Bullish order block: the last bearish candle before a strong bullish move. Bearish order block: the last bullish candle before a strong bearish move.
+
+Not all order blocks are equal. Focus on ones that broke structure, have clean moves away, and haven't been mitigated (revisited) yet.`,
+        keyTakeaways: [
+          'Order blocks = institutional order areas',
+          'Last opposing candle before strong move',
+          'Price often reverses at order blocks',
+          'Unmitigated blocks are most powerful'
+        ],
+        youtubeId: 'eSFt1F3sJwU',
+        youtubeTitle: 'Order Blocks Explained'
+      },
+      {
+        id: 3,
+        title: 'Fair Value Gaps (FVG)',
+        duration: '8 min',
+        type: 'video',
+        overview: `Fair Value Gaps are imbalances in price where buying and selling didn't occur equally. They appear as gaps between candle wicks, showing aggressive moves.
+
+Price tends to return to fill these gaps because they represent "unfair" prices - areas where orders weren't properly matched. Institutional traders often target these gaps.
+
+Use FVGs as entry zones. When price returns to fill a gap in the direction of your trade, it offers high-probability entries with tight stops.`,
+        keyTakeaways: [
+          'FVG = imbalance between candle wicks',
+          'Represent aggressive, unbalanced moves',
+          'Price tends to return and fill gaps',
+          'Use as entry zones in trend direction'
+        ],
+        youtubeId: 'k7y-6xIyNYw',
+        youtubeTitle: 'Fair Value Gaps Trading'
+      },
+      {
+        id: 4,
+        title: 'Liquidity Concepts',
+        duration: '10 min',
+        type: 'text',
+        overview: `Liquidity is where stop losses and pending orders cluster. Common areas: above/below obvious swing points, round numbers, and trend line touches.
+
+Institutions need liquidity to fill large orders. They often push price to these areas to trigger stops, which provides the liquidity they need, then reverse.
+
+"Liquidity sweeps" occur when price briefly spikes beyond a level to grab stops, then reverses. Recognizing these can help you avoid getting stopped out and potentially trade the reversal.`,
+        keyTakeaways: [
+          'Liquidity = clustered orders (stops, pending)',
+          'Found at swing points, round numbers',
+          'Institutions sweep liquidity before reversing',
+          'Avoid placing stops at obvious levels'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Institutional Concepts Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your institutional trading knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'Why can\'t institutions trade like retail?', options: ['Regulations', 'Their orders are too large', 'Time restrictions', 'Technology limits'], correctIndex: 1, explanation: 'Large orders would move price against them.' },
+          { question: 'What is an order block?', options: ['Technical indicator', 'Last opposing candle before strong move', 'News event', 'Volume spike'], correctIndex: 1, explanation: 'Order block = institutional order area.' },
+          { question: 'What is a Fair Value Gap?', options: ['Price target', 'Imbalance between candle wicks', 'Support level', 'Moving average'], correctIndex: 1, explanation: 'FVG shows aggressive, imbalanced moves.' },
+          { question: 'What is a liquidity sweep?', options: ['Market close', 'Spike to grab stops then reverse', 'Volume increase', 'Trend start'], correctIndex: 1, explanation: 'Sweeps grab liquidity before reversing.' },
+          { question: 'Where is liquidity commonly found?', options: ['Random levels', 'Above/below swing points', 'Only at round numbers', 'Never at obvious levels'], correctIndex: 1, explanation: 'Stops cluster at obvious swing points.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'order-flow',
+    title: 'Order Flow Analysis',
+    description: 'Read market depth and order activity',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'Order Flow Basics',
+        duration: '9 min',
+        type: 'video',
+        overview: `Order flow shows the actual buying and selling happening in real-time. While charts show price history, order flow shows what's driving price right now.
+
+Market orders (immediate execution) move price. Limit orders (pending orders) provide levels where price may pause. Understanding the interaction between these reveals market intent.
+
+Order flow analysis requires specific tools: footprint charts, depth of market (DOM), and volume profile. These show where orders are executing and where liquidity sits.`,
+        keyTakeaways: [
+          'Order flow shows real-time buying/selling',
+          'Market orders move price',
+          'Limit orders provide support/resistance',
+          'Requires specialized tools: footprint, DOM'
+        ],
+        youtubeId: '4OgL_e1PpTM',
+        youtubeTitle: 'Order Flow Basics'
+      },
+      {
+        id: 2,
+        title: 'Volume Profile Analysis',
+        duration: '10 min',
+        type: 'video',
+        overview: `Volume Profile shows where the most trading occurred at each price level. High Volume Nodes (HVN) act as magnets and S/R. Low Volume Nodes (LVN) are areas price moves through quickly.
+
+Point of Control (POC) is the price with most volume - the "fair value" for that session. Price tends to return to POC like a magnet.
+
+Value Area (VA) contains 70% of volume. Price inside VA is "fair" - expect ranging. Price outside VA is "unfair" - expect it to return or trend strongly.`,
+        keyTakeaways: [
+          'HVN = support/resistance, magnets',
+          'LVN = areas of quick movement',
+          'POC = fair value, price magnet',
+          'Value Area = 70% of volume'
+        ],
+        youtubeId: 'TJxQO6ntAcs',
+        youtubeTitle: 'Volume Profile Trading'
+      },
+      {
+        id: 3,
+        title: 'Delta and Cumulative Delta',
+        duration: '9 min',
+        type: 'video',
+        overview: `Delta measures the difference between buying and selling volume. Positive delta = more buying. Negative delta = more selling.
+
+Cumulative Delta (CD) shows the running total of delta. Rising CD with rising price confirms buyers in control. Divergence between price and CD signals potential reversal.
+
+Delta divergence is powerful: if price makes new highs but delta is lower than the previous high, buying is weakening. This often precedes pullbacks.`,
+        keyTakeaways: [
+          'Delta = buying volume - selling volume',
+          'Cumulative Delta shows running total',
+          'Price + CD rising = buyers in control',
+          'Delta divergence signals reversals'
+        ],
+        youtubeId: 'Y2Dx1J6P1Pw',
+        youtubeTitle: 'Delta Analysis'
+      },
+      {
+        id: 4,
+        title: 'Absorption and Exhaustion',
+        duration: '9 min',
+        type: 'text',
+        overview: `Absorption occurs when large limit orders absorb market orders without price moving much. This shows institutional presence - they're accumulating without showing their hand.
+
+Watch for high volume with little price movement. This indicates strong hands absorbing selling (bullish) or buying (bearish) pressure.
+
+Exhaustion occurs when aggressive buyers/sellers push price but fail to attract follow-through. Volume spikes but price quickly reverses. This signals the move is ending.`,
+        keyTakeaways: [
+          'Absorption = orders absorbed without price move',
+          'Shows institutional accumulation',
+          'Exhaustion = volume spike with quick reversal',
+          'Both signal potential turning points'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Order Flow Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your order flow knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What moves price?', options: ['Limit orders', 'Market orders', 'News', 'Time'], correctIndex: 1, explanation: 'Market orders (immediate execution) move price.' },
+          { question: 'What is Point of Control (POC)?', options: ['Random level', 'Price with most volume', 'Daily high', 'Daily low'], correctIndex: 1, explanation: 'POC = highest volume price level.' },
+          { question: 'What does positive delta indicate?', options: ['More selling', 'More buying', 'No activity', 'Market close'], correctIndex: 1, explanation: 'Positive delta = buying > selling.' },
+          { question: 'What is absorption?', options: ['Price spike', 'Orders absorbed with little price movement', 'Volume decrease', 'Trend start'], correctIndex: 1, explanation: 'Absorption = high volume, little price movement.' },
+          { question: 'What does exhaustion indicate?', options: ['Trend start', 'Move is ending', 'More momentum coming', 'Market open'], correctIndex: 1, explanation: 'Exhaustion signals the current move is ending.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'smart-money',
+    title: 'Smart Money Concepts',
+    description: 'Follow institutional footprints',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'Smart Money vs Dumb Money',
+        duration: '8 min',
+        type: 'video',
+        overview: `Smart Money refers to institutional traders with information advantages and deep pockets. Dumb Money is retail traders who often trade emotionally and predictably.
+
+Retail traders tend to buy at highs and sell at lows, chase breakouts, and place stops at obvious levels. Smart money exploits these patterns.
+
+The goal is to identify what smart money is doing and align with them. This means avoiding retail traps and recognizing accumulation/distribution phases.`,
+        keyTakeaways: [
+          'Smart Money = institutions with advantages',
+          'Retail often buys highs, sells lows',
+          'Smart money exploits retail behavior',
+          'Align with smart money, avoid traps'
+        ],
+        youtubeId: 'NcC5C0Qd9kU',
+        youtubeTitle: 'Smart Money Concepts'
+      },
+      {
+        id: 2,
+        title: 'Accumulation and Distribution',
+        duration: '10 min',
+        type: 'video',
+        overview: `Accumulation is when smart money quietly builds positions at low prices. Price moves sideways while they absorb all selling. Then price breaks out.
+
+Distribution is the opposite - smart money sells positions at high prices. Price moves sideways while they offload, then breaks down.
+
+Wyckoff methodology describes these phases. Look for: trading range after trend, tests of support/resistance, springs (false breaks), and volume patterns.`,
+        keyTakeaways: [
+          'Accumulation = building positions at lows',
+          'Distribution = selling positions at highs',
+          'Both appear as sideways ranges',
+          'Wyckoff describes these phases'
+        ],
+        youtubeId: '9q-fmQ_HjK4',
+        youtubeTitle: 'Accumulation and Distribution'
+      },
+      {
+        id: 3,
+        title: 'Inducement and Manipulation',
+        duration: '9 min',
+        type: 'video',
+        overview: `Inducement is how smart money attracts retail orders to provide liquidity. They create obvious patterns that retail traders love to trade.
+
+Common inducements: double bottoms/tops that fail, obvious trend lines that break, support/resistance that doesn't hold initially.
+
+The "stop hunt" is manipulation where price spikes to take out stops, then reverses. This provides smart money the liquidity they need to enter large positions.`,
+        keyTakeaways: [
+          'Inducement attracts retail orders',
+          'Creates patterns retail loves to trade',
+          'Stop hunts provide liquidity',
+          'Recognize inducement to avoid traps'
+        ],
+        youtubeId: 'V9j-JmMxwVQ',
+        youtubeTitle: 'Market Manipulation'
+      },
+      {
+        id: 4,
+        title: 'Trading with Smart Money',
+        duration: '9 min',
+        type: 'text',
+        overview: `To trade with smart money: 1) Wait for liquidity grabs (stop hunts) before entering. 2) Trade from order blocks and FVGs. 3) Enter on retests, not breakouts. 4) Avoid obvious levels for stops.
+
+The mindset shift: instead of asking "where should I enter?", ask "where will smart money enter?". Think about liquidity and order flow.
+
+Patience is essential. Smart money setups don't appear constantly. Wait for high-probability scenarios where retail gets trapped and smart money reverses price.`,
+        keyTakeaways: [
+          'Wait for liquidity grabs before entering',
+          'Trade from order blocks and FVGs',
+          'Enter on retests, not breakouts',
+          'Think "where will smart money enter?"'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Smart Money Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your smart money knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'Who is "Smart Money"?', options: ['Retail traders', 'Institutional traders', 'News reporters', 'Brokers'], correctIndex: 1, explanation: 'Smart Money = institutions with advantages.' },
+          { question: 'What is accumulation?', options: ['Selling at highs', 'Building positions at lows', 'Random trading', 'Day trading'], correctIndex: 1, explanation: 'Accumulation = building positions quietly.' },
+          { question: 'What is inducement?', options: ['Teaching', 'Attracting retail orders for liquidity', 'Technical indicator', 'News trading'], correctIndex: 1, explanation: 'Inducement attracts retail to provide liquidity.' },
+          { question: 'What is a stop hunt?', options: ['Searching for trades', 'Spike to take out stops then reverse', 'Volume analysis', 'Trend following'], correctIndex: 1, explanation: 'Stop hunts grab liquidity then reverse.' },
+          { question: 'How should you place stops?', options: ['At obvious levels', 'Beyond obvious levels with buffer', 'Very tight', 'Very wide'], correctIndex: 1, explanation: 'Avoid obvious levels that get hunted.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'liquidity',
+    title: 'Liquidity Trading',
+    description: 'Understand and trade liquidity',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'Liquidity Fundamentals',
+        duration: '9 min',
+        type: 'video',
+        overview: `Liquidity in trading terms means resting orders (stops and limits) at specific price levels. These orders are the "fuel" that moves markets.
+
+External liquidity sits above highs and below lows - where stops cluster. Internal liquidity is within price ranges - order blocks, FVGs, and imbalances.
+
+Price is always seeking liquidity. Understanding this principle explains why price often sweeps highs/lows before reversing - it's grabbing liquidity.`,
+        keyTakeaways: [
+          'Liquidity = resting orders at price levels',
+          'External: above highs, below lows',
+          'Internal: order blocks, FVGs',
+          'Price constantly seeks liquidity'
+        ],
+        youtubeId: 'mSN_FDxaZxI',
+        youtubeTitle: 'Liquidity in Trading'
+      },
+      {
+        id: 2,
+        title: 'Liquidity Pools',
+        duration: '8 min',
+        type: 'video',
+        overview: `Liquidity pools are areas where significant orders have accumulated. Equal highs/lows form obvious pools - everyone sees them, everyone places stops there.
+
+"Buy-side liquidity" sits above resistance levels (buy stops). "Sell-side liquidity" sits below support levels (sell stops).
+
+The most powerful trades come after liquidity pools are swept. Once the stops are triggered, the move often reverses because the "fuel" has been consumed.`,
+        keyTakeaways: [
+          'Equal highs/lows = obvious liquidity pools',
+          'Buy-side above resistance, sell-side below support',
+          'Best trades after pools are swept',
+          'Swept liquidity often leads to reversal'
+        ],
+        youtubeId: '3a_nTBJ-r-8',
+        youtubeTitle: 'Liquidity Pools Trading'
+      },
+      {
+        id: 3,
+        title: 'Trading Liquidity Sweeps',
+        duration: '10 min',
+        type: 'video',
+        overview: `A liquidity sweep occurs when price spikes beyond a level, triggers stops, then reverses. This is the "raid" on liquidity before smart money makes their move.
+
+To trade sweeps: 1) Identify liquidity pools (equal highs/lows, trend lines). 2) Wait for the sweep. 3) Look for reversal confirmation (order block, FVG, divergence). 4) Enter with stop beyond the sweep.
+
+Risk warning: not all sweeps reverse. Sometimes price continues after grabbing liquidity. Always wait for confirmation and manage risk properly.`,
+        keyTakeaways: [
+          'Sweep = spike beyond level, triggers stops, reverses',
+          'Identify pools, wait for sweep, confirm, enter',
+          'Stop goes beyond the sweep high/low',
+          'Not all sweeps reverse - always confirm'
+        ],
+        youtubeId: 'gL-vgQPmj4E',
+        youtubeTitle: 'Trading Liquidity Sweeps'
+      },
+      {
+        id: 4,
+        title: 'Advanced Liquidity Concepts',
+        duration: '9 min',
+        type: 'text',
+        overview: `Liquidity engineering is how smart money creates and sweeps liquidity. They may push price to form equal highs, then return later to sweep them.
+
+Premium and Discount zones: price above equilibrium (50% of range) is premium - look to sell. Below equilibrium is discount - look to buy. Combine with liquidity for high-probability trades.
+
+Optimal Trade Entry (OTE): the zone between 61.8% and 78.6% Fibonacci retracement where liquidity often sits. This is where smart money tends to enter after sweeps.`,
+        keyTakeaways: [
+          'Smart money engineers liquidity targets',
+          'Premium = above 50%, look to sell',
+          'Discount = below 50%, look to buy',
+          'OTE zone: 61.8-78.6% retracement'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Liquidity Trading Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your liquidity trading knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What is liquidity in trading?', options: ['Cash on hand', 'Resting orders at price levels', 'Market cap', 'Daily volume'], correctIndex: 1, explanation: 'Liquidity = stops and limits at levels.' },
+          { question: 'Where is buy-side liquidity?', options: ['Below support', 'Above resistance', 'At round numbers only', 'Random locations'], correctIndex: 1, explanation: 'Buy-side sits above resistance (buy stops).' },
+          { question: 'What happens after a sweep?', options: ['Always continues', 'Often reverses', 'Nothing', 'Market closes'], correctIndex: 1, explanation: 'Swept liquidity often leads to reversal.' },
+          { question: 'What is the OTE zone?', options: ['0-23.6% Fib', '61.8-78.6% Fib', '100% Fib', 'Random zone'], correctIndex: 1, explanation: 'OTE = 61.8-78.6% retracement zone.' },
+          { question: 'What is a premium zone?', options: ['Below 50% of range', 'Above 50% of range', 'Random area', 'News event area'], correctIndex: 1, explanation: 'Premium = above equilibrium, look to sell.' }
+        ]
+      }
+    ]
+  }
 ];
 
 // ==============================================================================
-// ADVANCED COURSES - PREVIEW ONLY (LOCKED)
+// COURSE PREVIEWS (for locked display)
 // ==============================================================================
 
-export const ADVANCED_COURSE_PREVIEWS = [
-  { id: 'institutional', title: 'Institutional Trading', preview: 'Trade like banks and hedge funds using institutional concepts.' },
-  { id: 'order-flow', title: 'Order Flow Analysis', preview: 'Read market depth and understand how orders drive price.' },
-  { id: 'smart-money', title: 'Smart Money Concepts', preview: 'Follow the footprints of institutional traders.' },
-  { id: 'liquidity', title: 'Liquidity Trading', preview: 'Understand where liquidity sits and how price seeks it.' },
-];
+export const INTERMEDIATE_COURSE_PREVIEWS = INTERMEDIATE_COURSES.map(c => ({
+  id: c.id,
+  title: c.title,
+  preview: c.description
+}));
+
+export const ADVANCED_COURSE_PREVIEWS = ADVANCED_COURSES.map(c => ({
+  id: c.id,
+  title: c.title,
+  preview: c.description
+}));
 
 // ==============================================================================
 // HELPER FUNCTIONS
 // ==============================================================================
 
 export function getCourseContent(courseId: string): CourseContent | null {
-  return BEGINNER_COURSES.find(c => c.id === courseId) || null;
+  // Search all course arrays
+  const allCourses = [...BEGINNER_COURSES, ...INTERMEDIATE_COURSES, ...ADVANCED_COURSES];
+  return allCourses.find(c => c.id === courseId) || null;
 }
 
 export function getLessonContent(courseId: string, lessonId: number): LessonContent | null {
   const course = getCourseContent(courseId);
   if (!course) return null;
   return course.lessons.find(l => l.id === lessonId) || null;
+}
+
+export function getCourseCategory(courseId: string): 'beginner' | 'intermediate' | 'advanced' | null {
+  const course = getCourseContent(courseId);
+  return course?.category || null;
 }
