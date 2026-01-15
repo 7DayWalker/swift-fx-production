@@ -600,6 +600,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   actionTitle: {
     fontSize: 14,
     fontWeight: '600',
