@@ -3240,12 +3240,9 @@ async def update_fund_application(
     application_id: str,
     status: str,
     admin_notes: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+    admin: User = Depends(require_admin)
 ):
     """Update fund application status. Admin only."""
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     # Validate status
     valid_statuses = ["pending_review", "contacted", "approved", "rejected"]
     if status not in valid_statuses:
@@ -3272,7 +3269,7 @@ async def update_fund_application(
         {"$set": update_data}
     )
     
-    logger.info(f"[Fund] Admin {current_user['user_id']} updated application {application_id} to {status}")
+    logger.info(f"[Fund] Admin {admin.user_id} updated application {application_id} to {status}")
     
     return {
         "success": True,
