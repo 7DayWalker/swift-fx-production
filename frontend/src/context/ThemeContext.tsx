@@ -140,3 +140,15 @@ export function useTheme() {
   }
   return context;
 }
+
+/**
+ * Hook for Admin screens - ALWAYS returns dark theme
+ * Use this in all (admin) screens to ensure consistent dark UI
+ * Ignores user preference completely
+ */
+export function useAdminTheme() {
+  return {
+    theme: adminTheme,
+    isDark: true,
+  };
+}
