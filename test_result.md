@@ -420,7 +420,10 @@ metadata:
 
 test_plan:
   current_focus:
-    []
+    - "Fund Management Application (User Submit)"
+    - "Fund Management Application (User Status)"
+    - "Fund Management Admin (List Applications)"
+    - "Fund Management Admin (Update Status)"
   stuck_tasks:
     - "Community Posts & Comments"
   test_all: false
@@ -464,3 +467,23 @@ agent_communication:
   - message: "✅ SIGNAL LIFECYCLE ENGINE v2.0 FINAL VERIFICATION COMPLETE: All 16 critical tests passed (100% success rate). COMPREHENSIVE TESTING RESULTS: 1) ADMIN STATE AUTHORITY ✅ - Admin creates signals with state='active' and they remain ACTIVE (never downgraded). Default signals correctly set to 'pending'. 2) PIP CALCULATION LOGIC ✅ - SELL signals: profit when price goes DOWN (+50 pips), loss when price goes UP (-50 pips). BUY signals: profit when price goes UP (+50 pips), loss when price goes DOWN (-50 pips). Formula verified: SELL pips = entry - exit, BUY pips = exit - entry. 3) STATE IMMUTABILITY ✅ - Closed signals completely immutable: ALL operations (/transition, /activate, /mark-tp, /force-close) correctly blocked with 'immutable' error messages. 4) EXIT HANDLING ✅ - When signals closed: state='closed', exit_price set, final_pips calculated accurately, closed_at timestamp populated. The Signal Lifecycle Engine v2.0 is production-ready and meets all critical requirements from the review request."
   - agent: "testing"
   - message: "✅ MANUAL SIGNAL MODE TESTING COMPLETE: All 10 tests passed (100% success rate). VERIFIED: 1) Automation Status - GET /api/automation/status returns mode='MANUAL' and auto_engine_running=false ✅. 2) Admin State Authority - Admin can create ACTIVE signals directly and they remain active (no auto-downgrade) ✅. Default signals correctly set to 'pending' ✅. 3) Manual State Control - Manual activation (pending→active), manual TP marking (active→tp1), and manual force-close all working correctly ✅. 4) Pip Calculation - BUY/SELL signals calculate pips correctly with proper directional logic ✅. 5) Closed Signal Immutability - All operations on closed signals correctly blocked with 'immutable' error messages ✅. Manual signal mode is fully functional and production-ready. The auto-engine is completely DISABLED as requested."
+  - agent: "main"
+  - message: |
+      ✅ FUND MANAGEMENT FEATURE IMPLEMENTED:
+      
+      1) Added admin navigation link to Fund Applications screen in (admin)/dashboard.tsx
+      2) Backend API endpoints created:
+         - POST /api/fund/apply - Submit application (Premium/VIP only)
+         - GET /api/fund/my-application - Get user's application status
+         - GET /api/admin/fund/applications - List all applications (admin only)
+         - PUT /api/admin/fund/applications/{id}?status=X - Update status (admin only)
+      3) Frontend pages:
+         - /app/fund-management.tsx - User-facing page with form and status display
+         - /app/(admin)/fund-applications.tsx - Admin management screen
+      4) WhatsApp integration: Contact Fund Manager button with pre-filled message
+      5) Legal disclaimers included
+      
+      NEEDS TESTING:
+      - Test with Free user (should NOT be able to apply)
+      - Test with VIP user (should be able to apply and see status)
+      - Test with Admin (should be able to view and update applications)
