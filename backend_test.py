@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Fund Management Feature
-Tests all fund management endpoints with proper authentication and access control
+Backend API Testing for Fund Management WhatsApp Apply Flow
+Testing the specific WhatsApp application flow as requested.
 """
 
 import requests
@@ -15,7 +15,7 @@ BACKEND_URL = "https://fundadmin-1.preview.emergentagent.com/api"
 # Test credentials from review request
 ADMIN_CREDENTIALS = {"email": "admin@swiftfx.com", "password": "adminpassword"}
 VIP_CREDENTIALS = {"email": "fundtest@test.com", "password": "password"}
-FREE_CREDENTIALS = {"email": "freetestuser@test.com", "password": "password"}
+FREE_CREDENTIALS = {"email": "freeuser@test.com", "password": "password"}
 
 class TestResults:
     def __init__(self):
