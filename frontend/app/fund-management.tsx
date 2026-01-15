@@ -1,300 +1,593 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
   Alert,
+  Linking,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
+import { useTheme } from '../src/context/ThemeContext';
 import { useSubscription } from '../src/context/SubscriptionContext';
+import api from '../src/services/api';
+
+// Investment tiers configuration
+const INVESTMENT_TIERS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    minInvestment: 500,
+    maxInvestment: 5000,
+    expectedReturn: '5-10%',
+    description: 'Perfect for beginners',
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    minInvestment: 5000,
+    maxInvestment: 25000,
+    expectedReturn: '10-20%',
+    description: 'For experienced investors',
+  },
+  {
+    id: 'elite',
+    name: 'Elite',
+    minInvestment: 25000,
+    maxInvestment: 100000,
+    expectedReturn: '20-35%',
+    description: 'Premium management',
+  },
+];
+
+// Performance data (historical)
+const PERFORMANCE_DATA = {
+  totalReturn: '+127.4%',
+  monthlyAvg: '+8.2%',
+  winRate: '73%',
+  clientCount: '500+',
+};
+
+// Experience levels
+const EXPERIENCE_LEVELS = [
+  { id: 'beginner', label: 'Beginner (< 1 year)' },
+  { id: 'intermediate', label: 'Intermediate (1-3 years)' },
+  { id: 'advanced', label: 'Advanced (3+ years)' },
+];
+
+// Country list (common)
+const COUNTRIES = [
+  'Nigeria', 'United States', 'United Kingdom', 'Canada', 'Ghana', 
+  'South Africa', 'Kenya', 'India', 'Australia', 'Germany', 'France',
+  'UAE', 'Singapore', 'Malaysia', 'Other'
+];
+
+// Application status display config
+const STATUS_CONFIG = {
+  pending_review: {
+    label: 'Under Review',
+    color: '#F59E0B',
+    icon: 'time-outline',
+    message: 'Your application is being reviewed by our team.',
+  },
+  contacted: {
+    label: 'Contacted',
+    color: '#3B82F6',
+    icon: 'call-outline',
+    message: 'Our team has reached out to you. Please check your messages.',
+  },
+  approved: {
+    label: 'Approved',
+    color: '#10B981',
+    icon: 'checkmark-circle-outline',
+    message: 'Congratulations! Your fund manager will guide you through the next steps.',
+  },
+  rejected: {
+    label: 'Not Approved',
+    color: '#EF4444',
+    icon: 'close-circle-outline',
+    message: 'Unfortunately, your application was not approved at this time.',
+  },
+};
+
+// WhatsApp contact details
+const FUND_MANAGER_PHONE = '+2348169427440';
 
 export default function FundManagementScreen() {
-  const { user } = useAuth();
-  const { status: subscriptionStatus } = useSubscription();
+  const { theme } = useTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { subscription } = useSubscription();
+  
+  // State
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [existingApplication, setExistingApplication] = useState<any>(null);
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    country: '',
+    investment_tier: '',
+    intended_amount: '',
+    trading_experience: '',
+    risk_agreement: false,
+  });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showExperiencePicker, setShowExperiencePicker] = useState(false);
 
-  // Check VIP access using subscription context
-  const effectiveSubscription = subscriptionStatus?.subscription || user?.role || 'free';
-  const isVIP = effectiveSubscription === 'vip';
+  // Check if user can apply (Premium or VIP)
+  const canApply = subscription === 'premium' || subscription === 'vip';
 
-  const handleApply = () => {
-    // VIP-only action - redirect to subscription if not VIP
-    if (!isVIP) {
-      router.push('/subscription');
-      return;
-    }
-    
-    const msg = 'Applications are currently being reviewed. Our team will contact you within 48 hours.';
-    if (Platform.OS === 'web') {
-      window.alert(msg);
-    } else {
-      Alert.alert('Application Submitted', msg);
+  // Fetch existing application
+  useEffect(() => {
+    fetchMyApplication();
+  }, []);
+
+  const fetchMyApplication = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/fund/my-application');
+      if (response.data.has_application) {
+        setExistingApplication(response.data.application);
+      }
+    } catch (error) {
+      console.error('Failed to fetch application:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleContact = () => {
-    // VIP-only action - redirect to subscription if not VIP
-    if (!isVIP) {
-      router.push('/subscription');
-      return;
-    }
+  // Form validation
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
     
-    const msg = 'Contact us at funds@swiftfxsignals.com for inquiries.';
-    if (Platform.OS === 'web') {
-      window.alert(msg);
-    } else {
-      Alert.alert('Contact Us', msg);
+    if (!formData.full_name.trim()) errors.full_name = 'Full name is required';
+    if (!formData.email.trim()) errors.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) errors.email = 'Invalid email format';
+    if (!formData.phone.trim()) errors.phone = 'Phone/WhatsApp is required';
+    if (!formData.country) errors.country = 'Country is required';
+    if (!formData.investment_tier) errors.investment_tier = 'Select an investment tier';
+    if (!formData.intended_amount) errors.intended_amount = 'Investment amount is required';
+    else if (isNaN(Number(formData.intended_amount)) || Number(formData.intended_amount) < 500) {
+      errors.intended_amount = 'Minimum investment is $500';
+    }
+    if (!formData.trading_experience) errors.trading_experience = 'Select your experience level';
+    if (!formData.risk_agreement) errors.risk_agreement = 'You must agree to the risk disclaimer';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Submit application
+  const handleSubmitApplication = async () => {
+    if (!validateForm()) return;
+    
+    try {
+      setSubmitting(true);
+      const response = await api.post('/fund/apply', {
+        full_name: formData.full_name,
+        email: formData.email,
+        phone: formData.phone,
+        country: formData.country,
+        investment_tier: formData.investment_tier,
+        intended_amount: parseFloat(formData.intended_amount),
+        trading_experience: formData.trading_experience,
+        risk_agreement: formData.risk_agreement,
+      });
+      
+      Alert.alert(
+        'Application Submitted',
+        response.data.message,
+        [{ text: 'OK', onPress: () => {
+          setShowApplicationForm(false);
+          fetchMyApplication();
+        }}]
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Error',
+        error.response?.data?.detail || 'Failed to submit application'
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // PREVIEW-FIRST: Show all content to all users, but lock actions
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fund Management</Text>
-        {isVIP ? (
-          <View style={styles.vipBadge}>
-            <Ionicons name="star" size={14} color="#FFD700" />
-          </View>
-        ) : (
-          <View style={styles.lockedBadge}>
-            <Ionicons name="lock-closed" size={14} color="#8A8D98" />
-          </View>
-        )}
-      </View>
+  // Open WhatsApp
+  const handleContactFundManager = () => {
+    const applicationId = existingApplication?.application_id || 'N/A';
+    const message = encodeURIComponent(
+      `Hello, I applied for Swift FX Fund Management. My application ID is ${applicationId}.`
+    );
+    const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE.replace('+', '')}?text=${message}`;
+    Linking.openURL(whatsappUrl);
+  };
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* VIP Banner for non-VIP users */}
-        {!isVIP && (
-          <TouchableOpacity 
-            style={styles.vipBanner}
-            onPress={() => router.push('/subscription')}
+  const dynamicStyles = {
+    container: { backgroundColor: theme.background },
+    card: { backgroundColor: theme.cardBackground, borderColor: theme.border },
+    text: { color: theme.text },
+    textSecondary: { color: theme.textSecondary },
+    input: { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text },
+  };
+
+  // Render application status card
+  const renderApplicationStatus = () => {
+    if (!existingApplication) return null;
+    
+    const status = STATUS_CONFIG[existingApplication.status as keyof typeof STATUS_CONFIG];
+    if (!status) return null;
+    
+    return (
+      <View style={[styles.statusCard, dynamicStyles.card, { borderColor: status.color }]}>
+        <View style={styles.statusHeader}>
+          <View style={[styles.statusIconContainer, { backgroundColor: `${status.color}20` }]}>
+            <Ionicons name={status.icon as any} size={24} color={status.color} />
+          </View>
+          <View style={styles.statusInfo}>
+            <Text style={[styles.statusLabel, { color: status.color }]}>
+              {status.label}
+            </Text>
+            <Text style={[styles.statusId, dynamicStyles.textSecondary]}>
+              ID: {existingApplication.application_id}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.statusMessage, dynamicStyles.text]}>
+          {status.message}
+        </Text>
+        
+        {/* Contact Fund Manager button */}
+        {(existingApplication.status === 'contacted' || existingApplication.status === 'approved') && (
+          <TouchableOpacity
+            style={[styles.whatsappButton, { backgroundColor: '#25D366' }]}
+            onPress={handleContactFundManager}
           >
-            <View style={styles.vipBannerContent}>
-              <Ionicons name="lock-closed" size={20} color="#FFD700" />
-              <View style={styles.vipBannerText}>
-                <Text style={styles.vipBannerTitle}>VIP Exclusive Feature</Text>
-                <Text style={styles.vipBannerSubtitle}>Upgrade to access fund management actions</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#FFD700" />
+            <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
+            <Text style={styles.whatsappButtonText}>Contact Fund Manager</Text>
           </TouchableOpacity>
         )}
+      </View>
+    );
+  };
 
-        {/* Intro Section */}
-        <View style={styles.introSection}>
-          <View style={styles.introIcon}>
-            <Ionicons name="briefcase" size={32} color="#00D4AA" />
-          </View>
-          <Text style={styles.introTitle}>Swift FX Fund Management</Text>
-          <Text style={styles.introText}>
-            Let our experienced traders manage your capital with proven strategies. 
-            Our fund management service provides hands-off investing with transparent 
-            performance tracking and professional risk management.
+  // Render application form
+  const renderApplicationForm = () => (
+    <View style={styles.formContainer}>
+      <Text style={[styles.formTitle, dynamicStyles.text]}>Fund Management Application</Text>
+      <Text style={[styles.formSubtitle, dynamicStyles.textSecondary]}>
+        Complete the form below to apply for managed fund services
+      </Text>
+      
+      {/* Full Name */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Full Name *</Text>
+        <TextInput
+          style={[styles.input, dynamicStyles.input, formErrors.full_name && styles.inputError]}
+          placeholder="Enter your full name"
+          placeholderTextColor={theme.textSecondary}
+          value={formData.full_name}
+          onChangeText={(text) => setFormData({ ...formData, full_name: text })}
+        />
+        {formErrors.full_name && <Text style={styles.errorText}>{formErrors.full_name}</Text>}
+      </View>
+      
+      {/* Email */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Email *</Text>
+        <TextInput
+          style={[styles.input, dynamicStyles.input, formErrors.email && styles.inputError]}
+          placeholder="Enter your email"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={formData.email}
+          onChangeText={(text) => setFormData({ ...formData, email: text })}
+        />
+        {formErrors.email && <Text style={styles.errorText}>{formErrors.email}</Text>}
+      </View>
+      
+      {/* Phone */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Phone / WhatsApp *</Text>
+        <TextInput
+          style={[styles.input, dynamicStyles.input, formErrors.phone && styles.inputError]}
+          placeholder="Enter your phone number"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="phone-pad"
+          value={formData.phone}
+          onChangeText={(text) => setFormData({ ...formData, phone: text })}
+        />
+        {formErrors.phone && <Text style={styles.errorText}>{formErrors.phone}</Text>}
+      </View>
+      
+      {/* Country */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Country *</Text>
+        <TouchableOpacity
+          style={[styles.input, dynamicStyles.input, styles.picker, formErrors.country && styles.inputError]}
+          onPress={() => setShowCountryPicker(!showCountryPicker)}
+        >
+          <Text style={formData.country ? dynamicStyles.text : { color: theme.textSecondary }}>
+            {formData.country || 'Select your country'}
           </Text>
-        </View>
-
-        {/* Performance Overview */}
-        <Text style={styles.sectionTitle}>Performance Overview</Text>
-        <View style={styles.performanceGrid}>
-          <View style={styles.performanceCard}>
-            <Text style={styles.performanceValue}>+47.8%</Text>
-            <Text style={styles.performanceLabel}>YTD Return</Text>
-            <View style={[styles.performanceTrend, { backgroundColor: 'rgba(0, 212, 170, 0.2)' }]}>
-              <Ionicons name="trending-up" size={12} color="#00D4AA" />
-              <Text style={[styles.performanceTrendText, { color: '#00D4AA' }]}>+3.2%</Text>
-            </View>
-          </View>
-          <View style={styles.performanceCard}>
-            <Text style={styles.performanceValue}>68%</Text>
-            <Text style={styles.performanceLabel}>Win Rate</Text>
-            <View style={[styles.performanceTrend, { backgroundColor: 'rgba(0, 212, 170, 0.2)' }]}>
-              <Ionicons name="checkmark-circle" size={12} color="#00D4AA" />
-              <Text style={[styles.performanceTrendText, { color: '#00D4AA' }]}>Consistent</Text>
-            </View>
-          </View>
-          <View style={styles.performanceCard}>
-            <Text style={styles.performanceValue}>12.4%</Text>
-            <Text style={styles.performanceLabel}>Max Drawdown</Text>
-            <View style={[styles.performanceTrend, { backgroundColor: 'rgba(255, 215, 0, 0.2)' }]}>
-              <Ionicons name="shield-checkmark" size={12} color="#FFD700" />
-              <Text style={[styles.performanceTrendText, { color: '#FFD700' }]}>Managed</Text>
-            </View>
-          </View>
-          <View style={styles.performanceCard}>
-            <Text style={styles.performanceValue}>2.8</Text>
-            <Text style={styles.performanceLabel}>Sharpe Ratio</Text>
-            <View style={[styles.performanceTrend, { backgroundColor: 'rgba(0, 212, 170, 0.2)' }]}>
-              <Ionicons name="star" size={12} color="#00D4AA" />
-              <Text style={[styles.performanceTrendText, { color: '#00D4AA' }]}>Excellent</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Monthly Performance Chart Placeholder */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Monthly Performance</Text>
-            <Text style={styles.chartPeriod}>Last 6 Months</Text>
-          </View>
-          <View style={styles.chartPlaceholder}>
-            <View style={styles.chartBars}>
-              {[5.2, 3.8, 7.1, -2.3, 4.6, 6.2].map((value, index) => (
-                <View key={index} style={styles.chartBarContainer}>
-                  <View 
-                    style={[
-                      styles.chartBar, 
-                      { 
-                        height: Math.abs(value) * 8,
-                        backgroundColor: value >= 0 ? '#00D4AA' : '#FF4757',
-                      }
-                    ]} 
-                  />
-                  <Text style={styles.chartBarLabel}>
-                    {['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index]}
-                  </Text>
-                </View>
+          <Ionicons name="chevron-down" size={20} color={theme.textSecondary} />
+        </TouchableOpacity>
+        {showCountryPicker && (
+          <View style={[styles.pickerDropdown, dynamicStyles.card]}>
+            <ScrollView style={{ maxHeight: 200 }}>
+              {COUNTRIES.map((country) => (
+                <TouchableOpacity
+                  key={country}
+                  style={styles.pickerItem}
+                  onPress={() => {
+                    setFormData({ ...formData, country });
+                    setShowCountryPicker(false);
+                  }}
+                >
+                  <Text style={dynamicStyles.text}>{country}</Text>
+                </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
-        </View>
-
-        {/* How It Works */}
-        <Text style={styles.sectionTitle}>How It Works</Text>
-        <View style={styles.stepsContainer}>
-          {[
-            { icon: 'document-text-outline', title: 'Apply', description: 'Submit your application with investment amount and goals' },
-            { icon: 'shield-checkmark-outline', title: 'Verification', description: 'Our team reviews and verifies your application' },
-            { icon: 'wallet-outline', title: 'Fund Account', description: 'Deposit funds to your managed account' },
-            { icon: 'trending-up-outline', title: 'Start Trading', description: 'Our traders execute strategies on your behalf' },
-            { icon: 'bar-chart-outline', title: 'Track & Withdraw', description: 'Monitor performance and withdraw anytime' },
-          ].map((step, index) => (
-            <View key={index} style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>{index + 1}</Text>
-              </View>
-              <View style={styles.stepIconContainer}>
-                <Ionicons name={step.icon as any} size={24} color="#00D4AA" />
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepDescription}>{step.description}</Text>
-              </View>
-            </View>
+        )}
+        {formErrors.country && <Text style={styles.errorText}>{formErrors.country}</Text>}
+      </View>
+      
+      {/* Investment Tier */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Investment Tier *</Text>
+        <View style={styles.tierContainer}>
+          {INVESTMENT_TIERS.map((tier) => (
+            <TouchableOpacity
+              key={tier.id}
+              style={[
+                styles.tierOption,
+                dynamicStyles.card,
+                formData.investment_tier === tier.id && { borderColor: theme.primary, borderWidth: 2 },
+              ]}
+              onPress={() => setFormData({ ...formData, investment_tier: tier.id })}
+            >
+              <Text style={[styles.tierName, dynamicStyles.text]}>{tier.name}</Text>
+              <Text style={[styles.tierRange, dynamicStyles.textSecondary]}>
+                ${tier.minInvestment.toLocaleString()} - ${tier.maxInvestment.toLocaleString()}
+              </Text>
+              {formData.investment_tier === tier.id && (
+                <Ionicons name="checkmark-circle" size={20} color={theme.primary} style={styles.tierCheck} />
+              )}
+            </TouchableOpacity>
           ))}
         </View>
+        {formErrors.investment_tier && <Text style={styles.errorText}>{formErrors.investment_tier}</Text>}
+      </View>
+      
+      {/* Investment Amount */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Intended Investment Amount (USD) *</Text>
+        <TextInput
+          style={[styles.input, dynamicStyles.input, formErrors.intended_amount && styles.inputError]}
+          placeholder="Enter amount (min $500)"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="numeric"
+          value={formData.intended_amount}
+          onChangeText={(text) => setFormData({ ...formData, intended_amount: text })}
+        />
+        {formErrors.intended_amount && <Text style={styles.errorText}>{formErrors.intended_amount}</Text>}
+      </View>
+      
+      {/* Trading Experience */}
+      <View style={styles.inputGroup}>
+        <Text style={[styles.inputLabel, dynamicStyles.text]}>Trading Experience *</Text>
+        <TouchableOpacity
+          style={[styles.input, dynamicStyles.input, styles.picker, formErrors.trading_experience && styles.inputError]}
+          onPress={() => setShowExperiencePicker(!showExperiencePicker)}
+        >
+          <Text style={formData.trading_experience ? dynamicStyles.text : { color: theme.textSecondary }}>
+            {EXPERIENCE_LEVELS.find(e => e.id === formData.trading_experience)?.label || 'Select your experience'}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color={theme.textSecondary} />
+        </TouchableOpacity>
+        {showExperiencePicker && (
+          <View style={[styles.pickerDropdown, dynamicStyles.card]}>
+            {EXPERIENCE_LEVELS.map((exp) => (
+              <TouchableOpacity
+                key={exp.id}
+                style={styles.pickerItem}
+                onPress={() => {
+                  setFormData({ ...formData, trading_experience: exp.id });
+                  setShowExperiencePicker(false);
+                }}
+              >
+                <Text style={dynamicStyles.text}>{exp.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {formErrors.trading_experience && <Text style={styles.errorText}>{formErrors.trading_experience}</Text>}
+      </View>
+      
+      {/* Risk Agreement */}
+      <TouchableOpacity
+        style={styles.checkboxContainer}
+        onPress={() => setFormData({ ...formData, risk_agreement: !formData.risk_agreement })}
+      >
+        <View style={[styles.checkbox, formData.risk_agreement && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
+          {formData.risk_agreement && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+        </View>
+        <Text style={[styles.checkboxLabel, dynamicStyles.text]}>
+          I understand trading involves significant risk and returns are not guaranteed *
+        </Text>
+      </TouchableOpacity>
+      {formErrors.risk_agreement && <Text style={styles.errorText}>{formErrors.risk_agreement}</Text>}
+      
+      {/* Submit Button */}
+      <TouchableOpacity
+        style={[styles.submitButton, { backgroundColor: theme.primary }, submitting && styles.buttonDisabled]}
+        onPress={handleSubmitApplication}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#0A0E17" />
+        ) : (
+          <Text style={styles.submitButtonText}>Submit Application</Text>
+        )}
+      </TouchableOpacity>
+      
+      {/* Cancel Button */}
+      <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={() => setShowApplicationForm(false)}
+      >
+        <Text style={[styles.cancelButtonText, dynamicStyles.textSecondary]}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-        {/* Investment Tiers */}
-        <Text style={styles.sectionTitle}>Investment Tiers</Text>
-        <View style={styles.tiersContainer}>
-          {[
-            { name: 'Starter', min: '$5,000', fee: '25%', features: ['Monthly reports', 'Standard support'] },
-            { name: 'Professional', min: '$25,000', fee: '20%', features: ['Weekly reports', 'Priority support', 'Lower fees'] },
-            { name: 'Elite', min: '$100,000', fee: '15%', features: ['Daily reports', 'Dedicated manager', 'Lowest fees', 'Custom strategies'] },
-          ].map((tier, index) => (
-            <View key={index} style={[styles.tierCard, index === 1 && styles.tierCardFeatured]}>
-              {index === 1 && <View style={styles.featuredBadge}><Text style={styles.featuredBadgeText}>POPULAR</Text></View>}
-              <Text style={styles.tierName}>{tier.name}</Text>
-              <Text style={styles.tierMin}>Min: {tier.min}</Text>
-              <Text style={styles.tierFee}>Performance Fee: {tier.fee}</Text>
-              <View style={styles.tierFeatures}>
-                {tier.features.map((feature, fIndex) => (
-                  <View key={fIndex} style={styles.tierFeatureItem}>
-                    <Ionicons name="checkmark" size={14} color="#00D4AA" />
-                    <Text style={styles.tierFeatureText}>{feature}</Text>
+  return (
+    <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, dynamicStyles.text]}>Fund Management</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          ) : showApplicationForm ? (
+            renderApplicationForm()
+          ) : (
+            <>
+              {/* Intro Section */}
+              <View style={[styles.introCard, { backgroundColor: `${theme.primary}15` }]}>
+                <View style={[styles.introIcon, { backgroundColor: `${theme.primary}25` }]}>
+                  <Ionicons name="briefcase" size={32} color={theme.primary} />
+                </View>
+                <Text style={[styles.introTitle, dynamicStyles.text]}>Professional Fund Management</Text>
+                <Text style={[styles.introText, dynamicStyles.textSecondary]}>
+                  Let our expert traders manage your investments. Hands-off approach with transparent reporting.
+                </Text>
+              </View>
+
+              {/* Application Status (if exists) */}
+              {existingApplication && renderApplicationStatus()}
+
+              {/* Performance Stats */}
+              <View style={[styles.card, dynamicStyles.card]}>
+                <Text style={[styles.cardTitle, dynamicStyles.text]}>Fund Performance</Text>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: '#10B981' }]}>{PERFORMANCE_DATA.totalReturn}</Text>
+                    <Text style={[styles.statLabel, dynamicStyles.textSecondary]}>Total Return</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: theme.primary }]}>{PERFORMANCE_DATA.monthlyAvg}</Text>
+                    <Text style={[styles.statLabel, dynamicStyles.textSecondary]}>Monthly Avg</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: '#8B5CF6' }]}>{PERFORMANCE_DATA.winRate}</Text>
+                    <Text style={[styles.statLabel, dynamicStyles.textSecondary]}>Win Rate</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, { color: '#F59E0B' }]}>{PERFORMANCE_DATA.clientCount}</Text>
+                    <Text style={[styles.statLabel, dynamicStyles.textSecondary]}>Clients</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Investment Tiers */}
+              <View style={[styles.card, dynamicStyles.card]}>
+                <Text style={[styles.cardTitle, dynamicStyles.text]}>Investment Tiers</Text>
+                {INVESTMENT_TIERS.map((tier, index) => (
+                  <View key={tier.id} style={[styles.tierCard, index < INVESTMENT_TIERS.length - 1 && styles.tierCardBorder]}>
+                    <View style={styles.tierHeader}>
+                      <Text style={[styles.tierCardName, dynamicStyles.text]}>{tier.name}</Text>
+                      <Text style={[styles.tierReturn, { color: '#10B981' }]}>{tier.expectedReturn}</Text>
+                    </View>
+                    <Text style={[styles.tierDescription, dynamicStyles.textSecondary]}>{tier.description}</Text>
+                    <Text style={[styles.tierInvestment, dynamicStyles.textSecondary]}>
+                      ${tier.minInvestment.toLocaleString()} - ${tier.maxInvestment.toLocaleString()}
+                    </Text>
                   </View>
                 ))}
               </View>
-            </View>
-          ))}
-        </View>
 
-        {/* Risk Disclaimer */}
-        <View style={styles.disclaimerCard}>
-          <View style={styles.disclaimerHeader}>
-            <Ionicons name="warning-outline" size={24} color="#FFD700" />
-            <Text style={styles.disclaimerTitle}>Risk Disclaimer</Text>
-          </View>
-          <Text style={styles.disclaimerText}>
-            Trading forex and CFDs involves significant risk and can result in the loss of your invested capital. 
-            Past performance is not indicative of future results. You should not invest money that you cannot 
-            afford to lose. Please ensure you fully understand the risks involved before investing.
-          </Text>
-          <View style={styles.disclaimerPoints}>
-            <Text style={styles.disclaimerPoint}>• Capital at risk - losses may exceed deposits</Text>
-            <Text style={styles.disclaimerPoint}>• Past performance doesn't guarantee future results</Text>
-            <Text style={styles.disclaimerPoint}>• Withdrawals subject to terms and conditions</Text>
-            <Text style={styles.disclaimerPoint}>• Not financial advice - consult a professional</Text>
-          </View>
-        </View>
+              {/* Apply Now Button OR Upgrade Message */}
+              {!existingApplication && (
+                canApply ? (
+                  <TouchableOpacity
+                    style={[styles.applyButton, { backgroundColor: theme.primary }]}
+                    onPress={() => setShowApplicationForm(true)}
+                  >
+                    <Text style={styles.applyButtonText}>Apply Now</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#0A0E17" />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.upgradeCard, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="lock-closed" size={24} color={theme.primary} />
+                    <Text style={[styles.upgradeText, dynamicStyles.text]}>
+                      Upgrade to Premium or VIP to apply for Fund Management
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.upgradeButton, { backgroundColor: theme.primary }]}
+                      onPress={() => router.push('/subscription')}
+                    >
+                      <Text style={styles.upgradeButtonText}>Upgrade Now</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              )}
 
-        {/* Terms Summary */}
-        <View style={styles.termsCard}>
-          <Text style={styles.termsTitle}>Key Terms</Text>
-          <View style={styles.termsGrid}>
-            <View style={styles.termItem}>
-              <Text style={styles.termLabel}>Lock-up Period</Text>
-              <Text style={styles.termValue}>30 Days</Text>
-            </View>
-            <View style={styles.termItem}>
-              <Text style={styles.termLabel}>Withdrawal Notice</Text>
-              <Text style={styles.termValue}>5 Business Days</Text>
-            </View>
-            <View style={styles.termItem}>
-              <Text style={styles.termLabel}>Reporting</Text>
-              <Text style={styles.termValue}>Weekly</Text>
-            </View>
-            <View style={styles.termItem}>
-              <Text style={styles.termLabel}>Audit</Text>
-              <Text style={styles.termValue}>Quarterly</Text>
-            </View>
-          </View>
-        </View>
+              {/* Contact Fund Manager (for existing applications) */}
+              {existingApplication && (
+                <TouchableOpacity
+                  style={[styles.contactButton, { backgroundColor: '#25D366' }]}
+                  onPress={handleContactFundManager}
+                >
+                  <Ionicons name="logo-whatsapp" size={22} color="#FFFFFF" />
+                  <Text style={styles.contactButtonText}>Contact Fund Manager via WhatsApp</Text>
+                </TouchableOpacity>
+              )}
 
-        {/* CTA Buttons */}
-        <View style={styles.ctaContainer}>
-          <TouchableOpacity 
-            style={[styles.applyButton, !isVIP && styles.lockedButton]} 
-            onPress={handleApply}
-          >
-            {!isVIP && <Ionicons name="lock-closed" size={16} color="#0A0E17" style={{ marginRight: 4 }} />}
-            <Ionicons name="rocket-outline" size={20} color="#0A0E17" />
-            <Text style={styles.applyButtonText}>
-              {isVIP ? 'Apply Now' : 'Upgrade to Apply'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.contactButton, !isVIP && styles.lockedContactButton]} 
-            onPress={handleContact}
-          >
-            {!isVIP && <Ionicons name="lock-closed" size={16} color={isVIP ? '#00D4AA' : '#8A8D98'} style={{ marginRight: 4 }} />}
-            <Ionicons name="chatbubble-outline" size={20} color={isVIP ? '#00D4AA' : '#8A8D98'} />
-            <Text style={[styles.contactButtonText, !isVIP && { color: '#8A8D98' }]}>
-              {isVIP ? 'Contact Fund Manager' : 'VIP Only'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer Note */}
-        <Text style={styles.footerNote}>
-          Swift FX Signals Fund Management is operated by licensed professionals. 
-          All investments are subject to our terms of service.
-        </Text>
-      </ScrollView>
+              {/* Legal Disclaimers */}
+              <View style={[styles.disclaimerCard, { backgroundColor: `${theme.border}30` }]}>
+                <Text style={[styles.disclaimerTitle, dynamicStyles.textSecondary]}>Important Disclaimers</Text>
+                <Text style={[styles.disclaimerText, dynamicStyles.textSecondary]}>
+                  • Past performance is not indicative of future results.{'\n'}
+                  • This is not financial advice.{'\n'}
+                  • Swift FX does not hold client funds. All trading is conducted via third-party brokers.{'\n'}
+                  • Trading involves significant risk of loss.
+                </Text>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -302,7 +595,6 @@ export default function FundManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E17',
   },
   header: {
     flexDirection: 'row',
@@ -310,472 +602,337 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1F2E',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1A1F2E',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFFFFF',
   },
-  vipBadge: {
+  headerRight: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lockedBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(138, 141, 152, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 16,
+    paddingBottom: 100,
   },
-  // VIP Banner for non-VIP users
-  vipBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  vipBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  loadingContainer: {
     flex: 1,
-  },
-  vipBannerText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  vipBannerTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFD700',
-  },
-  vipBannerSubtitle: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginTop: 2,
-  },
-  // Locked button styles
-  lockedButton: {
-    opacity: 0.9,
-  },
-  lockedContactButton: {
-    borderColor: '#3A3F4E',
-  },
-  // Locked screen styles
-  lockedContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 40,
-  },
-  lockIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingTop: 100,
   },
-  lockedTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  lockedSubtitle: {
-    fontSize: 14,
-    color: '#8A8D98',
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  benefitsCard: {
-    backgroundColor: '#1A1F2E',
+  introCard: {
     borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    marginBottom: 24,
-  },
-  benefitsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  benefitText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginLeft: 12,
-  },
-  upgradeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFD700',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
     marginBottom: 20,
   },
-  upgradeButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-    marginLeft: 8,
-  },
-  lockedNote: {
-    fontSize: 12,
-    color: '#8A8D98',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  // Main content styles
-  introSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
   introIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 212, 170, 0.2)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   introTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
   },
   introText: {
     fontSize: 14,
-    color: '#8A8D98',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  performanceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  performanceCard: {
-    width: '48%',
-    backgroundColor: '#1A1F2E',
+  card: {
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
+    borderWidth: 1,
   },
-  performanceValue: {
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  statItem: {
+    width: '50%',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  statValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
   },
-  performanceLabel: {
+  statLabel: {
     fontSize: 12,
-    color: '#8A8D98',
-    marginBottom: 8,
+    marginTop: 4,
   },
-  performanceTrend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  tierCard: {
+    paddingVertical: 12,
   },
-  performanceTrendText: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
+  tierCardBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
-  chartCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-  },
-  chartHeader: {
+  tierHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 4,
   },
-  chartTitle: {
+  tierCardName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
-  chartPeriod: {
+  tierReturn: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tierDescription: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  tierInvestment: {
     fontSize: 12,
-    color: '#8A8D98',
   },
-  chartPlaceholder: {
-    height: 120,
-    justifyContent: 'flex-end',
-  },
-  chartBars: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: 100,
-  },
-  chartBarContainer: {
-    alignItems: 'center',
-  },
-  chartBar: {
-    width: 32,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  chartBarLabel: {
-    fontSize: 10,
-    color: '#8A8D98',
-  },
-  stepsContainer: {
-    marginBottom: 24,
-  },
-  stepItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  stepNumber: {
-    width: 24,
-    height: 24,
+  statusCard: {
     borderRadius: 12,
-    backgroundColor: '#00D4AA',
-    justifyContent: 'center',
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+  },
+  statusHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    marginBottom: 12,
   },
-  stepNumberText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  stepIconContainer: {
+  statusIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#1A1F2E',
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  stepContent: {
+  statusInfo: {
     flex: 1,
   },
-  stepTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  stepDescription: {
-    fontSize: 13,
-    color: '#8A8D98',
-    lineHeight: 18,
-  },
-  tiersContainer: {
-    marginBottom: 24,
-  },
-  tierCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  tierCardFeatured: {
-    borderColor: '#00D4AA',
-    backgroundColor: 'rgba(0, 212, 170, 0.05)',
-  },
-  featuredBadge: {
-    position: 'absolute',
-    top: -10,
-    right: 16,
-    backgroundColor: '#00D4AA',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  featuredBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  tierName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  tierMin: {
-    fontSize: 14,
-    color: '#00D4AA',
-    marginBottom: 2,
-  },
-  tierFee: {
-    fontSize: 13,
-    color: '#8A8D98',
-    marginBottom: 12,
-  },
-  tierFeatures: {
-    borderTopWidth: 1,
-    borderTopColor: '#2A2F3E',
-    paddingTop: 12,
-  },
-  tierFeatureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  tierFeatureText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    marginLeft: 8,
-  },
-  disclaimerCard: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  disclaimerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  disclaimerTitle: {
+  statusLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFD700',
-    marginLeft: 8,
   },
-  disclaimerText: {
-    fontSize: 13,
-    color: '#FFFFFF',
+  statusId: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusMessage: {
+    fontSize: 14,
     lineHeight: 20,
-    marginBottom: 12,
   },
-  disclaimerPoints: {
-    gap: 4,
-  },
-  disclaimerPoint: {
-    fontSize: 12,
-    color: '#8A8D98',
-  },
-  termsCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  termsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  termsGrid: {
+  whatsappButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
   },
-  termItem: {
-    width: '50%',
-    marginBottom: 12,
-  },
-  termLabel: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginBottom: 2,
-  },
-  termValue: {
+  whatsappButtonText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  ctaContainer: {
-    marginBottom: 16,
   },
   applyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00D4AA',
     paddingVertical: 16,
     borderRadius: 12,
-    marginBottom: 12,
+    marginBottom: 16,
+    gap: 8,
   },
   applyButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
     color: '#0A0E17',
-    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  upgradeCard: {
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  upgradeText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginVertical: 12,
+    lineHeight: 20,
+  },
+  upgradeButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  upgradeButtonText: {
+    color: '#0A0E17',
+    fontSize: 14,
+    fontWeight: '600',
   },
   contactButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1A1F2E',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#00D4AA',
+    marginBottom: 16,
+    gap: 10,
   },
   contactButtonText: {
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '600',
-    color: '#00D4AA',
+  },
+  disclaimerCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  disclaimerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  disclaimerText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  // Form styles
+  formContainer: {
+    paddingBottom: 40,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  formSubtitle: {
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pickerDropdown: {
+    borderRadius: 10,
+    marginTop: 4,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  pickerItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  tierContainer: {
+    gap: 10,
+  },
+  tierOption: {
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tierName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tierRange: {
+    fontSize: 12,
+  },
+  tierCheck: {
     marginLeft: 8,
   },
-  footerNote: {
-    fontSize: 11,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 16,
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#8A8D98',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  submitButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  submitButtonText: {
+    color: '#0A0E17',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 14,
   },
 });
