@@ -440,6 +440,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     marginBottom: 12,
   },
+  quickActionCardInner: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
   quickActionIcon: {
     width: 44,
     height: 44,
