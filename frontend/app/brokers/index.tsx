@@ -117,9 +117,6 @@ const BrokerLogo = ({ broker, size = 52 }: { broker: typeof BROKERS[0], size?: n
     </View>
   );
 };
-    color: broker.color,
-  };
-};
 
 export default function RecommendedBrokersScreen() {
   const { theme } = useTheme();
