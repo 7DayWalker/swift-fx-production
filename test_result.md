@@ -252,7 +252,7 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
@@ -260,6 +260,9 @@ backend:
         - working: true
         - agent: "testing"
         - comment: "✅ SIGNAL LIFECYCLE ENGINE v2.0 COMPREHENSIVE TESTING COMPLETE: All 16 critical tests passed (100% success rate). VERIFIED: 1) Admin State Authority - Admin can create signals with state='active' and they remain ACTIVE (never downgraded to pending). Default signals correctly set to 'pending'. 2) Pip Calculation Logic - SELL signals: entry=1.1000, exit=1.0950 → +50 pips (profit when price goes DOWN), exit=1.1050 → -50 pips (loss when price goes UP). BUY signals: entry=1.1000, exit=1.1050 → +50 pips (profit when price goes UP), exit=1.0950 → -50 pips (loss when price goes DOWN). Formula working correctly: SELL pips = entry - exit, BUY pips = exit - entry. 3) State Immutability - Closed signals are completely immutable: ALL operations (/transition, /activate, /mark-tp, /force-close) correctly blocked with 'immutable' error messages. 4) Exit Handling - When signals are closed: state='closed', exit_price set correctly, final_pips calculated accurately, closed_at timestamp populated. The Signal Lifecycle Engine v2.0 is production-ready and all critical requirements satisfied."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ MANUAL SIGNAL MODE TESTING COMPLETE: All 10 tests passed (100% success rate). VERIFIED: 1) Automation Status - GET /api/automation/status returns mode='MANUAL' and auto_engine_running=false. 2) Admin State Authority - Admin can create ACTIVE signals directly (state='active') and they remain active (no auto-downgrade). Default signals correctly set to 'pending'. 3) Manual State Control - Manual activation (pending→active), manual TP marking (active→tp1), and manual force-close all working correctly. 4) Pip Calculation - BUY signals: entry=1.0000, close=1.0050 → +50 pips (positive). SELL signals: entry=1.0000, close=0.9950 → +50 pips (positive). Correct directional logic confirmed. 5) Closed Signal Immutability - All operations on closed signals (activate, mark-tp, force-close) correctly blocked with 'immutable' error messages. Manual signal mode is fully functional and production-ready."
 
 frontend:
   - task: "Splash Screen with Auth Check"
