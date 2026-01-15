@@ -430,6 +430,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 4,
   },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
+  quickActionCard: {
+    width: '50%',
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  quickActionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  quickActionSubtitle: {
+    fontSize: 11,
+    color: '#8A8D98',
+    marginTop: 2,
+  },
   signalCard: {
     backgroundColor: '#1A1F2E',
     borderRadius: 12,
