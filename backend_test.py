@@ -116,7 +116,7 @@ def test_fund_management_endpoints():
     
     application_data = {
         "full_name": "Free Test User",
-        "email": "freeuser@test.com",
+        "email": "freetestuser@test.com",
         "phone": "+1234567890",
         "country": "Nigeria",
         "investment_tier": "starter",
