@@ -142,7 +142,7 @@ class InvestorDashboardTester:
         # Look for VIP user application
         vip_application = None
         for app in applications:
-            if app.get("email") == VIP_EMAIL:
+            if isinstance(app, dict) and app.get("email") == VIP_EMAIL:
                 vip_application = app
                 break
         
