@@ -360,6 +360,18 @@ backend:
         - agent: "testing"
         - comment: "✅ ENHANCED REFERRAL PROGRAM DEEP LINKING TESTING COMPLETE: All 6/6 critical tests passed (100% success rate). VERIFIED SPECIFIC REVIEW REQUEST FUNCTIONALITY: 1) Validate Referral Code (GET /api/referral/validate/SWIFTDC0877E3) - Returns valid=true, referrer_name='Fund Test User' ✅. Invalid code test (INVALIDCODE) returns valid=false, message='Invalid referral code' ✅. 2) Registration with Referral Code (POST /api/auth/register?referral_code=SWIFTDC0877E3) - Successfully creates new user with referred_by field set and creates referral record with status=pending ✅. 3) Referrer Stats Update (GET /api/referral/my-code) - VIP user (fundtest@test.com) stats show increased total_referrals count and new referral appears in referrals array ✅. 4) Admin View (GET /api/admin/referrals) - Super Admin (ellapauledache@gmail.com) can view all referrals, new referral appears with status=pending and reward_status=locked ✅. Test credentials working perfectly: Super Admin (ellapauledache@gmail.com / SuperAdmin2025!), VIP User (fundtest@test.com / password with referral code SWIFTDC0877E3). Enhanced referral program deep linking and signup capture is fully functional and production-ready."
 
+  - task: "Help & Support System"
+    implemented: true
+    working: NA
+    file: "server.py, help-support.tsx, support-tickets.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: Complete Help & Support system with FAQs (20 pre-populated, CRUD-ready), support ticket submission, WhatsApp/Email contact options, user ticket tracking, and admin ticket management for Customer Support & Super Admin roles."
+
 frontend:
   - task: "Splash Screen with Auth Check"
     implemented: true
