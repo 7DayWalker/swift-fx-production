@@ -5,12 +5,8 @@ import { Platform } from 'react-native';
 // Use relative URL for web, full URL for native
 const getBaseUrl = () => {
   if (Platform.OS === 'web') {
-    // On web, check if we're on localhost (dev) or production preview
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      // Local development - connect directly to backend
-      return 'http://localhost:8001/api';
-    }
-    // Production preview - use relative URL which works with the proxy
+    // Always use relative URL on web to work with the proxy
+    // This works for both localhost dev and production preview
     return '/api';
   }
   // For native apps, use the full backend URL
