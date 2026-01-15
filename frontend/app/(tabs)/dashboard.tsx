@@ -173,6 +173,56 @@ export default function DashboardScreen() {
           </ScrollView>
         </View>
 
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.quickActionCard}
+              onPress={() => router.push('/calendar')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                <Ionicons name="calendar" size={22} color="#6366F1" />
+              </View>
+              <Text style={styles.quickActionTitle}>Calendar</Text>
+              <Text style={styles.quickActionSubtitle}>Economic Events</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionCard}
+              onPress={() => router.push('/academy')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 212, 170, 0.15)' }]}>
+                <Ionicons name="school" size={22} color="#00D4AA" />
+              </View>
+              <Text style={styles.quickActionTitle}>Academy</Text>
+              <Text style={styles.quickActionSubtitle}>Learn Trading</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionCard}
+              onPress={() => router.push('/(tabs)/ai')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                <Ionicons name="analytics" size={22} color="#8B5CF6" />
+              </View>
+              <Text style={styles.quickActionTitle}>AI Analyzer</Text>
+              <Text style={styles.quickActionSubtitle}>Chart Analysis</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionCard}
+              onPress={() => router.push('/signal-history')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                <Ionicons name="time" size={22} color="#F59E0B" />
+              </View>
+              <Text style={styles.quickActionTitle}>History</Text>
+              <Text style={styles.quickActionSubtitle}>Past Signals</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Recent Signals - REACTIVE from SignalContext */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
