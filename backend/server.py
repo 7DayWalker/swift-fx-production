@@ -873,6 +873,10 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
 
 @api_router.post("/admin/signals")
 async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundTasks, admin: User = Depends(require_admin)):
+    # Check permission: only signal_admin and super_admin can create signals
+    if not has_permission(admin, "signals", "create"):
+        raise HTTPException(status_code=403, detail="You don't have permission to create signals")
+    
     signal_id = f"sig_{uuid.uuid4().hex[:12]}"
     
     # Calculate risk/reward using tp1 as primary target
