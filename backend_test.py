@@ -210,10 +210,11 @@ class TestRunner:
             verify_response = self.make_request("GET", "/settings/notifications", self.vip_user_token)
             if verify_response.status_code == 200:
                 data = verify_response.json()
-                if data.get("signals") == False:
+                preferences = data.get("preferences", {})
+                if preferences.get("signals") == False:
                     self.log("✅ Notification preferences update verified: signals set to false")
                 else:
-                    self.log(f"❌ Notification update failed: signals is {data.get('signals')}, expected False", "ERROR")
+                    self.log(f"❌ Notification update failed: signals is {preferences.get('signals')}, expected False", "ERROR")
                     self.failed_tests += 1
                     self.passed_tests -= 1
     
