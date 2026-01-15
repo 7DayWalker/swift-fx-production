@@ -471,36 +471,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   newsCard: {
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
+  },
+  newsCardContent: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  newsCardText: {
+    flex: 1,
   },
   newsCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     gap: 4,
   },
   categoryText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   newsTime: {
-    fontSize: 12,
+    fontSize: 11,
   },
   newsTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 20,
     marginBottom: 8,
   },
   newsDescription: {
@@ -514,8 +521,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   newsSource: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
+  },
+  newsThumbnail: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#1A1F2E',
+  },
+  newsPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   disclaimer: {
     flexDirection: 'row',
