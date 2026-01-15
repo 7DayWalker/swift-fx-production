@@ -3126,14 +3126,19 @@ async def get_automation_status():
 @api_router.post("/fund/apply")
 async def submit_fund_application(
     application: FundApplicationCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """
     Submit a fund management application.
     Requires Premium or VIP subscription.
     """
+    # Get user document for subscription check
+    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     # Check subscription level
-    user_subscription = get_effective_subscription(current_user)
+    user_subscription = get_effective_subscription(user_doc)
     if user_subscription not in ["premium", "vip"]:
         raise HTTPException(
             status_code=403, 
@@ -3149,7 +3154,7 @@ async def submit_fund_application(
     
     # Check if user already has a pending application
     existing = await db.fund_applications.find_one({
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
         "status": {"$in": ["pending_review", "contacted"]}
     })
     if existing:
@@ -3164,7 +3169,7 @@ async def submit_fund_application(
     
     application_doc = {
         "application_id": application_id,
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
         "full_name": application.full_name,
         "email": application.email,
         "phone": application.phone,
@@ -3180,7 +3185,7 @@ async def submit_fund_application(
     }
     
     await db.fund_applications.insert_one(application_doc)
-    logger.info(f"[Fund] New application {application_id} from user {current_user['user_id']}")
+    logger.info(f"[Fund] New application {application_id} from user {current_user.user_id}")
     
     return {
         "success": True,
