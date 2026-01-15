@@ -185,6 +185,9 @@ class User(BaseModel):
     name: str
     email: str
     role: UserRole = UserRole.FREE
+    # Admin role for RBAC (only applies if role == ADMIN)
+    admin_role: Optional[AdminRole] = None
+    admin_enabled: bool = True  # Can be disabled by Super Admin
     # Subscription fields - single source of truth
     subscription: str = "free"  # "free" | "premium" | "vip"
     subscription_expiry: Optional[datetime] = None
@@ -199,6 +202,80 @@ class User(BaseModel):
     notification_preferences: Dict[str, bool] = Field(default_factory=lambda: {"signals": True, "community": True})
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     picture: Optional[str] = None
+
+
+# ==============================================================================
+# ADMIN RBAC HELPER FUNCTIONS
+# ==============================================================================
+
+def is_super_admin(user: User) -> bool:
+    """Check if user is a Super Admin"""
+    return user.role == UserRole.ADMIN and user.admin_role == AdminRole.SUPER_ADMIN
+
+def is_protected_super_admin(email: str) -> bool:
+    """Check if email belongs to a protected Super Admin"""
+    return email.lower() in [e.lower() for e in PROTECTED_SUPER_ADMINS]
+
+def has_permission(user: User, resource: str, action: str) -> bool:
+    """Check if admin user has permission for resource/action"""
+    if user.role != UserRole.ADMIN:
+        return False
+    if not user.admin_enabled:
+        return False
+    if user.admin_role is None:
+        return False
+    
+    # Super Admin has all permissions
+    if user.admin_role == AdminRole.SUPER_ADMIN:
+        return True
+    
+    # Check role-specific permissions
+    role_permissions = ADMIN_PERMISSIONS.get(user.admin_role, {})
+    resource_actions = role_permissions.get(resource, [])
+    return action in resource_actions
+
+async def log_admin_action(
+    admin_id: str,
+    admin_role: str,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    details: dict = None
+):
+    """Log an admin action for audit trail"""
+    log_entry = {
+        "log_id": f"log_{uuid.uuid4().hex[:12]}",
+        "admin_id": admin_id,
+        "admin_role": admin_role,
+        "action": action,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "details": details or {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.audit_logs.insert_one(log_entry)
+    logger.info(f"[Audit] {admin_role} {admin_id}: {action} on {resource_type}/{resource_id}")
+
+async def create_admin_notification(
+    target_roles: List[AdminRole],
+    notification_type: str,
+    title: str,
+    message: str,
+    resource_id: str = None
+):
+    """Create notification for specific admin roles"""
+    notification = {
+        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+        "target_roles": [r.value for r in target_roles],
+        "notification_type": notification_type,
+        "title": title,
+        "message": message,
+        "resource_id": resource_id,
+        "read_by": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.admin_notifications.insert_one(notification)
+    logger.info(f"[Notification] {notification_type}: {title} -> {[r.value for r in target_roles]}")
 
 
 # Subscription helper functions
