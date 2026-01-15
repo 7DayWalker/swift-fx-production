@@ -12,9 +12,9 @@ from typing import Dict, Any, Optional
 # Configuration
 BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
 
-# Test credentials from review request
-SUPER_ADMIN_EMAIL = "admin@swiftfx.com"
-SUPER_ADMIN_PASSWORD = "adminpassword"
+# Test credentials - using actual super admin account
+SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
+SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
 
 class RBACTester:
     def __init__(self):
