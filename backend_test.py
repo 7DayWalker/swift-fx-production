@@ -168,72 +168,89 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 4: Duplicate Application Prevention")
     
     response = make_request("POST", "/fund/apply", vip_token, vip_application_data)
-    if response and response.status_code in [400, 409]:  # Either bad request or conflict
-        results.log_pass("Duplicate Application Prevention")
+    if response:
+        if response.status_code in [400, 409]:
+            results.log_pass("Duplicate Application Prevention")
+        else:
+            results.log_fail("Duplicate Application Prevention", 
+                            f"Expected 400/409, got {response.status_code}")
     else:
-        results.log_fail("Duplicate Application Prevention", 
-                        f"Expected 400/409, got {response.status_code if response else 'No response'}")
+        results.log_fail("Duplicate Application Prevention", "No response received")
     
     # Step 5: Test VIP User Can Check Application Status
     print("\n📋 STEP 5: VIP User Application Status Check")
     
     response = make_request("GET", "/fund/my-application", vip_token)
-    if response and response.status_code == 200:
-        app_data = response.json()
-        if app_data.get("has_application") or app_data.get("application_id"):
-            results.log_pass("VIP User Application Status Retrieval")
-            print(f"   Status: {app_data.get('status', 'N/A')}")
+    if response:
+        if response.status_code == 200:
+            app_data = response.json()
+            if app_data.get("has_application") or app_data.get("application_id"):
+                results.log_pass("VIP User Application Status Retrieval")
+                print(f"   Status: {app_data.get('status', 'N/A')}")
+            else:
+                results.log_fail("VIP User Application Status Retrieval", "No application found for VIP user")
         else:
-            results.log_fail("VIP User Application Status Retrieval", "No application found for VIP user")
+            results.log_fail("VIP User Application Status Retrieval", 
+                            f"Expected 200, got {response.status_code}")
     else:
-        results.log_fail("VIP User Application Status Retrieval", 
-                        f"Expected 200, got {response.status_code if response else 'No response'}")
+        results.log_fail("VIP User Application Status Retrieval", "No response received")
     
     # Step 6: Test Free User Application Status (should show no application)
     print("\n📋 STEP 6: Free User Application Status Check")
     
     response = make_request("GET", "/fund/my-application", free_token)
-    if response and response.status_code == 200:
-        app_data = response.json()
-        if app_data.get("has_application") == False or not app_data.get("application_id"):
-            results.log_pass("Free User No Application Status")
+    if response:
+        if response.status_code == 200:
+            app_data = response.json()
+            if app_data.get("has_application") == False or not app_data.get("application_id"):
+                results.log_pass("Free User No Application Status")
+            else:
+                results.log_fail("Free User No Application Status", "Free user should not have application")
         else:
-            results.log_fail("Free User No Application Status", "Free user should not have application")
+            results.log_fail("Free User No Application Status", 
+                            f"Expected 200, got {response.status_code}")
     else:
-        results.log_fail("Free User No Application Status", 
-                        f"Expected 200, got {response.status_code if response else 'No response'}")
+        results.log_fail("Free User No Application Status", "No response received")
     
     # Step 7: Test Admin Can List All Applications
     print("\n📋 STEP 7: Admin List All Applications")
     
     response = make_request("GET", "/admin/fund/applications", admin_token)
-    if response and response.status_code == 200:
-        applications = response.json()
-        if isinstance(applications, list):
-            results.log_pass("Admin List All Applications")
-            print(f"   Found {len(applications)} applications")
-            # Find the VIP user's application for next test
-            vip_app_id = None
-            for app in applications:
-                if app.get("email") == "fundtest@test.com":
-                    vip_app_id = app.get("application_id")
-                    break
+    if response:
+        if response.status_code == 200:
+            applications = response.json()
+            if isinstance(applications, list):
+                results.log_pass("Admin List All Applications")
+                print(f"   Found {len(applications)} applications")
+                # Find the VIP user's application for next test
+                vip_app_id = None
+                for app in applications:
+                    if app.get("email") == "fundtest@test.com":
+                        vip_app_id = app.get("application_id")
+                        break
+            else:
+                results.log_fail("Admin List All Applications", "Response is not a list")
+                vip_app_id = None
         else:
-            results.log_fail("Admin List All Applications", "Response is not a list")
+            results.log_fail("Admin List All Applications", 
+                            f"Expected 200, got {response.status_code}")
+            vip_app_id = None
     else:
-        results.log_fail("Admin List All Applications", 
-                        f"Expected 200, got {response.status_code if response else 'No response'}")
+        results.log_fail("Admin List All Applications", "No response received")
         vip_app_id = None
     
     # Step 8: Test VIP User Cannot Access Admin Endpoint
     print("\n📋 STEP 8: VIP User Admin Access Control")
     
     response = make_request("GET", "/admin/fund/applications", vip_token)
-    if response and response.status_code == 403:
-        results.log_pass("VIP User Blocked from Admin Endpoint")
+    if response:
+        if response.status_code == 403:
+            results.log_pass("VIP User Blocked from Admin Endpoint")
+        else:
+            results.log_fail("VIP User Blocked from Admin Endpoint", 
+                            f"Expected 403, got {response.status_code}")
     else:
-        results.log_fail("VIP User Blocked from Admin Endpoint", 
-                        f"Expected 403, got {response.status_code if response else 'No response'}")
+        results.log_fail("VIP User Blocked from Admin Endpoint", "No response received")
     
     # Step 9: Test Admin Can Update Application Status
     print("\n📋 STEP 9: Admin Update Application Status")
@@ -241,11 +258,14 @@ def test_fund_management_endpoints():
     if vip_app_id:
         response = make_request("PUT", f"/admin/fund/applications/{vip_app_id}", 
                               admin_token, params={"status": "contacted"})
-        if response and response.status_code == 200:
-            results.log_pass("Admin Update Application Status")
+        if response:
+            if response.status_code == 200:
+                results.log_pass("Admin Update Application Status")
+            else:
+                results.log_fail("Admin Update Application Status", 
+                                f"Expected 200, got {response.status_code}")
         else:
-            results.log_fail("Admin Update Application Status", 
-                            f"Expected 200, got {response.status_code if response else 'No response'}")
+            results.log_fail("Admin Update Application Status", "No response received")
     else:
         results.log_fail("Admin Update Application Status", "No VIP application ID found")
     
@@ -255,11 +275,14 @@ def test_fund_management_endpoints():
     if vip_app_id:
         response = make_request("PUT", f"/admin/fund/applications/{vip_app_id}", 
                               vip_token, params={"status": "approved"})
-        if response and response.status_code == 403:
-            results.log_pass("VIP User Blocked from Update Endpoint")
+        if response:
+            if response.status_code == 403:
+                results.log_pass("VIP User Blocked from Update Endpoint")
+            else:
+                results.log_fail("VIP User Blocked from Update Endpoint", 
+                                f"Expected 403, got {response.status_code}")
         else:
-            results.log_fail("VIP User Blocked from Update Endpoint", 
-                            f"Expected 403, got {response.status_code if response else 'No response'}")
+            results.log_fail("VIP User Blocked from Update Endpoint", "No response received")
     else:
         results.log_fail("VIP User Blocked from Update Endpoint", "No VIP application ID found")
     
@@ -267,18 +290,21 @@ def test_fund_management_endpoints():
     print("\n📋 STEP 11: Verify Status Update")
     
     response = make_request("GET", "/fund/my-application", vip_token)
-    if response and response.status_code == 200:
-        app_data = response.json()
-        current_status = app_data.get("status")
-        if current_status == "contacted":
-            results.log_pass("Status Update Verification")
-            print(f"   Updated status: {current_status}")
+    if response:
+        if response.status_code == 200:
+            app_data = response.json()
+            current_status = app_data.get("status")
+            if current_status == "contacted":
+                results.log_pass("Status Update Verification")
+                print(f"   Updated status: {current_status}")
+            else:
+                results.log_fail("Status Update Verification", 
+                                f"Expected 'contacted', got '{current_status}'")
         else:
             results.log_fail("Status Update Verification", 
-                            f"Expected 'contacted', got '{current_status}'")
+                            f"Expected 200, got {response.status_code}")
     else:
-        results.log_fail("Status Update Verification", 
-                        f"Expected 200, got {response.status_code if response else 'No response'}")
+        results.log_fail("Status Update Verification", "No response received")
     
     return results.summary()
 
