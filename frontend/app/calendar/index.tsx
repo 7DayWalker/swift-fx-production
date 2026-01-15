@@ -657,6 +657,63 @@ export default function EconomicCalendarScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Notification Timing Modal */}
+      <Modal
+        visible={showNotificationModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowNotificationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.notificationModalContent, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, dynamicStyles.text]}>Alert Timing</Text>
+              <TouchableOpacity onPress={() => setShowNotificationModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.notificationModalSubtitle, dynamicStyles.textSecondary]}>
+              Get notified before high-impact events
+            </Text>
+            
+            <View style={styles.timingOptions}>
+              {NOTIFICATION_MINUTES_OPTIONS.map(minutes => (
+                <TouchableOpacity
+                  key={minutes}
+                  style={[
+                    styles.timingOption,
+                    { borderColor: theme.border },
+                    notificationMinutes === minutes && { 
+                      borderColor: '#EF4444', 
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)' 
+                    },
+                  ]}
+                  onPress={() => handleNotificationMinutesChange(minutes)}
+                >
+                  <Text style={[
+                    styles.timingOptionText,
+                    { color: notificationMinutes === minutes ? '#EF4444' : theme.text }
+                  ]}>
+                    {minutes} {minutes === 1 ? 'minute' : 'minutes'}
+                  </Text>
+                  {notificationMinutes === minutes && (
+                    <Ionicons name="checkmark-circle" size={20} color="#EF4444" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <View style={[styles.notificationNote, { backgroundColor: `${theme.border}40` }]}>
+              <Ionicons name="information-circle-outline" size={16} color={theme.textSecondary} />
+              <Text style={[styles.notificationNoteText, dynamicStyles.textSecondary]}>
+                Notifications are informational only. Not trading advice.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
