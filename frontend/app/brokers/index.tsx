@@ -14,8 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 
-// Broker data with referral links and official logos
-// Note: Some brokers restrict direct image access, fallback to letter logo is used
+// Broker data with referral links and logos via Google Favicon API
 const BROKERS = [
   {
     id: 'octafx',
@@ -29,7 +28,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Indices', 'Crypto'],
     color: '#0066CC',
-    logoUrl: 'https://www.octafx.com/apple-touch-icon.png',
+    logoUrl: 'https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://octafx.com&size=128',
     link: 'https://octa.click/bsNt11QX2CK?ib=9832496',
   },
   {
@@ -44,7 +43,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Stocks', 'Metals', 'Energies'],
     color: '#00C853',
-    logoUrl: 'https://fbs.com/apple-touch-icon.png',
+    logoUrl: 'https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://fbs.com&size=128',
     link: 'https://fbs.partners?ibl=689161&ibp=9609491',
   },
   {
@@ -59,8 +58,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Indices', 'Metals', 'Crypto'],
     color: '#E31E24',
-    // XM blocks direct image access, using fallback
-    logoUrl: null,
+    logoUrl: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://xm.com&size=128',
     link: 'https://clicks.pipaffiliates.com/c?c=909395&l=en&p=1',
   },
   {
@@ -75,8 +73,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Crypto', 'Indices'],
     color: '#FFD700',
-    // Exness blocks direct image access, using fallback  
-    logoUrl: null,
+    logoUrl: 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://exness.com&size=128',
     link: 'https://one.exnessonelink.com/a/xylvtcuik1',
   },
 ];
