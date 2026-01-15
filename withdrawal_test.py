@@ -272,45 +272,81 @@ class WithdrawalManagementTester:
                          "No investor user ID available. Cannot verify dashboard sync.")
             return False
         
-        # Try to get investor token
-        if not self.get_investor_token():
-            self.log_test("Verify Dashboard Sync", False, 
-                         "Could not authenticate as the investor user. Skipping dashboard sync verification.")
-            return False
-        
         try:
-            headers = {"Authorization": f"Bearer {self.investor_token}"}
-            response = requests.get(f"{BASE_URL}/investor/dashboard", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                withdrawals = data.get("withdrawals", [])
+            # Check if the user is an admin user (who can access investor dashboard)
+            if "admin" in self.investor_user_id:
+                # Admin users can access investor dashboard directly
+                headers = {"Authorization": f"Bearer {self.admin_token}"}
+                response = requests.get(f"{BASE_URL}/investor/dashboard", headers=headers)
                 
-                # Find our withdrawal in the dashboard
-                our_withdrawal = None
-                for w in withdrawals:
-                    if w.get("withdrawal_id") == self.withdrawal_id:
-                        our_withdrawal = w
-                        break
-                
-                if our_withdrawal:
-                    status = our_withdrawal.get("status")
-                    if status == "paid":
-                        self.log_test("Verify Dashboard Sync", True, 
-                                     f"Dashboard sync verified. Withdrawal {self.withdrawal_id} shows status: {status}")
-                        return True
+                if response.status_code == 200:
+                    data = response.json()
+                    withdrawals = data.get("withdrawals", [])
+                    
+                    # Find our withdrawal in the dashboard
+                    our_withdrawal = None
+                    for w in withdrawals:
+                        if w.get("withdrawal_id") == self.withdrawal_id:
+                            our_withdrawal = w
+                            break
+                    
+                    if our_withdrawal:
+                        status = our_withdrawal.get("status")
+                        if status == "paid":
+                            self.log_test("Verify Dashboard Sync", True, 
+                                         f"Dashboard sync verified. Withdrawal {self.withdrawal_id} shows status: {status}")
+                            return True
+                        else:
+                            self.log_test("Verify Dashboard Sync", False, 
+                                         f"Withdrawal status not updated. Expected: paid, Got: {status}")
+                            return False
                     else:
                         self.log_test("Verify Dashboard Sync", False, 
-                                     f"Withdrawal status not updated. Expected: paid, Got: {status}")
+                                     f"Withdrawal {self.withdrawal_id} not found in dashboard withdrawals array")
                         return False
                 else:
                     self.log_test("Verify Dashboard Sync", False, 
-                                 f"Withdrawal {self.withdrawal_id} not found in dashboard withdrawals array")
+                                 f"Dashboard request failed with status {response.status_code}", response.text)
                     return False
             else:
-                self.log_test("Verify Dashboard Sync", False, 
-                             f"Dashboard request failed with status {response.status_code}", response.text)
-                return False
+                # Try to get investor token for regular users
+                if not self.get_investor_token():
+                    self.log_test("Verify Dashboard Sync", False, 
+                                 "Could not authenticate as the investor user. Skipping dashboard sync verification.")
+                    return False
+                
+                headers = {"Authorization": f"Bearer {self.investor_token}"}
+                response = requests.get(f"{BASE_URL}/investor/dashboard", headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    withdrawals = data.get("withdrawals", [])
+                    
+                    # Find our withdrawal in the dashboard
+                    our_withdrawal = None
+                    for w in withdrawals:
+                        if w.get("withdrawal_id") == self.withdrawal_id:
+                            our_withdrawal = w
+                            break
+                    
+                    if our_withdrawal:
+                        status = our_withdrawal.get("status")
+                        if status == "paid":
+                            self.log_test("Verify Dashboard Sync", True, 
+                                         f"Dashboard sync verified. Withdrawal {self.withdrawal_id} shows status: {status}")
+                            return True
+                        else:
+                            self.log_test("Verify Dashboard Sync", False, 
+                                         f"Withdrawal status not updated. Expected: paid, Got: {status}")
+                            return False
+                    else:
+                        self.log_test("Verify Dashboard Sync", False, 
+                                     f"Withdrawal {self.withdrawal_id} not found in dashboard withdrawals array")
+                        return False
+                else:
+                    self.log_test("Verify Dashboard Sync", False, 
+                                 f"Dashboard request failed with status {response.status_code}", response.text)
+                    return False
                 
         except Exception as e:
             self.log_test("Verify Dashboard Sync", False, f"Exception: {str(e)}")
