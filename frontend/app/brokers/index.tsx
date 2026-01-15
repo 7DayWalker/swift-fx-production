@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 
-// Broker data with referral links
+// Broker data with referral links and official logos
 const BROKERS = [
   {
     id: 'octafx',
@@ -28,6 +28,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Indices', 'Crypto'],
     color: '#0066CC',
+    logoUrl: 'https://play-lh.googleusercontent.com/OqX1f5qKkWzZZPVVMxjSHBl5YFgEtjZFHxM0dXZc_BZX0g7lOlYjdAaJAu9VJN5FXg=w240-h480-rw',
     link: 'https://octa.click/bsNt11QX2CK?ib=9832496',
   },
   {
@@ -42,6 +43,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Stocks', 'Metals', 'Energies'],
     color: '#00C853',
+    logoUrl: 'https://play-lh.googleusercontent.com/mIptQzg1ZqW0sUxQmq4e8F1kdVdTxg7jOaS5h-lIhjBjJxXNlMlUPvxF_UqYAKHVUQ=w240-h480-rw',
     link: 'https://fbs.partners?ibl=689161&ibp=9609491',
   },
   {
@@ -56,6 +58,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Indices', 'Metals', 'Crypto'],
     color: '#E31E24',
+    logoUrl: 'https://play-lh.googleusercontent.com/V9bXj0K3Nl-93dKKrJMWlJ0Ygb5pL2g5H-D7rZ6dXDY5yt0I_UxIqAMmzFDkVQoFZg=w240-h480-rw',
     link: 'https://clicks.pipaffiliates.com/c?c=909395&l=en&p=1',
   },
   {
@@ -70,14 +73,50 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Crypto', 'Indices'],
     color: '#FFD700',
+    logoUrl: 'https://play-lh.googleusercontent.com/7PjXxKCHRFx2-5CX5-fZb5bRqM0WdvvQH0g0kwDc5XFHCH8kMXx3X8fLq5t-fAJRew=w240-h480-rw',
     link: 'https://one.exnessonelink.com/a/xylvtcuik1',
   },
 ];
 
-// Get broker logo letter and color
-const getBrokerLogo = (broker: typeof BROKERS[0]) => {
-  return {
-    letter: broker.name.charAt(0),
+// Broker Logo Component with fallback
+const BrokerLogo = ({ broker, size = 52 }: { broker: typeof BROKERS[0], size?: number }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  if (imageError || !broker.logoUrl) {
+    // Fallback to letter-based logo
+    return (
+      <View style={[styles.brokerLogoFallback, { 
+        width: size, 
+        height: size, 
+        borderRadius: size * 0.27,
+        backgroundColor: `${broker.color}20` 
+      }]}>
+        <Text style={[styles.brokerLogoText, { color: broker.color, fontSize: size * 0.46 }]}>
+          {broker.name.charAt(0)}
+        </Text>
+      </View>
+    );
+  }
+  
+  return (
+    <View style={[styles.brokerLogoContainer, { 
+      width: size, 
+      height: size, 
+      borderRadius: size * 0.27,
+    }]}>
+      <Image
+        source={{ uri: broker.logoUrl }}
+        style={[styles.brokerLogoImage, { 
+          width: size, 
+          height: size, 
+          borderRadius: size * 0.27,
+        }]}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    </View>
+  );
+};
     color: broker.color,
   };
 };
