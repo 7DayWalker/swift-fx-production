@@ -151,13 +151,17 @@ def test_fund_management_endpoints():
     }
     
     response = make_request("POST", "/fund/apply", vip_token, vip_application_data)
-    if response and response.status_code == 200:
-        results.log_pass("VIP User Fund Application Submission")
-        application_id = response.json().get("application_id")
-        print(f"   Application ID: {application_id}")
+    if response:
+        if response.status_code == 200:
+            results.log_pass("VIP User Fund Application Submission")
+            application_id = response.json().get("application_id")
+            print(f"   Application ID: {application_id}")
+        else:
+            results.log_fail("VIP User Fund Application Submission", 
+                            f"Expected 200, got {response.status_code}: {response.text}")
+            application_id = None
     else:
-        results.log_fail("VIP User Fund Application Submission", 
-                        f"Expected 200, got {response.status_code if response else 'No response'}: {response.text if response else 'No response'}")
+        results.log_fail("VIP User Fund Application Submission", "No response received")
         application_id = None
     
     # Step 4: Test Duplicate Application (VIP user should get error)
