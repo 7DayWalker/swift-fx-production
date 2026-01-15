@@ -279,6 +279,7 @@ class FundApplicationCreate(BaseModel):
     intended_amount: float
     trading_experience: TradingExperience
     risk_agreement: bool = False
+    source: str = "app"  # "app" or "whatsapp"
 
 class FundApplication(BaseModel):
     application_id: str
