@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 
 // Broker data with referral links and official logos
+// Note: Some brokers restrict direct image access, fallback to letter logo is used
 const BROKERS = [
   {
     id: 'octafx',
@@ -28,7 +29,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Indices', 'Crypto'],
     color: '#0066CC',
-    logoUrl: 'https://www.octafx.com/favicon-196x196.png',
+    logoUrl: 'https://www.octafx.com/apple-touch-icon.png',
     link: 'https://octa.click/bsNt11QX2CK?ib=9832496',
   },
   {
@@ -43,7 +44,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Stocks', 'Metals', 'Energies'],
     color: '#00C853',
-    logoUrl: 'https://fbs.com/favicon-196x196.png',
+    logoUrl: 'https://fbs.com/apple-touch-icon.png',
     link: 'https://fbs.partners?ibl=689161&ibp=9609491',
   },
   {
@@ -58,7 +59,8 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Indices', 'Metals', 'Crypto'],
     color: '#E31E24',
-    logoUrl: 'https://www.xm.com/apple-touch-icon.png',
+    // XM blocks direct image access, using fallback
+    logoUrl: null,
     link: 'https://clicks.pipaffiliates.com/c?c=909395&l=en&p=1',
   },
   {
@@ -73,7 +75,8 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Crypto', 'Indices'],
     color: '#FFD700',
-    logoUrl: 'https://www.exness.com/apple-touch-icon.png',
+    // Exness blocks direct image access, using fallback  
+    logoUrl: null,
     link: 'https://one.exnessonelink.com/a/xylvtcuik1',
   },
 ];
