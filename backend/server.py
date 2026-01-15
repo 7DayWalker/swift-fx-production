@@ -3494,6 +3494,10 @@ async def get_all_fund_applications(
     admin: User = Depends(require_admin)
 ):
     """Get all fund management applications. Admin only."""
+    # Check permission: fund_admin, account_manager, customer_support can read; signal_admin cannot
+    if not has_permission(admin, "fund_applications", "read"):
+        raise HTTPException(status_code=403, detail="You don't have permission to view fund applications")
+    
     query = {}
     if status:
         query["status"] = status
