@@ -3234,7 +3234,7 @@ async def get_all_fund_applications(
     for app in applications:
         app.pop("_id", None)
     
-    return applications
+    return {"applications": applications, "total": len(applications)}
 
 
 @api_router.put("/admin/fund/applications/{application_id}")
