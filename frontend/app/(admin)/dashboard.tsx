@@ -100,6 +100,13 @@ export default function AdminDashboard() {
       color: '#EC4899',
     },
     {
+      icon: 'headset',
+      label: 'Support Tickets',
+      description: 'Handle user support requests',
+      route: '/(admin)/support-tickets',
+      color: '#06B6D4',
+    },
+    {
       icon: 'shield-checkmark',
       label: 'Admin Management',
       description: 'Manage admin accounts & roles',
