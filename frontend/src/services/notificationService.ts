@@ -6,6 +6,8 @@ import { router } from 'expo-router';
 import { api } from './api';
 
 const NOTIFICATION_ENABLED_KEY = '@notification_enabled';
+const CALENDAR_NOTIFICATION_KEY = '@calendar_notification_enabled';
+const CALENDAR_NOTIFICATION_MINUTES_KEY = '@calendar_notification_minutes';
 
 // Notification subscriptions
 let responseListener: Notifications.Subscription | null = null;
