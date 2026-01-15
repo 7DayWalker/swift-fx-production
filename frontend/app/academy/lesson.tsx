@@ -5,11 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { getCourseContent, getLessonContent, LessonContent } from '../../src/data/academyContent';
 
 interface Lesson {
   id: number;
@@ -26,7 +29,7 @@ const COURSE_LESSONS: Record<string, { title: string; lessons: Lesson[] }> = {
       { id: 2, title: 'Types of Financial Markets', duration: '10 min', type: 'video' },
       { id: 3, title: 'Understanding Market Participants', duration: '7 min', type: 'text' },
       { id: 4, title: 'How Prices Move', duration: '12 min', type: 'video' },
-      { id: 5, title: 'Knowledge Check', duration: '5 min', type: 'quiz' },
+      { id: 5, title: 'Course Quiz: Trading Basics', duration: '5 min', type: 'quiz' },
     ],
   },
   'chart-basics': {
@@ -37,7 +40,38 @@ const COURSE_LESSONS: Record<string, { title: string; lessons: Lesson[] }> = {
       { id: 3, title: 'Common Candlestick Patterns', duration: '12 min', type: 'video' },
       { id: 4, title: 'Timeframes Explained', duration: '8 min', type: 'text' },
       { id: 5, title: 'Reading Price Action', duration: '10 min', type: 'video' },
-      { id: 6, title: 'Pattern Recognition Quiz', duration: '5 min', type: 'quiz' },
+      { id: 6, title: 'Chart Patterns Quiz', duration: '5 min', type: 'quiz' },
+    ],
+  },
+  'risk-management': {
+    title: 'Risk Management 101',
+    lessons: [
+      { id: 1, title: 'Why Risk Management Matters', duration: '8 min', type: 'video' },
+      { id: 2, title: 'Position Sizing', duration: '10 min', type: 'video' },
+      { id: 3, title: 'Stop Losses and Take Profits', duration: '10 min', type: 'video' },
+      { id: 4, title: 'The 1% Rule', duration: '7 min', type: 'text' },
+      { id: 5, title: 'Risk Management Quiz', duration: '5 min', type: 'quiz' },
+    ],
+  },
+  'trading-psychology': {
+    title: 'Trading Psychology',
+    lessons: [
+      { id: 1, title: 'The Trader\'s Mindset', duration: '8 min', type: 'video' },
+      { id: 2, title: 'Fear and Greed', duration: '10 min', type: 'video' },
+      { id: 3, title: 'Dealing with Losses', duration: '8 min', type: 'text' },
+      { id: 4, title: 'Building Discipline', duration: '10 min', type: 'video' },
+      { id: 5, title: 'Psychology Quiz', duration: '5 min', type: 'quiz' },
+    ],
+  },
+  'forex-basics': {
+    title: 'Forex Fundamentals',
+    lessons: [
+      { id: 1, title: 'What is Forex?', duration: '8 min', type: 'video' },
+      { id: 2, title: 'Currency Pairs Explained', duration: '10 min', type: 'video' },
+      { id: 3, title: 'Pips, Lots, and Leverage', duration: '12 min', type: 'video' },
+      { id: 4, title: 'What Moves Currency Prices', duration: '10 min', type: 'text' },
+      { id: 5, title: 'Forex Trading Sessions', duration: '8 min', type: 'video' },
+      { id: 6, title: 'Forex Fundamentals Quiz', duration: '5 min', type: 'quiz' },
     ],
   },
 };
@@ -64,6 +98,9 @@ export default function LessonScreen() {
     lessons: DEFAULT_LESSONS,
   };
 
+  // Get populated content from academyContent.ts
+  const courseContent = getCourseContent(params.course || '');
+
   const getCategoryColor = () => {
     switch (params.category) {
       case 'beginner': return '#00D4AA';
@@ -87,11 +124,23 @@ export default function LessonScreen() {
     setShowContent(true);
   };
 
+  const handleWatchVideo = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.log('Error opening video:', error);
+    }
+  };
+
   const color = getCategoryColor();
 
   // Content view for selected lesson
   if (showContent && selectedLesson) {
     const lesson = courseData.lessons.find(l => l.id === selectedLesson);
+    const lessonContent = courseContent?.lessons.find(l => l.id === selectedLesson);
     
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -113,20 +162,37 @@ export default function LessonScreen() {
           style={styles.scrollView}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         >
-          {/* Placeholder Video/Content Area */}
-          <View style={[styles.contentPlaceholder, { borderColor: color }]}>
-            <View style={[styles.playButton, { backgroundColor: `${color}30` }]}>
-              <Ionicons 
-                name={getLessonIcon(lesson?.type || 'video')} 
-                size={48} 
-                color={color} 
-              />
+          {/* Video/Content Area */}
+          {lessonContent?.youtubeUrl ? (
+            <TouchableOpacity 
+              style={[styles.videoCard, { borderColor: color }]}
+              onPress={() => handleWatchVideo(lessonContent.youtubeUrl!)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.playButton, { backgroundColor: `${color}30` }]}>
+                <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+              </View>
+              <Text style={styles.videoTitle}>{lessonContent.youtubeTitle || 'Watch Video'}</Text>
+              <View style={styles.watchButton}>
+                <Ionicons name="play" size={16} color="#0A0E17" />
+                <Text style={styles.watchButtonText}>Watch on YouTube</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.contentPlaceholder, { borderColor: color }]}>
+              <View style={[styles.playButton, { backgroundColor: `${color}30` }]}>
+                <Ionicons 
+                  name={getLessonIcon(lesson?.type || 'video')} 
+                  size={48} 
+                  color={color} 
+                />
+              </View>
+              <Text style={styles.placeholderText}>
+                {lesson?.type === 'video' ? 'Video Content' : lesson?.type === 'quiz' ? 'Quiz' : 'Reading Material'}
+              </Text>
+              <Text style={styles.placeholderSubtext}>{lesson?.duration}</Text>
             </View>
-            <Text style={styles.placeholderText}>
-              {lesson?.type === 'video' ? 'Video Content' : lesson?.type === 'quiz' ? 'Quiz' : 'Reading Material'}
-            </Text>
-            <Text style={styles.placeholderSubtext}>{lesson?.duration}</Text>
-          </View>
+          )}
 
           {/* Lesson Info */}
           <View style={styles.lessonInfo}>
@@ -142,31 +208,35 @@ export default function LessonScreen() {
             </View>
           </View>
 
-          {/* Placeholder Content */}
-          <View style={styles.contentSection}>
-            <Text style={styles.sectionTitle}>Lesson Overview</Text>
-            <Text style={styles.contentText}>
-              This is placeholder content for the lesson. In a production app, this would contain:
-            </Text>
-            <View style={styles.bulletList}>
-              <View style={styles.bulletItem}>
-                <View style={[styles.bullet, { backgroundColor: color }]} />
-                <Text style={styles.bulletText}>
-                  {lesson?.type === 'video' ? 'Embedded video player with progress tracking' : 
-                   lesson?.type === 'quiz' ? 'Interactive quiz questions' : 
-                   'Rich text content with images'}
-                </Text>
-              </View>
-              <View style={styles.bulletItem}>
-                <View style={[styles.bullet, { backgroundColor: color }]} />
-                <Text style={styles.bulletText}>Key takeaways and learning objectives</Text>
-              </View>
-              <View style={styles.bulletItem}>
-                <View style={[styles.bullet, { backgroundColor: color }]} />
-                <Text style={styles.bulletText}>Downloadable resources and notes</Text>
+          {/* Lesson Overview */}
+          {lessonContent?.overview ? (
+            <View style={styles.contentSection}>
+              <Text style={styles.sectionTitle}>Lesson Overview</Text>
+              <Text style={styles.overviewText}>{lessonContent.overview}</Text>
+            </View>
+          ) : (
+            <View style={styles.contentSection}>
+              <Text style={styles.sectionTitle}>Lesson Overview</Text>
+              <Text style={styles.contentText}>
+                This lesson covers important concepts that will help you on your trading journey.
+              </Text>
+            </View>
+          )}
+
+          {/* Key Takeaways */}
+          {lessonContent?.keyTakeaways && lessonContent.keyTakeaways.length > 0 && (
+            <View style={styles.contentSection}>
+              <Text style={styles.sectionTitle}>Key Takeaways</Text>
+              <View style={styles.bulletList}>
+                {lessonContent.keyTakeaways.map((takeaway, index) => (
+                  <View key={index} style={styles.bulletItem}>
+                    <View style={[styles.bullet, { backgroundColor: color }]} />
+                    <Text style={styles.bulletText}>{takeaway}</Text>
+                  </View>
+                ))}
               </View>
             </View>
-          </View>
+          )}
 
           {/* Navigation Buttons */}
           <View style={styles.navButtons}>
@@ -400,6 +470,14 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   // Content view styles
+  videoCard: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    marginBottom: 20,
+  },
   contentPlaceholder: {
     backgroundColor: '#1A1F2E',
     borderRadius: 16,
@@ -416,6 +494,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  videoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  watchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF0000',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  watchButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 6,
   },
   placeholderText: {
     fontSize: 16,
@@ -461,7 +560,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1F2E',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  overviewText: {
+    fontSize: 14,
+    color: '#C0C4CC',
+    lineHeight: 24,
   },
   contentText: {
     fontSize: 14,
@@ -480,7 +584,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginTop: 6,
+    marginTop: 7,
     marginRight: 10,
   },
   bulletText: {
@@ -492,6 +596,7 @@ const styles = StyleSheet.create({
   navButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
   },
   navButton: {
     flexDirection: 'row',
