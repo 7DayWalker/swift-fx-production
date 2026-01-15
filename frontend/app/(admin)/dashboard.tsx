@@ -93,6 +93,13 @@ export default function AdminDashboard() {
       color: '#F59E0B',
     },
     {
+      icon: 'gift-outline',
+      label: 'Referral Management',
+      description: 'Track & manage referrals',
+      route: '/(admin)/referrals',
+      color: '#EC4899',
+    },
+    {
       icon: 'shield-checkmark',
       label: 'Admin Management',
       description: 'Manage admin accounts & roles',
