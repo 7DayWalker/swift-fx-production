@@ -435,10 +435,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Fund Management Application (User Submit)"
-    - "Fund Management Application (User Status)"
-    - "Fund Management Admin (List Applications)"
-    - "Fund Management Admin (Update Status)"
+    - "Community Posts & Comments"
   stuck_tasks:
     - "Community Posts & Comments"
   test_all: false
