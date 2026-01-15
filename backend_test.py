@@ -348,7 +348,7 @@ class FundManagementTester:
         
         free_user_data = {
             "full_name": "Free User Test",
-            "email": "freeuser@test.com",
+            "email": "freetestuser@test.com",
             "phone": "123456789",
             "country": "USA",
             "investment_tier": "starter",
