@@ -74,9 +74,10 @@ def make_request(method, endpoint, token=None, json_data=None, params=None):
         else:
             raise ValueError(f"Unsupported method: {method}")
             
+        print(f"   DEBUG: {method} {endpoint} -> {response.status_code}")
         return response
     except Exception as e:
-        print(f"Request error: {e}")
+        print(f"   DEBUG: Request error for {method} {endpoint}: {e}")
         return None
 
 def test_fund_management_endpoints():
