@@ -3226,7 +3226,7 @@ async def get_all_fund_applications(
     if status:
         query["status"] = status
     
-    applications = list(fund_applications.find(query).sort("created_at", -1))
+    applications = await db.fund_applications.find(query).sort("created_at", -1).to_list(100)
     
     # Remove MongoDB _id field
     for app in applications:
@@ -3258,7 +3258,7 @@ async def update_fund_application(
         )
     
     # Find application
-    application = fund_applications.find_one({"application_id": application_id})
+    application = await db.fund_applications.find_one({"application_id": application_id})
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
@@ -3270,7 +3270,7 @@ async def update_fund_application(
     if admin_notes is not None:
         update_data["admin_notes"] = admin_notes
     
-    fund_applications.update_one(
+    await db.fund_applications.update_one(
         {"application_id": application_id},
         {"$set": update_data}
     )
