@@ -653,30 +653,74 @@ def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) 
 
 # ===================== AUTH ENDPOINTS =====================
 @api_router.post("/auth/register")
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, referral_code: Optional[str] = None):
     # Check if email exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     user_id = f"user_{uuid.uuid4().hex[:12]}"
+    
+    # Generate unique referral code for this user
+    user_referral_code = generate_referral_code(user_id)
+    
+    # Check if referred by someone
+    referred_by_user_id = None
+    if referral_code:
+        referrer = await db.users.find_one({"referral_code": referral_code.upper()})
+        if referrer:
+            # Prevent self-referral (check email match)
+            if referrer["email"] != user_data.email:
+                referred_by_user_id = referrer["user_id"]
+    
     user_doc = {
         "user_id": user_id,
         "name": user_data.name,
         "email": user_data.email,
         "password_hash": hash_password(user_data.password),
         "role": UserRole.FREE,
+        "subscription": "free",
         "subscription_status": "inactive",
         "billing_cycle": None,
         "subscription_expiry": None,
         "ai_usage_count": 0,
+        "ai_weekly_used": 0,
         "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7),
         "notification_preferences": {"signals": True, "community": True},
-        "created_at": datetime.now(timezone.utc),
-        "is_admin": False
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_admin": False,
+        # Referral fields
+        "referral_code": user_referral_code,
+        "referred_by": referred_by_user_id,
     }
     
     await db.users.insert_one(user_doc)
+    
+    # If referred, create referral record
+    if referred_by_user_id:
+        referral_id = f"ref_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc)
+        referral_doc = {
+            "referral_id": referral_id,
+            "referrer_id": referred_by_user_id,
+            "referred_user_id": user_id,
+            "referred_email": user_data.email,
+            "referred_name": user_data.name,
+            "status": ReferralStatus.PENDING.value,
+            "subscription_tier": None,
+            "subscribed_at": None,
+            "reward_status": RewardStatus.LOCKED.value,
+            "reward_type": None,
+            "reward_applied_at": None,
+            "expires_at": (now + timedelta(days=30)).isoformat(),
+            "flagged": False,
+            "flag_reason": None,
+            "admin_notes": None,
+            "created_at": now.isoformat(),
+        }
+        await db.referrals.insert_one(referral_doc)
+        logger.info(f"[Referral] Created referral {referral_id}: {referred_by_user_id} -> {user_id}")
+    
     token = create_token(user_id)
     
     return {
@@ -685,7 +729,8 @@ async def register(user_data: UserCreate):
             "user_id": user_id,
             "name": user_data.name,
             "email": user_data.email,
-            "role": UserRole.FREE
+            "role": UserRole.FREE,
+            "referral_code": user_referral_code
         }
     }
 
