@@ -28,7 +28,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Indices', 'Crypto'],
     color: '#0066CC',
-    logoUrl: 'https://play-lh.googleusercontent.com/OqX1f5qKkWzZZPVVMxjSHBl5YFgEtjZFHxM0dXZc_BZX0g7lOlYjdAaJAu9VJN5FXg=w240-h480-rw',
+    logoUrl: 'https://www.octafx.com/favicon-196x196.png',
     link: 'https://octa.click/bsNt11QX2CK?ib=9832496',
   },
   {
@@ -43,7 +43,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Stocks', 'Metals', 'Energies'],
     color: '#00C853',
-    logoUrl: 'https://play-lh.googleusercontent.com/mIptQzg1ZqW0sUxQmq4e8F1kdVdTxg7jOaS5h-lIhjBjJxXNlMlUPvxF_UqYAKHVUQ=w240-h480-rw',
+    logoUrl: 'https://fbs.com/favicon-196x196.png',
     link: 'https://fbs.partners?ibl=689161&ibp=9609491',
   },
   {
@@ -58,7 +58,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Indices', 'Metals', 'Crypto'],
     color: '#E31E24',
-    logoUrl: 'https://play-lh.googleusercontent.com/V9bXj0K3Nl-93dKKrJMWlJ0Ygb5pL2g5H-D7rZ6dXDY5yt0I_UxIqAMmzFDkVQoFZg=w240-h480-rw',
+    logoUrl: 'https://www.xm.com/apple-touch-icon.png',
     link: 'https://clicks.pipaffiliates.com/c?c=909395&l=en&p=1',
   },
   {
@@ -73,7 +73,7 @@ const BROKERS = [
     ],
     markets: ['Forex', 'Metals', 'Crypto', 'Indices'],
     color: '#FFD700',
-    logoUrl: 'https://play-lh.googleusercontent.com/7PjXxKCHRFx2-5CX5-fZb5bRqM0WdvvQH0g0kwDc5XFHCH8kMXx3X8fLq5t-fAJRew=w240-h480-rw',
+    logoUrl: 'https://www.exness.com/apple-touch-icon.png',
     link: 'https://one.exnessonelink.com/a/xylvtcuik1',
   },
 ];
