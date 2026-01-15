@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Signal Lifecycle Engine v2.0 Testing Suite
-Tests the completely rebuilt signal engine with focus on:
-1. Admin State Authority
-2. Pip Calculation Logic  
-3. State Immutability
-4. Exit Handling
+Manual Signal Mode Testing Suite
+Tests the manual signal mode where auto-engine is DISABLED.
+Covers all requirements from the review request:
+1. Verify Manual Mode Status
+2. Admin State Authority (Still Works)
+3. Manual State Control Works
+4. Pip Calculation on Manual Close
+5. Closed Signal Immutability (Still Enforced)
 """
 
 import requests
