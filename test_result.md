@@ -234,6 +234,54 @@ backend:
         - agent: "main"
         - comment: "Admin can create signals, tested successfully"
 
+  - task: "Fund Management Application (User Submit)"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: POST /api/fund/apply endpoint - allows Premium/VIP users to submit fund management applications"
+
+  - task: "Fund Management Application (User Status)"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: GET /api/fund/my-application endpoint - allows users to check their application status"
+
+  - task: "Fund Management Admin (List Applications)"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: GET /api/admin/fund/applications endpoint - allows admin to view all applications"
+
+  - task: "Fund Management Admin (Update Status)"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: NA
+        - agent: "main"
+        - comment: "NEW: PUT /api/admin/fund/applications/{id}?status=X endpoint - allows admin to update application status"
+
   - task: "Backend Subscription Enforcement System"
     implemented: true
     working: true
