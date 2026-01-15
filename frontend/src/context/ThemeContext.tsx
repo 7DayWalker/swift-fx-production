@@ -2,6 +2,21 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * Theme System v1
+ * 
+ * User Area:
+ * - Dark Mode is the stable default
+ * - Light Mode is optional and partial (Phase 2 polish)
+ * - Screens without Light Mode support fallback to Dark
+ * - User preference is persisted
+ * 
+ * Admin Area:
+ * - Force Dark Mode ONLY
+ * - Ignores user theme preference completely
+ * - Use useAdminTheme() hook for all admin screens
+ */
+
 // Theme colors
 export const themes = {
   dark: {
@@ -43,6 +58,9 @@ export const themes = {
     tabBarBorder: '#E5E7EB',
   },
 };
+
+// Admin theme - ALWAYS dark, never changes
+export const adminTheme = themes.dark;
 
 export type ThemeType = 'dark' | 'light' | 'system';
 export type Theme = typeof themes.dark;
