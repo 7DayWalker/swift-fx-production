@@ -15,7 +15,7 @@ BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
 # Test credentials from review request
 ADMIN_CREDENTIALS = {"email": "admin@swiftfx.com", "password": "adminpassword"}
 VIP_CREDENTIALS = {"email": "fundtest@test.com", "password": "password"}
-FREE_CREDENTIALS = {"email": "freeuser@test.com", "password": "password"}
+FREE_CREDENTIALS = {"email": "freetestuser@test.com", "password": "password"}
 
 class FundManagementTester:
     def __init__(self):
