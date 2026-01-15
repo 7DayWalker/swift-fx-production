@@ -388,6 +388,10 @@ class InvestorDashboardTester:
             self.log_test("Find Test Withdrawal", False, "No withdrawal found for testing")
             return False
         
+        if not self.withdrawal_id:
+            self.log_test("Find Test Withdrawal", False, "No valid withdrawal_id found")
+            return False
+        
         self.log_test("Find Test Withdrawal", True, f"Found withdrawal with status: {test_withdrawal.get('status')}")
         
         # Approve the withdrawal
