@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):

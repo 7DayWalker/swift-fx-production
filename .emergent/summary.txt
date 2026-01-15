@@ -1,181 +1,191 @@
 <analysis>
+<original_problem_statement>
+The user initially requested a Fund Management feature. This evolved significantly through multiple iterations into a full-fledged system including an investor dashboard, withdrawal management, and a comprehensive Role-Based Access Control (RBAC) system for admins. The latest request is to build a complete Referral Program.
 
-**original_problem_statement**:
-The user wants to implement a production-ready Fund Management feature. This feature should be visible to all users, but only Premium and VIP users can apply. The application process involves filling out a form, which is then saved to the database for an admin to review. The system must track the application status (pending, contacted, approved, rejected) and display it to the user. The feature also includes a Contact Fund Manager button that opens a WhatsApp deep link with a pre-filled message. All mock behavior must be removed, and the feature must be safe, compliant, and ready for real users.
-
-**PRODUCT REQUIREMENTS:**
-- **Access Control**: Free users can view the page but cannot apply. Premium/VIP users can apply.
-- **Application Form**: Collect Full Name, Email, Phone, Country, Investment Tier, Amount, and Experience.
-- **Database**: Store applications in a new  collection with a status field.
-- **Admin Panel**: Create a new screen for admins to view all applications and update their status.
-- **User Status Display**: Premium/VIP users should see their current application status on the Fund Management page.
-- **WhatsApp Integration**: The Contact Fund Manager button should open WhatsApp to  with a pre-filled message including the application ID.
-- **Compliance**: Legal disclaimers about risk and performance must be clearly visible.
+**PRODUCT REQUIREMENTS for Referral Program:**
+-   **User Side**:
+    -   Auto-generate a unique referral code for every user.
+    -   Provide a UI to share the code/link.
+    -   Track referral status (Pending, Completed, Expired).
+    -   Display user's referral stats (total, successful, rewards).
+    -   Rewards (extended subscription days) are locked until the referred user subscribes (Premium/VIP) for at least 7 days.
+    -   Referral expires if no subscription within 30 days.
+-   **Admin Side**:
+    -   New Referral Management screen.
+    -   List all referrals with filtering capabilities.
+    -   Super Admin and Account Manager can approve/revoke rewards and flag fraud.
+    -   Customer Support has read-only access.
+-   **Security**:
+    -   Prevent self-referrals and multi-referrals from the same device.
+    -   Log all admin actions related to referrals.
+</original_problem_statement>
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Expo (React Native) and FastAPI/MongoDB application. It features user authentication, a subscription system, a disabled MANUAL MODE signal engine, and several content modules:
--   **Academy**: Fully populated with tiered educational content.
--   **Economic Calendar**: A live, read-only view of economic events with filtering and push notification opt-ins.
--   **Recommended Brokers**: A page with affiliate links to external brokers, displaying their official logos.
--   **Market News**: A live news feed with category filters and preview images, sourced from RSS feeds.
+A comprehensive full-stack Expo (React Native) and FastAPI/MongoDB application. It includes:
+-   A robust user authentication system with multiple subscription tiers (Free, Premium, VIP).
+-   A detailed, multi-role admin RBAC system (Super Admin, Fund Admin, Signal Admin, Account Manager, Customer Support).
+-   A complete Fund Management feature, allowing users to apply, be approved, and become investors.
+-   An Investor Dashboard for approved users to track performance and request withdrawals.
+-   Multiple admin panels for managing fund applications, investor performance, and withdrawals.
+-   Content modules: Academy, Economic Calendar, Brokers, News.
+-   The core trading signal engine is intentionally disabled (MANUAL MODE).
 
 **Last working item**:
--   Last item agent was working: Implementing the production-ready Fund Management feature. The agent created the backend API endpoints (for submitting and managing applications) and the frontend files for both the user-facing page () and the admin management screen ().
+-   Last item agent was working: Building the new Referral Program feature. The agent has created the backend models and API endpoints, updated the user registration process to generate referral codes, and created the initial empty files for the user-facing and admin-facing frontend screens.
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **both**.
-    -   **backend testing agent**: To rigorously test the new API endpoints for creating, retrieving, and updating fund applications. This includes checking role-based access control.
-    -   **screenshot tool**: To test the end-to-end user and admin flows. This requires logging in with three different roles (Free, VIP, Admin).
+-   Which testing method agent to use? **both**
+    - **backend testing agent**: To test the new referral API endpoints (code generation, applying referral, tracking status, reward logic).
+    - **screenshot tool**: To test the user-facing referral page and the new admin management screen.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: The new admin page for fund applications is unreachable (P0)
-
-  Issues Detail:
-  - **Issue 1: The new admin page for fund applications is unreachable**
-     -   Attempted fixes: None. The agent created the file but did not link to it.
-     -   Next debug checklist:
-        1.  Edit  (the main admin dashboard).
-        2.  Add a new menu item or card that links to . Use a descriptive label like Fund Applications.
-        3.  Verify the navigation works after the fix.
-     -   Why fix this issue and what will be achieved with the fix?: This will make the newly created admin feature accessible, which is essential for managing the entire fund application workflow.
-     -   Status: **NOT STARTED**
-     -   Is recurring issue?: N
-     -   Should Test frontend/backend/both after fix?: Frontend
-     -   Blocked on other issue: None.
+There are no pending issues. The current work is a new feature implementation.
 
 **In progress Task List**:
-  - Task 1: Complete and Verify the Fund Management Feature (P0)
-     - Where to resume: The backend endpoints and frontend files have been created. The immediate next step is to fix the missing link to the admin page (see Issue 1). After that, a full end-to-end test of the feature is required.
-     - What will be achieved with this?: A complete, production-ready system for users to apply for fund management and for admins to review those applications.
-     - Status: **IN PROGRESS**
-     - Should Test frontend/backend/both after fix?: Both
-     - Blocked on something: None.
+-   Task 1: Complete the Referral Program feature (P0)
+    -   Where to resume: The backend API and frontend file skeletons are in place.
+        1.  **Backend**: Write and execute tests for all new referral API endpoints to ensure logic for code generation, referral tracking, and reward processing is correct.
+        2.  **Frontend (User)**: Implement the UI and logic for . This includes displaying the user's referral code, providing share buttons, and showing referral statistics (total, successful, pending rewards).
+        3.  **Frontend (Admin)**: Implement the UI and logic for . This includes listing all referrals, adding filters, and enabling role-based actions (approve/revoke for Super Admin/Account Manager, read-only for Customer Support).
+        4.  **Frontend (Navigation)**: Add a link to the user-facing  page, likely in the More tab ().
+    -   What will be achieved with this?: A complete, end-to-end referral system that allows users to earn rewards and enables admins to manage the program effectively.
+    -   Status: **IN PROGRESS**
+    -   Should Test frontend/backend/both after fix?: Both
+    -   Blocked on something: None.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks**:
-    - (P0) **Re-enable Automatic Signal Engine**: The core trade lifecycle automation in  is currently disabled. A crucial future task is to re-enable this engine.
-    - (P1) **Frontend UI for Trade Lifecycle**: Update signal cards and views in  and  to visually represent the granular states (, , , ).
+    - (P0) **Re-enable Automatic Signal Engine**: The core trade lifecycle automation in  is currently disabled and is a crucial future task.
 - **Future Tasks**:
-    - (P1) Integrate a real payment provider (e.g., Stripe).
+    - (P1) **Admin Notes**: Add functionality for admins to add notes to fund applications.
+    - (P1) **Assign Fund Manager**: Ability to assign a specific fund manager to an application/investor.
+    - (P1) **Conversion Tracking**: Track the conversion of a fund application to an active investor.
+    - (P1) Integrate a real payment provider (e.g., Stripe, or Google Play/Apple IAP).
     - (P2) Expand Dark/Light mode theme to all screens.
     - (P2) Implement remaining Community features (liking, commenting).
     - (P2) Implement mock AdMob banners for Free users.
     - (P3) Add user progress tracking to the Academy module.
 
 **Completed work in this session**
-- **Academy Content Verification**: Debugged login/proxy issues in the forked environment and verified that all Intermediate and Advanced academy lessons were correctly populated and accessible to VIP users.
-- **Economic Calendar Feature**: Implemented a live, read-only Economic Calendar using a free, no-key API. Added filtering, a detail view, a dashboard shortcut, and stubs for push notifications.
-- **Recommended Brokers Page**: Created a new page listing recommended brokers with logos, descriptions, and external affiliate links. Sourced official logos using Google's Favicon API.
-- **Market News Feature**: Implemented a live news feed sourced from public RSS feeds, with category filtering, a detail view, and preview images for articles.
+- **Fund Management System Refactors**: The entire feature was iterated upon multiple times, moving from a simple form to a complex hybrid flow that creates a database record before opening WhatsApp. This included fixing a critical bug preventing applications from appearing in the admin panel.
+- **Investor Dashboard**: A new dashboard was created for approved investors, showing portfolio stats and withdrawal options. This included a new admin screen for managing fund performance data and updating app navigation to be conditional.
+- **Admin Withdrawal Management**: A new admin screen was built to view, approve, and reject user withdrawal requests, fully integrated with the backend.
+- **Admin RBAC System**: A comprehensive Role-Based Access Control system was implemented with five distinct admin roles. This involved creating protected Super Admin accounts, securing all admin APIs with role-based checks, implementing an audit log, and building a new admin management screen. A critical login issue for Super Admins was also debugged and resolved.
 
 **Earlier issues found/mentioned but not fixed**
-   - **Issue 1: Bottom tab navigation is clipped on iOS.**
-     - Debug checklist: Work on this is **FROZEN** by the user. Do not attempt to fix it.
-     - Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug on modern iPhones.
-     - Should Test frontend/backend/both after fix: Frontend.
-     - Is recurring issue? Y
+-   **Issue 1: Bottom tab navigation is clipped on iOS.**
+    -   Debug checklist: Work on this is **FROZEN** by the user. Do not attempt to fix it.
+    -   Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug on modern iPhones.
+    -   Should Test frontend/backend/both after fix: Frontend.
+    -   Is recurring issue?: Y
 
 **Known issue recurrence from previous fork**
-  - **Issue recurrence in previous fork:** The iOS tab bar clipping issue is a known recurring problem.
-  - **Recurrence count:** Multiple.
-  - **Status:** NOT STARTED (frozen by user).
+- **Issue recurrence in previous fork:** The iOS tab bar clipping issue is a known recurring problem.
+- **Recurrence count:** Multiple.
+- **Status:** NOT STARTED (frozen by user).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **API Development**: New RESTful endpoints in FastAPI with Pydantic models for data validation.
--   **Async DB Operations**: Using  with  for all MongoDB queries in the new endpoints.
--   **Frontend State Management**: Using  and  to manage application form data, submission state, and user application status.
--   **Modal UI**: Using  component for the application form.
--   **Deep Linking**: Using  to open a pre-filled WhatsApp chat.
--   **Resourcefulness**: Using external services like  and Google's Favicon API to implement features without requiring user-provided API keys.
--   **Local Dev Workaround**: Modified  to handle the difference between local web preview (needs absolute URL ) and mobile builds (use relative  proxy).
+-   **RBAC (Role-Based Access Control)**: Implemented in FastAPI using enums for roles and dependency injection for permission checks on API endpoints. Includes a concept of protected Super Admins.
+-   **Audit Logging**: Storing records of all admin actions in a dedicated MongoDB collection.
+-   **Conditional Rendering (Frontend)**: Using user's subscription and application status to dynamically change UI and navigation (e.g., Fund Management vs. Investor Dashboard).
+-   **Hybrid API-UI Flow**: Implemented a flow where a frontend action (e.g., tapping a button) first triggers a backend API call to create a database record, and upon success, triggers a UI action (e.g., opening a WhatsApp deep link).
+-   **Startup Tasks (Backend)**: Using FastAPI's  to ensure Super Admin accounts are always present and correctly configured in the database.
 
 **key DB schema**
--   **users**: { , , ,  }
--   **signals**: { , ,  }
--   **fund_applications**: { , , , , , , , , , ,  } (NEW)
+-   **users**: { , , , , , , , ,  }
+-   **fund_applications**: { , , , , ... }
+-   **investor_portfolios**: { , , , , ... }
+-   **withdrawal_requests**: { , , , , ... }
+-   **fund_performances**: { , , , , , ... }
+-   **admin_audit_logs**: { , , , , , ... }
+-   **referrals**: { , , , ,  } (NEW)
+-   **referral_rewards**: { , , , ,  } (NEW)
 
 **changes in tech stack**
--   None. Existing stack was used.
+-   None. The existing tech stack (Expo, React Native, FastAPI, MongoDB) was used.
 
 **All files of reference**
--   **/app/backend/server.py**: Heavily modified to add models and API endpoints for Fund Management.
--   **/app/frontend/app/fund-management.tsx**: Completely rewritten to replace the mock page with a full-featured implementation.
--   **/app/frontend/app/(admin)/fund-applications.tsx**: New file created for the admin management UI.
--   **/app/frontend/app/(admin)/index.tsx**: Needs to be edited to make the new admin page accessible.
--   **/app/frontend/src/services/api.ts**: Contains the critical local development workaround for API calls.
+-   **/app/backend/server.py**: The monolithic backend file containing all business logic. Heavily modified to add RBAC, Investor Dashboard, Withdrawals, and the new Referral Program.
+-   **/app/frontend/app/referrals.tsx**: New (currently empty) user-facing screen for the referral program.
+-   **/app/frontend/app/(admin)/referral-management.tsx**: New (currently empty) admin screen for managing the referral program.
+-   **/app/frontend/app/(admin)/admin-management.tsx**: New screen for Super Admins to manage roles.
+-   **/app/frontend/app/investor-dashboard.tsx**: New dashboard for approved investors.
+-   **/app/frontend/app/(tabs)/more.tsx**: Contains the conditional navigation logic for Fund Management vs. Investor Dashboard.
 
 **Areas that need refactoring**:
-- The local dev workaround in  should ideally be replaced by a proper proxy setup in  for web if this becomes a recurring issue, but the current solution is functional for testing.
+-   The backend logic is entirely within a single  file, which is now over 4,500 lines long. It would benefit from being broken down into smaller, feature-specific modules (e.g., , ).
 
 **key api endpoints**
--    (POST): Submit a new fund management application.
--    (GET): Get the current user's application status.
--    (GET): Get all applications (admin only).
--    (PUT): Update an application's status (admin only).
--    (GET): Get economic calendar events.
+-   : (GET) Get current user's referral info.
+-   : (POST) Apply a referral code.
+-   : (GET) Get all referral records (for admins).
+-   : (POST) Approve a referral reward.
+-   : (GET, POST) Manage admin accounts.
+-   : (GET) Get data for the investor dashboard.
+-   : (GET, PUT) Manage withdrawal requests.
+-   : (POST) Submit a fund management application.
 
 **Critical Info for New Agent**
--   **Your immediate task is to complete the Fund Management feature.** Start by making the new admin page at  reachable by adding a link to it in .
--   **Comprehensive testing is required.** You must test the entire flow using three different user accounts to verify the access control and functionality:
-    -   **Free User ( / )**: Verify they CANNOT apply.
-    -   **VIP User ( / )**: Verify they CAN apply and see their status.
-    -   **Admin User ( / )**: Verify they can view and manage all applications.
--   **SIGNAL ENGINE is OFFLINE.** Do not attempt to fix or re-enable the automatic signal processing in . It is in MANUAL MODE intentionally.
+-   **Your immediate task is to complete the Referral Program feature.** The backend APIs and frontend file skeletons have been created. Your focus should be on building out the frontend UI for both the user () and admin () pages, adding navigation, and then thoroughly testing the entire end-to-end flow.
+-   **The RBAC system is live and enforced.** All admin API calls are protected. The new admin referral UI must respect the permissions of the logged-in admin (/ have write access,  has read-only).
+-   **Use the Super Admin credentials for testing** ( / ). This account has full access to all admin features.
+-   The project has undergone many rapid iterations. **Adhere strictly to the latest user request (Message 283 in history) for the referral program** and avoid getting confused by previous, now-obsolete, implementations of other features.
 
 **documents created in this job**
--   
--   
--   
--   
+-   /app/frontend/app/investor-dashboard.tsx
+-   /app/frontend/app/(admin)/fund-performance.tsx
+-   /app/frontend/app/(admin)/withdrawals.tsx
+-   /app/frontend/app/(admin)/admin-management.tsx
+-   /app/frontend/app/referrals.tsx
+-   /app/frontend/app/(admin)/referral-management.tsx
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Requested the production-ready Fund Management feature. (IN PROGRESS)
-2.  **User**: Requested preview images for the News feature. (COMPLETED)
-3.  **User**: Requested the Market News feature. (COMPLETED)
-4.  **User**: Corrected the agent, noting that some broker logos were still not visible. (COMPLETED)
-5.  **User**: Requested to replace text avatars with official logos on the Brokers page. (COMPLETED)
-6.  **User**: Requested the Recommended Brokers page. (COMPLETED)
-7.  **User**: Approved the Economic Calendar and requested enhancements (dashboard shortcut, notifications, filters). (COMPLETED)
-8.  **User**: Requested the Economic Calendar feature. (COMPLETED)
-9.  **User**: Requested a free, no-key API for the economic calendar. (COMPLETED)
-10. **User**: Confirmed the agent's plan to proceed with verifying the Academy content fix. (COMPLETED)
+10. **User**: Requested the Referral Program feature. (IN PROGRESS)
+9.  **User**: Confirmed the RBAC fix and provided credentials for Super Admins. (COMPLETED)
+8.  **User**: Reported Super Admins were logging in as normal users, not admins. (COMPLETED)
+7.  **User**: Asked for the Super Admin passwords. (COMPLETED)
+6.  **User**: Requested the comprehensive Admin RBAC system. (COMPLETED)
+5.  **User**: Requested to freeze the current state as a production baseline. (COMPLETED)
+4.  **User**: Requested the Admin Withdrawal Management feature. (COMPLETED)
+3.  **User**: Confirmed the plan for the Investor Dashboard feature. (COMPLETED)
+2.  **User**: Requested the Investor Dashboard feature. (COMPLETED)
+1.  **User**: Provided detailed requirements to finalize the Fund Management data flow. (COMPLETED)
 
 **Project Health Check:**
 -   **Broken**:
-    -   Bottom tab navigation UI on iOS (). Work is **FROZEN**.
+    -   Bottom tab navigation UI on iOS (). Work is **FROZEN** by user directive.
 -   **Disabled**:
     -   The core automatic signal processing engine in  is in **MANUAL MODE**.
 -   **Mocked**:
-    -   Payment system (Stripe-ready).
+    -   Payment system (Stripe/IAP stubs).
     -   Ad system.
 
 **3rd Party Integrations**
 -   **Anthropic Claude Vision**: For AI Chart Analyzer. Uses **Emergent LLM Key**.
 -   **Fair Economy Media API**: For Economic Calendar data (free, no key).
 -   **rss2json.com API**: For converting RSS feeds to JSON for the News feature (free, no key).
--   **Google Favicon API**: For sourcing broker logos reliably (free, no key).
+-   **Google Favicon API**: For sourcing broker logos (free, no key).
 -   **Frankfurter API**: For Forex price data.
 -   **CoinGecko API**: For Gold/Crypto price data.
 -   **Expo Push Notifications**: Integrated.
 
 **Testing status**
--   Testing agent used after significant changes: NO (for the current Fund Management feature).
+-   Testing agent used after significant changes: YES (for all major features prior to the Referral Program).
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: None are persisted.
 -   Known regressions: None.
 
 **Credentials to test flow:**
--   **Admin**:  / 
--   **VIP User (for testing Premium/VIP features)**:  / 
+-   **Super Admin**:  /  (or  with the same password)
+-   **VIP User**:  / 
 -   **Free User**:  / 
 
 **What agent forgot to execute**
-- The agent created the admin page for managing fund applications () but **forgot to add a link or menu item** to it from the main admin dashboard (), making the new page unreachable through the UI.
-
+- The agent has created the files for the Referral Program but has not yet added a navigation link for the user to access their referral page (). This will need to be added, likely in the More tab screen.
 </analysis>

@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
 def test_complete_rbac_sequence():
     """Test the complete RBAC system following the exact review request"""

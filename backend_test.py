@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
 # Test credentials - using actual super admin account
 SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"

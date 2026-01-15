@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@swiftfx.com"

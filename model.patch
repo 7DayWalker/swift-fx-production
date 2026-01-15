@@ -310,7 +310,7 @@ index 61e93ea..e69de29 100644
 ------------------+import os
 ------------------+
 ------------------+# Configuration
-------------------+BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+------------------+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 ------------------+
 ------------------+class AIChartAnalyzerTester:
 ------------------+    def __init__(self):
@@ -784,7 +784,7 @@ index 61e93ea..e69de29 100644
 ---------------+from datetime import datetime
 ---------------+
 ---------------+# Configuration
----------------+BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+---------------+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 ---------------+
 ---------------+# Test credentials
 ---------------+ADMIN_CREDENTIALS = {
@@ -1779,7 +1779,7 @@ index 61e93ea..e69de29 100644
 --+from datetime import datetime
 --+
 --+# Configuration
---+BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+--+BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 --+
 --+# Test credentials
 --+ADMIN_EMAIL = "admin@swiftfx.com"
@@ -2227,7 +2227,7 @@ index 0000000..3d9a67e
 +import json
 +import time
 +
-+BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
++BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 +
 +def test_complete_rbac_sequence():
 +    """Test the complete RBAC system following the exact review request"""
@@ -2500,7 +2500,7 @@ index 0000000..dfc394f
 +import json
 +import time
 +
-+BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
++BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 +SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
 +SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
 +
