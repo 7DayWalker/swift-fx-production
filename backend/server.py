@@ -3148,7 +3148,7 @@ async def submit_fund_application(
         )
     
     # Check if user already has a pending application
-    existing = fund_applications.find_one({
+    existing = await db.fund_applications.find_one({
         "user_id": current_user["user_id"],
         "status": {"$in": ["pending_review", "contacted"]}
     })
@@ -3179,7 +3179,7 @@ async def submit_fund_application(
         "updated_at": None,
     }
     
-    fund_applications.insert_one(application_doc)
+    await db.fund_applications.insert_one(application_doc)
     logger.info(f"[Fund] New application {application_id} from user {current_user['user_id']}")
     
     return {
@@ -3193,7 +3193,7 @@ async def submit_fund_application(
 @api_router.get("/fund/my-application")
 async def get_my_fund_application(current_user: dict = Depends(get_current_user)):
     """Get the current user's fund management application status."""
-    application = fund_applications.find_one(
+    application = await db.fund_applications.find_one(
         {"user_id": current_user["user_id"]},
         sort=[("created_at", -1)]  # Get most recent
     )
