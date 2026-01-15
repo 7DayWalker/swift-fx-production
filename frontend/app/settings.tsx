@@ -1,6 +1,6 @@
 /**
  * Settings Screen
- * Complete user settings with profile, security, notifications, privacy & account controls
+ * Complete user settings with profile, security, notifications, theme, privacy & account controls
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../src/context/AuthContext';
+import { useTheme, ThemeType } from '../src/context/ThemeContext';
 import api from '../src/services/api';
 
 // Types
@@ -56,20 +57,9 @@ interface LegalDocument {
   content: string;
 }
 
-// Theme colors (consistent Swift FX dark theme)
-const COLORS = {
-  background: '#0A0E17',
-  surface: '#1A1F2E',
-  border: '#2A2F3E',
-  primary: '#00D4AA',
-  text: '#FFFFFF',
-  textSecondary: '#8A8D98',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-};
-
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
@@ -87,6 +77,7 @@ export default function SettingsScreen() {
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   
   // Form states
   const [editName, setEditName] = useState('');
@@ -119,7 +110,6 @@ export default function SettingsScreen() {
       setNotifications(notifRes.data.preferences);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
-      Alert.alert('Error', 'Failed to load settings');
     } finally {
       setLoading(false);
     }
@@ -202,6 +192,27 @@ export default function SettingsScreen() {
       // Revert on error
       setNotifications(notifications);
       Alert.alert('Error', 'Failed to update notification setting');
+    }
+  };
+
+  const handleThemeChange = (newTheme: ThemeType) => {
+    setThemeType(newTheme);
+    setShowThemeModal(false);
+  };
+
+  const getThemeLabel = (type: ThemeType) => {
+    switch (type) {
+      case 'dark': return 'Dark';
+      case 'light': return 'Light';
+      case 'system': return 'System';
+    }
+  };
+
+  const getThemeIcon = (type: ThemeType) => {
+    switch (type) {
+      case 'dark': return 'moon';
+      case 'light': return 'sunny';
+      case 'system': return 'phone-portrait-outline';
     }
   };
 
@@ -309,6 +320,9 @@ export default function SettingsScreen() {
     });
   };
 
+  // Dynamic styles based on theme
+  const styles = createStyles(theme);
+
   const renderSettingItem = (
     icon: string,
     label: string,
@@ -325,7 +339,7 @@ export default function SettingsScreen() {
     >
       <View style={styles.settingLeft}>
         <View style={styles.settingIconBox}>
-          <Ionicons name={icon as any} size={20} color={COLORS.primary} />
+          <Ionicons name={icon as any} size={20} color={theme.primary} />
         </View>
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
@@ -336,7 +350,7 @@ export default function SettingsScreen() {
           </Text>
         )}
         {showArrow && onPress && (
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
         )}
       </View>
     </TouchableOpacity>
@@ -352,7 +366,7 @@ export default function SettingsScreen() {
     <View style={styles.toggleItem}>
       <View style={styles.toggleLeft}>
         <View style={styles.settingIconBox}>
-          <Ionicons name={icon as any} size={20} color={COLORS.primary} />
+          <Ionicons name={icon as any} size={20} color={theme.primary} />
         </View>
         <View style={styles.toggleTextContainer}>
           <Text style={styles.settingLabel}>{label}</Text>
@@ -362,7 +376,7 @@ export default function SettingsScreen() {
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: COLORS.border, true: COLORS.primary }}
+        trackColor={{ false: theme.border, true: theme.primary }}
         thumbColor="#FFFFFF"
       />
     </View>
@@ -372,7 +386,7 @@ export default function SettingsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={theme.primary} />
           <Text style={styles.loadingText}>Loading settings...</Text>
         </View>
       </SafeAreaView>
@@ -384,7 +398,7 @@ export default function SettingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={{ width: 40 }} />
@@ -407,7 +421,7 @@ export default function SettingsScreen() {
             profile?.is_admin ? `Admin (${profile.admin_role?.replace('_', ' ')})` : profile?.role?.toUpperCase(),
             undefined,
             false,
-            COLORS.primary
+            theme.primary
           )}
           {renderSettingItem(
             'card-outline',
@@ -415,7 +429,7 @@ export default function SettingsScreen() {
             profile?.subscription?.toUpperCase(),
             undefined,
             false,
-            profile?.subscription === 'vip' ? '#FFD700' : profile?.subscription === 'premium' ? COLORS.primary : undefined
+            profile?.subscription === 'vip' ? '#FFD700' : profile?.subscription === 'premium' ? theme.primary : undefined
           )}
         </View>
 
@@ -425,6 +439,30 @@ export default function SettingsScreen() {
           {renderSettingItem('lock-closed-outline', 'Change Password', undefined, () => setShowChangePassword(true))}
           {renderSettingItem('time-outline', 'Last Login', formatDate(profile?.last_login), undefined, false)}
           {renderSettingItem('calendar-outline', 'Member Since', formatDate(profile?.created_at), undefined, false)}
+        </View>
+
+        {/* Appearance Section */}
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => setShowThemeModal(true)}>
+            <View style={styles.settingLeft}>
+              <View style={styles.settingIconBox}>
+                <Ionicons name={getThemeIcon(themeType) as any} size={20} color={theme.primary} />
+              </View>
+              <Text style={styles.settingLabel}>Theme</Text>
+            </View>
+            <View style={styles.settingRight}>
+              <View style={styles.themePreview}>
+                <Ionicons 
+                  name={isDark ? 'moon' : 'sunny'} 
+                  size={16} 
+                  color={isDark ? '#FFD700' : '#F59E0B'} 
+                />
+                <Text style={styles.settingValue}>{getThemeLabel(themeType)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Notification Preferences */}
@@ -501,24 +539,24 @@ export default function SettingsScreen() {
         </View>
 
         {/* Danger Zone */}
-        <Text style={[styles.sectionTitle, { color: COLORS.danger }]}>Danger Zone</Text>
-        <View style={[styles.card, { borderColor: `${COLORS.danger}30` }]}>
+        <Text style={[styles.sectionTitle, { color: theme.error }]}>Danger Zone</Text>
+        <View style={[styles.card, { borderColor: `${theme.error}30` }]}>
           <TouchableOpacity style={styles.dangerItem} onPress={() => setShowDeactivateConfirm(true)}>
-            <View style={[styles.settingIconBox, { backgroundColor: `${COLORS.warning}15` }]}>
-              <Ionicons name="pause-circle-outline" size={20} color={COLORS.warning} />
+            <View style={[styles.settingIconBox, { backgroundColor: `${theme.warning}15` }]}>
+              <Ionicons name="pause-circle-outline" size={20} color={theme.warning} />
             </View>
             <View style={styles.dangerTextContainer}>
-              <Text style={[styles.settingLabel, { color: COLORS.warning }]}>Deactivate Account</Text>
+              <Text style={[styles.settingLabel, { color: theme.warning }]}>Deactivate Account</Text>
               <Text style={styles.dangerDescription}>Temporarily disable your account</Text>
             </View>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.dangerItem} onPress={() => setShowDeleteConfirm(true)}>
-            <View style={[styles.settingIconBox, { backgroundColor: `${COLORS.danger}15` }]}>
-              <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+            <View style={[styles.settingIconBox, { backgroundColor: `${theme.error}15` }]}>
+              <Ionicons name="trash-outline" size={20} color={theme.error} />
             </View>
             <View style={styles.dangerTextContainer}>
-              <Text style={[styles.settingLabel, { color: COLORS.danger }]}>Delete Account</Text>
+              <Text style={[styles.settingLabel, { color: theme.error }]}>Delete Account</Text>
               <Text style={styles.dangerDescription}>Permanently delete your account and data</Text>
             </View>
           </TouchableOpacity>
@@ -532,6 +570,59 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
+      {/* Theme Selection Modal */}
+      <Modal visible={showThemeModal} transparent animationType="fade">
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowThemeModal(false)}
+        >
+          <View style={styles.themeModalContent}>
+            <Text style={styles.themeModalTitle}>Choose Theme</Text>
+            
+            {(['dark', 'light', 'system'] as ThemeType[]).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.themeOption,
+                  themeType === type && styles.themeOptionActive,
+                ]}
+                onPress={() => handleThemeChange(type)}
+              >
+                <View style={styles.themeOptionLeft}>
+                  <View style={[
+                    styles.themeIconBox,
+                    themeType === type && { backgroundColor: `${theme.primary}20` }
+                  ]}>
+                    <Ionicons 
+                      name={getThemeIcon(type) as any} 
+                      size={24} 
+                      color={themeType === type ? theme.primary : theme.textSecondary} 
+                    />
+                  </View>
+                  <View>
+                    <Text style={[
+                      styles.themeOptionLabel,
+                      themeType === type && { color: theme.primary }
+                    ]}>
+                      {getThemeLabel(type)}
+                    </Text>
+                    <Text style={styles.themeOptionDesc}>
+                      {type === 'dark' && 'Always use dark theme'}
+                      {type === 'light' && 'Always use light theme'}
+                      {type === 'system' && 'Match device settings'}
+                    </Text>
+                  </View>
+                </View>
+                {themeType === type && (
+                  <Ionicons name="checkmark-circle" size={24} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Edit Name Modal */}
       <Modal visible={showEditName} transparent animationType="fade">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
@@ -540,7 +631,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="Your name"
-              placeholderTextColor={COLORS.textSecondary}
+              placeholderTextColor={theme.textSecondary}
               value={editName}
               onChangeText={setEditName}
               autoFocus
@@ -565,7 +656,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="Phone number"
-              placeholderTextColor={COLORS.textSecondary}
+              placeholderTextColor={theme.textSecondary}
               value={editPhone}
               onChangeText={setEditPhone}
               keyboardType="phone-pad"
@@ -592,7 +683,7 @@ export default function SettingsScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Current Password"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 secureTextEntry={!showPasswords}
@@ -602,7 +693,7 @@ export default function SettingsScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="New Password"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 secureTextEntry={!showPasswords}
@@ -612,13 +703,13 @@ export default function SettingsScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Confirm New Password"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={theme.textSecondary}
                 value={confirmNewPassword}
                 onChangeText={setConfirmNewPassword}
                 secureTextEntry={!showPasswords}
               />
               <TouchableOpacity onPress={() => setShowPasswords(!showPasswords)} style={styles.showPasswordButton}>
-                <Ionicons name={showPasswords ? 'eye-outline' : 'eye-off-outline'} size={20} color={COLORS.textSecondary} />
+                <Ionicons name={showPasswords ? 'eye-outline' : 'eye-off-outline'} size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalButtons}>
@@ -646,14 +737,14 @@ export default function SettingsScreen() {
               setShowLegalDocument(null);
               setLegalContent(null);
             }}>
-              <Ionicons name="close" size={24} color={COLORS.text} />
+              <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
             <Text style={styles.legalTitle}>{legalContent?.title || 'Loading...'}</Text>
             <View style={{ width: 24 }} />
           </View>
           {loadingLegal ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
+              <ActivityIndicator size="large" color={theme.primary} />
             </View>
           ) : (
             <ScrollView style={styles.legalContent} showsVerticalScrollIndicator={false}>
@@ -670,8 +761,8 @@ export default function SettingsScreen() {
       <Modal visible={showDeactivateConfirm} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.confirmModalContent}>
-            <View style={[styles.confirmIconBox, { backgroundColor: `${COLORS.warning}15` }]}>
-              <Ionicons name="pause-circle" size={48} color={COLORS.warning} />
+            <View style={[styles.confirmIconBox, { backgroundColor: `${theme.warning}15` }]}>
+              <Ionicons name="pause-circle" size={48} color={theme.warning} />
             </View>
             <Text style={styles.confirmTitle}>Deactivate Account?</Text>
             <Text style={styles.confirmDescription}>
@@ -682,7 +773,7 @@ export default function SettingsScreen() {
                 <Text style={styles.confirmButtonCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmButtonAction, { backgroundColor: COLORS.warning }]}
+                style={[styles.confirmButtonAction, { backgroundColor: theme.warning }]}
                 onPress={handleDeactivateAccount}
                 disabled={saving}
               >
@@ -697,8 +788,8 @@ export default function SettingsScreen() {
       <Modal visible={showDeleteConfirm} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.confirmModalContent}>
-            <View style={[styles.confirmIconBox, { backgroundColor: `${COLORS.danger}15` }]}>
-              <Ionicons name="trash" size={48} color={COLORS.danger} />
+            <View style={[styles.confirmIconBox, { backgroundColor: `${theme.error}15` }]}>
+              <Ionicons name="trash" size={48} color={theme.error} />
             </View>
             <Text style={styles.confirmTitle}>Delete Account?</Text>
             <Text style={styles.confirmDescription}>
@@ -709,7 +800,7 @@ export default function SettingsScreen() {
                 <Text style={styles.confirmButtonCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmButtonAction, { backgroundColor: COLORS.danger }]}
+                style={[styles.confirmButtonAction, { backgroundColor: theme.error }]}
                 onPress={handleDeleteRequest}
                 disabled={saving}
               >
@@ -721,16 +812,11 @@ export default function SettingsScreen() {
       </Modal>
 
       {/* Logout Confirmation Modal (for web) */}
-      <Modal
-        visible={showLogoutModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
+      <Modal visible={showLogoutModal} animationType="fade" transparent={true} onRequestClose={() => setShowLogoutModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.confirmModalContent}>
-            <View style={[styles.confirmIconBox, { backgroundColor: `${COLORS.danger}15` }]}>
-              <Ionicons name="log-out-outline" size={48} color={COLORS.danger} />
+            <View style={[styles.confirmIconBox, { backgroundColor: `${theme.error}15` }]}>
+              <Ionicons name="log-out-outline" size={48} color={theme.error} />
             </View>
             <Text style={styles.confirmTitle}>Logout</Text>
             <Text style={styles.confirmDescription}>
@@ -741,7 +827,7 @@ export default function SettingsScreen() {
                 <Text style={styles.confirmButtonCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmButtonAction, { backgroundColor: COLORS.danger }]}
+                style={[styles.confirmButtonAction, { backgroundColor: theme.error }]}
                 onPress={confirmLogout}
               >
                 <Text style={styles.confirmButtonActionText}>Logout</Text>
@@ -754,10 +840,11 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Dynamic styles function based on theme
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   loadingContainer: {
     flex: 1,
@@ -767,7 +854,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -776,20 +863,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: theme.text,
   },
   scrollView: {
     flex: 1,
@@ -798,7 +885,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 10,
     marginTop: 16,
     marginLeft: 4,
@@ -808,16 +895,16 @@ const styles = StyleSheet.create({
   subSectionTitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
   },
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     overflow: 'hidden',
   },
   settingItem: {
@@ -827,7 +914,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   settingLeft: {
     flexDirection: 'row',
@@ -838,14 +925,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: `${COLORS.primary}15`,
+    backgroundColor: `${theme.primary}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   settingLabel: {
     fontSize: 15,
-    color: COLORS.text,
+    color: theme.text,
     fontWeight: '500',
   },
   settingRight: {
@@ -856,7 +943,12 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
+  },
+  themePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   toggleItem: {
     flexDirection: 'row',
@@ -865,7 +957,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   toggleLeft: {
     flexDirection: 'row',
@@ -878,7 +970,7 @@ const styles = StyleSheet.create({
   },
   toggleDescription: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     marginTop: 2,
   },
   dangerItem: {
@@ -887,14 +979,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   dangerTextContainer: {
     flex: 1,
   },
   dangerDescription: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     marginTop: 2,
   },
   // Modal Styles
@@ -906,7 +998,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
     borderRadius: 16,
     padding: 24,
     width: '100%',
@@ -915,18 +1007,18 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text,
+    color: theme.text,
     marginBottom: 20,
     textAlign: 'center',
   },
   modalInput: {
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     padding: 14,
     fontSize: 16,
-    color: COLORS.text,
+    color: theme.text,
     marginBottom: 16,
   },
   modalButtons: {
@@ -938,11 +1030,11 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     alignItems: 'center',
   },
   modalButtonSecondaryText: {
-    color: COLORS.text,
+    color: theme.text,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -950,7 +1042,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
     borderRadius: 10,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.primary,
     alignItems: 'center',
   },
   modalButtonPrimaryText: {
@@ -961,25 +1053,74 @@ const styles = StyleSheet.create({
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     marginBottom: 12,
   },
   passwordInput: {
     flex: 1,
     padding: 14,
     fontSize: 16,
-    color: COLORS.text,
+    color: theme.text,
   },
   showPasswordButton: {
     padding: 14,
   },
+  // Theme Modal
+  themeModalContent: {
+    backgroundColor: theme.surface,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 340,
+  },
+  themeModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  themeOptionActive: {
+    backgroundColor: `${theme.primary}10`,
+  },
+  themeOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  themeIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: theme.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  themeOptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.text,
+  },
+  themeOptionDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
   // Legal Modal
   legalModalContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   legalHeader: {
     flexDirection: 'row',
@@ -988,12 +1129,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   legalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: COLORS.text,
+    color: theme.text,
   },
   legalContent: {
     flex: 1,
@@ -1001,17 +1142,17 @@ const styles = StyleSheet.create({
   },
   legalDate: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 16,
   },
   legalText: {
     fontSize: 14,
-    color: COLORS.text,
+    color: theme.text,
     lineHeight: 24,
   },
   // Confirm Modal
   confirmModalContent: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -1029,12 +1170,12 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: theme.text,
     marginBottom: 8,
   },
   confirmDescription: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -1049,11 +1190,11 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     alignItems: 'center',
   },
   confirmButtonCancelText: {
-    color: COLORS.text,
+    color: theme.text,
     fontSize: 15,
     fontWeight: '600',
   },
