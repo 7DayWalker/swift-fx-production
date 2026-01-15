@@ -3324,13 +3324,14 @@ async def initialize_super_admins():
         
         if existing:
             # Ensure they have Super Admin role (cannot be downgraded)
-            if existing.get("role") != UserRole.ADMIN.value or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value:
+            if existing.get("role") != UserRole.ADMIN.value or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value or not existing.get("is_admin"):
                 await db.users.update_one(
                     {"email": email.lower()},
                     {"$set": {
                         "role": UserRole.ADMIN.value,
                         "admin_role": AdminRole.SUPER_ADMIN.value,
                         "admin_enabled": True,
+                        "is_admin": True,
                         "subscription": "vip"
                     }}
                 )
@@ -3352,6 +3353,7 @@ async def initialize_super_admins():
                 "role": UserRole.ADMIN.value,
                 "admin_role": AdminRole.SUPER_ADMIN.value,
                 "admin_enabled": True,
+                "is_admin": True,
                 "subscription": "vip",
                 "subscription_expiry": None,
                 "subscription_status": "active",
