@@ -72,6 +72,13 @@ export default function AdminDashboard() {
       color: '#FFD700',
     },
     {
+      icon: 'briefcase',
+      label: 'Fund Applications',
+      description: 'Review & manage fund requests',
+      route: '/(admin)/fund-applications',
+      color: '#3B82F6',
+    },
+    {
       icon: 'analytics',
       label: 'AI Usage Metrics',
       description: 'View AI analysis statistics',
