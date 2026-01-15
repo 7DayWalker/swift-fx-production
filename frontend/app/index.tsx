@@ -12,7 +12,6 @@ export default function SplashScreen() {
     if (!isLoading) {
       const timer = setTimeout(() => {
         if (user) {
-          // Redirect based on admin status
           if (isAdmin) {
             router.replace('/(admin)/dashboard');
           } else {
@@ -29,23 +28,16 @@ export default function SplashScreen() {
   return (
     <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
       <View style={styles.logoContainer}>
-        <View style={styles.logoWrapper}>
-          <Image 
-            source={require('../assets/images/logo.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-        <Text style={styles.title}>Swift FX</Text>
-        <Text style={styles.subtitle}>SIGNALS</Text>
+        <Image 
+          source={require('../assets/images/logo.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
       </View>
       
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00D4AA" />
-        <Text style={styles.loadingText}>Loading...</Text>
       </View>
-      
-      <Text style={styles.tagline}>Professional Trading Signals</Text>
     </LinearGradient>
   );
 }
@@ -60,41 +52,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 60,
   },
-  logoWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 30,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
   logo: {
-    width: 120,
-    height: 120,
-  },
-  title: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#00D4AA',
-    letterSpacing: 8,
-    marginTop: 5,
+    width: 200,
+    height: 200,
   },
   loadingContainer: {
     alignItems: 'center',
-  },
-  loadingText: {
-    color: '#8A8D98',
-    marginTop: 15,
-    fontSize: 14,
-  },
-  tagline: {
-    position: 'absolute',
-    bottom: 50,
-    color: '#8A8D98',
-    fontSize: 14,
   },
 });
