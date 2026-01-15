@@ -222,17 +222,17 @@ backend:
         - agent: "main"
         - comment: "Returns performance stats, watchlist, recent signals"
 
-  - task: "Admin Endpoints"
+  - task: "Admin RBAC (Role-Based Access Control) System"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
     stuck_count: 0
-    priority: "medium"
+    priority: "high"
     needs_retesting: false
     status_history:
-        - working: true
-        - agent: "main"
-        - comment: "Admin can create signals, tested successfully"
+        - working: false
+        - agent: "testing"
+        - comment: "✅ RBAC SYSTEM COMPREHENSIVE TESTING COMPLETE: 9/11 tests passed (82% success rate). VERIFIED FUNCTIONALITY: 1) Super Admin Login - Working with correct credentials (ellaniswell@gmail.com) ✅. 2) RBAC Me Endpoint - Returns correct role, permissions, and super admin status ✅. 3) Roles List - All 5 roles (super_admin, signal_admin, fund_admin, account_manager, customer_support) with permissions ✅. 4) List Admins - Super admin can view all admin accounts ✅. 5) Create New Admin - Successfully creates new admin accounts with proper roles ✅. 6) Update Admin Role - Can modify admin roles successfully ✅. 7) Audit Logs - Tracks all admin actions with detailed logging ✅. 8) Admin Notifications - Notification system working ✅. 9) Delete Admin - Can remove admin accounts ✅. ❌ CRITICAL ISSUES FOUND: 1) Permission Enforcement NOT WORKING - Fund admin can access fund applications when signal_admin role should be blocked. Root cause: Endpoints use require_admin instead of require_permission() with proper resource/action checking. 2) Protected Super Admin test intermittent - Protection logic works (confirmed via manual testing and logs showing 403 Forbidden) but test framework has timeout issues. CONCLUSION: RBAC system is 80% functional with role management, audit logging, and basic access control working. However, granular permission enforcement is NOT implemented on endpoints, making the permission system ineffective for access control."
 
   - task: "Fund Management Application (User Submit)"
     implemented: true
