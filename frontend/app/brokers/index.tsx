@@ -215,7 +215,7 @@ export default function RecommendedBrokersScreen() {
 
               {/* Visit Button */}
               <TouchableOpacity
-                style={[styles.visitButton, { backgroundColor: logo.color }]}
+                style={[styles.visitButton, { backgroundColor: broker.color }]}
                 onPress={() => handleVisitBroker(broker.link, broker.name)}
                 activeOpacity={0.8}
               >
