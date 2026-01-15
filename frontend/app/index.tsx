@@ -38,6 +38,8 @@ export default function SplashScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00D4AA" />
       </View>
+      
+      <Text style={styles.tagline}>Professional Trading Signals</Text>
     </LinearGradient>
   );
 }
@@ -58,5 +60,11 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     alignItems: 'center',
+  },
+  tagline: {
+    position: 'absolute',
+    bottom: 50,
+    color: '#8A8D98',
+    fontSize: 14,
   },
 });
