@@ -1,100 +1,79 @@
 <analysis>
 
 **original_problem_statement**:
-The user wants to build a production-ready mobile trading signals application called **Swift FX Signals**. The most recent set of tasks focused on implementing a robust, secure, backend-enforced subscription and paywall system, followed by a detailed trade lifecycle engine. The latest user requests have shifted to populating the Academy module with comprehensive educational content for all subscription tiers.
+The user wants to implement a production-ready Fund Management feature. This feature should be visible to all users, but only Premium and VIP users can apply. The application process involves filling out a form, which is then saved to the database for an admin to review. The system must track the application status (pending, contacted, approved, rejected) and display it to the user. The feature also includes a Contact Fund Manager button that opens a WhatsApp deep link with a pre-filled message. All mock behavior must be removed, and the feature must be safe, compliant, and ready for real users.
 
-**PRODUCT REQUIREMENTS (for the current and recent tasks):**
--   **Academy Content Population**: The app's Academy module must be fully populated with content for Beginner, Intermediate, and Advanced tiers.
-    -   **Beginner**: Full access for all users.
-    -   **Intermediate (Premium) & Advanced (VIP)**: Content should be populated but remain locked behind the existing paywall.
-    -   **Content Format**: Each lesson requires an overview, key takeaways, a short, relevant YouTube video, and some courses should end with a static multiple-choice quiz.
-    -   **Video Playback**: Videos must be embedded and play *inside* the app, not redirect to YouTube.
--   **Trade Lifecycle Engine**: The signal engine was undergoing heavy refactoring to ensure trigger reliability and state integrity. The user's final instruction on this was to **disable all automatic signal processing** and put the system into a MANUAL MODE for stability, where only admins can change signal states.
--   **Backend-Enforced Subscriptions**: User access to features (Signals, AI Analyzer, Academy) must be controlled by the backend based on their subscription plan. This is complete and working.
+**PRODUCT REQUIREMENTS:**
+- **Access Control**: Free users can view the page but cannot apply. Premium/VIP users can apply.
+- **Application Form**: Collect Full Name, Email, Phone, Country, Investment Tier, Amount, and Experience.
+- **Database**: Store applications in a new  collection with a status field.
+- **Admin Panel**: Create a new screen for admins to view all applications and update their status.
+- **User Status Display**: Premium/VIP users should see their current application status on the Fund Management page.
+- **WhatsApp Integration**: The Contact Fund Manager button should open WhatsApp to  with a pre-filled message including the application ID.
+- **Compliance**: Legal disclaimers about risk and performance must be clearly visible.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application using Expo (React Native) for the frontend and FastAPI/MongoDB for the backend. The application features user authentication, a role-based subscription system with paywalls, an AI chart analyzer, a community section, and a signals module.
-
-The signal processing engine has been intentionally **disabled** and operates in a MANUAL MODE, where all automatic price-based triggers (activation, SL, TP) are turned off. Signal state changes can only be performed by an administrator.
-
-The Academy module has a complete UI structure and has been substantially populated with content for Beginner, Intermediate, and Advanced tiers, including embedded YouTube videos and static quizzes.
+A full-stack Expo (React Native) and FastAPI/MongoDB application. It features user authentication, a subscription system, a disabled MANUAL MODE signal engine, and several content modules:
+-   **Academy**: Fully populated with tiered educational content.
+-   **Economic Calendar**: A live, read-only view of economic events with filtering and push notification opt-ins.
+-   **Recommended Brokers**: A page with affiliate links to external brokers, displaying their official logos.
+-   **Market News**: A live news feed with category filters and preview images, sourced from RSS feeds.
 
 **Last working item**:
--   Last item agent was working: The user reported that lessons in the Intermediate and Advanced academy sections were missing content. The agent identified that the course list in  was more extensive than the content provided in . The agent's last action was to add the missing course content for all Intermediate and Advanced courses to the  file.
+-   Last item agent was working: Implementing the production-ready Fund Management feature. The agent created the backend API endpoints (for submitting and managing applications) and the frontend files for both the user-facing page () and the admin management screen ().
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **screenshot tool**. The agent must visually verify that the newly added content is now visible and accessible to the correct user role. This requires logging in as a VIP user to check the previously missing, locked content.
+-   Which testing method agent to use? **both**.
+    -   **backend testing agent**: To rigorously test the new API endpoints for creating, retrieving, and updating fund applications. This includes checking role-based access control.
+    -   **screenshot tool**: To test the end-to-end user and admin flows. This requires logging in with three different roles (Free, VIP, Admin).
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: Intermediate and Advanced academy lessons are missing content (P0)
--   Issue 2: Bottom tab navigation is clipped on iOS (P2, FROZEN)
+-   Issue 1: The new admin page for fund applications is unreachable (P0)
 
   Issues Detail:
-  - **Issue 1: Intermediate and Advanced academy lessons are missing content**
-     -   Attempted fixes: The agent updated the data file  to include the content for all the courses listed in the UI file .
+  - **Issue 1: The new admin page for fund applications is unreachable**
+     -   Attempted fixes: None. The agent created the file but did not link to it.
      -   Next debug checklist:
-        1.  Restart the frontend service: expo: ERROR (not running)
-expo: ERROR (abnormal termination).
-        2.  Use the  to visually verify the fix.
-        3.  Log in as a **VIP user** ( / ) to bypass the paywall for testing.
-        4.  Navigate to the Academy -> Intermediate section.
-        5.  Click on a previously missing course (e.g., Trend Trading or Swing Trading).
-        6.  Verify that the lesson list appears correctly.
-        7.  Click into a lesson and confirm the content (overview, video, takeaways, quiz) is now displayed.
-        8.  Repeat the verification process for a course in the Advanced section (e.g., Market Structure Confluence).
-     -   Why fix this issue and what will be achieved with the fix?: This will fulfill the user's request to complete the Academy content, making the premium tiers of the application valuable and justifying the subscription cost.
-     -   Status: **IN PROGRESS**
+        1.  Edit  (the main admin dashboard).
+        2.  Add a new menu item or card that links to . Use a descriptive label like Fund Applications.
+        3.  Verify the navigation works after the fix.
+     -   Why fix this issue and what will be achieved with the fix?: This will make the newly created admin feature accessible, which is essential for managing the entire fund application workflow.
+     -   Status: **NOT STARTED**
      -   Is recurring issue?: N
      -   Should Test frontend/backend/both after fix?: Frontend
      -   Blocked on other issue: None.
 
-  - **Issue 2: Bottom tab navigation is clipped on iOS**
-     -   Attempted fixes: Multiple failed attempts in a previous session.
-     -   Next debug checklist: **DO NOT WORK ON THIS.** The user has frozen all work on this issue.
-     -   Why fix this issue and what will be achieved with the fix?: Fixes a critical UI bug on modern iPhones.
-     -   Status: **NOT STARTED** (Work is frozen).
-     -   Is recurring issue?: Y
-     -   Should Test frontend/backend/both after fix?: Frontend.
-     -   Blocked on other issue: None.
-
 **In progress Task List**:
-  - Task 1: Finalize and verify the full population of the Academy module (P0)
-     - Where to resume: The agent has just edited . The next step is to restart the frontend and use the  to verify the changes, as detailed in Issue 1 above.
-     - What will be achieved with this?: A complete, professional, and monetizable Academy section.
+  - Task 1: Complete and Verify the Fund Management Feature (P0)
+     - Where to resume: The backend endpoints and frontend files have been created. The immediate next step is to fix the missing link to the admin page (see Issue 1). After that, a full end-to-end test of the feature is required.
+     - What will be achieved with this?: A complete, production-ready system for users to apply for fund management and for admins to review those applications.
      - Status: **IN PROGRESS**
-     - Should Test frontend/backend/both after fix?: Frontend.
+     - Should Test frontend/backend/both after fix?: Both
      - Blocked on something: None.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks**:
-    - (P0) **Re-enable Automatic Signal Engine**: The core trade lifecycle automation in  is currently disabled. A crucial future task is to re-enable this engine, likely after user confirmation that the manual mode period is over.
-    - (P1) **Frontend UI for Trade Lifecycle**: Update signal cards and views in  and  to visually represent the granular states (, , , ) from the new engine.
-
+    - (P0) **Re-enable Automatic Signal Engine**: The core trade lifecycle automation in  is currently disabled. A crucial future task is to re-enable this engine.
+    - (P1) **Frontend UI for Trade Lifecycle**: Update signal cards and views in  and  to visually represent the granular states (, , , ).
 - **Future Tasks**:
-    - (P1) Integrate a real payment provider (e.g., Stripe) to replace the mock payment flow.
+    - (P1) Integrate a real payment provider (e.g., Stripe).
     - (P2) Expand Dark/Light mode theme to all screens.
     - (P2) Implement remaining Community features (liking, commenting).
     - (P2) Implement mock AdMob banners for Free users.
     - (P3) Add user progress tracking to the Academy module.
 
 **Completed work in this session**
-- **Signal Engine Rebuild & Manual Mode Activation**:
-  - Refactored the backend trade lifecycle engine multiple times to improve reliability.
-  - Implemented accurate price-crossing logic for SL/TP triggers.
-  - Ultimately, per user request for stability, **disabled the entire automatic signal processing engine** and switched the backend to a MANUAL MODE. All automatic logic in  is commented out.
-- **Academy Content Population (Phase 1 & 2)**:
-  - Created a new data file  to hold all lesson content.
-  - Fully populated Beginner courses with overviews, key takeaways, YouTube links, and quizzes.
-  - Implemented embedded YouTube playback using  by updating .
-  - Added static multiple-choice quizzes with answer feedback to relevant lessons.
-  - Began populating Intermediate and Advanced course content.
+- **Academy Content Verification**: Debugged login/proxy issues in the forked environment and verified that all Intermediate and Advanced academy lessons were correctly populated and accessible to VIP users.
+- **Economic Calendar Feature**: Implemented a live, read-only Economic Calendar using a free, no-key API. Added filtering, a detail view, a dashboard shortcut, and stubs for push notifications.
+- **Recommended Brokers Page**: Created a new page listing recommended brokers with logos, descriptions, and external affiliate links. Sourced official logos using Google's Favicon API.
+- **Market News Feature**: Implemented a live news feed sourced from public RSS feeds, with category filtering, a detail view, and preview images for articles.
 
 **Earlier issues found/mentioned but not fixed**
    - **Issue 1: Bottom tab navigation is clipped on iOS.**
-     - Debug checklist: See All Pending/In progress Issue list. **Work is frozen by the user**.
+     - Debug checklist: Work on this is **FROZEN** by the user. Do not attempt to fix it.
      - Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug on modern iPhones.
      - Should Test frontend/backend/both after fix: Frontend.
      - Is recurring issue? Y
@@ -105,86 +84,98 @@ expo: ERROR (abnormal termination).
   - **Status:** NOT STARTED (frozen by user).
 
 **Code Architecture**
-react-native-webview
+
 
 **Key Technical Concepts**
--   **Frontend**: React Native, Expo, Expo Router, TypeScript
--   **Backend**: Python, FastAPI, Pydantic, MongoDB
--   **Video Embedding**:  is used to play YouTube videos directly within the lesson screen.
--   **Trade Logic**: Currently in **MANUAL MODE**. All automatic signal processing in  is disabled via commented-out code. State changes are admin-only.
--   **Content Management**: All Academy content is stored statically in a large TypeScript file ().
+-   **API Development**: New RESTful endpoints in FastAPI with Pydantic models for data validation.
+-   **Async DB Operations**: Using  with  for all MongoDB queries in the new endpoints.
+-   **Frontend State Management**: Using  and  to manage application form data, submission state, and user application status.
+-   **Modal UI**: Using  component for the application form.
+-   **Deep Linking**: Using  to open a pre-filled WhatsApp chat.
+-   **Resourcefulness**: Using external services like  and Google's Favicon API to implement features without requiring user-provided API keys.
+-   **Local Dev Workaround**: Modified  to handle the difference between local web preview (needs absolute URL ) and mobile builds (use relative  proxy).
 
 **key DB schema**
--   **users**: { , , , ,  }
--   **signals**: { , , , , , , , , , , ,  }
+-   **users**: { , , ,  }
+-   **signals**: { , ,  }
+-   **fund_applications**: { , , , , , , , , , ,  } (NEW)
 
 **changes in tech stack**
--    was added to the frontend to support embedded video playback.
+-   None. Existing stack was used.
 
 **All files of reference**
--   : **Most recently modified file.** Contains all static content for the Academy. The agent just added a large amount of content here to fix missing lessons.
--   : The UI component for displaying individual lessons. It was updated to handle embedded videos and quizzes.
--   : This file's hardcoded course list was the source of the missing content issue, as it contained more courses than were initially populated in .
--   : The  background task and its related startup event are commented out, effectively disabling the automatic signal engine.
+-   **/app/backend/server.py**: Heavily modified to add models and API endpoints for Fund Management.
+-   **/app/frontend/app/fund-management.tsx**: Completely rewritten to replace the mock page with a full-featured implementation.
+-   **/app/frontend/app/(admin)/fund-applications.tsx**: New file created for the admin management UI.
+-   **/app/frontend/app/(admin)/index.tsx**: Needs to be edited to make the new admin page accessible.
+-   **/app/frontend/src/services/api.ts**: Contains the critical local development workaround for API calls.
 
 **Areas that need refactoring**:
--   The static content in  has become very large. In a future iteration, this could be moved to a headless CMS or a dedicated database collection for better management.
--   The frontend components for signals (, ) will need significant updates to handle the new states once the automatic engine is re-enabled.
+- The local dev workaround in  should ideally be replaced by a proper proxy setup in  for web if this becomes a recurring issue, but the current solution is functional for testing.
 
 **key api endpoints**
--    (GET): Returns the current status of the signal engine (e.g., ).
--    (POST): Used by admins for manual state changes.
+-    (POST): Submit a new fund management application.
+-    (GET): Get the current user's application status.
+-    (GET): Get all applications (admin only).
+-    (PUT): Update an application's status (admin only).
+-    (GET): Get economic calendar events.
 
 **Critical Info for New Agent**
--   **Top Priority:** Your first task is to **verify the fix** for the missing Academy content. The data has been added, but you must confirm it appears correctly in the UI for a VIP user.
--   **SIGNAL ENGINE IS IN MANUAL MODE**: This is intentional. **Do not** attempt to fix or re-enable the automatic signal processing logic in . The background task that evaluates prices is disabled on purpose for system stability.
--   **DO NOT WORK ON THE IOS TAB BAR BUG.** Work on this UI issue is explicitly frozen by the user.
--   **Testing Credentials**: To view Intermediate and Advanced academy content, you MUST log in as the VIP user:  / .
+-   **Your immediate task is to complete the Fund Management feature.** Start by making the new admin page at  reachable by adding a link to it in .
+-   **Comprehensive testing is required.** You must test the entire flow using three different user accounts to verify the access control and functionality:
+    -   **Free User ( / )**: Verify they CANNOT apply.
+    -   **VIP User ( / )**: Verify they CAN apply and see their status.
+    -   **Admin User ( / )**: Verify they can view and manage all applications.
+-   **SIGNAL ENGINE is OFFLINE.** Do not attempt to fix or re-enable the automatic signal processing in . It is in MANUAL MODE intentionally.
 
 **documents created in this job**
 -   
+-   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User (Msg 202):** Great job, but lessons in Intermediate and advanced are missing contents and quizes or final assessment - **This is the current active issue.**
-2.  **User (Msg 189):** Requested full population of Intermediate and Advanced Academy content, keeping them locked. (In Progress)
-3.  **User (Msg 166):** Requested video embedding, better video selection, and static quizzes in the Academy. (Completed)
-4.  **User (Msg 131):** Requested initial population of Academy content, focusing on the Beginner tier. (Completed)
-5.  **User (Msg 110):** Requested to **disable all automatic signal behavior** and put the system into a stable MANUAL MODE. (Completed)
-6.  **User (Msg 77):** Requested a full rebuild of the signal engine from scratch to fix core logic issues. (Completed)
-7.  **User (Msg 36):** Reported critical bugs with the signal engine: SL/TP not triggering and admin states being overridden. (Completed)
-8.  **User (Msg 5):** Confirmed the agent's plan to implement the subscription system. (Completed)
-9.  **User (Msg 1):** Initial request to build the Swift FX Signals app. (Ongoing)
-10. **System (Msg 5):** User confirms the agent's plan to continue. (N/A)
+1.  **User**: Requested the production-ready Fund Management feature. (IN PROGRESS)
+2.  **User**: Requested preview images for the News feature. (COMPLETED)
+3.  **User**: Requested the Market News feature. (COMPLETED)
+4.  **User**: Corrected the agent, noting that some broker logos were still not visible. (COMPLETED)
+5.  **User**: Requested to replace text avatars with official logos on the Brokers page. (COMPLETED)
+6.  **User**: Requested the Recommended Brokers page. (COMPLETED)
+7.  **User**: Approved the Economic Calendar and requested enhancements (dashboard shortcut, notifications, filters). (COMPLETED)
+8.  **User**: Requested the Economic Calendar feature. (COMPLETED)
+9.  **User**: Requested a free, no-key API for the economic calendar. (COMPLETED)
+10. **User**: Confirmed the agent's plan to proceed with verifying the Academy content fix. (COMPLETED)
 
 **Project Health Check:**
 -   **Broken**:
     -   Bottom tab navigation UI on iOS (). Work is **FROZEN**.
 -   **Disabled**:
-    -   The core automatic signal processing engine in  is intentionally non-functional and in **MANUAL MODE**.
+    -   The core automatic signal processing engine in  is in **MANUAL MODE**.
 -   **Mocked**:
-    -   The payment system is a placeholder (Stripe-ready).
+    -   Payment system (Stripe-ready).
     -   Ad system.
 
 **3rd Party Integrations**
 -   **Anthropic Claude Vision**: For AI Chart Analyzer. Uses **Emergent LLM Key**.
+-   **Fair Economy Media API**: For Economic Calendar data (free, no key).
+-   **rss2json.com API**: For converting RSS feeds to JSON for the News feature (free, no key).
+-   **Google Favicon API**: For sourcing broker logos reliably (free, no key).
 -   **Frankfurter API**: For Forex price data.
 -   **CoinGecko API**: For Gold/Crypto price data.
 -   **Expo Push Notifications**: Integrated.
--   **expo-clipboard**: v14.0.1.
--   **react-native-webview**: v13.16.0, for embedding YouTube videos.
 
 **Testing status**
--   Testing agent used after significant changes: YES, the backend agent ran multiple times to verify the signal engine refactors and the final manual mode.
+-   Testing agent used after significant changes: NO (for the current Fund Management feature).
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: None are persisted.
 -   Known regressions: None.
 
 **Credentials to test flow:**
 -   **Admin**:  / 
--   **VIP User (for Academy testing)**:  / 
+-   **VIP User (for testing Premium/VIP features)**:  / 
 -   **Free User**:  / 
 
 **What agent forgot to execute**
-- The agent did not perform a final visual verification (e.g., via ) after adding the missing Academy content. The task was marked as done prematurely before confirming the user's reported issue was actually solved from a UI perspective.
+- The agent created the admin page for managing fund applications () but **forgot to add a link or menu item** to it from the main admin dashboard (), making the new page unreachable through the UI.
 
 </analysis>
