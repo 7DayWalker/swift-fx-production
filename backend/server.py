@@ -3120,6 +3120,172 @@ async def get_automation_status():
 
 
 # ==============================================================================
+# FUND MANAGEMENT API - PRODUCTION READY
+# ==============================================================================
+
+@api_router.post("/fund/apply")
+async def submit_fund_application(
+    application: FundApplicationCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Submit a fund management application.
+    Requires Premium or VIP subscription.
+    """
+    # Check subscription level
+    user_subscription = get_effective_subscription(current_user)
+    if user_subscription not in ["premium", "vip"]:
+        raise HTTPException(
+            status_code=403, 
+            detail="Fund Management applications require Premium or VIP subscription"
+        )
+    
+    # Validate risk agreement
+    if not application.risk_agreement:
+        raise HTTPException(
+            status_code=400,
+            detail="You must agree to the risk disclaimer to submit an application"
+        )
+    
+    # Check if user already has a pending application
+    existing = fund_applications.find_one({
+        "user_id": current_user["user_id"],
+        "status": {"$in": ["pending_review", "contacted"]}
+    })
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have an active application under review"
+        )
+    
+    # Create application
+    application_id = f"fund_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    application_doc = {
+        "application_id": application_id,
+        "user_id": current_user["user_id"],
+        "full_name": application.full_name,
+        "email": application.email,
+        "phone": application.phone,
+        "country": application.country,
+        "investment_tier": application.investment_tier.value,
+        "intended_amount": application.intended_amount,
+        "trading_experience": application.trading_experience.value,
+        "risk_agreement": application.risk_agreement,
+        "status": FundApplicationStatus.PENDING_REVIEW.value,
+        "admin_notes": None,
+        "created_at": now.isoformat(),
+        "updated_at": None,
+    }
+    
+    fund_applications.insert_one(application_doc)
+    logger.info(f"[Fund] New application {application_id} from user {current_user['user_id']}")
+    
+    return {
+        "success": True,
+        "application_id": application_id,
+        "message": "Application received. Our team will contact you within 48 hours.",
+        "status": "pending_review"
+    }
+
+
+@api_router.get("/fund/my-application")
+async def get_my_fund_application(current_user: dict = Depends(get_current_user)):
+    """Get the current user's fund management application status."""
+    application = fund_applications.find_one(
+        {"user_id": current_user["user_id"]},
+        sort=[("created_at", -1)]  # Get most recent
+    )
+    
+    if not application:
+        return {"has_application": False, "application": None}
+    
+    return {
+        "has_application": True,
+        "application": {
+            "application_id": application["application_id"],
+            "status": application["status"],
+            "investment_tier": application["investment_tier"],
+            "intended_amount": application["intended_amount"],
+            "created_at": application["created_at"],
+        }
+    }
+
+
+@api_router.get("/admin/fund/applications")
+async def get_all_fund_applications(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all fund management applications. Admin only."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    query = {}
+    if status:
+        query["status"] = status
+    
+    applications = list(fund_applications.find(query).sort("created_at", -1))
+    
+    # Remove MongoDB _id field
+    for app in applications:
+        app.pop("_id", None)
+    
+    return {
+        "applications": applications,
+        "total": len(applications)
+    }
+
+
+@api_router.put("/admin/fund/applications/{application_id}")
+async def update_fund_application(
+    application_id: str,
+    status: str,
+    admin_notes: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update fund application status. Admin only."""
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Validate status
+    valid_statuses = ["pending_review", "contacted", "approved", "rejected"]
+    if status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {valid_statuses}"
+        )
+    
+    # Find application
+    application = fund_applications.find_one({"application_id": application_id})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Update application
+    update_data = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if admin_notes is not None:
+        update_data["admin_notes"] = admin_notes
+    
+    fund_applications.update_one(
+        {"application_id": application_id},
+        {"$set": update_data}
+    )
+    
+    logger.info(f"[Fund] Admin {current_user['user_id']} updated application {application_id} to {status}")
+    
+    return {
+        "success": True,
+        "application_id": application_id,
+        "new_status": status,
+        "message": f"Application {status}"
+    }
+
+
+# ==============================================================================
 # ECONOMIC CALENDAR API - LIVE DATA
 # ==============================================================================
 
