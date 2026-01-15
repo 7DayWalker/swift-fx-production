@@ -3643,7 +3643,7 @@ async def request_withdrawal(
     
     # Generate WhatsApp notification URL for admin
     whatsapp_message = f"🔔 WITHDRAWAL REQUEST\n\nInvestor: {portfolio['full_name']}\nAmount: ${request.amount:,.2f}\nPortfolio: {portfolio['portfolio_id']}\nRequest ID: {withdrawal_id}\n\nPlease review in Admin Dashboard."
-    whatsapp_url = f"https://wa.me/{ADMIN_WHATSAPP_PHONE}?text={requests.utils.quote(whatsapp_message)}"
+    whatsapp_url = f"https://wa.me/{ADMIN_WHATSAPP_PHONE}?text={quote(whatsapp_message)}"
     
     return {
         "success": True,
