@@ -1,519 +1,384 @@
 #!/usr/bin/env python3
 """
-Admin RBAC (Role-Based Access Control) System Testing
-Test the complete RBAC system with all endpoints and permission enforcement.
+Comprehensive Backend Testing for Swift FX Signals - Referral Program
+Tests all referral program endpoints with proper authentication and role-based access control.
 """
 
 import requests
 import json
 import sys
-from typing import Dict, Any, Optional
+from datetime import datetime
+import time
 
-# Configuration
+# Backend URL from frontend .env
 BASE_URL = "https://friendboost.preview.emergentagent.com/api"
 
-# Test credentials - using actual super admin account
-SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
-SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
+# Test credentials from review request
+TEST_CREDENTIALS = {
+    "super_admin": {
+        "email": "ellapauledache@gmail.com",
+        "password": "SuperAdmin2025!"
+    },
+    "vip_user": {
+        "email": "fundtest@test.com", 
+        "password": "password"
+    },
+    "free_user": {
+        "email": "freeuser@test.com",
+        "password": "password"
+    }
+}
 
-class RBACTester:
+class TestResults:
     def __init__(self):
-        self.session = requests.Session()
-        self.super_admin_token = None
-        self.signal_admin_token = None
-        self.created_admin_id = None
-        self.test_results = []
+        self.passed = 0
+        self.failed = 0
+        self.errors = []
         
-    def log_test(self, test_name: str, success: bool, details: str = ""):
-        """Log test result"""
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name}")
-        if details:
-            print(f"   Details: {details}")
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "details": details
-        })
+    def success(self, test_name):
+        print(f"✅ {test_name}")
+        self.passed += 1
         
-    def make_request(self, method: str, endpoint: str, token: str = None, **kwargs) -> requests.Response:
-        """Make HTTP request with optional auth token"""
-        url = f"{BASE_URL}{endpoint}"
-        headers = kwargs.get('headers', {})
+    def failure(self, test_name, error):
+        print(f"❌ {test_name}: {error}")
+        self.failed += 1
+        self.errors.append(f"{test_name}: {error}")
         
-        if token:
-            headers['Authorization'] = f"Bearer {token}"
-            
-        kwargs['headers'] = headers
-        
-        # Set default timeout if not provided
-        if 'timeout' not in kwargs:
-            kwargs['timeout'] = 30
-        
-        try:
-            response = self.session.request(method, url, **kwargs)
-            return response
-        except Exception as e:
-            print(f"Request failed: {e}")
-            return None
-            
-    def test_1_super_admin_login(self):
-        """Step 1: Test Super Admin Login"""
-        print("\n=== Step 1: Super Admin Login ===")
-        
-        response = self.make_request(
-            'POST', 
-            '/auth/login',
-            json={
-                "email": SUPER_ADMIN_EMAIL,
-                "password": SUPER_ADMIN_PASSWORD
-            }
-        )
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            self.super_admin_token = data.get('token')
-            user_info = data.get('user', {})
-            
-            if self.super_admin_token and user_info.get('role') == 'admin':
-                self.log_test("Super Admin Login", True, f"Logged in as {user_info.get('email')}")
-                return True
-            else:
-                self.log_test("Super Admin Login", False, "Invalid token or role")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Super Admin Login", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_2_rbac_me_endpoint(self):
-        """Step 2: Test RBAC Me Endpoint"""
-        print("\n=== Step 2: Test RBAC Me Endpoint ===")
-        
-        response = self.make_request('GET', '/admin/rbac/me', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            
-            # Verify required fields
-            required_fields = ['admin_role', 'is_super_admin', 'permissions']
-            missing_fields = [field for field in required_fields if field not in data]
-            
-            if not missing_fields:
-                admin_role = data.get('admin_role')
-                is_super_admin = data.get('is_super_admin')
-                permissions = data.get('permissions', {})
-                
-                if admin_role == 'super_admin' and is_super_admin and permissions:
-                    self.log_test("RBAC Me Endpoint", True, 
-                                f"Role: {admin_role}, Super Admin: {is_super_admin}, Permissions: {len(permissions)} resources")
-                    return True
-                else:
-                    self.log_test("RBAC Me Endpoint", False, 
-                                f"Invalid data - Role: {admin_role}, Super Admin: {is_super_admin}")
-                    return False
-            else:
-                self.log_test("RBAC Me Endpoint", False, f"Missing fields: {missing_fields}")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("RBAC Me Endpoint", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_3_roles_list(self):
-        """Step 3: Test Roles List"""
-        print("\n=== Step 3: Test Roles List ===")
-        
-        response = self.make_request('GET', '/admin/rbac/roles', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            roles = data.get('roles', [])
-            
-            expected_roles = ['super_admin', 'signal_admin', 'fund_admin', 'account_manager', 'customer_support']
-            found_roles = [role.get('role') for role in roles]
-            
-            if len(roles) == 5 and all(role in found_roles for role in expected_roles):
-                # Verify each role has permissions
-                all_have_permissions = all(role.get('permissions') is not None for role in roles)
-                
-                if all_have_permissions:
-                    self.log_test("Roles List", True, f"Found all 5 roles: {found_roles}")
-                    return True
-                else:
-                    self.log_test("Roles List", False, "Some roles missing permissions")
-                    return False
-            else:
-                self.log_test("Roles List", False, f"Expected 5 roles, found {len(roles)}: {found_roles}")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Roles List", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_4_list_admins(self):
-        """Step 4: Test List Admins (Super Admin Only)"""
-        print("\n=== Step 4: Test List Admins ===")
-        
-        response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            admins = data.get('admins', [])
-            total = data.get('total', 0)
-            
-            if isinstance(admins, list) and total >= 0:
-                # Check if our super admin is in the list
-                super_admin_found = any(admin.get('email') == SUPER_ADMIN_EMAIL for admin in admins)
-                
-                if super_admin_found:
-                    self.log_test("List Admins", True, f"Found {total} admin(s), including super admin")
-                    return True
-                else:
-                    self.log_test("List Admins", False, f"Super admin not found in list of {total} admins")
-                    return False
-            else:
-                self.log_test("List Admins", False, "Invalid response format")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("List Admins", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_5_create_new_admin(self):
-        """Step 5: Test Create New Admin"""
-        print("\n=== Step 5: Test Create New Admin ===")
-        
-        # Use a unique email with timestamp to avoid conflicts
-        import time
-        timestamp = int(time.time())
-        
-        admin_data = {
-            "email": f"signaltest{timestamp}@swiftfx.com",
-            "name": "Signal Admin Test",
-            "password": "TestPassword123!",
-            "admin_role": "signal_admin"
-        }
-        
-        try:
-            response = self.make_request('POST', '/admin/rbac/admins', token=self.super_admin_token, 
-                                       json=admin_data, timeout=30)
-            
-            if response and response.status_code == 200:
-                data = response.json()
-                
-                if data.get('success') and data.get('user_id'):
-                    self.created_admin_id = data.get('user_id')
-                    self.log_test("Create New Admin", True, f"Created admin with ID: {self.created_admin_id}")
-                    return True
-                else:
-                    self.log_test("Create New Admin", False, f"Success: {data.get('success')}, User ID: {data.get('user_id')}")
-                    return False
-            else:
-                error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-                self.log_test("Create New Admin", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-                return False
-        except Exception as e:
-            self.log_test("Create New Admin", False, f"Exception: {str(e)}")
-            return False
-            
-    def test_6_update_admin_role(self):
-        """Step 6: Test Update Admin Role"""
-        print("\n=== Step 6: Test Update Admin Role ===")
-        
-        if not self.created_admin_id:
-            self.log_test("Update Admin Role", False, "No admin ID from previous test")
-            return False
-            
-        update_data = {
-            "admin_role": "fund_admin"
-        }
-        
-        response = self.make_request('PUT', f'/admin/rbac/admins/{self.created_admin_id}', 
-                                   token=self.super_admin_token, json=update_data)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            
-            if data.get('success'):
-                self.log_test("Update Admin Role", True, "Successfully updated admin role to fund_admin")
-                return True
-            else:
-                self.log_test("Update Admin Role", False, f"Success: {data.get('success')}")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Update Admin Role", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_7_audit_logs(self):
-        """Step 7: Test Audit Logs (Super Admin Only)"""
-        print("\n=== Step 7: Test Audit Logs ===")
-        
-        response = self.make_request('GET', '/admin/rbac/audit-logs', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            logs = data.get('logs', [])
-            total = data.get('total', 0)
-            
-            if isinstance(logs, list):
-                # Check if we have logs from previous actions
-                admin_actions = [log for log in logs if log.get('resource_type') == 'admin']
-                
-                self.log_test("Audit Logs", True, f"Retrieved {total} audit logs, {len(admin_actions)} admin actions")
-                return True
-            else:
-                self.log_test("Audit Logs", False, "Invalid response format")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Audit Logs", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_8_admin_notifications(self):
-        """Step 8: Test Admin Notifications"""
-        print("\n=== Step 8: Test Admin Notifications ===")
-        
-        response = self.make_request('GET', '/admin/notifications', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            notifications = data.get('notifications', [])
-            total = data.get('total', 0)
-            
-            if isinstance(notifications, list):
-                self.log_test("Admin Notifications", True, f"Retrieved {total} notifications")
-                return True
-            else:
-                self.log_test("Admin Notifications", False, "Invalid response format")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Admin Notifications", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_9_permission_enforcement(self):
-        """Step 9: Test Permission Enforcement"""
-        print("\n=== Step 9: Test Permission Enforcement ===")
-        
-        # First, login as the signal admin we created
-        if not self.created_admin_id:
-            self.log_test("Permission Enforcement - Login", False, "No signal admin created")
-            return False
-            
-        # Get the email from the created admin ID (we need to construct it)
-        import time
-        # We need to find the actual email used - let's get it from the admin list
-        response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            admins = response.json().get('admins', [])
-            signal_admin_email = None
-            
-            for admin in admins:
-                if admin.get('user_id') == self.created_admin_id:
-                    signal_admin_email = admin.get('email')
-                    break
-            
-            if not signal_admin_email:
-                self.log_test("Permission Enforcement - Login", False, "Could not find signal admin email")
-                return False
-        else:
-            self.log_test("Permission Enforcement - Login", False, "Could not retrieve admin list")
-            return False
-            
-        # Login as signal admin
-        response = self.make_request(
-            'POST', 
-            '/auth/login',
-            json={
-                "email": signal_admin_email,
-                "password": "TestPassword123!"
-            }
-        )
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            signal_admin_token = data.get('token')
-            
-            if signal_admin_token:
-                self.log_test("Permission Enforcement - Login", True, "Signal admin logged in successfully")
-                
-                # Test 1: Try to access fund applications (should be blocked)
-                fund_response = self.make_request('GET', '/admin/fund/applications', token=signal_admin_token)
-                
-                if fund_response and fund_response.status_code == 403:
-                    self.log_test("Permission Enforcement - Fund Access Blocked", True, "Signal admin correctly blocked from fund applications")
-                    fund_blocked = True
-                else:
-                    self.log_test("Permission Enforcement - Fund Access Blocked", False, 
-                                f"Expected 403, got {fund_response.status_code if fund_response else 'None'}")
-                    fund_blocked = False
-                
-                # Test 2: Try to access signals (should work)
-                signals_response = self.make_request('GET', '/signals', token=signal_admin_token)
-                
-                if signals_response and signals_response.status_code == 200:
-                    self.log_test("Permission Enforcement - Signal Access Allowed", True, "Signal admin can access signals")
-                    signal_allowed = True
-                else:
-                    self.log_test("Permission Enforcement - Signal Access Allowed", False, 
-                                f"Expected 200, got {signals_response.status_code if signals_response else 'None'}")
-                    signal_allowed = False
-                
-                return fund_blocked and signal_allowed
-            else:
-                self.log_test("Permission Enforcement - Login", False, "No token received")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Permission Enforcement - Login", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def test_10_protected_super_admin(self):
-        """Step 10: Test Protected Super Admin"""
-        print("\n=== Step 10: Test Protected Super Admin ===")
-        
-        # Try to change role of protected super admin to non-super admin
-        # Use ellapauledache@gmail.com which is in the protected list
-        protected_email = "ellapauledache@gmail.com"
-        
-        # First, get the admin list to find the protected super admin
-        try:
-            response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token, timeout=30)
-            
-            if response and response.status_code == 200:
-                data = response.json()
-                admins = data.get('admins', [])
-                
-                # Find the protected super admin
-                protected_admin = None
-                for admin in admins:
-                    if admin.get('email') == protected_email:
-                        protected_admin = admin
-                        break
-                
-                if protected_admin:
-                    protected_admin_id = protected_admin.get('user_id')
-                    
-                    # Try to downgrade the protected super admin
-                    update_data = {
-                        "admin_role": "signal_admin"
-                    }
-                    
-                    downgrade_response = self.make_request('PUT', f'/admin/rbac/admins/{protected_admin_id}', 
-                                                         token=self.super_admin_token, json=update_data, timeout=30)
-                    
-                    if downgrade_response and downgrade_response.status_code == 403:
-                        self.log_test("Protected Super Admin", True, "Protected super admin cannot be downgraded (403 Forbidden)")
-                        return True
-                    else:
-                        self.log_test("Protected Super Admin", False, 
-                                    f"Expected 403, got {downgrade_response.status_code if downgrade_response else 'None'}")
-                        return False
-                else:
-                    # If protected admin doesn't exist, try to create one and then modify it
-                    # This tests the protection during creation
-                    create_data = {
-                        "email": protected_email,
-                        "name": "Protected Super Admin",
-                        "password": "TempPassword123!",
-                        "admin_role": "signal_admin"  # Try to create as non-super admin
-                    }
-                    
-                    create_response = self.make_request('POST', '/admin/rbac/admins', 
-                                                      token=self.super_admin_token, json=create_data, timeout=30)
-                    
-                    if create_response and create_response.status_code == 403:
-                        self.log_test("Protected Super Admin", True, "Cannot create protected email as non-super admin (403 Forbidden)")
-                        return True
-                    else:
-                        self.log_test("Protected Super Admin", False, 
-                                    f"Expected 403 when creating protected email as non-super admin, got {create_response.status_code if create_response else 'None'}")
-                        return False
-            else:
-                self.log_test("Protected Super Admin", False, "Could not retrieve admin list")
-                return False
-        except Exception as e:
-            self.log_test("Protected Super Admin", False, f"Exception: {str(e)}")
-            return False
-            
-    def test_11_delete_admin(self):
-        """Step 11: Test Delete Admin"""
-        print("\n=== Step 11: Test Delete Admin ===")
-        
-        if not self.created_admin_id:
-            self.log_test("Delete Admin", False, "No admin ID to delete")
-            return False
-            
-        response = self.make_request('DELETE', f'/admin/rbac/admins/{self.created_admin_id}', 
-                                   token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            
-            if data.get('success'):
-                self.log_test("Delete Admin", True, "Successfully deleted admin account")
-                return True
-            else:
-                self.log_test("Delete Admin", False, f"Success: {data.get('success')}")
-                return False
-        else:
-            error_msg = response.json().get('detail', 'Unknown error') if response else "No response"
-            self.log_test("Delete Admin", False, f"Status: {response.status_code if response else 'None'}, Error: {error_msg}")
-            return False
-            
-    def run_all_tests(self):
-        """Run all RBAC tests in sequence"""
-        print("🚀 Starting Admin RBAC System Testing")
-        print("=" * 50)
-        
-        tests = [
-            self.test_1_super_admin_login,
-            self.test_2_rbac_me_endpoint,
-            self.test_3_roles_list,
-            self.test_4_list_admins,
-            self.test_5_create_new_admin,
-            self.test_6_update_admin_role,
-            self.test_7_audit_logs,
-            self.test_8_admin_notifications,
-            self.test_9_permission_enforcement,
-            self.test_10_protected_super_admin,
-            self.test_11_delete_admin,
-        ]
-        
-        passed = 0
-        total = len(tests)
-        
-        for test in tests:
-            try:
-                if test():
-                    passed += 1
-            except Exception as e:
-                print(f"❌ FAIL: {test.__name__} - Exception: {e}")
-        
-        print("\n" + "=" * 50)
-        print(f"🏁 RBAC Testing Complete: {passed}/{total} tests passed")
-        
-        if passed == total:
-            print("✅ ALL TESTS PASSED - Admin RBAC System is working correctly!")
-        else:
-            print(f"❌ {total - passed} TESTS FAILED - Issues found in RBAC system")
-            
-        return passed == total
+    def summary(self):
+        total = self.passed + self.failed
+        print(f"\n{'='*60}")
+        print(f"REFERRAL PROGRAM BACKEND TEST RESULTS")
+        print(f"{'='*60}")
+        print(f"✅ Passed: {self.passed}/{total}")
+        print(f"❌ Failed: {self.failed}/{total}")
+        if self.errors:
+            print(f"\nFAILED TESTS:")
+            for error in self.errors:
+                print(f"  - {error}")
+        print(f"{'='*60}")
 
-def main():
-    """Main test execution"""
-    tester = RBACTester()
-    success = tester.run_all_tests()
+def login_user(email, password):
+    """Login and return auth token"""
+    try:
+        response = requests.post(f"{BASE_URL}/auth/login", json={
+            "email": email,
+            "password": password
+        })
+        if response.status_code == 200:
+            return response.json().get("token")
+        else:
+            print(f"Login failed for {email}: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"Login error for {email}: {e}")
+        return None
+
+def register_new_user(name, email, password, referral_code=None):
+    """Register a new user with optional referral code"""
+    try:
+        payload = {
+            "name": name,
+            "email": email,
+            "password": password
+        }
+        
+        url = f"{BASE_URL}/auth/register"
+        if referral_code:
+            url += f"?referral_code={referral_code}"
+            
+        response = requests.post(url, json=payload)
+        return response
+    except Exception as e:
+        print(f"Registration error: {e}")
+        return None
+
+def make_authenticated_request(method, endpoint, token, data=None, params=None):
+    """Make authenticated API request"""
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        url = f"{BASE_URL}{endpoint}"
+        
+        if method.upper() == "GET":
+            response = requests.get(url, headers=headers, params=params)
+        elif method.upper() == "POST":
+            response = requests.post(url, headers=headers, json=data, params=params)
+        elif method.upper() == "PUT":
+            response = requests.put(url, headers=headers, json=data, params=params)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+            
+        return response
+    except Exception as e:
+        print(f"Request error: {e}")
+        return None
+
+def test_referral_program():
+    """Main test function for referral program"""
+    results = TestResults()
     
-    if success:
-        print("\n🎉 Admin RBAC System: FULLY FUNCTIONAL")
-        sys.exit(0)
+    print("🚀 Starting Referral Program Backend Tests...")
+    print(f"Backend URL: {BASE_URL}")
+    
+    # Step 1: Login all test users
+    print("\n📋 Step 1: Authentication Tests")
+    
+    super_admin_token = login_user(TEST_CREDENTIALS["super_admin"]["email"], 
+                                 TEST_CREDENTIALS["super_admin"]["password"])
+    if super_admin_token:
+        results.success("Super Admin Login")
     else:
-        print("\n💥 Admin RBAC System: ISSUES DETECTED")
-        sys.exit(1)
+        results.failure("Super Admin Login", "Failed to authenticate")
+        return results
+    
+    vip_token = login_user(TEST_CREDENTIALS["vip_user"]["email"], 
+                          TEST_CREDENTIALS["vip_user"]["password"])
+    if vip_token:
+        results.success("VIP User Login")
+    else:
+        results.failure("VIP User Login", "Failed to authenticate")
+        return results
+    
+    free_token = login_user(TEST_CREDENTIALS["free_user"]["email"], 
+                           TEST_CREDENTIALS["free_user"]["password"])
+    if free_token:
+        results.success("Free User Login")
+    else:
+        results.failure("Free User Login", "Failed to authenticate")
+        return results
+    
+    # Step 2: Test User Referral Code Endpoint
+    print("\n📋 Step 2: User Referral Code Tests")
+    
+    # Test GET /api/referral/my-code with VIP user
+    response = make_authenticated_request("GET", "/referral/my-code", vip_token)
+    if response and response.status_code == 200:
+        data = response.json()
+        required_fields = ["referral_code", "referral_link", "stats", "referrals"]
+        stats_fields = ["total_referrals", "successful_referrals", "pending_rewards", "total_reward_days"]
+        
+        if all(field in data for field in required_fields):
+            if all(field in data["stats"] for field in stats_fields):
+                if isinstance(data["referral_code"], str) and len(data["referral_code"]) > 0:
+                    results.success("GET /api/referral/my-code - VIP User")
+                    vip_referral_code = data["referral_code"]
+                    print(f"   VIP Referral Code: {vip_referral_code}")
+                else:
+                    results.failure("GET /api/referral/my-code - VIP User", "Invalid referral code format")
+            else:
+                results.failure("GET /api/referral/my-code - VIP User", f"Missing stats fields: {stats_fields}")
+        else:
+            results.failure("GET /api/referral/my-code - VIP User", f"Missing required fields: {required_fields}")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        if response:
+            error_msg += f", Response: {response.text}"
+        results.failure("GET /api/referral/my-code - VIP User", error_msg)
+        return results
+    
+    # Step 3: Test Validate Referral Code
+    print("\n📋 Step 3: Referral Code Validation Tests")
+    
+    # Test valid code
+    response = make_authenticated_request("GET", f"/referral/validate/{vip_referral_code}", None)
+    if response and response.status_code == 200:
+        data = response.json()
+        if data.get("valid") == True:
+            results.success("GET /api/referral/validate/{code} - Valid Code")
+        else:
+            results.failure("GET /api/referral/validate/{code} - Valid Code", f"Expected valid=true, got {data}")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        results.failure("GET /api/referral/validate/{code} - Valid Code", error_msg)
+    
+    # Test invalid code
+    response = make_authenticated_request("GET", "/referral/validate/INVALID123", None)
+    if response and response.status_code == 200:
+        data = response.json()
+        if data.get("valid") == False:
+            results.success("GET /api/referral/validate/{code} - Invalid Code")
+        else:
+            results.failure("GET /api/referral/validate/{code} - Invalid Code", f"Expected valid=false, got {data}")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        results.failure("GET /api/referral/validate/{code} - Invalid Code", error_msg)
+    
+    # Step 4: Test Registration with Referral Code
+    print("\n📋 Step 4: Registration with Referral Code Tests")
+    
+    # Generate unique email for new user
+    timestamp = int(time.time())
+    new_user_email = f"testuser{timestamp}@test.com"
+    
+    response = register_new_user("Test User", new_user_email, "password123", vip_referral_code)
+    if response and response.status_code == 200:
+        data = response.json()
+        if "user" in data and "token" in data:
+            results.success("Registration with Referral Code")
+            new_user_token = data["token"]
+            new_user_id = data["user"]["user_id"]
+            print(f"   New User ID: {new_user_id}")
+        else:
+            results.failure("Registration with Referral Code", f"Missing user/token in response: {data}")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        if response:
+            error_msg += f", Response: {response.text}"
+        results.failure("Registration with Referral Code", error_msg)
+        return results
+    
+    # Verify referral record was created
+    time.sleep(1)  # Allow time for referral record creation
+    response = make_authenticated_request("GET", "/referral/my-code", vip_token)
+    if response and response.status_code == 200:
+        data = response.json()
+        if data["stats"]["total_referrals"] > 0:
+            results.success("Referral Record Creation Verification")
+        else:
+            results.failure("Referral Record Creation Verification", "No referrals found after registration")
+    else:
+        results.failure("Referral Record Creation Verification", "Failed to fetch referral stats")
+    
+    # Step 5: Test Admin List Referrals
+    print("\n📋 Step 5: Admin Referral Management Tests")
+    
+    # Test GET /api/admin/referrals
+    response = make_authenticated_request("GET", "/admin/referrals", super_admin_token)
+    if response and response.status_code == 200:
+        data = response.json()
+        required_fields = ["referrals", "stats"]
+        stats_fields = ["total", "pending", "completed", "expired", "flagged"]
+        
+        if all(field in data for field in required_fields):
+            if all(field in data["stats"] for field in stats_fields):
+                results.success("GET /api/admin/referrals - Super Admin")
+                referrals_list = data["referrals"]
+                print(f"   Total Referrals: {len(referrals_list)}")
+                
+                # Find a referral to test with
+                test_referral_id = None
+                if referrals_list:
+                    test_referral_id = referrals_list[0]["referral_id"]
+                    print(f"   Test Referral ID: {test_referral_id}")
+            else:
+                results.failure("GET /api/admin/referrals - Super Admin", f"Missing stats fields: {stats_fields}")
+        else:
+            results.failure("GET /api/admin/referrals - Super Admin", f"Missing required fields: {required_fields}")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        if response:
+            error_msg += f", Response: {response.text}"
+        results.failure("GET /api/admin/referrals - Super Admin", error_msg)
+        return results
+    
+    # Test filtering with status parameter
+    response = make_authenticated_request("GET", "/admin/referrals", super_admin_token, params={"status": "pending"})
+    if response and response.status_code == 200:
+        data = response.json()
+        if "referrals" in data:
+            results.success("GET /api/admin/referrals?status=pending - Filter Test")
+        else:
+            results.failure("GET /api/admin/referrals?status=pending - Filter Test", "Missing referrals field")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        results.failure("GET /api/admin/referrals?status=pending - Filter Test", error_msg)
+    
+    # Step 6: Test Admin Approve Referral
+    print("\n📋 Step 6: Admin Referral Actions Tests")
+    
+    if test_referral_id:
+        # Test approve referral
+        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/approve", super_admin_token)
+        if response and response.status_code == 200:
+            data = response.json()
+            if "message" in data:
+                results.success("PUT /api/admin/referrals/{id}/approve - Super Admin")
+            else:
+                results.failure("PUT /api/admin/referrals/{id}/approve - Super Admin", f"Unexpected response: {data}")
+        else:
+            error_msg = f"Status: {response.status_code if response else 'No response'}"
+            if response:
+                error_msg += f", Response: {response.text}"
+            results.failure("PUT /api/admin/referrals/{id}/approve - Super Admin", error_msg)
+        
+        # Test revoke referral
+        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/revoke", 
+                                            super_admin_token, data={"reason": "Test revocation"})
+        if response and response.status_code == 200:
+            data = response.json()
+            if "message" in data:
+                results.success("PUT /api/admin/referrals/{id}/revoke - Super Admin")
+            else:
+                results.failure("PUT /api/admin/referrals/{id}/revoke - Super Admin", f"Unexpected response: {data}")
+        else:
+            error_msg = f"Status: {response.status_code if response else 'No response'}"
+            if response:
+                error_msg += f", Response: {response.text}"
+            results.failure("PUT /api/admin/referrals/{id}/revoke - Super Admin", error_msg)
+        
+        # Test flag referral
+        response = make_authenticated_request("PUT", f"/admin/referrals/{test_referral_id}/flag", 
+                                            super_admin_token, data={"reason": "Test flagging"})
+        if response and response.status_code == 200:
+            data = response.json()
+            if "message" in data:
+                results.success("PUT /api/admin/referrals/{id}/flag - Super Admin")
+            else:
+                results.failure("PUT /api/admin/referrals/{id}/flag - Super Admin", f"Unexpected response: {data}")
+        else:
+            error_msg = f"Status: {response.status_code if response else 'No response'}"
+            if response:
+                error_msg += f", Response: {response.text}"
+            results.failure("PUT /api/admin/referrals/{id}/flag - Super Admin", error_msg)
+    else:
+        results.failure("Admin Referral Actions", "No test referral ID available")
+    
+    # Step 7: Test Role-Based Access Control
+    print("\n📋 Step 7: Role-Based Access Control Tests")
+    
+    # Test VIP user trying to access admin endpoints (should fail)
+    response = make_authenticated_request("GET", "/admin/referrals", vip_token)
+    if response and response.status_code == 403:
+        results.success("RBAC Test - VIP User Blocked from Admin Referrals")
+    else:
+        error_msg = f"Expected 403, got {response.status_code if response else 'No response'}"
+        results.failure("RBAC Test - VIP User Blocked from Admin Referrals", error_msg)
+    
+    # Test Free user trying to access admin endpoints (should fail)
+    response = make_authenticated_request("GET", "/admin/referrals", free_token)
+    if response and response.status_code == 403:
+        results.success("RBAC Test - Free User Blocked from Admin Referrals")
+    else:
+        error_msg = f"Expected 403, got {response.status_code if response else 'No response'}"
+        results.failure("RBAC Test - Free User Blocked from Admin Referrals", error_msg)
+    
+    # Test Free user can access their own referral code
+    response = make_authenticated_request("GET", "/referral/my-code", free_token)
+    if response and response.status_code == 200:
+        data = response.json()
+        if "referral_code" in data:
+            results.success("RBAC Test - Free User Can Access Own Referral Code")
+        else:
+            results.failure("RBAC Test - Free User Can Access Own Referral Code", "Missing referral_code")
+    else:
+        error_msg = f"Status: {response.status_code if response else 'No response'}"
+        results.failure("RBAC Test - Free User Can Access Own Referral Code", error_msg)
+    
+    return results
 
 if __name__ == "__main__":
-    main()
+    print("🔧 Swift FX Signals - Referral Program Backend Testing")
+    print("=" * 60)
+    
+    try:
+        results = test_referral_program()
+        results.summary()
+        
+        # Exit with appropriate code
+        sys.exit(0 if results.failed == 0 else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Tests interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n💥 Unexpected error: {e}")
+        sys.exit(1)
