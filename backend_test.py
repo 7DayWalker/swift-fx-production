@@ -376,59 +376,63 @@ class RBACTester:
         protected_email = "ellapauledache@gmail.com"
         
         # First, get the admin list to find the protected super admin
-        response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token)
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            admins = data.get('admins', [])
+        try:
+            response = self.make_request('GET', '/admin/rbac/admins', token=self.super_admin_token, timeout=30)
             
-            # Find the protected super admin
-            protected_admin = None
-            for admin in admins:
-                if admin.get('email') == protected_email:
-                    protected_admin = admin
-                    break
-            
-            if protected_admin:
-                protected_admin_id = protected_admin.get('user_id')
+            if response and response.status_code == 200:
+                data = response.json()
+                admins = data.get('admins', [])
                 
-                # Try to downgrade the protected super admin
-                update_data = {
-                    "admin_role": "signal_admin"
-                }
+                # Find the protected super admin
+                protected_admin = None
+                for admin in admins:
+                    if admin.get('email') == protected_email:
+                        protected_admin = admin
+                        break
                 
-                downgrade_response = self.make_request('PUT', f'/admin/rbac/admins/{protected_admin_id}', 
-                                                     token=self.super_admin_token, json=update_data)
-                
-                if downgrade_response and downgrade_response.status_code == 403:
-                    self.log_test("Protected Super Admin", True, "Protected super admin cannot be downgraded (403 Forbidden)")
-                    return True
+                if protected_admin:
+                    protected_admin_id = protected_admin.get('user_id')
+                    
+                    # Try to downgrade the protected super admin
+                    update_data = {
+                        "admin_role": "signal_admin"
+                    }
+                    
+                    downgrade_response = self.make_request('PUT', f'/admin/rbac/admins/{protected_admin_id}', 
+                                                         token=self.super_admin_token, json=update_data, timeout=30)
+                    
+                    if downgrade_response and downgrade_response.status_code == 403:
+                        self.log_test("Protected Super Admin", True, "Protected super admin cannot be downgraded (403 Forbidden)")
+                        return True
+                    else:
+                        self.log_test("Protected Super Admin", False, 
+                                    f"Expected 403, got {downgrade_response.status_code if downgrade_response else 'None'}")
+                        return False
                 else:
-                    self.log_test("Protected Super Admin", False, 
-                                f"Expected 403, got {downgrade_response.status_code if downgrade_response else 'None'}")
-                    return False
+                    # If protected admin doesn't exist, try to create one and then modify it
+                    # This tests the protection during creation
+                    create_data = {
+                        "email": protected_email,
+                        "name": "Protected Super Admin",
+                        "password": "TempPassword123!",
+                        "admin_role": "signal_admin"  # Try to create as non-super admin
+                    }
+                    
+                    create_response = self.make_request('POST', '/admin/rbac/admins', 
+                                                      token=self.super_admin_token, json=create_data, timeout=30)
+                    
+                    if create_response and create_response.status_code == 403:
+                        self.log_test("Protected Super Admin", True, "Cannot create protected email as non-super admin (403 Forbidden)")
+                        return True
+                    else:
+                        self.log_test("Protected Super Admin", False, 
+                                    f"Expected 403 when creating protected email as non-super admin, got {create_response.status_code if create_response else 'None'}")
+                        return False
             else:
-                # If protected admin doesn't exist, try to create one and then modify it
-                # This tests the protection during creation
-                create_data = {
-                    "email": protected_email,
-                    "name": "Protected Super Admin",
-                    "password": "TempPassword123!",
-                    "admin_role": "signal_admin"  # Try to create as non-super admin
-                }
-                
-                create_response = self.make_request('POST', '/admin/rbac/admins', 
-                                                  token=self.super_admin_token, json=create_data)
-                
-                if create_response and create_response.status_code == 403:
-                    self.log_test("Protected Super Admin", True, "Cannot create protected email as non-super admin (403 Forbidden)")
-                    return True
-                else:
-                    self.log_test("Protected Super Admin", False, 
-                                f"Expected 403 when creating protected email as non-super admin, got {create_response.status_code if create_response else 'None'}")
-                    return False
-        else:
-            self.log_test("Protected Super Admin", False, "Could not retrieve admin list")
+                self.log_test("Protected Super Admin", False, "Could not retrieve admin list")
+                return False
+        except Exception as e:
+            self.log_test("Protected Super Admin", False, f"Exception: {str(e)}")
             return False
             
     def test_11_delete_admin(self):
