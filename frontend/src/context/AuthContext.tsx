@@ -87,8 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return userData;
   };
 
-  const register = async (name: string, email: string, password: string): Promise<User> => {
-    const response = await api.post('/auth/register', { name, email, password });
+  const register = async (name: string, email: string, password: string, referralCode?: string): Promise<User> => {
+    const payload: any = { name, email, password };
+    // Add referral_code as query parameter if provided
+    const params = referralCode ? { referral_code: referralCode } : {};
+    const response = await api.post('/auth/register', payload, { params });
     const { token: newToken, user: userData } = response.data;
     
     await AsyncStorage.setItem('auth_token', newToken);
