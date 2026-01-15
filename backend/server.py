@@ -3373,7 +3373,7 @@ async def startup_event():
     """
     MANUAL MODE - Auto-engine startup is DISABLED.
     Signals will not react to price changes automatically.
-    Also initializes protected Super Admin accounts.
+    Also initializes protected Super Admin accounts and default FAQs.
     """
     global price_automation_running
     price_automation_running = False
@@ -3385,6 +3385,9 @@ async def startup_event():
     
     # Auto-create protected Super Admin accounts
     await initialize_super_admins()
+    
+    # Initialize default FAQs
+    await initialize_faqs()
 
 
 async def initialize_super_admins():
