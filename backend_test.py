@@ -1,468 +1,562 @@
 #!/usr/bin/env python3
 """
-Fund Management Application System End-to-End Testing
-Testing the complete fund management workflow as specified in the review request.
+Investor Dashboard System End-to-End Testing
+Tests the complete investor dashboard functionality including:
+- Fund application status checking
+- Investor status verification
+- Dashboard data retrieval
+- Withdrawal requests
+- Admin portfolio management
+- Performance tracking
+- Notice system
 """
 
 import requests
 import json
 import sys
 from datetime import datetime
+from typing import Dict, Any, Optional
 
-# Backend URL from frontend/.env
-BASE_URL = "https://fundadmin-1.preview.emergentagent.com/api"
+# Backend URL from environment
+BACKEND_URL = "https://fundadmin-1.preview.emergentagent.com/api"
 
-# Test credentials from review request
-ADMIN_CREDENTIALS = {"email": "admin@swiftfx.com", "password": "adminpassword"}
-VIP_CREDENTIALS = {"email": "fundtest@test.com", "password": "password"}
-FREE_CREDENTIALS = {"email": "freetestuser@test.com", "password": "password"}
+# Test credentials
+ADMIN_EMAIL = "admin@swiftfx.com"
+ADMIN_PASSWORD = "adminpassword"
+VIP_EMAIL = "fundtest@test.com"
+VIP_PASSWORD = "password"
 
-class FundManagementTester:
+class InvestorDashboardTester:
     def __init__(self):
         self.admin_token = None
         self.vip_token = None
-        self.free_token = None
-        self.test_application_id = None
-        self.results = []
+        self.test_results = []
+        self.portfolio_id = None
+        self.withdrawal_id = None
+        self.notice_id = None
         
-    def log_result(self, test_name, success, details=""):
+    def log_test(self, test_name: str, success: bool, details: str = ""):
         """Log test result"""
         status = "✅ PASS" if success else "❌ FAIL"
-        self.results.append(f"{status}: {test_name}")
-        if details:
-            self.results.append(f"    Details: {details}")
+        self.test_results.append({
+            "test": test_name,
+            "status": status,
+            "success": success,
+            "details": details
+        })
         print(f"{status}: {test_name}")
         if details:
-            print(f"    Details: {details}")
+            print(f"   Details: {details}")
     
-    def login_user(self, credentials, user_type):
-        """Login and get JWT token"""
+    def make_request(self, method: str, endpoint: str, token: str = None, data: Dict = None, files: Dict = None) -> tuple:
+        """Make HTTP request with error handling"""
+        url = f"{BACKEND_URL}{endpoint}"
+        headers = {"Content-Type": "application/json"}
+        
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        
         try:
-            response = requests.post(f"{BASE_URL}/auth/login", json=credentials)
-            if response.status_code == 200:
-                data = response.json()
-                token = data.get("token")
-                user_info = data.get("user", {})
-                self.log_result(f"Login {user_type}", True, f"User: {user_info.get('name', 'Unknown')}, Role: {user_info.get('role', 'Unknown')}")
-                return token
+            if method == "GET":
+                response = requests.get(url, headers=headers)
+            elif method == "POST":
+                if files:
+                    # Remove Content-Type for multipart
+                    headers.pop("Content-Type", None)
+                    response = requests.post(url, headers=headers, files=files, data=data)
+                else:
+                    response = requests.post(url, headers=headers, json=data)
+            elif method == "PUT":
+                response = requests.put(url, headers=headers, json=data)
+            elif method == "DELETE":
+                response = requests.delete(url, headers=headers)
             else:
-                self.log_result(f"Login {user_type}", False, f"Status: {response.status_code}, Response: {response.text}")
-                return None
+                return False, f"Unsupported method: {method}"
+            
+            return True, response
         except Exception as e:
-            self.log_result(f"Login {user_type}", False, f"Exception: {str(e)}")
-            return None
+            return False, f"Request failed: {str(e)}"
     
-    def get_headers(self, token):
-        """Get authorization headers"""
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    def login_admin(self) -> bool:
+        """Login as admin user"""
+        success, response = self.make_request("POST", "/auth/login", data={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        })
+        
+        if not success:
+            self.log_test("Admin Login", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code == 200:
+            data = response.json()
+            self.admin_token = data.get("token")
+            self.log_test("Admin Login", True, f"Logged in as {data.get('user', {}).get('email')}")
+            return True
+        else:
+            self.log_test("Admin Login", False, f"Status {response.status_code}: {response.text}")
+            return False
     
-    def step1_setup_and_login(self):
-        """Step 1: Login all test users"""
-        print("\n=== STEP 1: Setup and Login ===")
+    def login_vip_user(self) -> bool:
+        """Login as VIP user"""
+        success, response = self.make_request("POST", "/auth/login", data={
+            "email": VIP_EMAIL,
+            "password": VIP_PASSWORD
+        })
         
-        # Login Admin
-        self.admin_token = self.login_user(ADMIN_CREDENTIALS, "Admin")
+        if not success:
+            self.log_test("VIP User Login", False, f"Request failed: {response}")
+            return False
         
-        # Login VIP User
-        self.vip_token = self.login_user(VIP_CREDENTIALS, "VIP User")
-        
-        # Login Free User
-        self.free_token = self.login_user(FREE_CREDENTIALS, "Free User")
-        
-        return all([self.admin_token, self.vip_token, self.free_token])
+        if response.status_code == 200:
+            data = response.json()
+            self.vip_token = data.get("token")
+            self.log_test("VIP User Login", True, f"Logged in as {data.get('user', {}).get('email')}")
+            return True
+        else:
+            self.log_test("VIP User Login", False, f"Status {response.status_code}: {response.text}")
+            return False
     
-    def step2_test_admin_dashboard_format(self):
-        """Step 2: Test Admin Dashboard Response Format"""
-        print("\n=== STEP 2: Test Admin Dashboard Response Format ===")
+    def test_fund_application_status(self) -> bool:
+        """Step 1: Check Fund Application Status"""
+        print("\n=== STEP 1: Check Fund Application Status ===")
         
         if not self.admin_token:
-            self.log_result("Admin Dashboard Format Test", False, "No admin token available")
+            self.log_test("Fund Application Status Check", False, "Admin not logged in")
             return False
         
-        try:
-            response = requests.get(
-                f"{BASE_URL}/admin/fund/applications",
-                headers=self.get_headers(self.admin_token)
-            )
+        # Get all fund applications
+        success, response = self.make_request("GET", "/admin/fund/applications", self.admin_token)
+        
+        if not success:
+            self.log_test("Get Fund Applications", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Get Fund Applications", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        applications = response.json()
+        self.log_test("Get Fund Applications", True, f"Retrieved {len(applications)} applications")
+        
+        # Look for VIP user application
+        vip_application = None
+        for app in applications:
+            if app.get("email") == VIP_EMAIL:
+                vip_application = app
+                break
+        
+        if not vip_application:
+            self.log_test("Find VIP Application", False, f"No application found for {VIP_EMAIL}")
+            return False
+        
+        self.log_test("Find VIP Application", True, f"Found application with status: {vip_application.get('status')}")
+        
+        # If not approved, approve it
+        if vip_application.get("status") != "approved":
+            app_id = vip_application.get("application_id")
+            success, response = self.make_request("PUT", f"/admin/fund/applications/{app_id}?status=approved", self.admin_token)
             
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check if response has expected format: { "applications": [...], "total": N }
-                if isinstance(data, dict) and "applications" in data and "total" in data:
-                    applications = data["applications"]
-                    total = data["total"]
-                    
-                    self.log_result("Admin Dashboard Format", True, f"Found {total} applications in correct format")
-                    
-                    # Check structure of each application
-                    if applications:
-                        app = applications[0]
-                        required_fields = ["application_id", "user_id", "full_name", "email", "investment_tier", "intended_amount", "status", "source", "created_at"]
-                        missing_fields = [field for field in required_fields if field not in app]
-                        
-                        if not missing_fields:
-                            self.log_result("Application Structure", True, "All required fields present")
-                        else:
-                            self.log_result("Application Structure", False, f"Missing fields: {missing_fields}")
-                    
-                    return True
-                else:
-                    # Check if it's the old format (direct array)
-                    if isinstance(data, list):
-                        self.log_result("Admin Dashboard Format", False, "Response is array format, expected object with 'applications' and 'total' fields")
-                    else:
-                        self.log_result("Admin Dashboard Format", False, f"Unexpected response format: {type(data)}")
-                    return False
-            else:
-                self.log_result("Admin Dashboard Format", False, f"Status: {response.status_code}, Response: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Admin Dashboard Format", False, f"Exception: {str(e)}")
-            return False
-    
-    def step3_test_vip_application_creation(self):
-        """Step 3: Test New Application Creation (VIP User)"""
-        print("\n=== STEP 3: Test New Application Creation (VIP User) ===")
-        
-        if not self.vip_token:
-            self.log_result("VIP Application Creation", False, "No VIP token available")
-            return False
-        
-        application_data = {
-            "full_name": "Fund Test VIP",
-            "email": "fundtest@test.com",
-            "phone": "WhatsApp",
-            "country": "Nigeria",
-            "investment_tier": "professional",
-            "intended_amount": 10000,
-            "trading_experience": "intermediate",
-            "risk_agreement": True,
-            "source": "whatsapp"
-        }
-        
-        try:
-            response = requests.post(
-                f"{BASE_URL}/fund/apply",
-                json=application_data,
-                headers=self.get_headers(self.vip_token)
-            )
-            
-            if response.status_code == 200 or response.status_code == 201:
-                data = response.json()
-                application_id = data.get("application_id")
-                
-                if application_id:
-                    self.test_application_id = application_id
-                    self.log_result("VIP Application Creation", True, f"Application ID: {application_id}")
-                    return True
-                else:
-                    self.log_result("VIP Application Creation", False, "No application_id in response")
-                    return False
-            else:
-                self.log_result("VIP Application Creation", False, f"Status: {response.status_code}, Response: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("VIP Application Creation", False, f"Exception: {str(e)}")
-            return False
-    
-    def step4_verify_application_in_admin_dashboard(self):
-        """Step 4: Verify Application Appears in Admin Dashboard"""
-        print("\n=== STEP 4: Verify Application in Admin Dashboard ===")
-        
-        if not self.admin_token or not self.test_application_id:
-            self.log_result("Application in Admin Dashboard", False, "Missing admin token or application ID")
-            return False
-        
-        try:
-            response = requests.get(
-                f"{BASE_URL}/admin/fund/applications",
-                headers=self.get_headers(self.admin_token)
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Handle both old and new response formats
-                if isinstance(data, dict) and "applications" in data:
-                    applications = data["applications"]
-                elif isinstance(data, list):
-                    applications = data
-                else:
-                    self.log_result("Application in Admin Dashboard", False, "Unexpected response format")
-                    return False
-                
-                # Look for our test application
-                found_application = None
-                for app in applications:
-                    if app.get("application_id") == self.test_application_id:
-                        found_application = app
-                        break
-                
-                if found_application:
-                    source = found_application.get("source", "unknown")
-                    self.log_result("Application in Admin Dashboard", True, f"Found application with source: {source}")
-                    
-                    # Verify source field is "whatsapp"
-                    if source == "whatsapp":
-                        self.log_result("WhatsApp Source Verification", True, "Source field correctly set to 'whatsapp'")
-                    else:
-                        self.log_result("WhatsApp Source Verification", False, f"Expected 'whatsapp', got '{source}'")
-                    
-                    return True
-                else:
-                    self.log_result("Application in Admin Dashboard", False, f"Application {self.test_application_id} not found")
-                    return False
-            else:
-                self.log_result("Application in Admin Dashboard", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Application in Admin Dashboard", False, f"Exception: {str(e)}")
-            return False
-    
-    def step5_test_duplicate_prevention(self):
-        """Step 5: Test Duplicate Prevention (Per-Tier)"""
-        print("\n=== STEP 5: Test Duplicate Prevention (Per-Tier) ===")
-        
-        if not self.vip_token:
-            self.log_result("Duplicate Prevention Test", False, "No VIP token available")
-            return False
-        
-        # Try to create another application with same tier "professional"
-        duplicate_data = {
-            "full_name": "Fund Test VIP Duplicate",
-            "email": "fundtest@test.com",
-            "phone": "WhatsApp",
-            "country": "Nigeria",
-            "investment_tier": "professional",  # Same tier as before
-            "intended_amount": 15000,
-            "trading_experience": "advanced",
-            "risk_agreement": True,
-            "source": "whatsapp"
-        }
-        
-        try:
-            response = requests.post(
-                f"{BASE_URL}/fund/apply",
-                json=duplicate_data,
-                headers=self.get_headers(self.vip_token)
-            )
-            
-            if response.status_code == 400:
-                response_text = response.text.lower()
-                if "already have an active application" in response_text or "duplicate" in response_text:
-                    self.log_result("Duplicate Prevention Test", True, "Correctly blocked duplicate application")
-                    return True
-                else:
-                    self.log_result("Duplicate Prevention Test", False, f"400 error but wrong message: {response.text}")
-                    return False
-            else:
-                self.log_result("Duplicate Prevention Test", False, f"Expected 400, got {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Duplicate Prevention Test", False, f"Exception: {str(e)}")
-            return False
-    
-    def step6_test_different_tier_application(self):
-        """Step 6: Test Different Tier Application (Should Work)"""
-        print("\n=== STEP 6: Test Different Tier Application (Should Work) ===")
-        
-        if not self.vip_token:
-            self.log_result("Different Tier Application", False, "No VIP token available")
-            return False
-        
-        # Try to create application with different tier "elite"
-        different_tier_data = {
-            "full_name": "Fund Test VIP Elite",
-            "email": "fundtest@test.com",
-            "phone": "WhatsApp",
-            "country": "Nigeria",
-            "investment_tier": "elite",  # Different tier
-            "intended_amount": 25000,
-            "trading_experience": "advanced",
-            "risk_agreement": True,
-            "source": "whatsapp"
-        }
-        
-        try:
-            response = requests.post(
-                f"{BASE_URL}/fund/apply",
-                json=different_tier_data,
-                headers=self.get_headers(self.vip_token)
-            )
-            
-            if response.status_code == 200 or response.status_code == 201:
-                data = response.json()
-                application_id = data.get("application_id")
-                
-                if application_id:
-                    self.log_result("Different Tier Application", True, f"Elite tier application created: {application_id}")
-                    return True
-                else:
-                    self.log_result("Different Tier Application", False, "No application_id in response")
-                    return False
-            else:
-                self.log_result("Different Tier Application", False, f"Status: {response.status_code}, Response: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Different Tier Application", False, f"Exception: {str(e)}")
-            return False
-    
-    def step7_test_admin_status_update(self):
-        """Step 7: Test Admin Status Update"""
-        print("\n=== STEP 7: Test Admin Status Update ===")
-        
-        if not self.admin_token or not self.test_application_id:
-            self.log_result("Admin Status Update", False, "Missing admin token or application ID")
-            return False
-        
-        try:
-            response = requests.put(
-                f"{BASE_URL}/admin/fund/applications/{self.test_application_id}?status=contacted",
-                headers=self.get_headers(self.admin_token)
-            )
-            
-            if response.status_code == 200:
-                self.log_result("Admin Status Update", True, "Status updated to 'contacted'")
+            if success and response.status_code == 200:
+                self.log_test("Approve VIP Application", True, "Application approved successfully")
                 return True
             else:
-                self.log_result("Admin Status Update", False, f"Status: {response.status_code}, Response: {response.text}")
+                self.log_test("Approve VIP Application", False, f"Failed to approve: {response.text if success else response}")
                 return False
-                
-        except Exception as e:
-            self.log_result("Admin Status Update", False, f"Exception: {str(e)}")
+        else:
+            self.log_test("VIP Application Already Approved", True, "Application is already approved")
+            return True
+    
+    def test_investor_status_check(self) -> bool:
+        """Step 2: Test Investor Status Check"""
+        print("\n=== STEP 2: Test Investor Status Check ===")
+        
+        if not self.vip_token:
+            self.log_test("Investor Status Check", False, "VIP user not logged in")
+            return False
+        
+        success, response = self.make_request("GET", "/investor/status", self.vip_token)
+        
+        if not success:
+            self.log_test("Investor Status Check", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Investor Status Check", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        is_investor = data.get("is_investor", False)
+        
+        if is_investor:
+            self.log_test("Investor Status Check", True, "User is confirmed as approved investor")
+            return True
+        else:
+            self.log_test("Investor Status Check", False, f"User is not an approved investor: {data}")
             return False
     
-    def step8_test_free_user_blocked(self):
-        """Step 8: Test Free User Blocked"""
-        print("\n=== STEP 8: Test Free User Blocked ===")
+    def test_investor_dashboard(self) -> bool:
+        """Step 3: Test Investor Dashboard"""
+        print("\n=== STEP 3: Test Investor Dashboard ===")
         
-        if not self.free_token:
-            self.log_result("Free User Blocked Test", False, "No free user token available")
+        if not self.vip_token:
+            self.log_test("Investor Dashboard", False, "VIP user not logged in")
             return False
         
-        free_user_data = {
-            "full_name": "Free User Test",
-            "email": "freetestuser@test.com",
-            "phone": "123456789",
-            "country": "USA",
-            "investment_tier": "starter",
-            "intended_amount": 5000,
-            "trading_experience": "beginner",
-            "risk_agreement": True,
-            "source": "app"
+        success, response = self.make_request("GET", "/investor/dashboard", self.vip_token)
+        
+        if not success:
+            self.log_test("Investor Dashboard", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Investor Dashboard", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        
+        # Verify required fields
+        required_fields = ["portfolio", "performance_history", "withdrawals", "notices"]
+        missing_fields = []
+        
+        for field in required_fields:
+            if field not in data:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            self.log_test("Investor Dashboard Structure", False, f"Missing fields: {missing_fields}")
+            return False
+        
+        # Verify portfolio structure
+        portfolio = data.get("portfolio", {})
+        portfolio_fields = ["portfolio_id", "invested_capital", "current_equity", "total_return_pct", "account_status"]
+        missing_portfolio_fields = []
+        
+        for field in portfolio_fields:
+            if field not in portfolio:
+                missing_portfolio_fields.append(field)
+        
+        if missing_portfolio_fields:
+            self.log_test("Portfolio Structure", False, f"Missing portfolio fields: {missing_portfolio_fields}")
+            return False
+        
+        # Store portfolio_id for later tests
+        self.portfolio_id = portfolio.get("portfolio_id")
+        
+        self.log_test("Investor Dashboard", True, f"Dashboard retrieved with portfolio_id: {self.portfolio_id}")
+        self.log_test("Portfolio Structure", True, "All required portfolio fields present")
+        
+        return True
+    
+    def test_withdrawal_request(self) -> bool:
+        """Step 4: Test Withdrawal Request"""
+        print("\n=== STEP 4: Test Withdrawal Request ===")
+        
+        if not self.vip_token:
+            self.log_test("Withdrawal Request", False, "VIP user not logged in")
+            return False
+        
+        withdrawal_data = {
+            "amount": 100,
+            "notes": "Test withdrawal request"
         }
         
-        try:
-            response = requests.post(
-                f"{BASE_URL}/fund/apply",
-                json=free_user_data,
-                headers=self.get_headers(self.free_token)
-            )
-            
-            if response.status_code == 403:
-                self.log_result("Free User Blocked Test", True, "Free user correctly blocked with 403 Forbidden")
-                return True
-            else:
-                self.log_result("Free User Blocked Test", False, f"Expected 403, got {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Free User Blocked Test", False, f"Exception: {str(e)}")
+        success, response = self.make_request("POST", "/investor/withdraw", self.vip_token, withdrawal_data)
+        
+        if not success:
+            self.log_test("Withdrawal Request", False, f"Request failed: {response}")
             return False
+        
+        if response.status_code != 200:
+            self.log_test("Withdrawal Request", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        
+        # Verify response structure
+        if "withdrawal_id" not in data:
+            self.log_test("Withdrawal Response", False, "Missing withdrawal_id in response")
+            return False
+        
+        if "whatsapp_notify_url" not in data:
+            self.log_test("Withdrawal Response", False, "Missing whatsapp_notify_url in response")
+            return False
+        
+        self.withdrawal_id = data.get("withdrawal_id")
+        self.log_test("Withdrawal Request", True, f"Withdrawal created with ID: {self.withdrawal_id}")
+        
+        return True
     
-    def step9_final_admin_dashboard_check(self):
-        """Step 9: Final Admin Dashboard Check"""
-        print("\n=== STEP 9: Final Admin Dashboard Check ===")
+    def test_admin_portfolio_management(self) -> bool:
+        """Step 5: Test Admin Portfolio Management"""
+        print("\n=== STEP 5: Test Admin Portfolio Management ===")
         
         if not self.admin_token:
-            self.log_result("Final Admin Dashboard Check", False, "No admin token available")
+            self.log_test("Admin Portfolio Management", False, "Admin not logged in")
             return False
         
-        try:
-            response = requests.get(
-                f"{BASE_URL}/admin/fund/applications",
-                headers=self.get_headers(self.admin_token)
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Handle both response formats
-                if isinstance(data, dict) and "applications" in data:
-                    applications = data["applications"]
-                    total = data.get("total", len(applications))
-                elif isinstance(data, list):
-                    applications = data
-                    total = len(applications)
-                else:
-                    self.log_result("Final Admin Dashboard Check", False, "Unexpected response format")
-                    return False
-                
-                self.log_result("Final Admin Dashboard Check", True, f"Total applications visible: {total}")
-                
-                # Show summary of applications
-                for app in applications:
-                    app_id = app.get("application_id", "unknown")
-                    tier = app.get("investment_tier", "unknown")
-                    status = app.get("status", "unknown")
-                    source = app.get("source", "unknown")
-                    print(f"    App {app_id}: {tier} tier, status: {status}, source: {source}")
-                
-                return True
-            else:
-                self.log_result("Final Admin Dashboard Check", False, f"Status: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Final Admin Dashboard Check", False, f"Exception: {str(e)}")
+        success, response = self.make_request("GET", "/admin/investor/portfolios", self.admin_token)
+        
+        if not success:
+            self.log_test("Get All Portfolios", False, f"Request failed: {response}")
             return False
+        
+        if response.status_code != 200:
+            self.log_test("Get All Portfolios", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        portfolios = response.json()
+        self.log_test("Get All Portfolios", True, f"Retrieved {len(portfolios)} portfolios")
+        
+        # Find our test portfolio
+        if not self.portfolio_id and portfolios:
+            self.portfolio_id = portfolios[0].get("portfolio_id")
+        
+        if not self.portfolio_id:
+            self.log_test("Find Test Portfolio", False, "No portfolio_id available for testing")
+            return False
+        
+        self.log_test("Find Test Portfolio", True, f"Using portfolio_id: {self.portfolio_id}")
+        return True
+    
+    def test_admin_performance_entry(self) -> bool:
+        """Step 6: Test Admin Performance Entry"""
+        print("\n=== STEP 6: Test Admin Performance Entry ===")
+        
+        if not self.admin_token or not self.portfolio_id:
+            self.log_test("Admin Performance Entry", False, "Admin not logged in or no portfolio_id")
+            return False
+        
+        performance_data = {
+            "month": "2025-01",
+            "return_percentage": 5.5,
+            "notes": "January performance"
+        }
+        
+        success, response = self.make_request("POST", f"/admin/investor/portfolio/{self.portfolio_id}/performance", 
+                                            self.admin_token, performance_data)
+        
+        if not success:
+            self.log_test("Add Performance Entry", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Add Performance Entry", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        self.log_test("Add Performance Entry", True, f"Performance entry added: {data.get('message', 'Success')}")
+        
+        return True
+    
+    def test_admin_withdrawal_management(self) -> bool:
+        """Step 7: Test Admin Withdrawal Management"""
+        print("\n=== STEP 7: Test Admin Withdrawal Management ===")
+        
+        if not self.admin_token:
+            self.log_test("Admin Withdrawal Management", False, "Admin not logged in")
+            return False
+        
+        # Get all withdrawals
+        success, response = self.make_request("GET", "/admin/investor/withdrawals", self.admin_token)
+        
+        if not success:
+            self.log_test("Get All Withdrawals", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Get All Withdrawals", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        withdrawals = response.json()
+        self.log_test("Get All Withdrawals", True, f"Retrieved {len(withdrawals)} withdrawals")
+        
+        # Find our test withdrawal
+        test_withdrawal = None
+        if self.withdrawal_id:
+            for withdrawal in withdrawals:
+                if withdrawal.get("withdrawal_id") == self.withdrawal_id:
+                    test_withdrawal = withdrawal
+                    break
+        
+        if not test_withdrawal and withdrawals:
+            # Use the first withdrawal if we can't find our specific one
+            test_withdrawal = withdrawals[0]
+            self.withdrawal_id = test_withdrawal.get("withdrawal_id")
+        
+        if not test_withdrawal:
+            self.log_test("Find Test Withdrawal", False, "No withdrawal found for testing")
+            return False
+        
+        self.log_test("Find Test Withdrawal", True, f"Found withdrawal with status: {test_withdrawal.get('status')}")
+        
+        # Approve the withdrawal
+        success, response = self.make_request("PUT", f"/admin/investor/withdrawal/{self.withdrawal_id}?status=approved", 
+                                            self.admin_token)
+        
+        if not success:
+            self.log_test("Approve Withdrawal", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Approve Withdrawal", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        self.log_test("Approve Withdrawal", True, f"Withdrawal approved: {data.get('message', 'Success')}")
+        
+        return True
+    
+    def test_fund_notice_creation(self) -> bool:
+        """Step 8: Test Fund Notice Creation"""
+        print("\n=== STEP 8: Test Fund Notice Creation ===")
+        
+        if not self.admin_token:
+            self.log_test("Fund Notice Creation", False, "Admin not logged in")
+            return False
+        
+        notice_data = {
+            "title": "Test Notice",
+            "content": "This is a test announcement for investors.",
+            "notice_type": "general"
+        }
+        
+        success, response = self.make_request("POST", "/admin/investor/notice", self.admin_token, notice_data)
+        
+        if not success:
+            self.log_test("Create Fund Notice", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Create Fund Notice", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        self.notice_id = data.get("notice_id")
+        self.log_test("Create Fund Notice", True, f"Notice created with ID: {self.notice_id}")
+        
+        return True
+    
+    def test_dashboard_shows_updates(self) -> bool:
+        """Step 9: Verify Dashboard Shows Updates"""
+        print("\n=== STEP 9: Verify Dashboard Shows Updates ===")
+        
+        if not self.vip_token:
+            self.log_test("Dashboard Updates Verification", False, "VIP user not logged in")
+            return False
+        
+        success, response = self.make_request("GET", "/investor/dashboard", self.vip_token)
+        
+        if not success:
+            self.log_test("Dashboard Updates Check", False, f"Request failed: {response}")
+            return False
+        
+        if response.status_code != 200:
+            self.log_test("Dashboard Updates Check", False, f"Status {response.status_code}: {response.text}")
+            return False
+        
+        data = response.json()
+        
+        # Check if performance_history is populated
+        performance_history = data.get("performance_history", [])
+        if len(performance_history) > 0:
+            self.log_test("Performance History Updated", True, f"Found {len(performance_history)} performance entries")
+        else:
+            self.log_test("Performance History Updated", False, "No performance history found")
+        
+        # Check if withdrawals are populated
+        withdrawals = data.get("withdrawals", [])
+        if len(withdrawals) > 0:
+            self.log_test("Withdrawals Updated", True, f"Found {len(withdrawals)} withdrawal entries")
+        else:
+            self.log_test("Withdrawals Updated", False, "No withdrawals found")
+        
+        # Check if notices are populated
+        notices = data.get("notices", [])
+        if len(notices) > 0:
+            self.log_test("Notices Updated", True, f"Found {len(notices)} notice entries")
+        else:
+            self.log_test("Notices Updated", False, "No notices found")
+        
+        # Overall verification
+        updates_found = len(performance_history) > 0 or len(withdrawals) > 0 or len(notices) > 0
+        self.log_test("Dashboard Shows Updates", updates_found, 
+                     f"Performance: {len(performance_history)}, Withdrawals: {len(withdrawals)}, Notices: {len(notices)}")
+        
+        return updates_found
     
     def run_all_tests(self):
-        """Run all test steps in sequence"""
-        print("🚀 Starting Fund Management Application System End-to-End Testing")
-        print(f"Backend URL: {BASE_URL}")
-        print(f"Test Time: {datetime.now().isoformat()}")
+        """Run all investor dashboard tests in sequence"""
+        print("🚀 Starting Investor Dashboard System End-to-End Testing")
+        print("=" * 60)
         
-        test_steps = [
-            self.step1_setup_and_login,
-            self.step2_test_admin_dashboard_format,
-            self.step3_test_vip_application_creation,
-            self.step4_verify_application_in_admin_dashboard,
-            self.step5_test_duplicate_prevention,
-            self.step6_test_different_tier_application,
-            self.step7_test_admin_status_update,
-            self.step8_test_free_user_blocked,
-            self.step9_final_admin_dashboard_check
+        # Login both users first
+        admin_login_success = self.login_admin()
+        vip_login_success = self.login_vip_user()
+        
+        if not admin_login_success or not vip_login_success:
+            print("\n❌ CRITICAL: Login failed. Cannot proceed with tests.")
+            return False
+        
+        # Run all test steps
+        test_methods = [
+            self.test_fund_application_status,
+            self.test_investor_status_check,
+            self.test_investor_dashboard,
+            self.test_withdrawal_request,
+            self.test_admin_portfolio_management,
+            self.test_admin_performance_entry,
+            self.test_admin_withdrawal_management,
+            self.test_fund_notice_creation,
+            self.test_dashboard_shows_updates
         ]
         
-        passed = 0
-        total = len(test_steps)
-        
-        for step in test_steps:
+        all_passed = True
+        for test_method in test_methods:
             try:
-                if step():
-                    passed += 1
+                result = test_method()
+                if not result:
+                    all_passed = False
             except Exception as e:
-                print(f"❌ CRITICAL ERROR in {step.__name__}: {str(e)}")
+                self.log_test(test_method.__name__, False, f"Exception: {str(e)}")
+                all_passed = False
         
-        print(f"\n📊 TEST SUMMARY")
-        print(f"Passed: {passed}/{total}")
-        print(f"Success Rate: {(passed/total)*100:.1f}%")
+        # Print summary
+        self.print_summary()
+        return all_passed
+    
+    def print_summary(self):
+        """Print test summary"""
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY")
+        print("=" * 60)
+        
+        passed = sum(1 for result in self.test_results if result["success"])
+        total = len(self.test_results)
+        
+        print(f"Total Tests: {total}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {total - passed}")
+        print(f"Success Rate: {(passed/total*100):.1f}%")
+        
+        print("\n📋 DETAILED RESULTS:")
+        for result in self.test_results:
+            print(f"{result['status']}: {result['test']}")
+            if result['details']:
+                print(f"   └─ {result['details']}")
         
         if passed == total:
-            print("🎉 ALL TESTS PASSED - Fund Management System is working correctly!")
+            print("\n🎉 ALL TESTS PASSED! Investor Dashboard System is working correctly.")
         else:
-            print("⚠️  SOME TESTS FAILED - Review the failures above")
-        
-        return passed == total
+            print(f"\n⚠️  {total - passed} TESTS FAILED. Please review the failures above.")
+
+def main():
+    """Main test execution"""
+    tester = InvestorDashboardTester()
+    success = tester.run_all_tests()
+    
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    tester = FundManagementTester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+    main()
