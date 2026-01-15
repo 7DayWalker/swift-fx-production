@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
+  Alert,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../src/context/ThemeContext';
 import { useSubscription } from '../src/context/SubscriptionContext';
 import { useAuth } from '../src/context/AuthContext';
+import { api } from '../src/services/api';
 
 // Investment tiers configuration
 const INVESTMENT_TIERS = [
@@ -24,6 +28,7 @@ const INVESTMENT_TIERS = [
     maxInvestment: 5000,
     expectedReturn: '5-10%',
     description: 'Perfect for beginners',
+    capitalRange: '$500 - $5,000',
   },
   {
     id: 'professional',
@@ -32,6 +37,7 @@ const INVESTMENT_TIERS = [
     maxInvestment: 25000,
     expectedReturn: '10-20%',
     description: 'For experienced investors',
+    capitalRange: '$5,000 - $25,000',
   },
   {
     id: 'elite',
@@ -40,6 +46,7 @@ const INVESTMENT_TIERS = [
     maxInvestment: 100000,
     expectedReturn: '20-35%',
     description: 'Premium management',
+    capitalRange: '$25,000 - $100,000',
   },
 ];
 
@@ -84,6 +91,11 @@ export default function FundManagementScreen() {
   const { user } = useAuth();
   const { status, refreshStatus } = useSubscription();
 
+  // State for tier selection modal
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<typeof INVESTMENT_TIERS[0] | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Get subscription from backend status (authoritative source)
   const subscription = status?.subscription || 'free';
   
@@ -104,23 +116,64 @@ export default function FundManagementScreen() {
     return 'FREE';
   };
 
-  // Get user email
-  const getUserEmail = (): string => {
-    return user?.email || 'Not available';
-  };
-
-  // Open WhatsApp with pre-filled message (per spec)
-  const handleWhatsAppApplication = () => {
-    const userPlan = getUserPlanUpperCase();
-    const userEmail = getUserEmail();
-    
-    // Message template as per spec
+  // Open WhatsApp for general enquiry (Contact Fund Manager button)
+  const handleContactFundManager = () => {
     const message = encodeURIComponent(
-      `Hello Swift FX Team 👋\nI'm a ${userPlan} member and I'd like to apply for Fund Management.\nMy registered email is: ${userEmail}`
+      `Hello Swift FX Fund Team,\nI have an enquiry about your Fund Management service.`
     );
-    
     const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE}?text=${message}`;
     Linking.openURL(whatsappUrl);
+  };
+
+  // Show tier selection modal when user taps "Apply via WhatsApp"
+  const handleApplyPress = () => {
+    setSelectedTier(null);
+    setShowTierModal(true);
+  };
+
+  // Submit application to backend, then open WhatsApp
+  const handleSubmitApplication = async () => {
+    if (!selectedTier || !user) return;
+
+    setIsSubmitting(true);
+
+    try {
+      // Create application in database FIRST
+      const response = await api.post('/fund/apply', {
+        full_name: user.name || 'Not provided',
+        email: user.email,
+        phone: 'WhatsApp',
+        country: 'Not specified',
+        investment_tier: selectedTier.id,
+        intended_amount: selectedTier.minInvestment,
+        trading_experience: 'intermediate',
+        risk_agreement: true,
+        source: 'whatsapp',
+      });
+
+      const applicationId = response.data.application_id;
+
+      // Close modal
+      setShowTierModal(false);
+
+      // THEN open WhatsApp with the application ID
+      const message = encodeURIComponent(
+        `Hello Swift FX Fund Team,\nI want to apply for Fund Management.\n\nName: ${user.name || 'Not provided'}\nEmail: ${user.email}\nSelected Tier: ${selectedTier.name}\nCapital Range: ${selectedTier.capitalRange}\nUser ID: ${user.user_id}\nApplication ID: ${applicationId}`
+      );
+      const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE}?text=${message}`;
+      
+      // Small delay to ensure modal closes before opening WhatsApp
+      setTimeout(() => {
+        Linking.openURL(whatsappUrl);
+      }, 300);
+
+    } catch (error: any) {
+      console.error('Failed to submit application:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to submit application. Please try again.';
+      Alert.alert('Application Error', errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const dynamicStyles = {
@@ -129,6 +182,89 @@ export default function FundManagementScreen() {
     text: { color: theme.text },
     textSecondary: { color: theme.textSecondary },
   };
+
+  // Tier Selection Modal
+  const renderTierSelectionModal = () => (
+    <Modal
+      visible={showTierModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowTierModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, dynamicStyles.card]}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, dynamicStyles.text]}>Select Investment Tier</Text>
+            <TouchableOpacity onPress={() => setShowTierModal(false)}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Tier Options */}
+          <ScrollView style={styles.modalScroll}>
+            {INVESTMENT_TIERS.map((tier) => (
+              <TouchableOpacity
+                key={tier.id}
+                style={[
+                  styles.tierOption,
+                  { borderColor: selectedTier?.id === tier.id ? theme.primary : theme.border },
+                  selectedTier?.id === tier.id && { backgroundColor: `${theme.primary}15` },
+                ]}
+                onPress={() => setSelectedTier(tier)}
+              >
+                <View style={styles.tierOptionHeader}>
+                  <View style={styles.tierOptionLeft}>
+                    <View style={[
+                      styles.radioOuter,
+                      { borderColor: selectedTier?.id === tier.id ? theme.primary : theme.textSecondary }
+                    ]}>
+                      {selectedTier?.id === tier.id && (
+                        <View style={[styles.radioInner, { backgroundColor: theme.primary }]} />
+                      )}
+                    </View>
+                    <Text style={[styles.tierOptionName, dynamicStyles.text]}>{tier.name}</Text>
+                  </View>
+                  <Text style={[styles.tierOptionReturn, { color: '#10B981' }]}>{tier.expectedReturn}</Text>
+                </View>
+                <Text style={[styles.tierOptionCapital, dynamicStyles.textSecondary]}>
+                  {tier.capitalRange}
+                </Text>
+                <Text style={[styles.tierOptionDesc, dynamicStyles.textSecondary]}>
+                  {tier.description}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: selectedTier ? theme.primary : theme.border },
+              ]}
+              onPress={handleSubmitApplication}
+              disabled={!selectedTier || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#0A0E17" />
+              ) : (
+                <>
+                  <Ionicons name="logo-whatsapp" size={20} color="#0A0E17" />
+                  <Text style={styles.submitButtonText}>
+                    {selectedTier ? 'Continue to WhatsApp' : 'Select a Tier'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={[styles.modalNote, dynamicStyles.textSecondary]}>
+              Your application will be recorded and a team member will contact you via WhatsApp.
+            </Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
@@ -190,20 +326,21 @@ export default function FundManagementScreen() {
 
         {/* Action Section - Based on Subscription Entitlement */}
         {canApply ? (
-          // Premium/VIP users: Show Apply + Contact buttons (both open WhatsApp)
-          // IMPORTANT: Do NOT show upgrade CTA for premium/vip users
+          // Premium/VIP users: Show Apply + Contact buttons
           <View style={styles.actionButtonsContainer}>
+            {/* Apply via WhatsApp - Creates DB record FIRST */}
             <TouchableOpacity
               style={[styles.applyButton, { backgroundColor: theme.primary }]}
-              onPress={handleWhatsAppApplication}
+              onPress={handleApplyPress}
             >
               <Ionicons name="logo-whatsapp" size={20} color="#0A0E17" />
               <Text style={styles.applyButtonText}>Apply via WhatsApp</Text>
             </TouchableOpacity>
 
+            {/* Contact Fund Manager - General enquiry only, NO DB record */}
             <TouchableOpacity
               style={[styles.contactButton, { backgroundColor: '#25D366' }]}
-              onPress={handleWhatsAppApplication}
+              onPress={handleContactFundManager}
             >
               <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
               <Text style={styles.contactButtonText}>Contact Fund Manager</Text>
@@ -239,6 +376,9 @@ export default function FundManagementScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Tier Selection Modal */}
+      {renderTierSelectionModal()}
     </SafeAreaView>
   );
 }
@@ -446,6 +586,101 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 12,
+    lineHeight: 18,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalScroll: {
+    padding: 20,
+  },
+  tierOption: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  tierOptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tierOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  tierOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tierOptionReturn: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tierOptionCapital: {
+    fontSize: 14,
+    marginBottom: 4,
+    marginLeft: 32,
+  },
+  tierOptionDesc: {
+    fontSize: 12,
+    marginLeft: 32,
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 8,
+  },
+  submitButtonText: {
+    color: '#0A0E17',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalNote: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
     lineHeight: 18,
   },
 });
