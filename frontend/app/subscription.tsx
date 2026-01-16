@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { useSubscription } from '../src/context/SubscriptionContext';
+import { useTheme } from '../src/context/ThemeContext';
 import { SubscriptionBadge } from '../src/components/SubscriptionBadge';
 import { api } from '../src/services/api';
 
