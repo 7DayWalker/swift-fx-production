@@ -6986,7 +6986,7 @@ async def get_iap_transactions(
 
 @api_router.get("/admin/iap/transactions")
 async def admin_get_iap_transactions(
-    admin: AdminUser = Depends(get_admin_user),
+    admin: User = Depends(require_admin),
     user_id: Optional[str] = None,
     platform: Optional[str] = None,
     status: Optional[str] = None,
