@@ -373,15 +373,15 @@ export default function CommunityScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalContainer}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Post</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Create Post</Text>
               <TouchableOpacity onPress={() => {
                 setShowCreateModal(false);
                 setNewPostImage(null);
                 setNewPostImageBase64(null);
               }}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -391,12 +391,13 @@ export default function CommunityScreen() {
                   key={type}
                   style={[
                     styles.postTypeOption,
+                    { borderColor: theme.border },
                     newPostType === type && { backgroundColor: `${getPostTypeColor(type)}20`, borderColor: getPostTypeColor(type) }
                   ]}
                   onPress={() => setNewPostType(type)}
                 >
                   <Ionicons name={getPostTypeIcon(type) as any} size={16} color={getPostTypeColor(type)} />
-                  <Text style={[styles.postTypeOptionText, { color: newPostType === type ? getPostTypeColor(type) : '#8A8D98' }]}>
+                  <Text style={[styles.postTypeOptionText, { color: newPostType === type ? getPostTypeColor(type) : theme.textSecondary }]}>
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -404,9 +405,9 @@ export default function CommunityScreen() {
             </View>
 
             <TextInput
-              style={styles.postInput}
+              style={[styles.postInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
               placeholder="Share your analysis, results, or question..."
-              placeholderTextColor="#8A8D98"
+              placeholderTextColor={theme.textSecondary}
               multiline
               numberOfLines={4}
               value={newPostContent}
@@ -416,16 +417,17 @@ export default function CommunityScreen() {
             {/* Image Picker Section */}
             <View style={styles.imagePickerSection}>
               {newPostImage ? (
-                <View style={styles.imagePreviewContainer}>
+                <View style={[styles.imagePreviewContainer, { borderColor: theme.border }]}>
                   <Image source={{ uri: newPostImage }} style={styles.imagePreview} />
                   <TouchableOpacity style={styles.removeImageButton} onPress={removePostImage}>
-                    <Ionicons name="close-circle" size={24} color="#FF4757" />
+                    <Ionicons name="close-circle" size={24} color={theme.error} />
                   </TouchableOpacity>
                 </View>
               ) : (
                 <TouchableOpacity 
                   style={[
                     styles.addImageButton,
+                    { borderColor: theme.border },
                     !canUploadImages && styles.addImageButtonDisabled
                   ]} 
                   onPress={pickPostImage}
@@ -433,23 +435,23 @@ export default function CommunityScreen() {
                   <Ionicons 
                     name="image-outline" 
                     size={24} 
-                    color={canUploadImages ? '#00D4AA' : '#8A8D98'} 
+                    color={canUploadImages ? theme.primary : theme.textSecondary} 
                   />
                   <Text style={[
                     styles.addImageText,
-                    !canUploadImages && styles.addImageTextDisabled
+                    { color: canUploadImages ? theme.primary : theme.textSecondary }
                   ]}>
                     {canUploadImages ? 'Add Chart/Screenshot' : 'Upgrade to add images'}
                   </Text>
                   {!canUploadImages && (
-                    <Ionicons name="lock-closed" size={14} color="#8A8D98" style={{ marginLeft: 4 }} />
+                    <Ionicons name="lock-closed" size={14} color={theme.textSecondary} style={{ marginLeft: 4 }} />
                   )}
                 </TouchableOpacity>
               )}
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting && styles.submitButtonDisabled]}
               onPress={createPost}
               disabled={isSubmitting}
             >
@@ -474,32 +476,32 @@ export default function CommunityScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalContainer}
         >
-          <View style={styles.commentsModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comments</Text>
+          <View style={[styles.commentsModalContent, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Comments</Text>
               <TouchableOpacity onPress={() => setSelectedPost(null)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
             {loadingComments ? (
-              <ActivityIndicator size="large" color="#00D4AA" style={{ marginTop: 40 }} />
+              <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
             ) : (
               <FlatList
                 data={comments}
                 keyExtractor={(item) => item.comment_id}
                 style={styles.commentsList}
                 ListEmptyComponent={
-                  <Text style={styles.noComments}>No comments yet. Be the first!</Text>
+                  <Text style={[styles.noComments, { color: theme.textSecondary }]}>No comments yet. Be the first!</Text>
                 }
                 renderItem={({ item }) => (
-                  <View style={styles.commentItem}>
-                    <View style={styles.commentAvatar}>
-                      <Text style={styles.commentAvatarText}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
+                  <View style={[styles.commentItem, { borderBottomColor: theme.border }]}>
+                    <View style={[styles.commentAvatar, { backgroundColor: `${theme.primary}20` }]}>
+                      <Text style={[styles.commentAvatarText, { color: theme.primary }]}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
                     </View>
                     <View style={styles.commentContent}>
-                      <Text style={styles.commentAuthor}>{item.user_name}</Text>
-                      <Text style={styles.commentText}>{item.content}</Text>
+                      <Text style={[styles.commentAuthor, { color: theme.text }]}>{item.user_name}</Text>
+                      <Text style={[styles.commentText, { color: theme.textSecondary }]}>{item.content}</Text>
                     </View>
                   </View>
                 )}
@@ -507,16 +509,16 @@ export default function CommunityScreen() {
             )}
 
             {user && (
-              <View style={styles.commentInputContainer}>
+              <View style={[styles.commentInputContainer, { borderTopColor: theme.border, backgroundColor: theme.surface }]}>
                 <TextInput
-                  style={styles.commentInput}
+                  style={[styles.commentInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
                   placeholder="Add a comment..."
-                  placeholderTextColor="#8A8D98"
+                  placeholderTextColor={theme.textSecondary}
                   value={newComment}
                   onChangeText={setNewComment}
                 />
-                <TouchableOpacity style={styles.sendButton} onPress={addComment}>
-                  <Ionicons name="send" size={20} color="#00D4AA" />
+                <TouchableOpacity style={[styles.sendButton, { backgroundColor: `${theme.primary}15` }]} onPress={addComment}>
+                  <Ionicons name="send" size={20} color={theme.primary} />
                 </TouchableOpacity>
               </View>
             )}
