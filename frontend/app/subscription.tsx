@@ -57,6 +57,31 @@ export default function SubscriptionScreen() {
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [pendingSessions, setPendingSessions] = useState<PaymentSession[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [iapInitialized, setIapInitialized] = useState(false);
+
+  // Initialize IAP on mount (mobile only)
+  useEffect(() => {
+    const initializeIAP = async () => {
+      if (isIAPAvailable()) {
+        try {
+          const success = await IAPService.initIAP();
+          setIapInitialized(success);
+          console.log('[Subscription] IAP initialized:', success);
+        } catch (error) {
+          console.error('[Subscription] IAP init error:', error);
+        }
+      }
+    };
+    initializeIAP();
+
+    return () => {
+      if (isIAPAvailable()) {
+        IAPService.endIAP();
+      }
+    };
+  }, []);
 
   // Fetch plans and pending sessions
   const fetchData = useCallback(async () => {
@@ -85,9 +110,9 @@ export default function SubscriptionScreen() {
     fetchData();
   }, [fetchData, refreshStatus]);
 
-  // Create payment session and navigate to checkout
+  // Handle upgrade with native IAP (iOS/Android) or web checkout
   const handleUpgrade = async (planId: string) => {
-    if (isCreatingSession) return;
+    if (isCreatingSession || isPurchasing) return;
     
     // Check if user already has this or higher plan
     const planHierarchy: Record<string, number> = { free: 0, premium: 1, vip: 2 };
@@ -99,22 +124,96 @@ export default function SubscriptionScreen() {
       return;
     }
 
-    setIsCreatingSession(true);
+    // Use native IAP on mobile
+    if (isIAPAvailable() && Platform.OS !== 'web') {
+      setIsPurchasing(true);
+      try {
+        const plan = planId as 'premium' | 'vip';
+        const result = await IAPService.purchaseSubscription(plan);
+        
+        if (result.success) {
+          Alert.alert(
+            'Subscription Activated! 🎉',
+            result.message,
+            [{ text: 'OK', onPress: () => {
+              refreshStatus();
+              router.back();
+            }}]
+          );
+        } else {
+          if (result.message !== 'Purchase cancelled') {
+            Alert.alert('Purchase Failed', result.message);
+          }
+        }
+      } catch (error: any) {
+        console.error('[Subscription] Purchase error:', error);
+        Alert.alert('Purchase Error', error.message || 'Something went wrong. Please try again.');
+      } finally {
+        setIsPurchasing(false);
+      }
+    } else {
+      // Fallback to web checkout (Stripe) for web platform
+      setIsCreatingSession(true);
+      try {
+        const response = await api.post('/payments/create-session', {
+          plan: planId,
+          billing_cycle: selectedCycle,
+        });
+        router.push(`/pay?session_id=${response.data.session_id}`);
+      } catch (error: any) {
+        Alert.alert(
+          'Unable to Start Checkout',
+          error.response?.data?.detail || 'Please try again or contact support.'
+        );
+      } finally {
+        setIsCreatingSession(false);
+      }
+    }
+  };
+
+  // Restore purchases (mobile only)
+  const handleRestorePurchases = async () => {
+    if (!isIAPAvailable() || Platform.OS === 'web') {
+      Alert.alert('Not Available', 'Restore purchases is only available on mobile devices.');
+      return;
+    }
+
+    setIsRestoring(true);
     try {
-      const response = await api.post('/payments/create-session', {
-        plan: planId,
-        billing_cycle: selectedCycle,
-      });
+      const result = await IAPService.restorePurchases();
       
-      // Navigate to checkout page
-      router.push(`/pay?session_id=${response.data.session_id}`);
+      if (result.success) {
+        Alert.alert(
+          'Purchases Restored! 🎉',
+          `Your ${result.plan?.toUpperCase()} subscription has been restored.`,
+          [{ text: 'OK', onPress: () => refreshStatus() }]
+        );
+      } else {
+        Alert.alert('No Purchases Found', result.message);
+      }
     } catch (error: any) {
-      Alert.alert(
-        'Unable to Start Checkout',
-        error.response?.data?.detail || 'Please try again or contact support.'
-      );
+      Alert.alert('Restore Failed', error.message || 'Unable to restore purchases.');
     } finally {
-      setIsCreatingSession(false);
+      setIsRestoring(false);
+    }
+  };
+
+  // Open subscription management (Apple/Google settings)
+  const handleManageSubscription = async () => {
+    if (isIAPAvailable() && Platform.OS !== 'web') {
+      try {
+        await IAPService.openSubscriptionManagement();
+      } catch (error) {
+        // Fallback to manual URL
+        if (Platform.OS === 'ios') {
+          Linking.openURL('https://apps.apple.com/account/subscriptions');
+        } else {
+          Linking.openURL('https://play.google.com/store/account/subscriptions');
+        }
+      }
+    } else {
+      // Web - show contact support
+      Alert.alert('Manage Subscription', 'Please contact support to manage your subscription.');
     }
   };
 
