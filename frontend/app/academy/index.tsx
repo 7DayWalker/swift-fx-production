@@ -55,6 +55,7 @@ const CATEGORIES: Category[] = [
 
 export default function AcademyScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
