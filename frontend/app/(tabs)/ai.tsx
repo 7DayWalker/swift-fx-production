@@ -808,36 +808,36 @@ export default function AIScreen() {
 
   // Upload screen (default)
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>AI Chart Analyzer</Text>
-          <Text style={styles.subtitle}>Upload a chart for instant analysis</Text>
+          <Text style={[styles.title, { color: theme.text }]}>AI Chart Analyzer</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Upload a chart for instant analysis</Text>
         </View>
 
         {/* Usage Info */}
-        <View style={styles.usageCard}>
+        <View style={[styles.usageCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.usageHeader}>
-            <Ionicons name="sparkles" size={20} color="#00D4AA" />
-            <Text style={styles.usageTitle}>Weekly Usage</Text>
+            <Ionicons name="sparkles" size={20} color={theme.primary} />
+            <Text style={[styles.usageTitle, { color: theme.text }]}>Weekly Usage</Text>
           </View>
-          <View style={styles.usageBar}>
+          <View style={[styles.usageBar, { backgroundColor: theme.background }]}>
             <View
               style={[
                 styles.usageProgress,
-                { width: `${((usage?.current_usage || 0) / (usage?.weekly_limit || 1)) * 100}%` }
+                { width: `${((usage?.current_usage || 0) / (usage?.weekly_limit || 1)) * 100}%`, backgroundColor: theme.primary }
               ]}
             />
           </View>
-          <Text style={styles.usageText}>
+          <Text style={[styles.usageText, { color: theme.textSecondary }]}>
             {usage?.remaining || 0} of {usage?.weekly_limit || 0} analyses remaining
           </Text>
           {user?.role === 'premium' && (
-            <Text style={styles.usageNote}>
+            <Text style={[styles.usageNote, { color: theme.textMuted }]}>
               * Includes limited AI chart analysis. Usage caps apply.
             </Text>
           )}
@@ -846,44 +846,44 @@ export default function AIScreen() {
         {/* Image Picker - Gallery and Camera Options */}
         <View style={styles.imagePickerSection}>
           {selectedImage ? (
-            <View style={styles.selectedImageContainer}>
+            <View style={[styles.selectedImageContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Image source={{ uri: selectedImage }} style={styles.selectedImage} resizeMode="contain" />
               <View style={styles.imageActions}>
-                <TouchableOpacity style={styles.imageActionButton} onPress={pickImage}>
-                  <Ionicons name="images-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.imageActionText}>Gallery</Text>
+                <TouchableOpacity style={[styles.imageActionButton, { backgroundColor: theme.surfaceSecondary }]} onPress={pickImage}>
+                  <Ionicons name="images-outline" size={20} color={theme.text} />
+                  <Text style={[styles.imageActionText, { color: theme.text }]}>Gallery</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.imageActionButton} onPress={takePhoto}>
-                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.imageActionText}>Camera</Text>
+                <TouchableOpacity style={[styles.imageActionButton, { backgroundColor: theme.surfaceSecondary }]} onPress={takePhoto}>
+                  <Ionicons name="camera-outline" size={20} color={theme.text} />
+                  <Text style={[styles.imageActionText, { color: theme.text }]}>Camera</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
-            <View style={styles.uploadOptions}>
-              <Text style={styles.uploadTitle}>Upload Your Chart</Text>
-              <Text style={styles.uploadSubtitle}>Portrait or landscape • Any trading platform</Text>
+            <View style={[styles.uploadOptions, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.uploadTitle, { color: theme.text }]}>Upload Your Chart</Text>
+              <Text style={[styles.uploadSubtitle, { color: theme.textSecondary }]}>Portrait or landscape • Any trading platform</Text>
               
               <View style={styles.uploadButtonsRow}>
-                <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                  <View style={styles.uploadIconContainer}>
-                    <Ionicons name="images" size={32} color="#00D4AA" />
+                <TouchableOpacity style={[styles.uploadButton, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]} onPress={pickImage}>
+                  <View style={[styles.uploadIconContainer, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="images" size={32} color={theme.primary} />
                   </View>
-                  <Text style={styles.uploadButtonTitle}>Gallery</Text>
-                  <Text style={styles.uploadButtonSubtext}>Screenshot or saved image</Text>
+                  <Text style={[styles.uploadButtonTitle, { color: theme.text }]}>Gallery</Text>
+                  <Text style={[styles.uploadButtonSubtext, { color: theme.textSecondary }]}>Screenshot or saved image</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
-                  <View style={styles.uploadIconContainer}>
-                    <Ionicons name="camera" size={32} color="#00D4AA" />
+                <TouchableOpacity style={[styles.uploadButton, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]} onPress={takePhoto}>
+                  <View style={[styles.uploadIconContainer, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="camera" size={32} color={theme.primary} />
                   </View>
-                  <Text style={styles.uploadButtonTitle}>Camera</Text>
-                  <Text style={styles.uploadButtonSubtext}>Snap a chart photo</Text>
+                  <Text style={[styles.uploadButtonTitle, { color: theme.text }]}>Camera</Text>
+                  <Text style={[styles.uploadButtonSubtext, { color: theme.textSecondary }]}>Snap a chart photo</Text>
                 </TouchableOpacity>
               </View>
               
               <View style={styles.supportedPlatforms}>
-                <Text style={styles.supportedText}>Works with MT4 • MT5 • TradingView • Any chart</Text>
+                <Text style={[styles.supportedText, { color: theme.textMuted }]}>Works with MT4 • MT5 • TradingView • Any chart</Text>
               </View>
             </View>
           )}
@@ -892,41 +892,41 @@ export default function AIScreen() {
         {/* Settings */}
         <View style={styles.settingsContainer}>
           <TouchableOpacity
-            style={styles.settingButton}
+            style={[styles.settingButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => setShowPairPicker(!showPairPicker)}
           >
-            <Text style={styles.settingLabel}>Pair</Text>
+            <Text style={[styles.settingLabel, { color: theme.textSecondary }]}>Pair</Text>
             <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{selectedPair}</Text>
-              <Ionicons name="chevron-down" size={16} color="#8A8D98" />
+              <Text style={[styles.settingValueText, { color: theme.text }]}>{selectedPair}</Text>
+              <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.settingButton}
+            style={[styles.settingButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => setShowTimeframePicker(!showTimeframePicker)}
           >
-            <Text style={styles.settingLabel}>Timeframe</Text>
+            <Text style={[styles.settingLabel, { color: theme.textSecondary }]}>Timeframe</Text>
             <View style={styles.settingValue}>
-              <Text style={styles.settingValueText}>{selectedTimeframe}</Text>
-              <Ionicons name="chevron-down" size={16} color="#8A8D98" />
+              <Text style={[styles.settingValueText, { color: theme.text }]}>{selectedTimeframe}</Text>
+              <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Pair Picker */}
         {showPairPicker && (
-          <View style={styles.pickerContainer}>
+          <View style={[styles.pickerContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {PAIRS.map((pair) => (
               <TouchableOpacity
                 key={pair}
-                style={[styles.pickerItem, selectedPair === pair && styles.pickerItemActive]}
+                style={[styles.pickerItem, { borderBottomColor: theme.border }, selectedPair === pair && { backgroundColor: `${theme.primary}20` }]}
                 onPress={() => {
                   setSelectedPair(pair);
                   setShowPairPicker(false);
                 }}
               >
-                <Text style={[styles.pickerItemText, selectedPair === pair && styles.pickerItemTextActive]}>
+                <Text style={[styles.pickerItemText, { color: theme.text }, selectedPair === pair && { color: theme.primary }]}>
                   {pair}
                 </Text>
               </TouchableOpacity>
@@ -936,17 +936,17 @@ export default function AIScreen() {
 
         {/* Timeframe Picker */}
         {showTimeframePicker && (
-          <View style={styles.pickerContainer}>
+          <View style={[styles.pickerContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {TIMEFRAMES.map((tf) => (
               <TouchableOpacity
                 key={tf}
-                style={[styles.pickerItem, selectedTimeframe === tf && styles.pickerItemActive]}
+                style={[styles.pickerItem, { borderBottomColor: theme.border }, selectedTimeframe === tf && { backgroundColor: `${theme.primary}20` }]}
                 onPress={() => {
                   setSelectedTimeframe(tf);
                   setShowTimeframePicker(false);
                 }}
               >
-                <Text style={[styles.pickerItemText, selectedTimeframe === tf && styles.pickerItemTextActive]}>
+                <Text style={[styles.pickerItemText, { color: theme.text }, selectedTimeframe === tf && { color: theme.primary }]}>
                   {tf}
                 </Text>
               </TouchableOpacity>
@@ -956,7 +956,7 @@ export default function AIScreen() {
 
         {/* Analyze Button */}
         <TouchableOpacity
-          style={[styles.analyzeButton, !selectedImage && styles.analyzeButtonDisabled]}
+          style={[styles.analyzeButton, { backgroundColor: theme.primary }, !selectedImage && styles.analyzeButtonDisabled]}
           onPress={analyzeChart}
           disabled={!selectedImage}
         >
