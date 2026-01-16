@@ -7,10 +7,11 @@
  * - Never unlock features client-side
  * - Always validate purchases through backend
  * - Backend is the source of truth for subscription status
+ * - IAP is only available on native iOS/Android builds
+ * - Web/preview builds use fallback (Stripe checkout)
  */
 
 import { Platform } from 'react-native';
-import * as RNIap from 'react-native-iap';
 import { api } from './api';
 
 // Product IDs - fetched from backend or use defaults
@@ -54,9 +55,45 @@ export interface PurchaseResult {
 // IAP Service state
 let isInitialized = false;
 let productIds: string[] = [];
-let products: RNIap.Product[] = [];
+let products: any[] = [];
 let purchaseUpdateSubscription: any = null;
 let purchaseErrorSubscription: any = null;
+
+// Dynamic import for react-native-iap (only on native platforms)
+let RNIap: any = null;
+
+/**
+ * Check if IAP is available on current platform
+ * Only available on native iOS/Android builds
+ */
+export function isIAPAvailable(): boolean {
+  return Platform.OS === 'ios' || Platform.OS === 'android';
+}
+
+/**
+ * Load react-native-iap dynamically (native only)
+ */
+async function loadIAPModule(): Promise<boolean> {
+  if (!isIAPAvailable()) {
+    console.log('[IAP] Not available on web platform');
+    return false;
+  }
+
+  if (RNIap) {
+    return true;
+  }
+
+  try {
+    // Dynamic import to avoid loading on web
+    RNIap = require('react-native-iap');
+    console.log('[IAP] Module loaded successfully');
+    return true;
+  } catch (error) {
+    console.warn('[IAP] Failed to load react-native-iap module:', error);
+    RNIap = null;
+    return false;
+  }
+}
 
 /**
  * Fetch product IDs from backend
@@ -74,16 +111,24 @@ export async function fetchProductIds(): Promise<IAPProducts> {
 /**
  * Initialize IAP connection
  * Call this when app starts or before showing subscription screen
+ * Only works on native iOS/Android builds
  */
 export async function initIAP(): Promise<boolean> {
+  // Guard: Only run on native platforms
+  if (!isIAPAvailable()) {
+    console.log('[IAP] Skipping initialization - not available on this platform');
+    return false;
+  }
+
   if (isInitialized) {
     return true;
   }
 
   try {
-    // Check if IAP is available on this platform
-    if (Platform.OS === 'web') {
-      console.log('[IAP] Web platform - IAP not available');
+    // Load the IAP module dynamically
+    const moduleLoaded = await loadIAPModule();
+    if (!moduleLoaded || !RNIap) {
+      console.warn('[IAP] Module not available');
       return false;
     }
 
@@ -131,6 +176,8 @@ export async function initIAP(): Promise<boolean> {
  * Set up purchase update and error listeners
  */
 function setupPurchaseListeners() {
+  if (!RNIap) return;
+
   // Remove existing listeners
   if (purchaseUpdateSubscription) {
     purchaseUpdateSubscription.remove();
@@ -140,15 +187,12 @@ function setupPurchaseListeners() {
   }
 
   // Listen for purchase updates
-  purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(async (purchase) => {
+  purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(async (purchase: any) => {
     console.log('[IAP] Purchase update:', purchase.productId);
-    
-    // The actual validation will be handled in the purchase flow
-    // This listener is mainly for background updates
   });
 
   // Listen for purchase errors
-  purchaseErrorSubscription = RNIap.purchaseErrorListener((error) => {
+  purchaseErrorSubscription = RNIap.purchaseErrorListener((error: any) => {
     console.error('[IAP] Purchase error:', error);
   });
 }
@@ -158,6 +202,10 @@ function setupPurchaseListeners() {
  * Call this when app is closing or user logs out
  */
 export async function endIAP(): Promise<void> {
+  if (!isIAPAvailable() || !RNIap) {
+    return;
+  }
+
   try {
     if (purchaseUpdateSubscription) {
       purchaseUpdateSubscription.remove();
@@ -180,14 +228,14 @@ export async function endIAP(): Promise<void> {
 /**
  * Get available subscription products
  */
-export function getProducts(): RNIap.Product[] {
+export function getProducts(): any[] {
   return products;
 }
 
 /**
  * Get product by plan type
  */
-export function getProductByPlan(plan: SubscriptionPlan): RNIap.Product | undefined {
+export function getProductByPlan(plan: SubscriptionPlan): any | undefined {
   const platformProducts = Platform.OS === 'ios' 
     ? DEFAULT_PRODUCTS.ios 
     : DEFAULT_PRODUCTS.android;
@@ -196,7 +244,7 @@ export function getProductByPlan(plan: SubscriptionPlan): RNIap.Product | undefi
     ? platformProducts.vip_monthly 
     : platformProducts.premium_monthly;
   
-  return products.find(p => p.productId === productId);
+  return products.find((p: any) => p.productId === productId);
 }
 
 /**
@@ -208,8 +256,18 @@ export function getProductByPlan(plan: SubscriptionPlan): RNIap.Product | undefi
  * 3. Send to backend for validation
  * 4. Backend updates user subscription
  * 5. Return result
+ * 
+ * Only works on native iOS/Android builds
  */
 export async function purchaseSubscription(plan: SubscriptionPlan): Promise<PurchaseResult> {
+  // Guard: Only run on native platforms
+  if (!isIAPAvailable()) {
+    return {
+      success: false,
+      message: 'In-App Purchases are only available on mobile devices. Please use web checkout.',
+    };
+  }
+
   try {
     if (!isInitialized) {
       const success = await initIAP();
@@ -219,6 +277,13 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
           message: 'In-App Purchases not available on this device',
         };
       }
+    }
+
+    if (!RNIap) {
+      return {
+        success: false,
+        message: 'IAP module not loaded',
+      };
     }
 
     // Get product for the plan
@@ -235,7 +300,7 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
     // Request subscription purchase
     const purchase = await RNIap.requestSubscription({
       sku: product.productId,
-      andDangerouslyFinishTransactionAutomaticallyIOS: false, // We'll finish after validation
+      andDangerouslyFinishTransactionAutomaticallyIOS: false,
     });
 
     console.log('[IAP] Purchase result:', purchase);
@@ -277,7 +342,7 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
 /**
  * Validate purchase with backend
  */
-async function validatePurchaseWithBackend(purchase: RNIap.SubscriptionPurchase | RNIap.SubscriptionPurchase[]): Promise<PurchaseResult> {
+async function validatePurchaseWithBackend(purchase: any): Promise<PurchaseResult> {
   try {
     const purchaseData = Array.isArray(purchase) ? purchase[0] : purchase;
     
@@ -343,8 +408,17 @@ async function validatePurchaseWithBackend(purchase: RNIap.SubscriptionPurchase 
 /**
  * Restore previous purchases
  * Call this when user taps "Restore Purchases" or after reinstall
+ * Only works on native iOS/Android builds
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
+  // Guard: Only run on native platforms
+  if (!isIAPAvailable()) {
+    return {
+      success: false,
+      message: 'Restore purchases is only available on mobile devices.',
+    };
+  }
+
   try {
     if (!isInitialized) {
       const success = await initIAP();
@@ -354,6 +428,13 @@ export async function restorePurchases(): Promise<PurchaseResult> {
           message: 'In-App Purchases not available on this device',
         };
       }
+    }
+
+    if (!RNIap) {
+      return {
+        success: false,
+        message: 'IAP module not loaded',
+      };
     }
 
     console.log('[IAP] Restoring purchases...');
@@ -371,8 +452,8 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
     // Find the most recent subscription
     const subscription = purchases
-      .filter(p => productIds.includes(p.productId))
-      .sort((a, b) => (b.transactionDate || 0) - (a.transactionDate || 0))[0];
+      .filter((p: any) => productIds.includes(p.productId))
+      .sort((a: any, b: any) => (b.transactionDate || 0) - (a.transactionDate || 0))[0];
 
     if (!subscription) {
       return {
@@ -408,37 +489,33 @@ export async function getIAPStatus(): Promise<any> {
 /**
  * Open subscription management
  * Opens native subscription management screen
+ * Only works on native iOS/Android builds
  */
 export async function openSubscriptionManagement(): Promise<void> {
+  // Guard: Only run on native platforms
+  if (!isIAPAvailable() || !RNIap) {
+    console.log('[IAP] Subscription management not available on this platform');
+    return;
+  }
+
   try {
     if (Platform.OS === 'ios') {
-      // Open iOS subscription settings
       await RNIap.deepLinkToSubscriptionsIos();
     } else if (Platform.OS === 'android') {
-      // Open Google Play subscriptions
       await RNIap.deepLinkToSubscriptionsAndroid({
-        sku: productIds[0], // Any product ID will work
+        sku: productIds[0],
       });
     }
   } catch (error) {
     console.error('[IAP] Error opening subscription management:', error);
-    // Fallback: Open app store directly
-    // You could use Linking.openURL here
   }
-}
-
-/**
- * Check if IAP is available on current platform
- */
-export function isIAPAvailable(): boolean {
-  return Platform.OS !== 'web';
 }
 
 /**
  * Format price for display
  */
-export function formatProductPrice(product: RNIap.Product): string {
-  return product.localizedPrice || `$${product.price}`;
+export function formatProductPrice(product: any): string {
+  return product?.localizedPrice || `$${product?.price || '0.00'}`;
 }
 
 export default {
