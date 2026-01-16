@@ -166,23 +166,23 @@ export default function MoreScreen() {
         {/* Menu Sections */}
         {menuItems.map((section, sectionIndex) => (
           <View key={sectionIndex} style={styles.menuSection}>
-            <Text style={styles.sectionTitle}>{section.section}</Text>
-            <View style={styles.menuCard}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{section.section}</Text>
+            <View style={[styles.menuCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {section.items.map((item, itemIndex) => (
                 <TouchableOpacity
                   key={itemIndex}
                   style={[
                     styles.menuItem,
-                    itemIndex < section.items.length - 1 && styles.menuItemBorder
+                    itemIndex < section.items.length - 1 && [styles.menuItemBorder, { borderBottomColor: theme.border }]
                   ]}
                   onPress={item.action}
                   disabled={item.locked}
                 >
                   <View style={styles.menuItemLeft}>
-                    <View style={[styles.menuIconContainer, item.locked && styles.menuIconLocked]}>
-                      <Ionicons name={item.icon as any} size={20} color={item.locked ? '#8A8D98' : '#00D4AA'} />
+                    <View style={[styles.menuIconContainer, { backgroundColor: `${theme.primary}15` }, item.locked && { backgroundColor: `${theme.textSecondary}15` }]}>
+                      <Ionicons name={item.icon as any} size={20} color={item.locked ? theme.textSecondary : theme.primary} />
                     </View>
-                    <Text style={[styles.menuItemText, item.locked && styles.menuItemTextLocked]}>
+                    <Text style={[styles.menuItemText, { color: theme.text }, item.locked && { color: theme.textSecondary }]}>
                       {item.label}
                     </Text>
                   </View>
@@ -190,16 +190,16 @@ export default function MoreScreen() {
                     {item.badge && (
                       <View style={[
                         styles.menuBadge,
-                        item.badge === 'VIP' && styles.vipMenuBadge,
-                        item.badge === 'PREMIUM' && styles.premiumMenuBadge
+                        item.badge === 'VIP' && { backgroundColor: `${theme.warning}20` },
+                        item.badge === 'PREMIUM' && { backgroundColor: `${theme.primary}20` }
                       ]}>
-                        <Text style={styles.menuBadgeText}>{item.badge}</Text>
+                        <Text style={[styles.menuBadgeText, { color: item.badge === 'VIP' ? theme.warning : theme.primary }]}>{item.badge}</Text>
                       </View>
                     )}
                     {item.locked ? (
-                      <Ionicons name="lock-closed" size={16} color="#8A8D98" />
+                      <Ionicons name="lock-closed" size={16} color={theme.textSecondary} />
                     ) : (
-                      <Ionicons name="chevron-forward" size={20} color="#8A8D98" />
+                      <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
                     )}
                   </View>
                 </TouchableOpacity>
@@ -209,12 +209,12 @@ export default function MoreScreen() {
         ))}
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#FF4757" />
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: `${theme.error}10` }]} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={theme.error} />
+          <Text style={[styles.logoutText, { color: theme.error }]}>Logout</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Swift FX Signals v1.0.0</Text>
+        <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.0</Text>
       </ScrollView>
 
       {/* Logout Confirmation Modal */}
