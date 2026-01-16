@@ -74,6 +74,7 @@ const COURSES_DATA: Record<string, { title: string; color: string; courses: Cour
 
 export default function CourseListScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { category } = useLocalSearchParams<{ category: string }>();
@@ -82,8 +83,8 @@ export default function CourseListScreen() {
 
   if (!categoryData) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Category not found</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.errorText, { color: theme.text }]}>Category not found</Text>
       </SafeAreaView>
     );
   }
@@ -93,13 +94,13 @@ export default function CourseListScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{categoryData.title} Courses</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{categoryData.title} Courses</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -113,8 +114,8 @@ export default function CourseListScreen() {
           />
         </View>
         <View style={styles.categoryInfo}>
-          <Text style={styles.categoryTitle}>{categoryData.title} Level</Text>
-          <Text style={styles.categoryCount}>{categoryData.courses.length} courses available</Text>
+          <Text style={[styles.categoryTitle, { color: theme.text }]}>{categoryData.title} Level</Text>
+          <Text style={[styles.categoryCount, { color: theme.textSecondary }]}>{categoryData.courses.length} courses available</Text>
         </View>
       </View>
 
@@ -126,18 +127,18 @@ export default function CourseListScreen() {
         {categoryData.courses.map((course, index) => (
           <TouchableOpacity
             key={course.id}
-            style={styles.courseCard}
+            style={[styles.courseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => handleCoursePress(course.id)}
           >
             <View style={[styles.courseIcon, { backgroundColor: `${categoryData.color}20` }]}>
               <Ionicons name={course.icon as any} size={24} color={categoryData.color} />
             </View>
             <View style={styles.courseContent}>
-              <Text style={styles.courseTitle}>{course.title}</Text>
-              <Text style={styles.courseDescription}>{course.description}</Text>
+              <Text style={[styles.courseTitle, { color: theme.text }]}>{course.title}</Text>
+              <Text style={[styles.courseDescription, { color: theme.textSecondary }]}>{course.description}</Text>
               <View style={styles.courseMeta}>
                 <View style={styles.metaItem}>
-                  <Ionicons name="play-circle-outline" size={14} color="#8A8D98" />
+                  <Ionicons name="play-circle-outline" size={14} color={theme.textSecondary} />
                   <Text style={styles.metaText}>{course.lessonCount} lessons</Text>
                 </View>
                 <View style={styles.metaItem}>
