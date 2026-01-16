@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
+import { useTheme } from '../src/context/ThemeContext';
 import { api } from '../src/services/api';
 import * as Clipboard from 'expo-clipboard';
 
