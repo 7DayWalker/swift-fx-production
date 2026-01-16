@@ -200,28 +200,28 @@ export default function SignalsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.title}>Trading Signals</Text>
-            <Text style={styles.subtitle}>Real-time trading opportunities</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Trading Signals</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Real-time trading opportunities</Text>
           </View>
           <TouchableOpacity 
-            style={styles.historyButton}
+            style={[styles.historyButton, { borderColor: `${theme.primary}30` }]}
             onPress={() => router.push('/signal-history')}
           >
-            <Ionicons name="time-outline" size={18} color="#00D4AA" />
-            <Text style={styles.historyButtonText}>History</Text>
+            <Ionicons name="time-outline" size={18} color={theme.primary} />
+            <Text style={[styles.historyButtonText, { color: theme.primary }]}>History</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -231,10 +231,18 @@ export default function SignalsScreen() {
         {['all', 'pending', 'active', 'closed'].map((f) => (
           <TouchableOpacity
             key={f}
-            style={[styles.filterTab, filter === f && styles.filterTabActive]}
+            style={[
+              styles.filterTab, 
+              { backgroundColor: theme.surface },
+              filter === f && { backgroundColor: theme.primary }
+            ]}
             onPress={() => setFilter(f as any)}
           >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+            <Text style={[
+              styles.filterText, 
+              { color: theme.textSecondary },
+              filter === f && { color: theme.background, fontWeight: 'bold' }
+            ]}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </Text>
           </TouchableOpacity>
@@ -243,17 +251,17 @@ export default function SignalsScreen() {
 
       <FlatList
         data={filteredSignals}
-        renderItem={renderSignal}
+        renderItem={({ item }) => renderSignalWithTheme(item, theme)}
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="trending-up-outline" size={64} color="#8A8D98" />
-            <Text style={styles.emptyTitle}>No Signals</Text>
-            <Text style={styles.emptyText}>Check back later for new trading signals</Text>
+            <Ionicons name="trending-up-outline" size={64} color={theme.textSecondary} />
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Signals</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Check back later for new trading signals</Text>
           </View>
         }
         ListFooterComponent={user?.role === 'free' ? <MockAdBanner /> : null}
