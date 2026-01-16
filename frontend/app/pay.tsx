@@ -35,6 +35,7 @@ interface PaymentSession {
 export default function PaymentPage() {
   const { session_id } = useLocalSearchParams<{ session_id: string }>();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   
   const [session, setSession] = useState<PaymentSession | null>(null);
