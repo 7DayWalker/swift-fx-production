@@ -45,6 +45,7 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { status: subscriptionStatus, refreshStatus, isLoading: subLoading } = useSubscription();
   
   const [plans, setPlans] = useState<Plan[]>([]);
