@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { login, loginWithGoogle } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
 
   const handleLogin = async () => {
