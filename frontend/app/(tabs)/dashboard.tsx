@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
 import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
