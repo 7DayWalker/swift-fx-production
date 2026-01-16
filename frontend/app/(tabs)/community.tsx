@@ -46,6 +46,7 @@ interface Comment {
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
