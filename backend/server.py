@@ -33,6 +33,44 @@ JWT_EXPIRY_DAYS = 7
 # Emergent LLM Key for Claude Vision
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
+# ===================== IAP CONFIGURATION =====================
+# Apple App Store
+APPLE_SHARED_SECRET = os.environ.get('APPLE_SHARED_SECRET', '')
+APPLE_BUNDLE_ID = os.environ.get('APPLE_BUNDLE_ID', 'com.swiftfx.app')
+APPLE_ENVIRONMENT = os.environ.get('APPLE_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
+APPLE_KEY_ID = os.environ.get('APPLE_KEY_ID', '')
+APPLE_ISSUER_ID = os.environ.get('APPLE_ISSUER_ID', '')
+APPLE_PRIVATE_KEY = os.environ.get('APPLE_PRIVATE_KEY', '')
+APPLE_WEBHOOK_SECRET = os.environ.get('APPLE_WEBHOOK_SECRET', '')
+
+# Google Play Billing
+GOOGLE_PACKAGE_NAME = os.environ.get('GOOGLE_PACKAGE_NAME', 'com.swiftfx.app')
+GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
+GOOGLE_PUBSUB_TOPIC = os.environ.get('GOOGLE_PUBSUB_TOPIC', '')
+GOOGLE_WEBHOOK_TOKEN = os.environ.get('GOOGLE_WEBHOOK_TOKEN', '')
+
+# IAP Product IDs (configurable)
+IAP_PRODUCTS = {
+    'ios': {
+        'premium_monthly': os.environ.get('IOS_PREMIUM_MONTHLY_ID', 'swiftfx_premium_monthly'),
+        'vip_monthly': os.environ.get('IOS_VIP_MONTHLY_ID', 'swiftfx_vip_monthly'),
+    },
+    'android': {
+        'premium_monthly': os.environ.get('ANDROID_PREMIUM_MONTHLY_ID', 'swiftfx_premium_monthly'),
+        'vip_monthly': os.environ.get('ANDROID_VIP_MONTHLY_ID', 'swiftfx_vip_monthly'),
+    }
+}
+
+# Map product IDs to subscription plans
+def get_plan_from_product_id(product_id: str) -> Optional[str]:
+    """Map IAP product ID to subscription plan"""
+    product_id_lower = product_id.lower()
+    if 'vip' in product_id_lower:
+        return 'vip'
+    elif 'premium' in product_id_lower:
+        return 'premium'
+    return None
+
 app = FastAPI(title="Swift FX Signals API")
 api_router = APIRouter(prefix="/api")
 
