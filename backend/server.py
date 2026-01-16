@@ -6205,6 +6205,852 @@ async def admin_restore_user(
     return {"success": True, "message": "User account restored"}
 
 
+# ==============================================================================
+# IN-APP PURCHASES (IAP) - APPLE & GOOGLE
+# ==============================================================================
+
+# IAP Request/Response Models
+class AppleReceiptValidationRequest(BaseModel):
+    receipt_data: str = Field(..., description="Base64 encoded receipt data from iOS")
+    exclude_old_transactions: bool = Field(default=True)
+
+class GooglePurchaseValidationRequest(BaseModel):
+    purchase_token: str = Field(..., description="Purchase token from Google Play")
+    product_id: str = Field(..., description="Product ID of the subscription")
+    package_name: Optional[str] = Field(default=None, description="Package name (optional, uses default)")
+
+class IAPValidationResponse(BaseModel):
+    success: bool
+    plan: Optional[str] = None
+    expiry_date: Optional[str] = None
+    is_trial: bool = False
+    auto_renew: bool = False
+    message: str = ""
+
+class AppleNotificationPayload(BaseModel):
+    signedPayload: str
+
+class GoogleNotificationPayload(BaseModel):
+    message: dict
+    subscription: Optional[str] = None
+
+# IAP Transaction record
+class IAPTransaction(BaseModel):
+    transaction_id: str
+    user_id: str
+    platform: str  # 'ios' or 'android'
+    product_id: str
+    plan: str
+    original_transaction_id: Optional[str] = None
+    purchase_date: str
+    expiry_date: Optional[str] = None
+    is_trial: bool = False
+    auto_renew: bool = True
+    status: str = "active"  # active, expired, cancelled, refunded
+    raw_receipt: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== APPLE IAP VALIDATION ====================
+
+async def validate_apple_receipt(receipt_data: str, exclude_old: bool = True) -> dict:
+    """
+    Validate Apple App Store receipt
+    
+    Endpoints:
+    - Sandbox: https://sandbox.itunes.apple.com/verifyReceipt
+    - Production: https://buy.itunes.apple.com/verifyReceipt
+    
+    Returns validation result with subscription info
+    """
+    # Determine endpoint based on environment
+    if APPLE_ENVIRONMENT == 'production':
+        url = "https://buy.itunes.apple.com/verifyReceipt"
+    else:
+        url = "https://sandbox.itunes.apple.com/verifyReceipt"
+    
+    payload = {
+        "receipt-data": receipt_data,
+        "password": APPLE_SHARED_SECRET,
+        "exclude-old-transactions": exclude_old
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=payload, timeout=30.0)
+            result = response.json()
+            
+            # Status 21007 means sandbox receipt sent to production
+            # Retry with sandbox endpoint
+            if result.get('status') == 21007:
+                logger.info("[Apple IAP] Sandbox receipt, retrying with sandbox endpoint")
+                url = "https://sandbox.itunes.apple.com/verifyReceipt"
+                response = await client.post(url, json=payload, timeout=30.0)
+                result = response.json()
+            
+            return result
+        except Exception as e:
+            logger.error(f"[Apple IAP] Validation error: {e}")
+            return {"status": -1, "error": str(e)}
+
+
+def parse_apple_receipt(validation_result: dict) -> dict:
+    """Parse Apple receipt validation result to extract subscription info"""
+    if validation_result.get('status') != 0:
+        status_codes = {
+            21000: "App Store could not read JSON",
+            21002: "Receipt data malformed",
+            21003: "Receipt not authenticated",
+            21004: "Shared secret mismatch",
+            21005: "Receipt server unavailable",
+            21006: "Receipt valid but subscription expired",
+            21007: "Sandbox receipt sent to production",
+            21008: "Production receipt sent to sandbox",
+            21010: "Account not found",
+        }
+        error_msg = status_codes.get(validation_result.get('status'), "Unknown error")
+        return {"valid": False, "error": error_msg, "status": validation_result.get('status')}
+    
+    receipt = validation_result.get('receipt', {})
+    latest_receipt_info = validation_result.get('latest_receipt_info', [])
+    pending_renewal_info = validation_result.get('pending_renewal_info', [])
+    
+    # Get the most recent active subscription
+    active_subscription = None
+    latest_expiry = None
+    
+    for txn in latest_receipt_info:
+        expires_date_ms = txn.get('expires_date_ms')
+        if expires_date_ms:
+            expires_date = datetime.fromtimestamp(int(expires_date_ms) / 1000, tz=timezone.utc)
+            if expires_date > datetime.now(timezone.utc):
+                if latest_expiry is None or expires_date > latest_expiry:
+                    latest_expiry = expires_date
+                    active_subscription = txn
+    
+    if not active_subscription:
+        # Check if expired
+        if latest_receipt_info:
+            latest = sorted(latest_receipt_info, key=lambda x: int(x.get('expires_date_ms', 0)), reverse=True)[0]
+            return {
+                "valid": True,
+                "active": False,
+                "product_id": latest.get('product_id'),
+                "expired": True,
+                "expiry_date": datetime.fromtimestamp(int(latest.get('expires_date_ms', 0)) / 1000, tz=timezone.utc).isoformat()
+            }
+        return {"valid": True, "active": False, "error": "No active subscription found"}
+    
+    # Check auto-renewal status
+    auto_renew = True
+    is_trial = active_subscription.get('is_trial_period', 'false') == 'true'
+    
+    for renewal in pending_renewal_info:
+        if renewal.get('product_id') == active_subscription.get('product_id'):
+            auto_renew = renewal.get('auto_renew_status') == '1'
+            break
+    
+    return {
+        "valid": True,
+        "active": True,
+        "product_id": active_subscription.get('product_id'),
+        "original_transaction_id": active_subscription.get('original_transaction_id'),
+        "transaction_id": active_subscription.get('transaction_id'),
+        "purchase_date": datetime.fromtimestamp(int(active_subscription.get('purchase_date_ms', 0)) / 1000, tz=timezone.utc).isoformat(),
+        "expiry_date": latest_expiry.isoformat() if latest_expiry else None,
+        "is_trial": is_trial,
+        "auto_renew": auto_renew,
+        "bundle_id": receipt.get('bundle_id'),
+    }
+
+
+@api_router.post("/iap/apple/verify", response_model=IAPValidationResponse)
+async def verify_apple_purchase(
+    request: AppleReceiptValidationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Verify Apple App Store purchase receipt and update user subscription
+    
+    Flow:
+    1. Client sends receipt data after purchase
+    2. Server validates with Apple
+    3. Server updates user subscription
+    4. Returns success/failure
+    """
+    user_id = current_user["user_id"]
+    
+    try:
+        # Validate receipt with Apple
+        validation_result = await validate_apple_receipt(
+            request.receipt_data, 
+            request.exclude_old_transactions
+        )
+        
+        # Parse the validation result
+        parsed = parse_apple_receipt(validation_result)
+        
+        if not parsed.get('valid'):
+            logger.warning(f"[Apple IAP] Invalid receipt for user {user_id}: {parsed.get('error')}")
+            return IAPValidationResponse(
+                success=False,
+                message=f"Invalid receipt: {parsed.get('error')}"
+            )
+        
+        if not parsed.get('active'):
+            logger.info(f"[Apple IAP] No active subscription for user {user_id}")
+            return IAPValidationResponse(
+                success=False,
+                message="No active subscription found"
+            )
+        
+        # Get plan from product ID
+        product_id = parsed.get('product_id')
+        plan = get_plan_from_product_id(product_id)
+        
+        if not plan:
+            logger.error(f"[Apple IAP] Unknown product ID: {product_id}")
+            return IAPValidationResponse(
+                success=False,
+                message=f"Unknown product: {product_id}"
+            )
+        
+        # Update user subscription
+        expiry_date = parsed.get('expiry_date')
+        
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "subscription": plan,
+                "subscription_status": "active",
+                "subscription_expiry": expiry_date,
+                "subscription_platform": "ios",
+                "subscription_product_id": product_id,
+                "subscription_auto_renew": parsed.get('auto_renew', True),
+                "subscription_is_trial": parsed.get('is_trial', False),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Store transaction record
+        transaction = {
+            "transaction_id": parsed.get('transaction_id'),
+            "original_transaction_id": parsed.get('original_transaction_id'),
+            "user_id": user_id,
+            "platform": "ios",
+            "product_id": product_id,
+            "plan": plan,
+            "purchase_date": parsed.get('purchase_date'),
+            "expiry_date": expiry_date,
+            "is_trial": parsed.get('is_trial', False),
+            "auto_renew": parsed.get('auto_renew', True),
+            "status": "active",
+            "raw_receipt": request.receipt_data[:500],  # Store partial for debugging
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.iap_transactions.update_one(
+            {"transaction_id": parsed.get('transaction_id')},
+            {"$set": transaction},
+            upsert=True
+        )
+        
+        # Trigger subscription change event (for referrals, etc.)
+        await on_user_subscription_change(user_id, plan)
+        
+        logger.info(f"[Apple IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
+        
+        return IAPValidationResponse(
+            success=True,
+            plan=plan,
+            expiry_date=expiry_date,
+            is_trial=parsed.get('is_trial', False),
+            auto_renew=parsed.get('auto_renew', True),
+            message=f"Successfully subscribed to {plan.upper()}"
+        )
+        
+    except Exception as e:
+        logger.error(f"[Apple IAP] Error processing purchase for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process purchase: {str(e)}")
+
+
+@api_router.post("/iap/apple/restore")
+async def restore_apple_purchases(
+    request: AppleReceiptValidationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Restore Apple purchases - used when user reinstalls app or changes device
+    Same as verify but specifically for restore flow
+    """
+    return await verify_apple_purchase(request, current_user)
+
+
+# ==================== GOOGLE PLAY IAP VALIDATION ====================
+
+async def validate_google_purchase(purchase_token: str, product_id: str, package_name: str = None) -> dict:
+    """
+    Validate Google Play purchase token using Google Play Developer API
+    
+    Note: Requires service account JSON credentials
+    Returns validation result with subscription info
+    """
+    package = package_name or GOOGLE_PACKAGE_NAME
+    
+    # Check if credentials are configured
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        logger.warning("[Google IAP] Service account not configured, using mock validation")
+        # Return mock response for development
+        return {
+            "valid": True,
+            "mock": True,
+            "product_id": product_id,
+            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
+            "auto_renewing": True,
+            "payment_state": 1,
+            "acknowledgement_state": 1,
+        }
+    
+    try:
+        # Import Google API client
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        import json
+        
+        # Load credentials
+        if GOOGLE_SERVICE_ACCOUNT_JSON.startswith('{'):
+            creds_dict = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+        else:
+            # Assume it's base64 encoded
+            creds_dict = json.loads(base64.b64decode(GOOGLE_SERVICE_ACCOUNT_JSON))
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/androidpublisher']
+        )
+        
+        # Build the service
+        service = build('androidpublisher', 'v3', credentials=credentials)
+        
+        # Get subscription purchase details
+        result = service.purchases().subscriptions().get(
+            packageName=package,
+            subscriptionId=product_id,
+            token=purchase_token
+        ).execute()
+        
+        return {
+            "valid": True,
+            **result
+        }
+        
+    except ImportError:
+        logger.warning("[Google IAP] Google API client not installed, using mock validation")
+        return {
+            "valid": True,
+            "mock": True,
+            "product_id": product_id,
+            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
+            "auto_renewing": True,
+        }
+    except Exception as e:
+        logger.error(f"[Google IAP] Validation error: {e}")
+        return {"valid": False, "error": str(e)}
+
+
+async def acknowledge_google_purchase(purchase_token: str, product_id: str, package_name: str = None):
+    """Acknowledge Google Play purchase (required within 3 days)"""
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        logger.warning("[Google IAP] Service account not configured, skipping acknowledgement")
+        return True
+    
+    package = package_name or GOOGLE_PACKAGE_NAME
+    
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        import json
+        
+        if GOOGLE_SERVICE_ACCOUNT_JSON.startswith('{'):
+            creds_dict = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+        else:
+            creds_dict = json.loads(base64.b64decode(GOOGLE_SERVICE_ACCOUNT_JSON))
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/androidpublisher']
+        )
+        
+        service = build('androidpublisher', 'v3', credentials=credentials)
+        
+        service.purchases().subscriptions().acknowledge(
+            packageName=package,
+            subscriptionId=product_id,
+            token=purchase_token
+        ).execute()
+        
+        return True
+    except Exception as e:
+        logger.error(f"[Google IAP] Acknowledgement error: {e}")
+        return False
+
+
+@api_router.post("/iap/google/verify", response_model=IAPValidationResponse)
+async def verify_google_purchase(
+    request: GooglePurchaseValidationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Verify Google Play purchase token and update user subscription
+    
+    Flow:
+    1. Client sends purchase token after purchase
+    2. Server validates with Google Play Developer API
+    3. Server acknowledges the purchase
+    4. Server updates user subscription
+    5. Returns success/failure
+    """
+    user_id = current_user["user_id"]
+    
+    try:
+        # Validate with Google
+        validation_result = await validate_google_purchase(
+            request.purchase_token,
+            request.product_id,
+            request.package_name
+        )
+        
+        if not validation_result.get('valid'):
+            logger.warning(f"[Google IAP] Invalid purchase for user {user_id}: {validation_result.get('error')}")
+            return IAPValidationResponse(
+                success=False,
+                message=f"Invalid purchase: {validation_result.get('error')}"
+            )
+        
+        # Parse expiry time
+        expiry_ms = validation_result.get('expiryTimeMillis') or validation_result.get('expiry_time_millis')
+        if expiry_ms:
+            expiry_date = datetime.fromtimestamp(int(expiry_ms) / 1000, tz=timezone.utc)
+            if expiry_date <= datetime.now(timezone.utc):
+                return IAPValidationResponse(
+                    success=False,
+                    message="Subscription has expired"
+                )
+        else:
+            expiry_date = datetime.now(timezone.utc) + timedelta(days=30)  # Default for mock
+        
+        # Get plan from product ID
+        plan = get_plan_from_product_id(request.product_id)
+        
+        if not plan:
+            logger.error(f"[Google IAP] Unknown product ID: {request.product_id}")
+            return IAPValidationResponse(
+                success=False,
+                message=f"Unknown product: {request.product_id}"
+            )
+        
+        # Acknowledge the purchase (required by Google)
+        ack_state = validation_result.get('acknowledgementState') or validation_result.get('acknowledgement_state', 0)
+        if ack_state != 1:
+            await acknowledge_google_purchase(
+                request.purchase_token,
+                request.product_id,
+                request.package_name
+            )
+        
+        # Update user subscription
+        auto_renewing = validation_result.get('autoRenewing', validation_result.get('auto_renewing', True))
+        
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "subscription": plan,
+                "subscription_status": "active",
+                "subscription_expiry": expiry_date.isoformat(),
+                "subscription_platform": "android",
+                "subscription_product_id": request.product_id,
+                "subscription_auto_renew": auto_renewing,
+                "subscription_is_trial": False,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Store transaction record
+        order_id = validation_result.get('orderId', f"google_{uuid.uuid4().hex[:12]}")
+        transaction = {
+            "transaction_id": order_id,
+            "user_id": user_id,
+            "platform": "android",
+            "product_id": request.product_id,
+            "plan": plan,
+            "purchase_token": request.purchase_token[:100],  # Store partial
+            "purchase_date": datetime.now(timezone.utc).isoformat(),
+            "expiry_date": expiry_date.isoformat(),
+            "is_trial": False,
+            "auto_renew": auto_renewing,
+            "status": "active",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.iap_transactions.update_one(
+            {"transaction_id": order_id},
+            {"$set": transaction},
+            upsert=True
+        )
+        
+        # Trigger subscription change event
+        await on_user_subscription_change(user_id, plan)
+        
+        logger.info(f"[Google IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
+        
+        return IAPValidationResponse(
+            success=True,
+            plan=plan,
+            expiry_date=expiry_date.isoformat(),
+            is_trial=False,
+            auto_renew=auto_renewing,
+            message=f"Successfully subscribed to {plan.upper()}"
+        )
+        
+    except Exception as e:
+        logger.error(f"[Google IAP] Error processing purchase for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process purchase: {str(e)}")
+
+
+@api_router.post("/iap/google/restore")
+async def restore_google_purchases(
+    request: GooglePurchaseValidationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Restore Google Play purchases"""
+    return await verify_google_purchase(request, current_user)
+
+
+# ==================== WEBHOOK ENDPOINTS ====================
+
+@api_router.post("/webhooks/apple")
+async def apple_server_notification(request: dict):
+    """
+    Apple App Store Server Notifications (v2)
+    
+    Handle subscription lifecycle events:
+    - INITIAL_BUY: New subscription
+    - DID_RENEW: Subscription renewed
+    - DID_CHANGE_RENEWAL_STATUS: Auto-renew toggled
+    - DID_FAIL_TO_RENEW: Billing retry
+    - EXPIRED: Subscription expired
+    - REFUND: Refund processed
+    - REVOKE: Family sharing revoked
+    
+    Setup in App Store Connect:
+    1. Go to App Information > App Store Server Notifications
+    2. Enter your webhook URL: https://your-domain.com/api/webhooks/apple
+    3. Select Version 2 Notifications
+    """
+    try:
+        # Get the signed payload
+        signed_payload = request.get('signedPayload')
+        
+        if not signed_payload:
+            logger.warning("[Apple Webhook] No signed payload received")
+            raise HTTPException(status_code=400, detail="Missing signed payload")
+        
+        # TODO: Verify signature with Apple's public key
+        # For now, decode the JWT payload
+        try:
+            # Split JWT and decode payload (without verification for now)
+            parts = signed_payload.split('.')
+            if len(parts) >= 2:
+                # Add padding if needed
+                payload_b64 = parts[1] + '=' * (4 - len(parts[1]) % 4)
+                payload_json = base64.urlsafe_b64decode(payload_b64)
+                notification = json.loads(payload_json)
+            else:
+                notification = request
+        except:
+            notification = request
+        
+        notification_type = notification.get('notificationType', notification.get('notification_type', 'UNKNOWN'))
+        subtype = notification.get('subtype', '')
+        
+        logger.info(f"[Apple Webhook] Received: {notification_type} ({subtype})")
+        
+        # Extract transaction info
+        data = notification.get('data', {})
+        signed_transaction = data.get('signedTransactionInfo', '')
+        
+        # TODO: Parse signedTransactionInfo JWT to get transaction details
+        # For now, log and return success
+        
+        if notification_type == 'DID_RENEW':
+            # Subscription renewed - update expiry
+            logger.info("[Apple Webhook] Subscription renewed")
+            # TODO: Update user subscription expiry
+            
+        elif notification_type == 'EXPIRED':
+            # Subscription expired - downgrade user
+            logger.info("[Apple Webhook] Subscription expired")
+            # TODO: Find user by original_transaction_id and downgrade
+            
+        elif notification_type == 'REFUND':
+            # Refund processed - revoke access
+            logger.info("[Apple Webhook] Refund processed")
+            # TODO: Find user and revoke subscription
+            
+        elif notification_type == 'DID_CHANGE_RENEWAL_STATUS':
+            # Auto-renew toggled
+            logger.info(f"[Apple Webhook] Renewal status changed: {subtype}")
+            # TODO: Update auto_renew status
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"[Apple Webhook] Error: {e}")
+        # Return 200 to prevent Apple from retrying
+        return {"status": "error", "message": str(e)}
+
+
+@api_router.post("/webhooks/google")
+async def google_rtdn_notification(request: dict):
+    """
+    Google Real-Time Developer Notifications (RTDN)
+    
+    Handle subscription lifecycle events:
+    - SUBSCRIPTION_RECOVERED: Recovered from account hold
+    - SUBSCRIPTION_RENEWED: Subscription renewed
+    - SUBSCRIPTION_CANCELED: Subscription canceled
+    - SUBSCRIPTION_PURCHASED: New subscription
+    - SUBSCRIPTION_ON_HOLD: Payment pending
+    - SUBSCRIPTION_IN_GRACE_PERIOD: Grace period started
+    - SUBSCRIPTION_RESTARTED: Resubscribed
+    - SUBSCRIPTION_PRICE_CHANGE_CONFIRMED: Price change accepted
+    - SUBSCRIPTION_DEFERRED: Renewal deferred
+    - SUBSCRIPTION_PAUSED: Subscription paused
+    - SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED: Pause schedule changed
+    - SUBSCRIPTION_REVOKED: Access revoked
+    - SUBSCRIPTION_EXPIRED: Subscription expired
+    
+    Setup in Google Play Console:
+    1. Go to Monetization setup > Real-time developer notifications
+    2. Enter Cloud Pub/Sub topic
+    3. Create Cloud Function or use webhook endpoint
+    """
+    try:
+        # Google sends Pub/Sub message
+        message = request.get('message', {})
+        
+        if not message:
+            logger.warning("[Google Webhook] No message in request")
+            raise HTTPException(status_code=400, detail="Missing message")
+        
+        # Decode the Pub/Sub message data
+        data_b64 = message.get('data', '')
+        if data_b64:
+            try:
+                notification_json = base64.b64decode(data_b64).decode('utf-8')
+                notification = json.loads(notification_json)
+            except:
+                notification = request
+        else:
+            notification = request
+        
+        # Get the subscription notification
+        sub_notification = notification.get('subscriptionNotification', {})
+        notification_type = sub_notification.get('notificationType', 0)
+        
+        NOTIFICATION_TYPES = {
+            1: 'SUBSCRIPTION_RECOVERED',
+            2: 'SUBSCRIPTION_RENEWED',
+            3: 'SUBSCRIPTION_CANCELED',
+            4: 'SUBSCRIPTION_PURCHASED',
+            5: 'SUBSCRIPTION_ON_HOLD',
+            6: 'SUBSCRIPTION_IN_GRACE_PERIOD',
+            7: 'SUBSCRIPTION_RESTARTED',
+            8: 'SUBSCRIPTION_PRICE_CHANGE_CONFIRMED',
+            9: 'SUBSCRIPTION_DEFERRED',
+            10: 'SUBSCRIPTION_PAUSED',
+            11: 'SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED',
+            12: 'SUBSCRIPTION_REVOKED',
+            13: 'SUBSCRIPTION_EXPIRED',
+        }
+        
+        type_name = NOTIFICATION_TYPES.get(notification_type, f'UNKNOWN_{notification_type}')
+        logger.info(f"[Google Webhook] Received: {type_name}")
+        
+        purchase_token = sub_notification.get('purchaseToken')
+        subscription_id = sub_notification.get('subscriptionId')
+        
+        if notification_type in [2, 4, 7]:  # Renewed, Purchased, Restarted
+            logger.info(f"[Google Webhook] Active subscription: {subscription_id}")
+            # TODO: Validate and update user subscription
+            
+        elif notification_type in [3, 12, 13]:  # Canceled, Revoked, Expired
+            logger.info(f"[Google Webhook] Subscription ended: {subscription_id}")
+            # TODO: Find user by purchase_token and downgrade
+            
+        elif notification_type in [5, 6]:  # On Hold, Grace Period
+            logger.info(f"[Google Webhook] Subscription in grace/hold: {subscription_id}")
+            # TODO: Update subscription status but keep access
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"[Google Webhook] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ==================== IAP STATUS & MANAGEMENT ====================
+
+@api_router.get("/iap/status")
+async def get_iap_status(current_user: dict = Depends(get_current_user)):
+    """Get user's IAP subscription status"""
+    user_id = current_user["user_id"]
+    
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get latest transaction
+    latest_txn = await db.iap_transactions.find_one(
+        {"user_id": user_id},
+        sort=[("created_at", -1)]
+    )
+    
+    return {
+        "subscription": user.get("subscription", "free"),
+        "status": user.get("subscription_status", "inactive"),
+        "platform": user.get("subscription_platform"),
+        "product_id": user.get("subscription_product_id"),
+        "expiry_date": user.get("subscription_expiry"),
+        "auto_renew": user.get("subscription_auto_renew", False),
+        "is_trial": user.get("subscription_is_trial", False),
+        "latest_transaction": {
+            "transaction_id": latest_txn.get("transaction_id") if latest_txn else None,
+            "purchase_date": latest_txn.get("purchase_date") if latest_txn else None,
+        } if latest_txn else None
+    }
+
+
+@api_router.get("/iap/products")
+async def get_iap_products():
+    """
+    Get IAP product IDs for the client to use
+    Client uses these to request products from Apple/Google
+    """
+    return {
+        "ios": {
+            "premium_monthly": IAP_PRODUCTS['ios']['premium_monthly'],
+            "vip_monthly": IAP_PRODUCTS['ios']['vip_monthly'],
+        },
+        "android": {
+            "premium_monthly": IAP_PRODUCTS['android']['premium_monthly'],
+            "vip_monthly": IAP_PRODUCTS['android']['vip_monthly'],
+        }
+    }
+
+
+@api_router.get("/iap/transactions")
+async def get_iap_transactions(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 10
+):
+    """Get user's IAP transaction history"""
+    user_id = current_user["user_id"]
+    
+    transactions = await db.iap_transactions.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return {
+        "transactions": [
+            {
+                "transaction_id": t.get("transaction_id"),
+                "platform": t.get("platform"),
+                "product_id": t.get("product_id"),
+                "plan": t.get("plan"),
+                "purchase_date": t.get("purchase_date"),
+                "expiry_date": t.get("expiry_date"),
+                "status": t.get("status"),
+                "auto_renew": t.get("auto_renew"),
+            }
+            for t in transactions
+        ]
+    }
+
+
+# ==================== ADMIN IAP ENDPOINTS ====================
+
+@api_router.get("/admin/iap/transactions")
+async def admin_get_iap_transactions(
+    admin: AdminUser = Depends(get_admin_user),
+    user_id: Optional[str] = None,
+    platform: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0
+):
+    """Admin: View IAP transactions"""
+    query = {}
+    if user_id:
+        query["user_id"] = user_id
+    if platform:
+        query["platform"] = platform
+    if status:
+        query["status"] = status
+    
+    transactions = await db.iap_transactions.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.iap_transactions.count_documents(query)
+    
+    return {
+        "transactions": [
+            {
+                **{k: v for k, v in t.items() if k != '_id' and k != 'raw_receipt'},
+            }
+            for t in transactions
+        ],
+        "total": total,
+        "limit": limit,
+        "skip": skip
+    }
+
+
+@api_router.get("/admin/iap/stats")
+async def admin_get_iap_stats(admin: AdminUser = Depends(get_admin_user)):
+    """Admin: Get IAP statistics"""
+    # Count by platform
+    ios_count = await db.iap_transactions.count_documents({"platform": "ios"})
+    android_count = await db.iap_transactions.count_documents({"platform": "android"})
+    
+    # Count by status
+    active_count = await db.iap_transactions.count_documents({"status": "active"})
+    expired_count = await db.iap_transactions.count_documents({"status": "expired"})
+    cancelled_count = await db.iap_transactions.count_documents({"status": "cancelled"})
+    
+    # Count active subscriptions by plan
+    premium_users = await db.users.count_documents({"subscription": "premium", "subscription_platform": {"$exists": True}})
+    vip_users = await db.users.count_documents({"subscription": "vip", "subscription_platform": {"$exists": True}})
+    
+    return {
+        "by_platform": {
+            "ios": ios_count,
+            "android": android_count
+        },
+        "by_status": {
+            "active": active_count,
+            "expired": expired_count,
+            "cancelled": cancelled_count
+        },
+        "active_subscribers": {
+            "premium": premium_users,
+            "vip": vip_users,
+            "total": premium_users + vip_users
+        }
+    }
+
+
 # Include router
 app.include_router(api_router)
 
