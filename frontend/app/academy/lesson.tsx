@@ -260,6 +260,7 @@ function YouTubePlayer({ videoId, color }: YouTubePlayerProps) {
 
 export default function LessonScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category: string; course: string }>();
