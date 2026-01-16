@@ -144,39 +144,39 @@ export default function SubscriptionScreen() {
 
   if (isLoading || subLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
-          <Text style={styles.loadingText}>Loading subscription plans...</Text>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading subscription plans...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
       >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Subscription</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Subscription</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* Current Plan Card */}
-        <View style={styles.currentPlanCard}>
-          <Text style={styles.currentPlanLabel}>Current Plan</Text>
+        <View style={[styles.currentPlanCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.currentPlanLabel, { color: theme.textSecondary }]}>Current Plan</Text>
           <View style={styles.currentPlanRow}>
             <SubscriptionBadge size="large" showIcon={true} />
             {subscriptionStatus?.subscription_expiry && (
-              <Text style={styles.expiryText}>
+              <Text style={[styles.expiryText, { color: theme.textSecondary }]}>
                 Expires: {new Date(subscriptionStatus.subscription_expiry).toLocaleDateString()}
               </Text>
             )}
@@ -188,9 +188,9 @@ export default function SubscriptionScreen() {
               <Ionicons 
                 name={subscriptionStatus?.features.ai_analyzer ? "checkmark-circle" : "close-circle"} 
                 size={16} 
-                color={subscriptionStatus?.features.ai_analyzer ? "#10B981" : "#EF4444"} 
+                color={subscriptionStatus?.features.ai_analyzer ? theme.success : theme.error} 
               />
-              <Text style={styles.featureText}>
+              <Text style={[styles.featureText, { color: theme.textSecondary }]}>
                 AI Analyzer: {subscriptionStatus?.features.ai_used}/{subscriptionStatus?.features.ai_limit === 'unlimited' ? '∞' : subscriptionStatus?.features.ai_limit}
               </Text>
             </View>
@@ -198,17 +198,17 @@ export default function SubscriptionScreen() {
               <Ionicons 
                 name={subscriptionStatus?.features.fund_management ? "checkmark-circle" : "close-circle"} 
                 size={16} 
-                color={subscriptionStatus?.features.fund_management ? "#10B981" : "#EF4444"} 
+                color={subscriptionStatus?.features.fund_management ? theme.success : theme.error} 
               />
-              <Text style={styles.featureText}>Fund Management</Text>
+              <Text style={[styles.featureText, { color: theme.textSecondary }]}>Fund Management</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons 
                 name={subscriptionStatus?.features.academy ? "checkmark-circle" : "close-circle"} 
                 size={16} 
-                color={subscriptionStatus?.features.academy ? "#10B981" : "#EF4444"} 
+                color={subscriptionStatus?.features.academy ? theme.success : theme.error} 
               />
-              <Text style={styles.featureText}>Academy</Text>
+              <Text style={[styles.featureText, { color: theme.textSecondary }]}>Academy</Text>
             </View>
           </View>
         </View>
