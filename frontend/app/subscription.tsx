@@ -216,24 +216,24 @@ export default function SubscriptionScreen() {
         {/* Pending Payment Sessions */}
         {pendingSessions.length > 0 && (
           <View style={styles.pendingSection}>
-            <Text style={styles.pendingTitle}>Pending Payments</Text>
+            <Text style={[styles.pendingTitle, { color: theme.text }]}>Pending Payments</Text>
             {pendingSessions.map((session) => (
               <TouchableOpacity 
                 key={session.session_id}
-                style={styles.pendingCard}
+                style={[styles.pendingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => router.push(`/pay?session_id=${session.session_id}`)}
               >
                 <View style={styles.pendingInfo}>
                   <View style={[styles.pendingBadge, { backgroundColor: getPlanColor(session.plan) }]}>
                     <Text style={styles.pendingBadgeText}>{session.plan.toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.pendingAmount}>${session.amount}/{session.billing_cycle}</Text>
+                  <Text style={[styles.pendingAmount, { color: theme.text }]}>${session.amount}/{session.billing_cycle}</Text>
                 </View>
                 <View style={styles.pendingStatus}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>Awaiting Payment</Text>
+                  <View style={[styles.statusDot, { backgroundColor: theme.warning }]} />
+                  <Text style={[styles.statusText, { color: theme.warning }]}>Awaiting Payment</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#8A8D98" />
+                <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             ))}
           </View>
@@ -241,19 +241,19 @@ export default function SubscriptionScreen() {
 
         {/* Billing Cycle Selector */}
         <View style={styles.cycleSection}>
-          <Text style={styles.sectionTitle}>Choose Billing Cycle</Text>
-          <View style={styles.cycleSelector}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Choose Billing Cycle</Text>
+          <View style={[styles.cycleSelector, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {(['weekly', 'monthly', 'yearly'] as BillingCycle[]).map((cycle) => (
               <TouchableOpacity
                 key={cycle}
-                style={[styles.cycleOption, selectedCycle === cycle && styles.cycleOptionActive]}
+                style={[styles.cycleOption, selectedCycle === cycle && { backgroundColor: theme.primary }]}
                 onPress={() => setSelectedCycle(cycle)}
               >
-                <Text style={[styles.cycleText, selectedCycle === cycle && styles.cycleTextActive]}>
+                <Text style={[styles.cycleText, { color: theme.textSecondary }, selectedCycle === cycle && { color: '#0A0E17' }]}>
                   {cycle.charAt(0).toUpperCase() + cycle.slice(1)}
                 </Text>
                 {cycle === 'yearly' && (
-                  <View style={styles.saveBadge}>
+                  <View style={[styles.saveBadge, { backgroundColor: theme.success }]}>
                     <Text style={styles.saveBadgeText}>SAVE</Text>
                   </View>
                 )}
@@ -264,7 +264,7 @@ export default function SubscriptionScreen() {
 
         {/* Plans */}
         <View style={styles.plansSection}>
-          <Text style={styles.sectionTitle}>Available Plans</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Available Plans</Text>
           
           {plans.map((plan) => {
             const isCurrent = isCurrentPlan(plan.id);
