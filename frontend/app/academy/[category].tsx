@@ -139,15 +139,15 @@ export default function CourseListScreen() {
               <View style={styles.courseMeta}>
                 <View style={styles.metaItem}>
                   <Ionicons name="play-circle-outline" size={14} color={theme.textSecondary} />
-                  <Text style={styles.metaText}>{course.lessonCount} lessons</Text>
+                  <Text style={[styles.metaText, { color: theme.textSecondary }]}>{course.lessonCount} lessons</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Ionicons name="time-outline" size={14} color="#8A8D98" />
-                  <Text style={styles.metaText}>{course.duration}</Text>
+                  <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
+                  <Text style={[styles.metaText, { color: theme.textSecondary }]}>{course.duration}</Text>
                 </View>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#8A8D98" />
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         ))}
       </ScrollView>
