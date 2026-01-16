@@ -87,10 +87,10 @@ export default function SignalsScreen() {
     const badge = getVisibilityBadge(item.visibility);
     
     return (
-      <View style={styles.signalCard}>
+      <View style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.signalHeader}>
           <View style={styles.signalLeft}>
-            <Text style={styles.signalPair}>{item.pair}</Text>
+            <Text style={[styles.signalPair, { color: theme.text }]}>{item.pair}</Text>
             <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}20` }]}>
               <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
               <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -101,16 +101,16 @@ export default function SignalsScreen() {
           <View style={styles.signalRight}>
             <View style={[
               styles.typeBadge,
-              { backgroundColor: item.signal_type === 'buy' ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 71, 87, 0.2)' }
+              { backgroundColor: item.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }
             ]}>
               <Ionicons
                 name={item.signal_type === 'buy' ? 'arrow-up' : 'arrow-down'}
                 size={16}
-                color={item.signal_type === 'buy' ? '#00D4AA' : '#FF4757'}
+                color={item.signal_type === 'buy' ? theme.success : theme.error}
               />
               <Text style={[
                 styles.typeText,
-                { color: item.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }
+                { color: item.signal_type === 'buy' ? theme.success : theme.error }
               ]}>
                 {item.signal_type?.toUpperCase()}
               </Text>
@@ -122,33 +122,33 @@ export default function SignalsScreen() {
         </View>
 
         {item.locked ? (
-          <View style={styles.lockedContainer}>
-            <Ionicons name="lock-closed" size={24} color="#FFD700" />
-            <Text style={styles.lockedTitle}>Upgrade to Unlock</Text>
-            <Text style={styles.lockedSubtitle}>
+          <View style={[styles.lockedContainer, { backgroundColor: `${theme.warning}05` }]}>
+            <Ionicons name="lock-closed" size={24} color={theme.warning} />
+            <Text style={[styles.lockedTitle, { color: theme.warning }]}>Upgrade to Unlock</Text>
+            <Text style={[styles.lockedSubtitle, { color: theme.textSecondary }]}>
               This signal requires {item.visibility === 'vip' ? 'VIP' : 'Premium'} subscription
             </Text>
           </View>
         ) : (
           <>
-            <View style={styles.signalDetails}>
+            <View style={[styles.signalDetails, { backgroundColor: theme.background }]}>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Entry</Text>
-                <Text style={styles.detailValue}>{item.entry}</Text>
+                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Entry</Text>
+                <Text style={[styles.detailValue, { color: theme.text }]}>{item.entry}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>SL</Text>
-                <Text style={[styles.detailValue, { color: '#FF4757' }]}>{item.stop_loss}</Text>
+                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>SL</Text>
+                <Text style={[styles.detailValue, { color: theme.error }]}>{item.stop_loss}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>TP1</Text>
-                <Text style={[styles.detailValue, { color: (item.tp_hit || 0) >= 1 ? '#00D4AA' : '#8A8D98' }]}>
+                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>TP1</Text>
+                <Text style={[styles.detailValue, { color: (item.tp_hit || 0) >= 1 ? theme.success : theme.textSecondary }]}>
                   {item.tp1 || item.take_profit}{(item.tp_hit || 0) >= 1 ? ' ✓' : ''}
                 </Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>R:R</Text>
-                <Text style={styles.detailValue}>1:{item.risk_reward}</Text>
+                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>R:R</Text>
+                <Text style={[styles.detailValue, { color: theme.text }]}>1:{item.risk_reward}</Text>
               </View>
             </View>
             
@@ -156,15 +156,15 @@ export default function SignalsScreen() {
             {(item.tp2 || item.tp3) && (
               <View style={styles.additionalTPs}>
                 {item.tp2 && (
-                  <View style={[styles.tpTag, (item.tp_hit || 0) >= 2 && styles.tpTagHit]}>
-                    <Text style={[styles.tpTagText, (item.tp_hit || 0) >= 2 && styles.tpTagTextHit]}>
+                  <View style={[styles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 2 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
+                    <Text style={[styles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 2 && { color: theme.success }]}>
                       TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' ✓' : ''}
                     </Text>
                   </View>
                 )}
                 {item.tp3 && (
-                  <View style={[styles.tpTag, (item.tp_hit || 0) >= 3 && styles.tpTagHit]}>
-                    <Text style={[styles.tpTagText, (item.tp_hit || 0) >= 3 && styles.tpTagTextHit]}>
+                  <View style={[styles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 3 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
+                    <Text style={[styles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 3 && { color: theme.success }]}>
                       TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' ✓' : ''}
                     </Text>
                   </View>
@@ -173,11 +173,11 @@ export default function SignalsScreen() {
             )}
             
             {item.status === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
-              <View style={styles.resultContainer}>
-                <Text style={styles.resultLabel}>Result:</Text>
+              <View style={[styles.resultContainer, { borderTopColor: theme.border }]}>
+                <Text style={[styles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
                 <Text style={[
                   styles.resultValue,
-                  { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? '#00D4AA' : '#FF4757' }
+                  { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? theme.success : theme.error }
                 ]}>
                   {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}{item.final_pips ?? item.result_pips} pips
                 </Text>
@@ -186,7 +186,7 @@ export default function SignalsScreen() {
           </>
         )}
 
-        <Text style={styles.timestamp}>
+        <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
           {new Date(item.created_at).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
@@ -196,6 +196,11 @@ export default function SignalsScreen() {
         </Text>
       </View>
     );
+  };
+
+  // Helper function for themed signal rendering
+  const renderSignalWithTheme = (item: Signal, t: typeof theme) => {
+    return renderSignal({ item });
   };
 
   if (isLoading) {
