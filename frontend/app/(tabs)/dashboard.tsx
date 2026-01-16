@@ -32,6 +32,7 @@ const WATCHLIST = [
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { status: subscriptionStatus } = useSubscription();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
