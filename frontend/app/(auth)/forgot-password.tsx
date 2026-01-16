@@ -13,12 +13,14 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/context/ThemeContext';
 import { api } from '../../src/services/api';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const { theme } = useTheme();
   const router = useRouter();
 
   const handleResetPassword = async () => {
