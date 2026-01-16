@@ -105,12 +105,12 @@ export default function SignalHistoryScreen() {
   };
 
   const renderStatCard = (label: string, value: string | number, icon: string, color: string) => (
-    <View style={styles.statCard}>
+    <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
         <Ionicons name={icon as any} size={20} color={color} />
       </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
     </View>
   );
 
@@ -122,22 +122,22 @@ export default function SignalHistoryScreen() {
     const isLoss = pips < 0;
     
     return (
-      <View style={styles.signalCard}>
+      <View style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.signalHeader}>
           <View style={styles.signalLeft}>
-            <Text style={styles.signalPair}>{item.pair}</Text>
+            <Text style={[styles.signalPair, { color: theme.text }]}>{item.pair}</Text>
             <View style={[
               styles.typeBadge,
-              { backgroundColor: item.signal_type === 'buy' ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 71, 87, 0.2)' }
+              { backgroundColor: item.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }
             ]}>
               <Ionicons
                 name={item.signal_type === 'buy' ? 'arrow-up' : 'arrow-down'}
                 size={14}
-                color={item.signal_type === 'buy' ? '#00D4AA' : '#FF4757'}
+                color={item.signal_type === 'buy' ? theme.success : theme.error}
               />
               <Text style={[
                 styles.typeText,
-                { color: item.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }
+                { color: item.signal_type === 'buy' ? theme.success : theme.error }
               ]}>
                 {item.signal_type?.toUpperCase()}
               </Text>
@@ -146,11 +146,11 @@ export default function SignalHistoryScreen() {
           <View style={styles.signalRight}>
             <View style={[
               styles.resultBadge,
-              { backgroundColor: isProfitable ? 'rgba(0, 212, 170, 0.2)' : isLoss ? 'rgba(255, 71, 87, 0.2)' : 'rgba(138, 141, 152, 0.2)' }
+              { backgroundColor: isProfitable ? `${theme.success}20` : isLoss ? `${theme.error}20` : `${theme.textSecondary}20` }
             ]}>
               <Text style={[
                 styles.resultText,
-                { color: isProfitable ? '#00D4AA' : isLoss ? '#FF4757' : '#8A8D98' }
+                { color: isProfitable ? theme.success : isLoss ? theme.error : theme.textSecondary }
               ]}>
                 {isProfitable ? '+' : ''}{pips.toFixed(1)} pips
               </Text>
@@ -158,26 +158,26 @@ export default function SignalHistoryScreen() {
           </View>
         </View>
         
-        <View style={styles.signalDetails}>
+        <View style={[styles.signalDetails, { backgroundColor: theme.background }]}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Entry</Text>
-            <Text style={styles.detailValue}>{item.entry}</Text>
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Entry</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>{item.entry}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>SL</Text>
-            <Text style={[styles.detailValue, { color: '#FF4757' }]}>{item.stop_loss}</Text>
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>SL</Text>
+            <Text style={[styles.detailValue, { color: theme.error }]}>{item.stop_loss}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>TP1</Text>
-            <Text style={[styles.detailValue, { color: '#00D4AA' }]}>{item.tp1 || item.take_profit}</Text>
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>TP1</Text>
+            <Text style={[styles.detailValue, { color: theme.success }]}>{item.tp1 || item.take_profit}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>R:R</Text>
-            <Text style={styles.detailValue}>1:{item.risk_reward}</Text>
+            <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>R:R</Text>
+            <Text style={[styles.detailValue, { color: theme.text }]}>1:{item.risk_reward}</Text>
           </View>
         </View>
         
-        <Text style={styles.signalDate}>
+        <Text style={[styles.signalDate, { color: theme.textMuted }]}>
           Closed: {item.closed_at ? formatDate(item.closed_at) : formatDate(item.created_at)}
         </Text>
       </View>
@@ -186,9 +186,9 @@ export default function SignalHistoryScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </SafeAreaView>
     );
@@ -197,13 +197,13 @@ export default function SignalHistoryScreen() {
   const stats = data?.stats;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.surface }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Signal History</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Signal History</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -213,65 +213,65 @@ export default function SignalHistoryScreen() {
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         ListHeaderComponent={
           <>
             {/* Performance Stats */}
-            <Text style={styles.sectionTitle}>Performance Overview</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Performance Overview</Text>
             <View style={styles.statsGrid}>
-              {renderStatCard('Win Rate', `${stats?.win_rate || 0}%`, 'trophy-outline', '#FFD700')}
-              {renderStatCard('Total Pips', `${(stats?.total_pips || 0) >= 0 ? '+' : ''}${stats?.total_pips || 0}`, 'trending-up-outline', stats?.total_pips && stats.total_pips >= 0 ? '#00D4AA' : '#FF4757')}
-              {renderStatCard('Signals', stats?.total_signals || 0, 'analytics-outline', '#00D4AA')}
-              {renderStatCard('Avg Pips', `${(stats?.avg_pips_per_trade || 0) >= 0 ? '+' : ''}${stats?.avg_pips_per_trade || 0}`, 'stats-chart-outline', '#8A8D98')}
+              {renderStatCard('Win Rate', `${stats?.win_rate || 0}%`, 'trophy-outline', theme.warning)}
+              {renderStatCard('Total Pips', `${(stats?.total_pips || 0) >= 0 ? '+' : ''}${stats?.total_pips || 0}`, 'trending-up-outline', stats?.total_pips && stats.total_pips >= 0 ? theme.success : theme.error)}
+              {renderStatCard('Signals', stats?.total_signals || 0, 'analytics-outline', theme.primary)}
+              {renderStatCard('Avg Pips', `${(stats?.avg_pips_per_trade || 0) >= 0 ? '+' : ''}${stats?.avg_pips_per_trade || 0}`, 'stats-chart-outline', theme.textSecondary)}
             </View>
 
             {/* Win/Loss Breakdown */}
-            <View style={styles.breakdownCard}>
+            <View style={[styles.breakdownCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.breakdownRow}>
                 <View style={styles.breakdownItem}>
-                  <View style={[styles.breakdownDot, { backgroundColor: '#00D4AA' }]} />
-                  <Text style={styles.breakdownLabel}>Winning</Text>
-                  <Text style={[styles.breakdownValue, { color: '#00D4AA' }]}>{stats?.winning_signals || 0}</Text>
+                  <View style={[styles.breakdownDot, { backgroundColor: theme.success }]} />
+                  <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Winning</Text>
+                  <Text style={[styles.breakdownValue, { color: theme.success }]}>{stats?.winning_signals || 0}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <View style={[styles.breakdownDot, { backgroundColor: '#FF4757' }]} />
-                  <Text style={styles.breakdownLabel}>Losing</Text>
-                  <Text style={[styles.breakdownValue, { color: '#FF4757' }]}>{stats?.losing_signals || 0}</Text>
+                  <View style={[styles.breakdownDot, { backgroundColor: theme.error }]} />
+                  <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Losing</Text>
+                  <Text style={[styles.breakdownValue, { color: theme.error }]}>{stats?.losing_signals || 0}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <View style={[styles.breakdownDot, { backgroundColor: '#8A8D98' }]} />
-                  <Text style={styles.breakdownLabel}>Breakeven</Text>
-                  <Text style={styles.breakdownValue}>{stats?.breakeven_signals || 0}</Text>
+                  <View style={[styles.breakdownDot, { backgroundColor: theme.textSecondary }]} />
+                  <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>Breakeven</Text>
+                  <Text style={[styles.breakdownValue, { color: theme.text }]}>{stats?.breakeven_signals || 0}</Text>
                 </View>
               </View>
               
               {/* Progress Bar */}
-              <View style={styles.progressBar}>
+              <View style={[styles.progressBar, { backgroundColor: theme.background }]}>
                 {stats && stats.total_signals > 0 && (
                   <>
-                    <View style={[styles.progressSegment, { flex: stats.winning_signals, backgroundColor: '#00D4AA' }]} />
-                    <View style={[styles.progressSegment, { flex: stats.losing_signals, backgroundColor: '#FF4757' }]} />
-                    <View style={[styles.progressSegment, { flex: stats.breakeven_signals, backgroundColor: '#8A8D98' }]} />
+                    <View style={[styles.progressSegment, { flex: stats.winning_signals, backgroundColor: theme.success }]} />
+                    <View style={[styles.progressSegment, { flex: stats.losing_signals, backgroundColor: theme.error }]} />
+                    <View style={[styles.progressSegment, { flex: stats.breakeven_signals, backgroundColor: theme.textSecondary }]} />
                   </>
                 )}
               </View>
             </View>
 
             {/* Best/Worst Trades */}
-            <View style={styles.extremesCard}>
+            <View style={[styles.extremesCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.extremeItem}>
-                <Ionicons name="arrow-up-circle" size={24} color="#00D4AA" />
-                <Text style={styles.extremeLabel}>Best Trade</Text>
-                <Text style={[styles.extremeValue, { color: '#00D4AA' }]}>
+                <Ionicons name="arrow-up-circle" size={24} color={theme.success} />
+                <Text style={[styles.extremeLabel, { color: theme.textSecondary }]}>Best Trade</Text>
+                <Text style={[styles.extremeValue, { color: theme.success }]}>
                   +{stats?.best_trade_pips || 0} pips
                 </Text>
               </View>
-              <View style={styles.extremeDivider} />
+              <View style={[styles.extremeDivider, { backgroundColor: theme.border }]} />
               <View style={styles.extremeItem}>
-                <Ionicons name="arrow-down-circle" size={24} color="#FF4757" />
-                <Text style={styles.extremeLabel}>Worst Trade</Text>
-                <Text style={[styles.extremeValue, { color: '#FF4757' }]}>
+                <Ionicons name="arrow-down-circle" size={24} color={theme.error} />
+                <Text style={[styles.extremeLabel, { color: theme.textSecondary }]}>Worst Trade</Text>
+                <Text style={[styles.extremeValue, { color: theme.error }]}>
                   {stats?.worst_trade_pips || 0} pips
                 </Text>
               </View>
