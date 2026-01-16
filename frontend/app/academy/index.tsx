@@ -84,13 +84,13 @@ export default function AcademyScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Academy</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Academy</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -101,41 +101,41 @@ export default function AcademyScreen() {
       >
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
-          <View style={styles.welcomeIcon}>
-            <Ionicons name="school" size={32} color="#00D4AA" />
+          <View style={[styles.welcomeIcon, { backgroundColor: `${theme.primary}20` }]}>
+            <Ionicons name="school" size={32} color={theme.primary} />
           </View>
-          <Text style={styles.welcomeTitle}>Trading Academy</Text>
-          <Text style={styles.welcomeSubtitle}>
+          <Text style={[styles.welcomeTitle, { color: theme.text }]}>Trading Academy</Text>
+          <Text style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
             Learn to trade with our comprehensive courses designed for all skill levels
           </Text>
         </View>
 
         {/* User Progress */}
-        <View style={styles.progressCard}>
+        <View style={[styles.progressCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.progressHeader}>
-            <Ionicons name="trophy-outline" size={20} color="#FFD700" />
-            <Text style={styles.progressTitle}>Your Progress</Text>
+            <Ionicons name="trophy-outline" size={20} color={theme.warning} />
+            <Text style={[styles.progressTitle, { color: theme.text }]}>Your Progress</Text>
           </View>
           <View style={styles.progressStats}>
             <View style={styles.progressStat}>
-              <Text style={styles.progressStatValue}>0</Text>
-              <Text style={styles.progressStatLabel}>Completed</Text>
+              <Text style={[styles.progressStatValue, { color: theme.text }]}>0</Text>
+              <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Completed</Text>
             </View>
-            <View style={styles.progressDivider} />
+            <View style={[styles.progressDivider, { backgroundColor: theme.border }]} />
             <View style={styles.progressStat}>
-              <Text style={styles.progressStatValue}>30</Text>
-              <Text style={styles.progressStatLabel}>Total Lessons</Text>
+              <Text style={[styles.progressStatValue, { color: theme.text }]}>30</Text>
+              <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Total Lessons</Text>
             </View>
-            <View style={styles.progressDivider} />
+            <View style={[styles.progressDivider, { backgroundColor: theme.border }]} />
             <View style={styles.progressStat}>
-              <Text style={styles.progressStatValue}>0%</Text>
-              <Text style={styles.progressStatLabel}>Progress</Text>
+              <Text style={[styles.progressStatValue, { color: theme.text }]}>0%</Text>
+              <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Progress</Text>
             </View>
           </View>
         </View>
 
         {/* Categories */}
-        <Text style={styles.sectionTitle}>Course Categories</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Course Categories</Text>
 
         {CATEGORIES.map((category) => {
           const locked = !hasAccess(category.requiredRole);
@@ -144,39 +144,39 @@ export default function AcademyScreen() {
           return (
             <TouchableOpacity
               key={category.id}
-              style={[styles.categoryCard, locked && styles.categoryCardLocked]}
+              style={[styles.categoryCard, { backgroundColor: theme.surface, borderColor: theme.border }, locked && { opacity: 0.7 }]}
               onPress={() => handleCategoryPress(category)}
             >
               <View style={[styles.categoryIconContainer, { backgroundColor: `${category.color}20` }]}>
                 <Ionicons 
                   name={category.icon as any} 
                   size={28} 
-                  color={locked ? '#8A8D98' : category.color} 
+                  color={locked ? theme.textSecondary : category.color} 
                 />
               </View>
               <View style={styles.categoryContent}>
                 <View style={styles.categoryHeader}>
-                  <Text style={[styles.categoryTitle, locked && styles.categoryTitleLocked]}>
+                  <Text style={[styles.categoryTitle, { color: theme.text }, locked && { color: theme.textSecondary }]}>
                     {category.title}
                   </Text>
                   {badge && (
                     <View style={[
                       styles.categoryBadge,
-                      { backgroundColor: badge === 'VIP' ? 'rgba(255, 215, 0, 0.2)' : 'rgba(0, 212, 170, 0.2)' }
+                      { backgroundColor: badge === 'VIP' ? `${theme.warning}20` : `${theme.primary}20` }
                     ]}>
                       <Text style={[
                         styles.categoryBadgeText,
-                        { color: badge === 'VIP' ? '#FFD700' : '#00D4AA' }
+                        { color: badge === 'VIP' ? theme.warning : theme.primary }
                       ]}>
                         {badge}
                       </Text>
                     </View>
                   )}
                 </View>
-                <Text style={[styles.categoryDescription, locked && styles.categoryDescriptionLocked]}>
+                <Text style={[styles.categoryDescription, { color: theme.textSecondary }, locked && { color: theme.textMuted }]}>
                   {category.description}
                 </Text>
-                <Text style={styles.categoryCourseCount}>
+                <Text style={[styles.categoryCourseCount, { color: theme.textMuted }]}>
                   {category.courseCount} courses
                 </Text>
               </View>
