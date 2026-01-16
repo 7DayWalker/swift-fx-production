@@ -1,191 +1,156 @@
 <analysis>
-<original_problem_statement>
-The user initially requested a Fund Management feature. This evolved significantly through multiple iterations into a full-fledged system including an investor dashboard, withdrawal management, and a comprehensive Role-Based Access Control (RBAC) system for admins. The latest request is to build a complete Referral Program.
+**original_problem_statement:**
+The user initially requested the completion and testing of a Light/Dark theme system and fixing data population bugs on the Settings and Referral pages. After this was completed, the user requested that Light Mode be extended to all user-facing screens, and provided feedback on several UI inconsistencies which were then fixed.
 
-**PRODUCT REQUIREMENTS for Referral Program:**
--   **User Side**:
-    -   Auto-generate a unique referral code for every user.
-    -   Provide a UI to share the code/link.
-    -   Track referral status (Pending, Completed, Expired).
-    -   Display user's referral stats (total, successful, rewards).
-    -   Rewards (extended subscription days) are locked until the referred user subscribes (Premium/VIP) for at least 7 days.
-    -   Referral expires if no subscription within 30 days.
--   **Admin Side**:
-    -   New Referral Management screen.
-    -   List all referrals with filtering capabilities.
-    -   Super Admin and Account Manager can approve/revoke rewards and flag fraud.
-    -   Customer Support has read-only access.
--   **Security**:
-    -   Prevent self-referrals and multi-referrals from the same device.
-    -   Log all admin actions related to referrals.
-</original_problem_statement>
+The primary and current task is a major new feature: replace the existing Stripe payment system with native Apple In-App Purchases (IAP) and Google Play Billing for all mobile subscriptions. The implementation must be done with placeholder credentials, as the user does not have them yet. The backend should be the source of truth for subscription status, and the system must handle the full subscription lifecycle (purchase, renewal, cancellation, etc.) via server-side receipt validation and webhooks.
+
+PRODUCT REQUIREMENTS:
+1.  **IAP System:** Implement a full end-to-end IAP flow for iOS and Android for 'premium' and 'vip' monthly subscriptions.
+2.  **Backend Authority:** The backend must validate all receipts with Apple/Google and grant user access. The client must never unlock features directly.
+3.  **Lifecycle Management:** Handle all subscription states (active, expired, canceled, renewed) via server-to-server notifications (webhooks).
+4.  **UI:** The subscription page must show the current plan, allow purchase/upgrade, and include Manage Subscription and Restore Purchases buttons.
+5.  **Placeholders:** The entire implementation must use environment variables and placeholders for API keys, secrets, and product IDs, to be configured later.
+6.  **Web Compatibility:** The app must not crash in the web preview, even though IAP is a native-only feature.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A comprehensive full-stack Expo (React Native) and FastAPI/MongoDB application. It includes:
--   A robust user authentication system with multiple subscription tiers (Free, Premium, VIP).
--   A detailed, multi-role admin RBAC system (Super Admin, Fund Admin, Signal Admin, Account Manager, Customer Support).
--   A complete Fund Management feature, allowing users to apply, be approved, and become investors.
--   An Investor Dashboard for approved users to track performance and request withdrawals.
--   Multiple admin panels for managing fund applications, investor performance, and withdrawals.
--   Content modules: Academy, Economic Calendar, Brokers, News.
--   The core trading signal engine is intentionally disabled (MANUAL MODE).
+A full-stack Expo (React Native) and FastAPI/MongoDB application.
+-   A v1 Light/Dark theme system is implemented and tested. User-facing screens have been updated to support both themes, while admin screens are intentionally locked to Dark Mode.
+-   The backend () has been significantly expanded with placeholder endpoints for IAP receipt validation (, ) and webhooks (, ).
+-   The  library has been added to the frontend.
+-   A new service file, , has been created to handle IAP logic.
+-   The subscription screen () has been partially refactored to integrate IAP, including new UI for restoring purchases.
+-   A documentation file, , has been created outlining the steps to configure the IAP system with real credentials.
 
 **Last working item**:
--   Last item agent was working: Building the new Referral Program feature. The agent has created the backend models and API endpoints, updated the user registration process to generate referral codes, and created the initial empty files for the user-facing and admin-facing frontend screens.
+-   Last item agent was working: The agent was addressing a critical crash in the Expo web preview. The crash is caused by the  library, which requires native modules not available in a web environment. The user instructed the agent to guard all IAP-related code to ensure it only runs on native platforms (iOS/Android) and is disabled on the web. The agent's last attempt to fix this by simply overwriting  was unsuccessful, and it concluded that a more robust isolation strategy is needed.
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **both**
-    - **backend testing agent**: To test the new referral API endpoints (code generation, applying referral, tracking status, reward logic).
-    - **screenshot tool**: To test the user-facing referral page and the new admin management screen.
+-   Which testing method agent to use? **NA**. The immediate goal is to fix the web preview crash. No testing is possible until the app can run. After the fix, manual verification via screenshot tool is needed to confirm the subscription page loads without error on the web.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
-There are no pending issues. The current work is a new feature implementation.
+-   Issue 1: (P0) Frontend web preview crashes on startup due to .
+
+**Issues Detail:**
+-   **Issue 1: Frontend web preview crashes on startup due to .**
+    -   **Attempted fixes:** The agent attempted to use a conditional  inside  to prevent the module from loading on the web. This failed because the Metro bundler still tries to resolve the dependency for the web bundle, leading to a crash.
+    -   **Next debug checklist:**
+        1.  Implement a platform-specific file extension strategy. Create two versions of the IAP service:
+            -   : Contains the real  implementation.
+            -   : Contains mock/stub implementations for all exported functions. These stubs should do nothing or return empty/default values (e.g., empty arrays for products,  for purchases).
+        2.  In any file that uses the IAP service (like ), change the import from  to just . The bundler will automatically select the correct  or  file based on the platform.
+        3.  Delete the old  file after creating the platform-specific versions to avoid confusion.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a **critical blocker**. Fixing it will make the web preview usable again, unblocking all further frontend development and testing.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** Frontend (just to ensure it loads without crashing).
+    -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   Task 1: Complete the Referral Program feature (P0)
-    -   Where to resume: The backend API and frontend file skeletons are in place.
-        1.  **Backend**: Write and execute tests for all new referral API endpoints to ensure logic for code generation, referral tracking, and reward processing is correct.
-        2.  **Frontend (User)**: Implement the UI and logic for . This includes displaying the user's referral code, providing share buttons, and showing referral statistics (total, successful, pending rewards).
-        3.  **Frontend (Admin)**: Implement the UI and logic for . This includes listing all referrals, adding filters, and enabling role-based actions (approve/revoke for Super Admin/Account Manager, read-only for Customer Support).
-        4.  **Frontend (Navigation)**: Add a link to the user-facing  page, likely in the More tab ().
-    -   What will be achieved with this?: A complete, end-to-end referral system that allows users to earn rewards and enables admins to manage the program effectively.
-    -   Status: **IN PROGRESS**
-    -   Should Test frontend/backend/both after fix?: Both
-    -   Blocked on something: None.
+-   **Task 1: Implement Apple & Google In-App Purchases (IAP) (P0)**
+    -   **Where to resume:** The immediate next step is to resolve the web preview crash as described in Issue 1. Once the app is running again, the agent must verify that the  screen loads correctly on the web with the mocked IAP service.
+    -   **What will be achieved with this?** A complete, stable, end-to-end IAP system with placeholder credentials, ready for native-build testing and future store configuration. The application will be stable for development on all platforms.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Frontend
+    -   **Blocked on something:** Blocked on Issue 1.
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks**:
-    - (P0) **Re-enable Automatic Signal Engine**: The core trade lifecycle automation in  is currently disabled and is a crucial future task.
-- **Future Tasks**:
-    - (P1) **Admin Notes**: Add functionality for admins to add notes to fund applications.
-    - (P1) **Assign Fund Manager**: Ability to assign a specific fund manager to an application/investor.
-    - (P1) **Conversion Tracking**: Track the conversion of a fund application to an active investor.
-    - (P1) Integrate a real payment provider (e.g., Stripe, or Google Play/Apple IAP).
-    - (P2) Expand Dark/Light mode theme to all screens.
-    - (P2) Implement remaining Community features (liking, commenting).
-    - (P2) Implement mock AdMob banners for Free users.
-    - (P3) Add user progress tracking to the Academy module.
+-   **Upcoming Tasks**:
+    -   (P1) **Re-enable Automatic Signal Engine**: This is a core backend feature in  that is currently disabled and needs to be reactivated.
+-   **Future Tasks**:
+    -   (P1) **Admin FAQ Management**: Implement CRUD functionality for admins to manage FAQ content.
+    -   (P1) **Admin Notes**: Add functionality for admins to add notes to user fund applications.
+    -   (P2) **Refine Light/Dark Mode**: While all user-facing screens were touched, a full audit may be needed to catch any remaining hardcoded colors in nested components or modals. Admin screens are still hardcoded dark by design.
+    -   (P2) **Implement remaining Community features**: Add support for liking and commenting on posts.
 
 **Completed work in this session**
-- **Fund Management System Refactors**: The entire feature was iterated upon multiple times, moving from a simple form to a complex hybrid flow that creates a database record before opening WhatsApp. This included fixing a critical bug preventing applications from appearing in the admin panel.
-- **Investor Dashboard**: A new dashboard was created for approved investors, showing portfolio stats and withdrawal options. This included a new admin screen for managing fund performance data and updating app navigation to be conditional.
-- **Admin Withdrawal Management**: A new admin screen was built to view, approve, and reject user withdrawal requests, fully integrated with the backend.
-- **Admin RBAC System**: A comprehensive Role-Based Access Control system was implemented with five distinct admin roles. This involved creating protected Super Admin accounts, securing all admin APIs with role-based checks, implementing an audit log, and building a new admin management screen. A critical login issue for Super Admins was also debugged and resolved.
+-   **Light/Dark Mode System (v1):** A fully functional theme system was implemented and tested. It persists user choice and correctly applies themes globally on user-facing screens. A key architectural decision was made to keep the admin area strictly in Dark Mode.
+-   **UI Bug Fixes:** Resolved data population issues on the Settings and Referral pages (which turned out to be environment-related) and fixed numerous Light Mode UI inconsistencies reported by the user across the Academy, More, Signal History, and Community screens.
+-   **IAP Backend Implementation:** The  file was updated with a full suite of (placeholder) endpoints for handling IAP configuration, receipt validation, and server-to-server webhooks for both Apple and Google.
+-   **IAP Frontend Scaffolding:** Installed the  library, created a dedicated , and refactored the  screen to use the new IAP flow.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Bottom tab navigation is clipped on iOS.**
-    -   Debug checklist: Work on this is **FROZEN** by the user. Do not attempt to fix it.
-    -   Why to solve this issue and what will be achieved with this?: Fixes a critical UI bug on modern iPhones.
-    -   Should Test frontend/backend/both after fix: Frontend.
-    -   Is recurring issue?: Y
+None. All previously mentioned issues (data fetching on Settings/Referral, theme inconsistencies) were resolved during this session.
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork:** The iOS tab bar clipping issue is a known recurring problem.
-- **Recurrence count:** Multiple.
-- **Status:** NOT STARTED (frozen by user).
+-   **Issue recurrence in previous fork:** Data fetching issues on the Settings and Referral pages.
+-   **Recurrence count:** 1
+-   **Status:** RESOLVED. These issues were confirmed to be related to the testing environment's authentication state and are no longer present in a standard user flow.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **RBAC (Role-Based Access Control)**: Implemented in FastAPI using enums for roles and dependency injection for permission checks on API endpoints. Includes a concept of protected Super Admins.
--   **Audit Logging**: Storing records of all admin actions in a dedicated MongoDB collection.
--   **Conditional Rendering (Frontend)**: Using user's subscription and application status to dynamically change UI and navigation (e.g., Fund Management vs. Investor Dashboard).
--   **Hybrid API-UI Flow**: Implemented a flow where a frontend action (e.g., tapping a button) first triggers a backend API call to create a database record, and upon success, triggers a UI action (e.g., opening a WhatsApp deep link).
--   **Startup Tasks (Backend)**: Using FastAPI's  to ensure Super Admin accounts are always present and correctly configured in the database.
+-   **Light/Dark Mode Theming:** Using React Context (),  for persistence, and a custom hook () to provide theme-dependent styles across the application.
+-   **Platform-Specific UI/Logic:** A key concept for the IAP implementation, where native modules must be isolated from the web build to prevent crashes.
+-   **In-App Purchases (IAP):** Integration with  for handling native mobile payments.
+-   **Server-Side Receipt Validation:** The backend is designed to be the source of truth for subscriptions by validating purchase receipts directly with Apple and Google servers.
 
 **key DB schema**
--   **users**: { , , , , , , , ,  }
--   **fund_applications**: { , , , , ... }
--   **investor_portfolios**: { , , , , ... }
--   **withdrawal_requests**: { , , , , ... }
--   **fund_performances**: { , , , , , ... }
--   **admin_audit_logs**: { , , , , , ... }
--   **referrals**: { , , , ,  } (NEW)
--   **referral_rewards**: { , , , ,  } (NEW)
+-   **iap_transactions**: {, , , , , , , , } (NEW)
 
 **changes in tech stack**
--   None. The existing tech stack (Expo, React Native, FastAPI, MongoDB) was used.
+-   Added  to the frontend for handling mobile subscriptions.
 
 **All files of reference**
--   **/app/backend/server.py**: The monolithic backend file containing all business logic. Heavily modified to add RBAC, Investor Dashboard, Withdrawals, and the new Referral Program.
--   **/app/frontend/app/referrals.tsx**: New (currently empty) user-facing screen for the referral program.
--   **/app/frontend/app/(admin)/referral-management.tsx**: New (currently empty) admin screen for managing the referral program.
--   **/app/frontend/app/(admin)/admin-management.tsx**: New screen for Super Admins to manage roles.
--   **/app/frontend/app/investor-dashboard.tsx**: New dashboard for approved investors.
--   **/app/frontend/app/(tabs)/more.tsx**: Contains the conditional navigation logic for Fund Management vs. Investor Dashboard.
+-   **/app/frontend/src/services/iapService.ts**: The source of the current crash. This file needs to be split into platform-specific versions ( and ).
+-   **/app/frontend/app/subscription.tsx**: The primary UI for the IAP flow. It depends on .
+-   **/app/backend/server.py**: Contains the new backend logic for IAP validation and webhooks.
+-   **/app/docs/IAP_SETUP.md**: Contains instructions for the user on how to configure the IAP system later.
 
 **Areas that need refactoring**:
--   The backend logic is entirely within a single  file, which is now over 4,500 lines long. It would benefit from being broken down into smaller, feature-specific modules (e.g., , ).
+-   The  file has grown to over 7,000 lines and is critically in need of being split into smaller, more manageable router files by feature (e.g., , , ).
 
 **key api endpoints**
--   : (GET) Get current user's referral info.
--   : (POST) Apply a referral code.
--   : (GET) Get all referral records (for admins).
--   : (POST) Approve a referral reward.
--   : (GET, POST) Manage admin accounts.
--   : (GET) Get data for the investor dashboard.
--   : (GET, PUT) Manage withdrawal requests.
--   : (POST) Submit a fund management application.
+-   : GET - Fetches product IDs for the frontend.
+-   : POST - Validates an Apple purchase receipt.
+-   : POST - Validates a Google purchase token.
+-   : POST - Receives server-to-server notifications from Apple.
+-   : POST - Receives server-to-server notifications from Google.
 
 **Critical Info for New Agent**
--   **Your immediate task is to complete the Referral Program feature.** The backend APIs and frontend file skeletons have been created. Your focus should be on building out the frontend UI for both the user () and admin () pages, adding navigation, and then thoroughly testing the entire end-to-end flow.
--   **The RBAC system is live and enforced.** All admin API calls are protected. The new admin referral UI must respect the permissions of the logged-in admin (/ have write access,  has read-only).
--   **Use the Super Admin credentials for testing** ( / ). This account has full access to all admin features.
--   The project has undergone many rapid iterations. **Adhere strictly to the latest user request (Message 283 in history) for the referral program** and avoid getting confused by previous, now-obsolete, implementations of other features.
+-   **Your immediate and only priority is to fix the web preview crash.** The application is currently unusable in the development environment. Follow the plan in Issues Detail to create platform-specific versions of  to isolate the native code.
+-   Do not attempt to test the full IAP flow. This environment does not support native builds. The goal is to make the app *stable* on the web by mocking the IAP functionality.
+-   The user has made a clear architectural decision for theming: user-facing screens support light/dark, but admin screens are always dark. Do not change this.
+-   The backend  is extremely large. Be careful when making edits and be aware that it's a major candidate for future refactoring.
 
 **documents created in this job**
--   /app/frontend/app/investor-dashboard.tsx
--   /app/frontend/app/(admin)/fund-performance.tsx
--   /app/frontend/app/(admin)/withdrawals.tsx
--   /app/frontend/app/(admin)/admin-management.tsx
--   /app/frontend/app/referrals.tsx
--   /app/frontend/app/(admin)/referral-management.tsx
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-10. **User**: Requested the Referral Program feature. (IN PROGRESS)
-9.  **User**: Confirmed the RBAC fix and provided credentials for Super Admins. (COMPLETED)
-8.  **User**: Reported Super Admins were logging in as normal users, not admins. (COMPLETED)
-7.  **User**: Asked for the Super Admin passwords. (COMPLETED)
-6.  **User**: Requested the comprehensive Admin RBAC system. (COMPLETED)
-5.  **User**: Requested to freeze the current state as a production baseline. (COMPLETED)
-4.  **User**: Requested the Admin Withdrawal Management feature. (COMPLETED)
-3.  **User**: Confirmed the plan for the Investor Dashboard feature. (COMPLETED)
-2.  **User**: Requested the Investor Dashboard feature. (COMPLETED)
-1.  **User**: Provided detailed requirements to finalize the Fund Management data flow. (COMPLETED)
+-   **10. User:** Requests to fix IAP crash on web by guarding native code. (IN PROGRESS)
+-   **9. User:** Confirms agent should proceed with IAP implementation using placeholder credentials. (COMPLETED)
+-   **8. User:** Submits a detailed Product Requirements Document for implementing Apple & Google In-App Purchases. (IN PROGRESS)
+-   **7. User:** Reports Signal History and Community modals are still in dark mode. (COMPLETED)
+-   **6. User:** Reports Academy light mode is incomplete and logout popup is still dark. (COMPLETED)
+-   **5. User:** Instructs agent to fix remaining theming inconsistencies in the user area only. (COMPLETED)
+-   **4. User:** Asks agent to complete remaining secondary screens for full light mode. (COMPLETED)
+-   **3. User:** Asks agent to extend Light Mode to remaining user screens. (COMPLETED)
+-   **2. User:** Provides a clear architectural decision for the theme system (User: partial Light/Dark, Admin: Dark only). (COMPLETED)
+-   **1. User:** Asks for a summary of completed work and next steps. (COMPLETED)
 
 **Project Health Check:**
 -   **Broken**:
-    -   Bottom tab navigation UI on iOS (). Work is **FROZEN** by user directive.
--   **Disabled**:
-    -   The core automatic signal processing engine in  is in **MANUAL MODE**.
+    -   The frontend web preview is crashing on startup, blocking all frontend development.
 -   **Mocked**:
-    -   Payment system (Stripe/IAP stubs).
-    -   Ad system.
+    -   The entire In-App Purchase flow relies on placeholder credentials and endpoints. The  will also be a mock.
 
 **3rd Party Integrations**
--   **Anthropic Claude Vision**: For AI Chart Analyzer. Uses **Emergent LLM Key**.
--   **Fair Economy Media API**: For Economic Calendar data (free, no key).
--   **rss2json.com API**: For converting RSS feeds to JSON for the News feature (free, no key).
--   **Google Favicon API**: For sourcing broker logos (free, no key).
--   **Frankfurter API**: For Forex price data.
--   **CoinGecko API**: For Gold/Crypto price data.
--   **Expo Push Notifications**: Integrated.
+-    (v14.7.1): For handling Apple and Google In-App Purchases on native devices.
 
 **Testing status**
--   Testing agent used after significant changes: YES (for all major features prior to the Referral Program).
+-   Testing agent used after significant changes: YES
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: None are persisted.
--   Known regressions: None.
+-   Test files created: None
+-   Known regressions: The entire frontend web preview is non-functional due to the  integration.
 
 **Credentials to test flow:**
--   **Super Admin**:  /  (or  with the same password)
+-   **Super Admin**:  / 
 -   **VIP User**:  / 
--   **Free User**:  / 
 
 **What agent forgot to execute**
-- The agent has created the files for the Referral Program but has not yet added a navigation link for the user to access their referral page (). This will need to be added, likely in the More tab screen.
+The agent did not successfully fix the web preview crash caused by . It correctly identified the root cause but its initial fix was insufficient. The immediate next step is to implement a more robust platform-specific solution.
+
 </analysis>
