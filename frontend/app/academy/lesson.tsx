@@ -307,16 +307,16 @@ export default function LessonScreen() {
     const isQuiz = lesson?.type === 'quiz';
     
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <TouchableOpacity 
-            style={styles.backButton} 
+            style={[styles.backButton, { backgroundColor: theme.surface }]} 
             onPress={() => setShowContent(false)}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
             {lesson?.title || 'Lesson'}
           </Text>
           <View style={{ width: 40 }} />
