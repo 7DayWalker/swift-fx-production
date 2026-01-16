@@ -581,34 +581,34 @@ export default function AIScreen() {
   // Analyzing screen - show loading state
   if (screenState === 'analyzing') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <ScrollView 
           contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.analyzingContainer}>
-            <View style={styles.analyzingIconContainer}>
-              <ActivityIndicator size="large" color="#00D4AA" />
+            <View style={[styles.analyzingIconContainer, { backgroundColor: `${theme.primary}15` }]}>
+              <ActivityIndicator size="large" color={theme.primary} />
             </View>
-            <Text style={styles.analyzingTitle}>Analyzing Chart</Text>
-            <Text style={styles.analyzingSubtitle}>
+            <Text style={[styles.analyzingTitle, { color: theme.text }]}>Analyzing Chart</Text>
+            <Text style={[styles.analyzingSubtitle, { color: theme.textSecondary }]}>
               Our AI is analyzing your {selectedPair} chart on {selectedTimeframe} timeframe
             </Text>
             <View style={styles.analyzingSteps}>
               <View style={styles.analyzingStep}>
-                <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
-                <Text style={styles.analyzingStepText}>Processing image</Text>
+                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
+                <Text style={[styles.analyzingStepText, { color: theme.text }]}>Processing image</Text>
               </View>
               <View style={styles.analyzingStep}>
-                <ActivityIndicator size="small" color="#00D4AA" />
-                <Text style={styles.analyzingStepText}>Detecting patterns</Text>
+                <ActivityIndicator size="small" color={theme.primary} />
+                <Text style={[styles.analyzingStepText, { color: theme.text }]}>Detecting patterns</Text>
               </View>
               <View style={styles.analyzingStep}>
-                <Ionicons name="ellipse-outline" size={20} color="#8A8D98" />
-                <Text style={[styles.analyzingStepText, { color: '#8A8D98' }]}>Generating insights</Text>
+                <Ionicons name="ellipse-outline" size={20} color={theme.textSecondary} />
+                <Text style={[styles.analyzingStepText, { color: theme.textSecondary }]}>Generating insights</Text>
               </View>
             </View>
-            <Text style={styles.analyzingNote}>This may take up to 30 seconds...</Text>
+            <Text style={[styles.analyzingNote, { color: theme.textSecondary }]}>This may take up to 30 seconds...</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -618,24 +618,24 @@ export default function AIScreen() {
   // Error screen
   if (screenState === 'error') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <ScrollView 
           contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.errorContainer}>
-            <View style={styles.errorIconContainer}>
-              <Ionicons name="alert-circle" size={64} color="#FF4757" />
+            <View style={[styles.errorIconContainer, { backgroundColor: `${theme.error}15` }]}>
+              <Ionicons name="alert-circle" size={64} color={theme.error} />
             </View>
-            <Text style={styles.errorTitle}>Analysis Failed</Text>
-            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Text style={[styles.errorTitle, { color: theme.text }]}>Analysis Failed</Text>
+            <Text style={[styles.errorMessage, { color: theme.textSecondary }]}>{errorMessage}</Text>
             <View style={styles.errorButtons}>
-              <TouchableOpacity style={styles.retryButton} onPress={analyzeChart}>
+              <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={analyzeChart}>
                 <Ionicons name="refresh" size={20} color="#0A0E17" />
                 <Text style={styles.retryButtonText}>Try Again</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.backButton} onPress={resetToUpload}>
-                <Text style={styles.backButtonText}>Change Image</Text>
+              <TouchableOpacity style={[styles.backButton, { borderColor: theme.border }]} onPress={resetToUpload}>
+                <Text style={[styles.backButtonText, { color: theme.text }]}>Change Image</Text>
               </TouchableOpacity>
             </View>
           </View>
