@@ -225,19 +225,19 @@ export default function MoreScreen() {
         onRequestClose={() => setShowLogoutModal(false)}
       >
         <View style={styles.logoutModalContainer}>
-          <View style={styles.logoutModalContent}>
-            <Ionicons name="log-out-outline" size={48} color="#FF4757" style={{ marginBottom: 16 }} />
-            <Text style={styles.logoutModalTitle}>Logout</Text>
-            <Text style={styles.logoutModalText}>Are you sure you want to logout?</Text>
+          <View style={[styles.logoutModalContent, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Ionicons name="log-out-outline" size={48} color={theme.error} style={{ marginBottom: 16 }} />
+            <Text style={[styles.logoutModalTitle, { color: theme.text }]}>Logout</Text>
+            <Text style={[styles.logoutModalText, { color: theme.textSecondary }]}>Are you sure you want to logout?</Text>
             <View style={styles.logoutModalButtons}>
               <TouchableOpacity 
-                style={styles.logoutCancelButton} 
+                style={[styles.logoutCancelButton, { backgroundColor: theme.surfaceSecondary }]} 
                 onPress={() => setShowLogoutModal(false)}
               >
-                <Text style={styles.logoutCancelButtonText}>Cancel</Text>
+                <Text style={[styles.logoutCancelButtonText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.logoutConfirmButton} 
+                style={[styles.logoutConfirmButton, { backgroundColor: theme.error }]} 
                 onPress={confirmLogout}
               >
                 <Text style={styles.logoutConfirmButtonText}>Logout</Text>
