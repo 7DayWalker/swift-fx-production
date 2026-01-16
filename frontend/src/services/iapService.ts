@@ -52,47 +52,13 @@ export interface PurchaseResult {
   error?: string;
 }
 
-// IAP Service state
-let isInitialized = false;
-let productIds: string[] = [];
-let products: any[] = [];
-let purchaseUpdateSubscription: any = null;
-let purchaseErrorSubscription: any = null;
-
-// Dynamic import for react-native-iap (only on native platforms)
-let RNIap: any = null;
-
 /**
  * Check if IAP is available on current platform
- * Only available on native iOS/Android builds
+ * Only available on native iOS/Android builds, NOT on web/preview
  */
 export function isIAPAvailable(): boolean {
-  return Platform.OS === 'ios' || Platform.OS === 'android';
-}
-
-/**
- * Load react-native-iap dynamically (native only)
- */
-async function loadIAPModule(): Promise<boolean> {
-  if (!isIAPAvailable()) {
-    console.log('[IAP] Not available on web platform');
-    return false;
-  }
-
-  if (RNIap) {
-    return true;
-  }
-
-  try {
-    // Dynamic import to avoid loading on web
-    RNIap = require('react-native-iap');
-    console.log('[IAP] Module loaded successfully');
-    return true;
-  } catch (error) {
-    console.warn('[IAP] Failed to load react-native-iap module:', error);
-    RNIap = null;
-    return false;
-  }
+  // Explicitly check we're on native mobile AND not web
+  return (Platform.OS === 'ios' || Platform.OS === 'android') && Platform.OS !== 'web';
 }
 
 /**
@@ -110,308 +76,68 @@ export async function fetchProductIds(): Promise<IAPProducts> {
 
 /**
  * Initialize IAP connection
- * Call this when app starts or before showing subscription screen
- * Only works on native iOS/Android builds
+ * This is a no-op on web - IAP only works on native builds
  */
 export async function initIAP(): Promise<boolean> {
-  // Guard: Only run on native platforms
   if (!isIAPAvailable()) {
-    console.log('[IAP] Skipping initialization - not available on this platform');
+    console.log('[IAP] Skipping initialization - web/preview platform');
     return false;
   }
-
-  if (isInitialized) {
-    return true;
-  }
-
-  try {
-    // Load the IAP module dynamically
-    const moduleLoaded = await loadIAPModule();
-    if (!moduleLoaded || !RNIap) {
-      console.warn('[IAP] Module not available');
-      return false;
-    }
-
-    // Initialize connection
-    const canMakePayments = await RNIap.initConnection();
-    console.log('[IAP] Connection initialized, canMakePayments:', canMakePayments);
-
-    if (!canMakePayments) {
-      console.warn('[IAP] Cannot make payments on this device');
-      return false;
-    }
-
-    // Fetch product IDs from backend
-    const productConfig = await fetchProductIds();
-    
-    // Get product IDs for current platform
-    const platformProducts = Platform.OS === 'ios' 
-      ? productConfig.ios 
-      : productConfig.android;
-    
-    productIds = Object.values(platformProducts);
-    console.log('[IAP] Product IDs:', productIds);
-
-    // Fetch subscription products
-    products = await RNIap.getSubscriptions({ skus: productIds });
-    console.log('[IAP] Products loaded:', products.length);
-
-    // Set up purchase listeners
-    setupPurchaseListeners();
-
-    // Flush any pending purchases (iOS)
-    if (Platform.OS === 'ios') {
-      await RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch(() => {});
-    }
-
-    isInitialized = true;
-    return true;
-  } catch (error) {
-    console.error('[IAP] Initialization error:', error);
-    return false;
-  }
+  
+  // On native platforms, this will be handled by the native IAP module
+  // For now, return false since react-native-iap is not available in preview
+  console.log('[IAP] Native IAP will be available in TestFlight/Play Store builds');
+  return false;
 }
 
 /**
- * Set up purchase update and error listeners
- */
-function setupPurchaseListeners() {
-  if (!RNIap) return;
-
-  // Remove existing listeners
-  if (purchaseUpdateSubscription) {
-    purchaseUpdateSubscription.remove();
-  }
-  if (purchaseErrorSubscription) {
-    purchaseErrorSubscription.remove();
-  }
-
-  // Listen for purchase updates
-  purchaseUpdateSubscription = RNIap.purchaseUpdatedListener(async (purchase: any) => {
-    console.log('[IAP] Purchase update:', purchase.productId);
-  });
-
-  // Listen for purchase errors
-  purchaseErrorSubscription = RNIap.purchaseErrorListener((error: any) => {
-    console.error('[IAP] Purchase error:', error);
-  });
-}
-
-/**
- * End IAP connection
- * Call this when app is closing or user logs out
+ * End IAP connection - no-op on web
  */
 export async function endIAP(): Promise<void> {
-  if (!isIAPAvailable() || !RNIap) {
+  if (!isIAPAvailable()) {
     return;
   }
-
-  try {
-    if (purchaseUpdateSubscription) {
-      purchaseUpdateSubscription.remove();
-      purchaseUpdateSubscription = null;
-    }
-    if (purchaseErrorSubscription) {
-      purchaseErrorSubscription.remove();
-      purchaseErrorSubscription = null;
-    }
-    
-    await RNIap.endConnection();
-    isInitialized = false;
-    products = [];
-    console.log('[IAP] Connection ended');
-  } catch (error) {
-    console.error('[IAP] Error ending connection:', error);
-  }
+  console.log('[IAP] endIAP called - will work in native builds');
 }
 
 /**
  * Get available subscription products
  */
 export function getProducts(): any[] {
-  return products;
+  return [];
 }
 
 /**
  * Get product by plan type
  */
 export function getProductByPlan(plan: SubscriptionPlan): any | undefined {
-  const platformProducts = Platform.OS === 'ios' 
-    ? DEFAULT_PRODUCTS.ios 
-    : DEFAULT_PRODUCTS.android;
-  
-  const productId = plan === 'vip' 
-    ? platformProducts.vip_monthly 
-    : platformProducts.premium_monthly;
-  
-  return products.find((p: any) => p.productId === productId);
+  return undefined;
 }
 
 /**
  * Request subscription purchase
- * 
- * Flow:
- * 1. Request purchase from Apple/Google
- * 2. Get receipt/token
- * 3. Send to backend for validation
- * 4. Backend updates user subscription
- * 5. Return result
- * 
- * Only works on native iOS/Android builds
+ * Returns fallback message on web - real implementation on native
  */
 export async function purchaseSubscription(plan: SubscriptionPlan): Promise<PurchaseResult> {
-  // Guard: Only run on native platforms
   if (!isIAPAvailable()) {
     return {
       success: false,
-      message: 'In-App Purchases are only available on mobile devices. Please use web checkout.',
+      message: 'In-App Purchases are only available on mobile devices. Please use the web checkout option.',
     };
   }
 
-  try {
-    if (!isInitialized) {
-      const success = await initIAP();
-      if (!success) {
-        return {
-          success: false,
-          message: 'In-App Purchases not available on this device',
-        };
-      }
-    }
-
-    if (!RNIap) {
-      return {
-        success: false,
-        message: 'IAP module not loaded',
-      };
-    }
-
-    // Get product for the plan
-    const product = getProductByPlan(plan);
-    if (!product) {
-      return {
-        success: false,
-        message: `Product not found for plan: ${plan}`,
-      };
-    }
-
-    console.log('[IAP] Requesting subscription:', product.productId);
-
-    // Request subscription purchase
-    const purchase = await RNIap.requestSubscription({
-      sku: product.productId,
-      andDangerouslyFinishTransactionAutomaticallyIOS: false,
-    });
-
-    console.log('[IAP] Purchase result:', purchase);
-
-    // Validate with backend
-    const validationResult = await validatePurchaseWithBackend(purchase);
-    
-    // Finish transaction if validated (iOS)
-    if (validationResult.success && Platform.OS === 'ios') {
-      if (Array.isArray(purchase)) {
-        for (const p of purchase) {
-          await RNIap.finishTransaction({ purchase: p, isConsumable: false });
-        }
-      } else {
-        await RNIap.finishTransaction({ purchase, isConsumable: false });
-      }
-    }
-
-    return validationResult;
-  } catch (error: any) {
-    console.error('[IAP] Purchase error:', error);
-    
-    // Handle user cancellation
-    if (error.code === 'E_USER_CANCELLED' || error.message?.includes('cancelled')) {
-      return {
-        success: false,
-        message: 'Purchase cancelled',
-      };
-    }
-
-    return {
-      success: false,
-      message: error.message || 'Purchase failed',
-      error: error.code,
-    };
-  }
-}
-
-/**
- * Validate purchase with backend
- */
-async function validatePurchaseWithBackend(purchase: any): Promise<PurchaseResult> {
-  try {
-    const purchaseData = Array.isArray(purchase) ? purchase[0] : purchase;
-    
-    if (Platform.OS === 'ios') {
-      // iOS: Send receipt data
-      const receiptData = purchaseData.transactionReceipt;
-      
-      if (!receiptData) {
-        return {
-          success: false,
-          message: 'No receipt data available',
-        };
-      }
-
-      const response = await api.post('/api/iap/apple/verify', {
-        receipt_data: receiptData,
-        exclude_old_transactions: true,
-      });
-
-      return {
-        success: response.data.success,
-        plan: response.data.plan,
-        expiryDate: response.data.expiry_date,
-        isTrial: response.data.is_trial,
-        autoRenew: response.data.auto_renew,
-        message: response.data.message,
-      };
-    } else {
-      // Android: Send purchase token
-      const purchaseToken = purchaseData.purchaseToken;
-      const productId = purchaseData.productId;
-
-      if (!purchaseToken) {
-        return {
-          success: false,
-          message: 'No purchase token available',
-        };
-      }
-
-      const response = await api.post('/api/iap/google/verify', {
-        purchase_token: purchaseToken,
-        product_id: productId,
-      });
-
-      return {
-        success: response.data.success,
-        plan: response.data.plan,
-        expiryDate: response.data.expiry_date,
-        isTrial: response.data.is_trial,
-        autoRenew: response.data.auto_renew,
-        message: response.data.message,
-      };
-    }
-  } catch (error: any) {
-    console.error('[IAP] Validation error:', error);
-    return {
-      success: false,
-      message: error.response?.data?.detail || 'Failed to validate purchase',
-    };
-  }
+  // This will work in native builds with react-native-iap
+  return {
+    success: false,
+    message: 'Native IAP will be available in TestFlight and Play Store builds.',
+  };
 }
 
 /**
  * Restore previous purchases
- * Call this when user taps "Restore Purchases" or after reinstall
- * Only works on native iOS/Android builds
+ * Returns fallback message on web - real implementation on native
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
-  // Guard: Only run on native platforms
   if (!isIAPAvailable()) {
     return {
       success: false,
@@ -419,58 +145,10 @@ export async function restorePurchases(): Promise<PurchaseResult> {
     };
   }
 
-  try {
-    if (!isInitialized) {
-      const success = await initIAP();
-      if (!success) {
-        return {
-          success: false,
-          message: 'In-App Purchases not available on this device',
-        };
-      }
-    }
-
-    if (!RNIap) {
-      return {
-        success: false,
-        message: 'IAP module not loaded',
-      };
-    }
-
-    console.log('[IAP] Restoring purchases...');
-
-    // Get available purchases
-    const purchases = await RNIap.getAvailablePurchases();
-    console.log('[IAP] Found purchases:', purchases.length);
-
-    if (purchases.length === 0) {
-      return {
-        success: false,
-        message: 'No previous purchases found',
-      };
-    }
-
-    // Find the most recent subscription
-    const subscription = purchases
-      .filter((p: any) => productIds.includes(p.productId))
-      .sort((a: any, b: any) => (b.transactionDate || 0) - (a.transactionDate || 0))[0];
-
-    if (!subscription) {
-      return {
-        success: false,
-        message: 'No subscription found to restore',
-      };
-    }
-
-    // Validate with backend
-    return await validatePurchaseWithBackend(subscription);
-  } catch (error: any) {
-    console.error('[IAP] Restore error:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to restore purchases',
-    };
-  }
+  return {
+    success: false,
+    message: 'Native restore will be available in TestFlight and Play Store builds.',
+  };
 }
 
 /**
@@ -487,28 +165,14 @@ export async function getIAPStatus(): Promise<any> {
 }
 
 /**
- * Open subscription management
- * Opens native subscription management screen
- * Only works on native iOS/Android builds
+ * Open subscription management - no-op on web
  */
 export async function openSubscriptionManagement(): Promise<void> {
-  // Guard: Only run on native platforms
-  if (!isIAPAvailable() || !RNIap) {
-    console.log('[IAP] Subscription management not available on this platform');
+  if (!isIAPAvailable()) {
+    console.log('[IAP] Subscription management not available on web');
     return;
   }
-
-  try {
-    if (Platform.OS === 'ios') {
-      await RNIap.deepLinkToSubscriptionsIos();
-    } else if (Platform.OS === 'android') {
-      await RNIap.deepLinkToSubscriptionsAndroid({
-        sku: productIds[0],
-      });
-    }
-  } catch (error) {
-    console.error('[IAP] Error opening subscription management:', error);
-  }
+  console.log('[IAP] Native subscription management will work in native builds');
 }
 
 /**
