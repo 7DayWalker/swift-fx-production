@@ -867,12 +867,44 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+  // Restore Purchases Button
+  restoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  restoreButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Manage Subscription Button
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 24,
+  },
+  manageButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
   // Support
   supportSection: {
     alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   supportTitle: {
     color: '#FFFFFF',
@@ -894,11 +926,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
   },
   supportButtonText: {
-    color: '#3B82F6',
     fontSize: 14,
     fontWeight: '600',
   },
