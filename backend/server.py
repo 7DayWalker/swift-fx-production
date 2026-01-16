@@ -7019,7 +7019,7 @@ async def admin_get_iap_transactions(
 
 
 @api_router.get("/admin/iap/stats")
-async def admin_get_iap_stats(admin: AdminUser = Depends(get_admin_user)):
+async def admin_get_iap_stats(admin: User = Depends(require_admin)):
     """Admin: Get IAP statistics"""
     # Count by platform
     ios_count = await db.iap_transactions.count_documents({"platform": "ios"})
