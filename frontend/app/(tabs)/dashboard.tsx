@@ -91,29 +91,29 @@ export default function DashboardScreen() {
 
   if (contextLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>{user?.name || 'Trader'}</Text>
+            <Text style={[styles.greeting, { color: theme.textSecondary }]}>Welcome back,</Text>
+            <Text style={[styles.userName, { color: theme.text }]}>{user?.name || 'Trader'}</Text>
           </View>
           <View style={styles.headerRight}>
             <SubscriptionBadge 
@@ -126,47 +126,47 @@ export default function DashboardScreen() {
 
         {/* Upgrade Banner for Free Users - Routes to canonical /subscription page */}
         {isFreeUser && (
-          <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/subscription')}>
+          <TouchableOpacity style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} onPress={() => router.push('/subscription')}>
             <View style={styles.upgradeContent}>
-              <Ionicons name="rocket-outline" size={24} color="#FFD700" />
+              <Ionicons name="rocket-outline" size={24} color={theme.warning} />
               <View style={styles.upgradeTextContainer}>
-                <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
-                <Text style={styles.upgradeSubtitle}>Unlock all signals & AI features</Text>
+                <Text style={[styles.upgradeTitle, { color: theme.warning }]}>Upgrade to Premium</Text>
+                <Text style={[styles.upgradeSubtitle, { color: theme.textSecondary }]}>Unlock all signals & AI features</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#FFD700" />
+            <Ionicons name="chevron-forward" size={24} color={theme.warning} />
           </TouchableOpacity>
         )}
 
         {/* Performance Stats - REACTIVE from SignalContext */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Performance</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Performance</Text>
           <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{formatWinRate(winRate)}%</Text>
-              <Text style={styles.statLabel}>Win Rate</Text>
+            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.statValue, { color: theme.text }]}>{formatWinRate(winRate)}%</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Win Rate</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: totalPips >= 0 ? '#00D4AA' : '#FF4757' }]}>
+            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.statValue, { color: totalPips >= 0 ? theme.success : theme.error }]}>
                 {formatPips(totalPips)}
               </Text>
-              <Text style={styles.statLabel}>Total Pips</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Total Pips</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{totalSignals}</Text>
-              <Text style={styles.statLabel}>Signals</Text>
+            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.statValue, { color: theme.text }]}>{totalSignals}</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Signals</Text>
             </View>
           </View>
         </View>
 
         {/* Watchlist - Static data */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Watchlist</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Watchlist</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.watchlistScroll}>
             {WATCHLIST.map((item, index) => (
-              <View key={index} style={styles.watchlistItem}>
+              <View key={index} style={[styles.watchlistItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(item.category) }]} />
-                <Text style={styles.watchlistPair}>{item.pair}</Text>
+                <Text style={[styles.watchlistPair, { color: theme.text }]}>{item.pair}</Text>
                 <Text style={[styles.watchlistCategory, { color: getCategoryColor(item.category) }]}>
                   {item.category.toUpperCase()}
                 </Text>
@@ -177,18 +177,18 @@ export default function DashboardScreen() {
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity 
               style={styles.quickActionCard}
               onPress={() => router.push('/calendar')}
             >
-              <View style={styles.quickActionCardInner}>
+              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
                   <Ionicons name="calendar" size={22} color="#6366F1" />
                 </View>
-                <Text style={styles.quickActionTitle}>Calendar</Text>
-                <Text style={styles.quickActionSubtitle}>Economic Events</Text>
+                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
+                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
               </View>
             </TouchableOpacity>
             
@@ -196,12 +196,12 @@ export default function DashboardScreen() {
               style={styles.quickActionCard}
               onPress={() => router.push('/academy')}
             >
-              <View style={styles.quickActionCardInner}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(0, 212, 170, 0.15)' }]}>
-                  <Ionicons name="school" size={22} color="#00D4AA" />
+              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
+                  <Ionicons name="school" size={22} color={theme.primary} />
                 </View>
-                <Text style={styles.quickActionTitle}>Academy</Text>
-                <Text style={styles.quickActionSubtitle}>Learn Trading</Text>
+                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
+                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
               </View>
             </TouchableOpacity>
             
@@ -209,12 +209,12 @@ export default function DashboardScreen() {
               style={styles.quickActionCard}
               onPress={() => router.push('/(tabs)/ai')}
             >
-              <View style={styles.quickActionCardInner}>
+              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
                   <Ionicons name="analytics" size={22} color="#8B5CF6" />
                 </View>
-                <Text style={styles.quickActionTitle}>AI Analyzer</Text>
-                <Text style={styles.quickActionSubtitle}>Chart Analysis</Text>
+                <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
+                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
               </View>
             </TouchableOpacity>
             
@@ -222,12 +222,12 @@ export default function DashboardScreen() {
               style={styles.quickActionCard}
               onPress={() => router.push('/signal-history')}
             >
-              <View style={styles.quickActionCardInner}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                  <Ionicons name="time" size={22} color="#F59E0B" />
+              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
+                  <Ionicons name="time" size={22} color={theme.warning} />
                 </View>
-                <Text style={styles.quickActionTitle}>History</Text>
-                <Text style={styles.quickActionSubtitle}>Past Signals</Text>
+                <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
+                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -236,33 +236,33 @@ export default function DashboardScreen() {
         {/* Recent Signals - REACTIVE from SignalContext */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Signals</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Active Signals</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/signals')}>
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={[styles.seeAllText, { color: theme.primary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           
           {recentSignals.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="trending-up-outline" size={48} color="#8A8D98" />
-              <Text style={styles.emptyText}>No active signals</Text>
+            <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="trending-up-outline" size={48} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active signals</Text>
             </View>
           ) : (
             recentSignals.slice(0, 3).map((signal, index) => (
               <TouchableOpacity
                 key={signal.signal_id || index}
-                style={styles.signalCard}
+                style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => router.push(`/(tabs)/signals`)}
               >
                 <View style={styles.signalHeader}>
-                  <Text style={styles.signalPair}>{signal.pair}</Text>
+                  <Text style={[styles.signalPair, { color: theme.text }]}>{signal.pair}</Text>
                   <View style={[
                     styles.signalTypeBadge,
-                    { backgroundColor: signal.signal_type === 'buy' ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 71, 87, 0.2)' }
+                    { backgroundColor: signal.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }
                   ]}>
                     <Text style={[
                       styles.signalTypeText,
-                      { color: signal.signal_type === 'buy' ? '#00D4AA' : '#FF4757' }
+                      { color: signal.signal_type === 'buy' ? theme.success : theme.error }
                     ]}>
                       {signal.signal_type?.toUpperCase()}
                     </Text>
@@ -270,14 +270,14 @@ export default function DashboardScreen() {
                 </View>
                 {signal.locked ? (
                   <View style={styles.lockedContent}>
-                    <Ionicons name="lock-closed" size={16} color="#FFD700" />
-                    <Text style={styles.lockedText}>Upgrade to unlock</Text>
+                    <Ionicons name="lock-closed" size={16} color={theme.warning} />
+                    <Text style={[styles.lockedText, { color: theme.warning }]}>Upgrade to unlock</Text>
                   </View>
                 ) : (
                   <View style={styles.signalDetails}>
-                    <Text style={styles.signalDetailText}>Entry: {signal.entry}</Text>
-                    <Text style={styles.signalDetailText}>TP1: {signal.tp1 || signal.take_profit}</Text>
-                    <Text style={styles.signalDetailText}>SL: {signal.stop_loss}</Text>
+                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>Entry: {signal.entry}</Text>
+                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>TP1: {signal.tp1 || signal.take_profit}</Text>
+                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>SL: {signal.stop_loss}</Text>
                   </View>
                 )}
               </TouchableOpacity>
