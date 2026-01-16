@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
 
