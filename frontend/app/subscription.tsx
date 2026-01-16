@@ -462,20 +462,51 @@ export default function SubscriptionScreen() {
         {/* Security Notice */}
         <View style={styles.securityNotice}>
           <Ionicons name="shield-checkmark" size={20} color="#10B981" />
-          <Text style={styles.securityText}>
-            Secure checkout. Your subscription activates only after payment confirmation.
+          <Text style={[styles.securityText, { color: theme.textSecondary }]}>
+            {isIAPAvailable() && Platform.OS !== 'web'
+              ? 'Secure payment through Apple App Store or Google Play. Your subscription activates immediately after purchase.'
+              : 'Secure checkout. Your subscription activates only after payment confirmation.'}
           </Text>
         </View>
 
+        {/* Restore Purchases (Mobile only) */}
+        {isIAPAvailable() && Platform.OS !== 'web' && (
+          <TouchableOpacity 
+            style={[styles.restoreButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={handleRestorePurchases}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={20} color={theme.primary} />
+                <Text style={[styles.restoreButtonText, { color: theme.primary }]}>Restore Purchases</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Manage Subscription (for existing subscribers) */}
+        {subscriptionStatus?.subscription && subscriptionStatus.subscription !== 'free' && (
+          <TouchableOpacity 
+            style={[styles.manageButton, { borderColor: theme.border }]}
+            onPress={handleManageSubscription}
+          >
+            <Ionicons name="settings-outline" size={18} color={theme.textSecondary} />
+            <Text style={[styles.manageButtonText, { color: theme.textSecondary }]}>Manage Subscription</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Contact Support */}
-        <View style={styles.supportSection}>
-          <Text style={styles.supportTitle}>Need Help?</Text>
-          <Text style={styles.supportText}>
-            Contact support for bank transfers, special offers, or any questions about your subscription.
+        <View style={[styles.supportSection, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.supportTitle, { color: theme.text }]}>Need Help?</Text>
+          <Text style={[styles.supportText, { color: theme.textSecondary }]}>
+            Contact support for special offers, or any questions about your subscription.
           </Text>
-          <TouchableOpacity style={styles.supportButton}>
-            <Ionicons name="mail-outline" size={18} color="#3B82F6" />
-            <Text style={styles.supportButtonText}>Contact Support</Text>
+          <TouchableOpacity style={[styles.supportButton, { backgroundColor: `${theme.primary}15` }]}>
+            <Ionicons name="mail-outline" size={18} color={theme.primary} />
+            <Text style={[styles.supportButtonText, { color: theme.primary }]}>Contact Support</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
