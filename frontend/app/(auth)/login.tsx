@@ -105,7 +105,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -123,17 +123,17 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue trading</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Welcome Back</Text>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Sign in to continue trading</Text>
           </View>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#8A8D98" style={styles.inputIcon} />
+            <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="mail-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.text }]}
                 placeholder="Email"
-                placeholderTextColor="#8A8D98"
+                placeholderTextColor={theme.textSecondary}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -141,12 +141,12 @@ export default function LoginScreen() {
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#8A8D98" style={styles.inputIcon} />
+            <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.text }]}
                 placeholder="Password"
-                placeholderTextColor="#8A8D98"
+                placeholderTextColor={theme.textSecondary}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -155,19 +155,19 @@ export default function LoginScreen() {
                 <Ionicons
                   name={showPassword ? 'eye-outline' : 'eye-off-outline'}
                   size={20}
-                  color="#8A8D98"
+                  color={theme.textSecondary}
                 />
               </TouchableOpacity>
             </View>
 
             <Link href="/(auth)/forgot-password" asChild>
               <TouchableOpacity style={styles.forgotPassword}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>Forgot Password?</Text>
               </TouchableOpacity>
             </Link>
 
             <Pressable
-              style={[styles.loginButton, isLoading && styles.buttonDisabled]}
+              style={[styles.loginButton, { backgroundColor: theme.primary }, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
               accessibilityRole="button"
@@ -182,32 +182,32 @@ export default function LoginScreen() {
             </Pressable>
 
             <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
 
             <TouchableOpacity
-              style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
+              style={[styles.googleButton, { backgroundColor: theme.surface, borderColor: theme.border }, isGoogleLoading && styles.buttonDisabled]}
               onPress={handleGoogleLogin}
               disabled={isGoogleLoading}
             >
               {isGoogleLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={theme.text} />
               ) : (
                 <>
-                  <Ionicons name="logo-google" size={20} color="#FFFFFF" />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  <Ionicons name="logo-google" size={20} color={theme.text} />
+                  <Text style={[styles.googleButtonText, { color: theme.text }]}>Continue with Google</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={[styles.footerText, { color: theme.textSecondary }]}>Don't have an account? </Text>
             <Link href="/(auth)/register" asChild>
               <TouchableOpacity>
-                <Text style={styles.footerLink}>Sign Up</Text>
+                <Text style={[styles.footerLink, { color: theme.primary }]}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
           </View>
