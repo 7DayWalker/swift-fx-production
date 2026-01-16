@@ -39,6 +39,7 @@ interface Signal {
 
 export default function SignalsScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
