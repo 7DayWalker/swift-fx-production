@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,7 @@ import { useSubscription } from '../src/context/SubscriptionContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { SubscriptionBadge } from '../src/components/SubscriptionBadge';
 import { api } from '../src/services/api';
+import IAPService, { isIAPAvailable, PurchaseResult } from '../src/services/iapService';
 
 type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
