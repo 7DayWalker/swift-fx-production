@@ -59,6 +59,7 @@ interface HistoryResponse {
 
 export default function SignalHistoryScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
