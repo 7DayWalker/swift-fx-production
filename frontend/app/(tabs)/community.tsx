@@ -244,15 +244,15 @@ export default function CommunityScreen() {
     const isLiked = item.likes?.includes(user?.user_id || '');
     
     return (
-      <View style={styles.postCard}>
+      <View style={[styles.postCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.postHeader}>
           <View style={styles.postAuthor}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
+            <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
             </View>
             <View>
-              <Text style={styles.authorName}>{item.user_name}</Text>
-              <Text style={styles.postTime}>
+              <Text style={[styles.authorName, { color: theme.text }]}>{item.user_name}</Text>
+              <Text style={[styles.postTime, { color: theme.textSecondary }]}>
                 {new Date(item.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
@@ -270,7 +270,7 @@ export default function CommunityScreen() {
           </View>
         </View>
 
-        <Text style={styles.postContent}>{item.content}</Text>
+        <Text style={[styles.postContent, { color: theme.text }]}>{item.content}</Text>
 
         {/* Post Image */}
         {item.image && (
@@ -289,20 +289,20 @@ export default function CommunityScreen() {
           </TouchableOpacity>
         )}
 
-        <View style={styles.postActions}>
+        <View style={[styles.postActions, { borderTopColor: theme.border }]}>
           <TouchableOpacity style={styles.actionButton} onPress={() => toggleLike(item.post_id)}>
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
               size={20}
-              color={isLiked ? '#FF4757' : '#8A8D98'}
+              color={isLiked ? theme.error : theme.textSecondary}
             />
-            <Text style={[styles.actionText, isLiked && { color: '#FF4757' }]}>
+            <Text style={[styles.actionText, { color: theme.textSecondary }, isLiked && { color: theme.error }]}>
               {item.likes?.length || 0}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => openComments(item)}>
-            <Ionicons name="chatbubble-outline" size={18} color="#8A8D98" />
-            <Text style={styles.actionText}>Comment</Text>
+            <Ionicons name="chatbubble-outline" size={18} color={theme.textSecondary} />
+            <Text style={[styles.actionText, { color: theme.textSecondary }]}>Comment</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -311,25 +311,25 @@ export default function CommunityScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Community</Text>
-        <Text style={styles.subtitle}>Share insights with fellow traders</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Community</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Share insights with fellow traders</Text>
       </View>
 
       {/* Community Rules Banner */}
-      <View style={styles.rulesBanner}>
-        <Ionicons name="information-circle" size={20} color="#00D4AA" />
-        <Text style={styles.rulesText}>
+      <View style={[styles.rulesBanner, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}30` }]}>
+        <Ionicons name="information-circle" size={20} color={theme.primary} />
+        <Text style={[styles.rulesText, { color: theme.textSecondary }]}>
           Be respectful. No financial advice. Share for educational purposes only.
         </Text>
       </View>
@@ -340,13 +340,13 @@ export default function CommunityScreen() {
         keyExtractor={(item) => item.post_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D4AA" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#8A8D98" />
-            <Text style={styles.emptyTitle}>No Posts Yet</Text>
-            <Text style={styles.emptyText}>Be the first to share with the community!</Text>
+            <Ionicons name="chatbubbles-outline" size={64} color={theme.textSecondary} />
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Posts Yet</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Be the first to share with the community!</Text>
           </View>
         }
       />
