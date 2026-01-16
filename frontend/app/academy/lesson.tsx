@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../src/context/AuthContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { getCourseContent, LessonContent } from '../../src/data/academyContent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
