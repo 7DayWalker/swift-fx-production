@@ -56,15 +56,18 @@ const CATEGORIES: Category[] = [
 
 export default function AcademyScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Use subscription status (which is authoritative) instead of user.role
+  const userSubscription = subscriptionStatus?.subscription || 'free';
+
   const hasAccess = (requiredRole: string) => {
-    if (!user) return false;
     if (requiredRole === 'free') return true;
-    if (requiredRole === 'premium') return user.role === 'premium' || user.role === 'vip';
-    if (requiredRole === 'vip') return user.role === 'vip';
+    if (requiredRole === 'premium') return userSubscription === 'premium' || userSubscription === 'vip';
+    if (requiredRole === 'vip') return userSubscription === 'vip';
     return false;
   };
 
