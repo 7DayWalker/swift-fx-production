@@ -196,12 +196,12 @@ export default function AcademyScreen() {
         })}
 
         {/* Upgrade CTA for non-VIP users */}
-        {user?.role !== 'vip' && (
+        {userSubscription !== 'vip' && (
           <View style={styles.upgradeCTA}>
             <Ionicons name="star" size={24} color="#FFD700" />
             <Text style={styles.upgradeCTATitle}>Unlock All Courses</Text>
             <Text style={styles.upgradeCTAText}>
-              Upgrade to {user?.role === 'free' ? 'Premium or VIP' : 'VIP'} to access all academy content
+              Upgrade to {userSubscription === 'free' ? 'Premium or VIP' : 'VIP'} to access all academy content
             </Text>
             <TouchableOpacity 
               style={styles.upgradeButton}
