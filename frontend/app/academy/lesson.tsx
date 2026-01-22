@@ -260,14 +260,49 @@ function YouTubePlayer({ videoId, color }: YouTubePlayerProps) {
   );
 }
 
+// Required role for each category
+const CATEGORY_REQUIRED_ROLE: Record<string, 'free' | 'premium' | 'vip'> = {
+  beginner: 'free',
+  intermediate: 'premium',
+  advanced: 'vip',
+};
+
 export default function LessonScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category: string; course: string }>();
   const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
   const [showContent, setShowContent] = useState(false);
+
+  const requiredRole = CATEGORY_REQUIRED_ROLE[params.category || 'beginner'] || 'free';
+
+  // Check if user has access based on subscription
+  const hasAccess = () => {
+    if (!subscriptionStatus) return requiredRole === 'free';
+    const userPlan = subscriptionStatus.subscription || 'free';
+    
+    if (requiredRole === 'free') return true;
+    if (requiredRole === 'premium') return userPlan === 'premium' || userPlan === 'vip';
+    if (requiredRole === 'vip') return userPlan === 'vip';
+    return false;
+  };
+
+  // Redirect if user doesn't have access
+  useEffect(() => {
+    if (!hasAccess()) {
+      Alert.alert(
+        'Access Restricted',
+        `This content requires a ${requiredRole.toUpperCase()} subscription.`,
+        [
+          { text: 'View Plans', onPress: () => router.replace('/subscription') },
+          { text: 'Go Back', onPress: () => router.back() },
+        ]
+      );
+    }
+  }, [params.category, subscriptionStatus]);
 
   const courseData = COURSE_LESSONS[params.course || ''] || {
     title: params.course?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Course',
@@ -285,6 +320,21 @@ export default function LessonScreen() {
       default: return '#00D4AA';
     }
   };
+
+  // Don't render content if user doesn't have access
+  if (!hasAccess()) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={styles.lockedContainer}>
+          <Ionicons name="lock-closed" size={48} color={theme.textSecondary} />
+          <Text style={[styles.lockedText, { color: theme.text }]}>Content Locked</Text>
+          <Text style={[styles.lockedSubtext, { color: theme.textSecondary }]}>
+            Upgrade to {requiredRole.toUpperCase()} to access this content
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const getLessonIcon = (type: string) => {
     switch (type) {
