@@ -6906,9 +6906,9 @@ async def google_rtdn_notification(request: dict):
 # ==================== IAP STATUS & MANAGEMENT ====================
 
 @api_router.get("/iap/status")
-async def get_iap_status(current_user: dict = Depends(get_current_user)):
+async def get_iap_status(current_user: User = Depends(require_auth)):
     """Get user's IAP subscription status"""
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     
     user = await db.users.find_one({"user_id": user_id})
     if not user:
