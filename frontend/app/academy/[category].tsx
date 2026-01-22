@@ -74,19 +74,68 @@ const COURSES_DATA: Record<string, { title: string; color: string; courses: Cour
   },
 };
 
+// Required role for each category
+const CATEGORY_REQUIRED_ROLE: Record<string, 'free' | 'premium' | 'vip'> = {
+  beginner: 'free',
+  intermediate: 'premium',
+  advanced: 'vip',
+};
+
 export default function CourseListScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { category } = useLocalSearchParams<{ category: string }>();
 
   const categoryData = COURSES_DATA[category || 'beginner'];
+  const requiredRole = CATEGORY_REQUIRED_ROLE[category || 'beginner'] || 'free';
+
+  // Check if user has access based on subscription
+  const hasAccess = () => {
+    if (!subscriptionStatus) return requiredRole === 'free';
+    const userPlan = subscriptionStatus.subscription || 'free';
+    
+    if (requiredRole === 'free') return true;
+    if (requiredRole === 'premium') return userPlan === 'premium' || userPlan === 'vip';
+    if (requiredRole === 'vip') return userPlan === 'vip';
+    return false;
+  };
+
+  // Redirect if user doesn't have access
+  useEffect(() => {
+    if (!hasAccess()) {
+      Alert.alert(
+        'Access Restricted',
+        `This content requires a ${requiredRole.toUpperCase()} subscription.`,
+        [
+          { text: 'View Plans', onPress: () => router.replace('/subscription') },
+          { text: 'Go Back', onPress: () => router.back() },
+        ]
+      );
+    }
+  }, [category, subscriptionStatus]);
 
   if (!categoryData) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <Text style={[styles.errorText, { color: theme.text }]}>Category not found</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Don't render content if user doesn't have access
+  if (!hasAccess()) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={styles.lockedContainer}>
+          <Ionicons name="lock-closed" size={48} color={theme.textSecondary} />
+          <Text style={[styles.lockedText, { color: theme.text }]}>Content Locked</Text>
+          <Text style={[styles.lockedSubtext, { color: theme.textSecondary }]}>
+            Upgrade to {requiredRole.toUpperCase()} to access this content
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
