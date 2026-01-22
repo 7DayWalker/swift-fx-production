@@ -3650,28 +3650,179 @@ async def initialize_super_admins():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop event - no action needed in manual mode"""
-    global price_automation_running
+    """Gracefully stop the signal engine on shutdown"""
+    global price_automation_running, engine_task
+    
+    logger.info("[Shutdown] Stopping Signal Auto-Engine...")
     price_automation_running = False
-    logger.info("[MANUAL MODE] Server shutting down...")
+    
+    if engine_task:
+        engine_task.cancel()
+        try:
+            await engine_task
+        except asyncio.CancelledError:
+            pass
+    
+    logger.info("[Shutdown] Server shutdown complete")
 
 
 # API endpoint to check automation status
 @api_router.get("/automation/status")
 async def get_automation_status():
-    """Get the status of the signal engine - MANUAL MODE"""
+    """Get the status of the signal engine"""
+    config = await get_engine_config()
+    
     return {
-        "mode": "MANUAL",
-        "auto_engine_running": False,
-        "description": "Auto-engine is DISABLED. All signal state changes require manual admin action.",
-        "manual_endpoints": [
-            "POST /api/admin/signals - Create signal",
-            "POST /api/admin/signals/{id}/activate - Activate pending signal",
-            "POST /api/admin/signals/{id}/mark-tp?tp_level=1|2|3 - Mark TP hit",
-            "POST /api/admin/signals/{id}/force-close - Close signal",
-            "POST /api/admin/signals/{id}/transition - Manual state change"
+        "mode": "AUTO" if config.get("enabled") and not config.get("paused") else "PAUSED" if config.get("paused") else "DISABLED",
+        "auto_engine_running": price_automation_running,
+        "enabled": config.get("enabled", True),
+        "paused": config.get("paused", False),
+        "pause_reason": config.get("pause_reason"),
+        "poll_interval": config.get("poll_interval", 30),
+        "last_health_check": config.get("last_health_check"),
+        "error_count": config.get("error_count", 0),
+        "config": {
+            "auto_activate_pending": config.get("auto_activate_pending", True),
+            "auto_close_on_sl": config.get("auto_close_on_sl", True),
+            "auto_advance_tp": config.get("auto_advance_tp", True),
+            "auto_close_on_tp3": config.get("auto_close_on_tp3", True),
+            "send_notifications": config.get("send_notifications", True),
+        },
+        "admin_endpoints": [
+            "POST /api/admin/automation/start - Start the engine",
+            "POST /api/admin/automation/stop - Stop the engine",
+            "POST /api/admin/automation/pause - Pause the engine",
+            "POST /api/admin/automation/resume - Resume the engine",
+            "POST /api/admin/automation/config - Update engine config",
         ]
     }
+
+
+# Admin endpoints for engine control
+@api_router.post("/admin/automation/start")
+async def start_automation_engine(admin: User = Depends(require_admin)):
+    """Start the signal automation engine (Admin only)"""
+    global price_automation_running, engine_task
+    
+    if price_automation_running:
+        return {"success": False, "message": "Engine is already running"}
+    
+    config = await get_engine_config()
+    config["enabled"] = True
+    config["paused"] = False
+    config["pause_reason"] = None
+    config["error_count"] = 0
+    await save_engine_config(config)
+    
+    price_automation_running = True
+    engine_task = asyncio.create_task(run_price_automation())
+    
+    logger.info(f"[Admin] Engine started by {admin.user_id}")
+    return {"success": True, "message": "Signal engine started"}
+
+
+@api_router.post("/admin/automation/stop")
+async def stop_automation_engine(admin: User = Depends(require_admin)):
+    """Stop the signal automation engine (Admin only)"""
+    global price_automation_running, engine_task
+    
+    if not price_automation_running:
+        return {"success": False, "message": "Engine is not running"}
+    
+    config = await get_engine_config()
+    config["enabled"] = False
+    await save_engine_config(config)
+    
+    price_automation_running = False
+    
+    if engine_task:
+        engine_task.cancel()
+        try:
+            await engine_task
+        except asyncio.CancelledError:
+            pass
+    
+    logger.info(f"[Admin] Engine stopped by {admin.user_id}")
+    return {"success": True, "message": "Signal engine stopped"}
+
+
+@api_router.post("/admin/automation/pause")
+async def pause_automation_engine(
+    reason: str = "Manual pause by admin",
+    admin: User = Depends(require_admin)
+):
+    """Pause the signal automation engine (Admin only) - Engine stays running but won't process signals"""
+    config = await get_engine_config()
+    config["paused"] = True
+    config["pause_reason"] = reason
+    await save_engine_config(config)
+    
+    logger.info(f"[Admin] Engine paused by {admin.user_id}: {reason}")
+    return {"success": True, "message": f"Signal engine paused: {reason}"}
+
+
+@api_router.post("/admin/automation/resume")
+async def resume_automation_engine(admin: User = Depends(require_admin)):
+    """Resume the signal automation engine (Admin only)"""
+    global price_automation_running, engine_task
+    
+    config = await get_engine_config()
+    config["paused"] = False
+    config["pause_reason"] = None
+    config["error_count"] = 0
+    await save_engine_config(config)
+    
+    # Start the engine if it's not running
+    if not price_automation_running and config.get("enabled", True):
+        price_automation_running = True
+        engine_task = asyncio.create_task(run_price_automation())
+    
+    logger.info(f"[Admin] Engine resumed by {admin.user_id}")
+    return {"success": True, "message": "Signal engine resumed"}
+
+
+class EngineConfigUpdate(BaseModel):
+    poll_interval: Optional[int] = None
+    auto_activate_pending: Optional[bool] = None
+    auto_close_on_sl: Optional[bool] = None
+    auto_advance_tp: Optional[bool] = None
+    auto_close_on_tp3: Optional[bool] = None
+    send_notifications: Optional[bool] = None
+
+
+@api_router.post("/admin/automation/config")
+async def update_automation_config(
+    config_update: EngineConfigUpdate,
+    admin: User = Depends(require_admin)
+):
+    """Update signal automation engine configuration (Admin only)"""
+    config = await get_engine_config()
+    
+    # Update only provided fields
+    if config_update.poll_interval is not None:
+        # Enforce limits
+        interval = max(config["min_poll_interval"], min(config["max_poll_interval"], config_update.poll_interval))
+        config["poll_interval"] = interval
+    
+    if config_update.auto_activate_pending is not None:
+        config["auto_activate_pending"] = config_update.auto_activate_pending
+    
+    if config_update.auto_close_on_sl is not None:
+        config["auto_close_on_sl"] = config_update.auto_close_on_sl
+    
+    if config_update.auto_advance_tp is not None:
+        config["auto_advance_tp"] = config_update.auto_advance_tp
+    
+    if config_update.auto_close_on_tp3 is not None:
+        config["auto_close_on_tp3"] = config_update.auto_close_on_tp3
+    
+    if config_update.send_notifications is not None:
+        config["send_notifications"] = config_update.send_notifications
+    
+    await save_engine_config(config)
+    
+    logger.info(f"[Admin] Engine config updated by {admin.user_id}")
+    return {"success": True, "message": "Engine configuration updated", "config": config}
 
 
 # ==============================================================================
