@@ -3373,53 +3373,206 @@ class SignalLifecycleController:
 
 
 # ==============================================================================
-# MANUAL MODE - AUTO ENGINE DISABLED
+# ==============================================================================
+# AUTOMATIC SIGNAL ENGINE - RE-ENABLED WITH SAFEGUARDS
 # ==============================================================================
 # 
-# IMPORTANT: All automatic signal processing has been INTENTIONALLY DISABLED.
-# 
-# This is a deliberate downgrade for stability. Signals will NOT:
-# - Auto-activate based on price
-# - Auto-detect TP levels
-# - Auto-detect SL levels
-# - Auto-close trades
-# 
-# All signal state changes must be done MANUALLY via admin endpoints:
-# - POST /api/admin/signals (create)
-# - POST /api/admin/signals/{id}/activate (pending → active)
-# - POST /api/admin/signals/{id}/mark-tp?tp_level=1|2|3 (mark TP hit)
-# - POST /api/admin/signals/{id}/force-close (close with exit_reason)
-# - POST /api/admin/signals/{id}/transition (manual state change)
+# FEATURES:
+# - Configurable on/off state via admin API
+# - Respects signal visibility (Free/Premium/VIP subscription tiers)
+# - Admin override capability
+# - Paused state protection (no signals sent when paused)
+# - Health checks and self-healing
+# - Comprehensive logging
+#
+# ADMIN CONTROLS:
+# - GET /api/automation/status - Check engine status
+# - POST /api/admin/automation/start - Start the engine
+# - POST /api/admin/automation/stop - Stop the engine
+# - POST /api/admin/automation/config - Update engine config
 # ==============================================================================
 
-# Auto-engine is DISABLED - do not start
+# Engine configuration (loaded from DB on startup)
+ENGINE_CONFIG_DEFAULTS = {
+    "enabled": True,              # Master switch
+    "paused": False,              # Temporary pause (maintenance mode)
+    "poll_interval": 30,          # Seconds between price checks
+    "min_poll_interval": 10,      # Minimum allowed poll interval
+    "max_poll_interval": 300,     # Maximum allowed poll interval
+    "auto_activate_pending": True,  # Auto-activate pending signals
+    "auto_close_on_sl": True,     # Auto-close on stop loss
+    "auto_advance_tp": True,      # Auto-advance through TP levels
+    "auto_close_on_tp3": True,    # Auto-close after TP3
+    "send_notifications": True,   # Send push notifications on events
+    "last_health_check": None,    # Last successful price fetch
+    "error_count": 0,             # Consecutive errors (auto-pause if > threshold)
+    "max_errors": 5,              # Pause after this many consecutive errors
+}
+
+# Global engine state
+price_automation_running = False
+engine_task = None
+lifecycle_controller = None
+
+
+async def get_engine_config() -> dict:
+    """Get engine configuration from database or use defaults"""
+    config = await db.settings.find_one({"setting_id": "signal_engine_config"})
+    if config:
+        # Merge with defaults for any missing keys
+        merged = {**ENGINE_CONFIG_DEFAULTS, **config.get("config", {})}
+        return merged
+    return ENGINE_CONFIG_DEFAULTS.copy()
+
+
+async def save_engine_config(config: dict):
+    """Save engine configuration to database"""
+    await db.settings.update_one(
+        {"setting_id": "signal_engine_config"},
+        {"$set": {
+            "setting_id": "signal_engine_config",
+            "config": config,
+            "updated_at": datetime.now(timezone.utc)
+        }},
+        upsert=True
+    )
+
+
 async def run_price_automation():
     """
-    AUTO-ENGINE DISABLED - MANUAL MODE ACTIVE
+    AUTOMATIC SIGNAL ENGINE - Main Processing Loop
     
-    This function does nothing. It exists only to maintain code structure.
-    All signal processing must be done via manual admin endpoints.
+    This function:
+    1. Checks engine config (enabled/paused)
+    2. Fetches live prices for all active signals
+    3. Processes each signal through the lifecycle controller
+    4. Sends notifications based on visibility rules
+    5. Handles errors gracefully with auto-recovery
     """
-    global price_automation_running
+    global price_automation_running, lifecycle_controller
+    
+    price_automation_running = True
+    lifecycle_controller = SignalLifecycleController(db)
+    
+    logger.info("=" * 60)
+    logger.info("[Engine] Signal Auto-Engine STARTED")
+    logger.info("[Engine] Visibility rules ACTIVE: Free/Premium/VIP")
+    logger.info("=" * 60)
+    
+    consecutive_errors = 0
+    
+    while price_automation_running:
+        try:
+            # Load current config
+            config = await get_engine_config()
+            poll_interval = config.get("poll_interval", 30)
+            
+            # Check if engine is enabled
+            if not config.get("enabled", True):
+                logger.info("[Engine] Engine is DISABLED. Sleeping...")
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # Check if engine is paused (maintenance mode)
+            if config.get("paused", False):
+                logger.info("[Engine] Engine is PAUSED. Sleeping...")
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # Check error threshold
+            if consecutive_errors >= config.get("max_errors", 5):
+                logger.error(f"[Engine] Too many errors ({consecutive_errors}). Auto-pausing...")
+                config["paused"] = True
+                config["pause_reason"] = f"Auto-paused after {consecutive_errors} consecutive errors"
+                await save_engine_config(config)
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # === MAIN PROCESSING ===
+            
+            # Get all non-closed signals
+            active_signals = await db.signals.find({
+                "state": {"$ne": "closed"},
+                "status": {"$ne": "closed"}
+            }).to_list(None)
+            
+            if not active_signals:
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # Extract unique symbols
+            symbols = list(set(s.get("pair", "").upper() for s in active_signals if s.get("pair")))
+            
+            if not symbols:
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # Fetch live prices
+            prices = await fetch_live_prices(symbols)
+            
+            if not prices:
+                consecutive_errors += 1
+                logger.warning(f"[Engine] No prices fetched (error {consecutive_errors})")
+                await asyncio.sleep(poll_interval)
+                continue
+            
+            # Reset error count on successful price fetch
+            consecutive_errors = 0
+            
+            # Update health check timestamp
+            config["last_health_check"] = datetime.now(timezone.utc).isoformat()
+            config["error_count"] = 0
+            await save_engine_config(config)
+            
+            # Process each signal
+            processed = 0
+            actions = 0
+            
+            for signal in active_signals:
+                pair = signal.get("pair", "").upper()
+                # Try both formats
+                current_price = prices.get(pair) or prices.get(pair.replace("/", ""))
+                
+                if not current_price:
+                    continue
+                
+                processed += 1
+                
+                # Process signal through lifecycle controller
+                result = await lifecycle_controller.process_signal(signal, current_price)
+                
+                if result:
+                    actions += 1
+                    logger.info(f"[Engine] Action: {result}")
+            
+            if processed > 0:
+                logger.debug(f"[Engine] Processed {processed} signals, {actions} actions taken")
+            
+            await asyncio.sleep(poll_interval)
+            
+        except asyncio.CancelledError:
+            logger.info("[Engine] Engine task cancelled")
+            break
+        except Exception as e:
+            consecutive_errors += 1
+            logger.error(f"[Engine] Error in main loop: {e} (error {consecutive_errors})")
+            await asyncio.sleep(30)  # Wait before retry
+    
     price_automation_running = False
-    logger.info("[MANUAL MODE] Auto-engine is DISABLED. Signals require manual control.")
-    # Do nothing - manual mode
+    logger.info("[Engine] Signal Auto-Engine STOPPED")
 
 
-# Start automation on app startup - DISABLED
+# Start automation on app startup
 @app.on_event("startup")
 async def startup_event():
     """
-    MANUAL MODE - Auto-engine startup is DISABLED.
-    Signals will not react to price changes automatically.
-    Also initializes protected Super Admin accounts and default FAQs.
+    Application startup handler.
+    Initializes the signal engine, super admin accounts, and default data.
     """
-    global price_automation_running
-    price_automation_running = False
+    global price_automation_running, engine_task
+    
     logger.info("=" * 60)
-    logger.info("[MANUAL MODE] Signal auto-engine is DISABLED")
-    logger.info("[MANUAL MODE] All signal state changes require admin action")
-    logger.info("[MANUAL MODE] Endpoints: /activate, /mark-tp, /force-close")
+    logger.info("[Startup] Swift FX Backend Starting...")
     logger.info("=" * 60)
     
     # Auto-create protected Super Admin accounts
@@ -3427,6 +3580,21 @@ async def startup_event():
     
     # Initialize default FAQs
     await initialize_faqs()
+    
+    # Load engine config
+    config = await get_engine_config()
+    
+    if config.get("enabled", True) and not config.get("paused", False):
+        logger.info("[Startup] Starting Signal Auto-Engine...")
+        price_automation_running = True
+        engine_task = asyncio.create_task(run_price_automation())
+        logger.info("[Startup] Signal Auto-Engine task created")
+    else:
+        logger.info("[Startup] Signal Auto-Engine is DISABLED or PAUSED")
+        if config.get("paused"):
+            logger.info(f"[Startup] Pause reason: {config.get('pause_reason', 'No reason specified')}")
+    
+    logger.info("[Startup] Startup complete")
 
 
 async def initialize_super_admins():
