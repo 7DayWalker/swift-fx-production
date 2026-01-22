@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { getCourseContent, LessonContent } from '../../src/data/academyContent';
 
