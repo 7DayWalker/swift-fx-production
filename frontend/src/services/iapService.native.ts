@@ -8,6 +8,11 @@
  * - Always validate purchases through backend
  * - Backend is the source of truth for subscription status
  * - This file is only loaded on native iOS/Android builds
+ * 
+ * NOTE: react-native-iap is NOT bundled with the app.
+ * IAP functionality requires a native build with the IAP module installed.
+ * This service provides stub implementations that will work in Expo Go
+ * and full implementations when built with EAS Build including the IAP module.
  */
 
 import { Platform } from 'react-native';
@@ -55,13 +60,35 @@ export interface PurchaseResult {
 let iapProducts: any[] = [];
 let productIds: IAPProducts = DEFAULT_PRODUCTS;
 let isConnected = false;
+let RNIap: any = null;
 
 /**
  * Check if IAP is available on current platform
- * Available on native iOS/Android
+ * Available on native iOS/Android only when react-native-iap is installed
  */
 export function isIAPAvailable(): boolean {
-  return Platform.OS === 'ios' || Platform.OS === 'android';
+  return (Platform.OS === 'ios' || Platform.OS === 'android') && RNIap !== null;
+}
+
+/**
+ * Try to load react-native-iap module
+ * Returns true if loaded successfully, false otherwise
+ */
+async function tryLoadIAPModule(): Promise<boolean> {
+  if (RNIap !== null) {
+    return true;
+  }
+  
+  try {
+    // Dynamic require to avoid bundling issues
+    // This will only work in production builds that include the native module
+    RNIap = require('react-native-iap');
+    return true;
+  } catch (error) {
+    console.log('[IAP-Native] react-native-iap not available in this build');
+    console.log('[IAP-Native] IAP will be available in production EAS builds');
+    return false;
+  }
 }
 
 /**
@@ -80,51 +107,40 @@ export async function fetchProductIds(): Promise<IAPProducts> {
 
 /**
  * Initialize IAP connection
- * Note: react-native-iap initialization will happen here in production builds
  */
 export async function initIAP(): Promise<boolean> {
-  if (!isIAPAvailable()) {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     console.log('[IAP-Native] Skipping initialization - not on native platform');
     return false;
   }
 
+  // Try to load the IAP module
+  const moduleLoaded = await tryLoadIAPModule();
+  if (!moduleLoaded || !RNIap) {
+    console.log('[IAP-Native] IAP module not available - using stub implementation');
+    return false;
+  }
+
   try {
-    // In development/preview, react-native-iap may not be fully functional
-    // The actual IAP functionality requires a TestFlight/Play Store build
     console.log('[IAP-Native] Initializing IAP connection...');
     
-    // Try to dynamically import react-native-iap
-    // This will only work in actual native builds
-    try {
-      const RNIap = require('react-native-iap');
-      
-      // Initialize connection
-      await RNIap.initConnection();
-      isConnected = true;
-      
-      // Fetch product IDs from backend
-      await fetchProductIds();
-      
-      // Get products for current platform
-      const platformProductIds = Platform.OS === 'ios' 
-        ? [productIds.ios.premium_monthly, productIds.ios.vip_monthly]
-        : [productIds.android.premium_monthly, productIds.android.vip_monthly];
-      
-      // Fetch products from store
-      if (Platform.OS === 'ios') {
-        iapProducts = await RNIap.getSubscriptions({ skus: platformProductIds });
-      } else {
-        iapProducts = await RNIap.getSubscriptions({ skus: platformProductIds });
-      }
-      
-      console.log('[IAP-Native] IAP initialized successfully. Products:', iapProducts.length);
-      return true;
-    } catch (iapError: any) {
-      // react-native-iap not available in this build (dev/preview)
-      console.log('[IAP-Native] react-native-iap not available in this build:', iapError.message);
-      console.log('[IAP-Native] Native IAP will be available in TestFlight/Play Store builds');
-      return false;
-    }
+    // Initialize connection
+    await RNIap.initConnection();
+    isConnected = true;
+    
+    // Fetch product IDs from backend
+    await fetchProductIds();
+    
+    // Get products for current platform
+    const platformProductIds = Platform.OS === 'ios' 
+      ? [productIds.ios.premium_monthly, productIds.ios.vip_monthly]
+      : [productIds.android.premium_monthly, productIds.android.vip_monthly];
+    
+    // Fetch products from store
+    iapProducts = await RNIap.getSubscriptions({ skus: platformProductIds });
+    
+    console.log('[IAP-Native] IAP initialized successfully. Products:', iapProducts.length);
+    return true;
   } catch (error: any) {
     console.error('[IAP-Native] IAP initialization error:', error);
     return false;
@@ -135,10 +151,9 @@ export async function initIAP(): Promise<boolean> {
  * End IAP connection
  */
 export async function endIAP(): Promise<void> {
-  if (!isConnected) return;
+  if (!isConnected || !RNIap) return;
   
   try {
-    const RNIap = require('react-native-iap');
     await RNIap.endConnection();
     isConnected = false;
     iapProducts = [];
@@ -173,11 +188,11 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
   if (!isIAPAvailable()) {
     return {
       success: false,
-      message: 'In-App Purchases are only available on mobile devices.',
+      message: 'In-App Purchases require a production build. Please use the App Store or Play Store version.',
     };
   }
 
-  if (!isConnected) {
+  if (!isConnected || !RNIap) {
     return {
       success: false,
       message: 'IAP connection not established. Please restart the app and try again.',
@@ -185,8 +200,6 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
   }
 
   try {
-    const RNIap = require('react-native-iap');
-    
     const productId = Platform.OS === 'ios'
       ? productIds.ios[`${plan}_monthly` as keyof typeof productIds.ios]
       : productIds.android[`${plan}_monthly` as keyof typeof productIds.android];
@@ -265,13 +278,18 @@ export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
     return {
       success: false,
-      message: 'Restore purchases is only available on mobile devices.',
+      message: 'Restore purchases requires a production build. Please use the App Store or Play Store version.',
+    };
+  }
+
+  if (!RNIap) {
+    return {
+      success: false,
+      message: 'IAP module not available in this build.',
     };
   }
 
   try {
-    const RNIap = require('react-native-iap');
-    
     console.log('[IAP-Native] Restoring purchases...');
     
     const purchases = await RNIap.getAvailablePurchases();
@@ -326,14 +344,6 @@ export async function restorePurchases(): Promise<PurchaseResult> {
     };
   } catch (error: any) {
     console.error('[IAP-Native] Restore error:', error);
-    
-    // Check if react-native-iap is not available
-    if (error.message?.includes('cannot find') || error.message?.includes('not found')) {
-      return {
-        success: false,
-        message: 'Native restore will be available in TestFlight and Play Store builds.',
-      };
-    }
     
     return {
       success: false,
