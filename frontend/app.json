@@ -8,6 +8,17 @@
     "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/swiftfx"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "swiftfx-signals"
+      }
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.swiftfx.app",
