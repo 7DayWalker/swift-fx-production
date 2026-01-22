@@ -315,4 +315,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 50,
   },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  lockedText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  lockedSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
