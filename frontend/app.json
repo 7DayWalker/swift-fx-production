@@ -8,6 +8,9 @@
     "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "enabled": false
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.swiftfx.app",
