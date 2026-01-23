@@ -16,7 +16,7 @@
     "update": "echo 'Update disabled'",
     "eas": "echo 'EAS CLI disabled'",
     "preinstall": "echo 'Skipping EAS setup'",
-    "postinstall": "echo 'Build complete - EAS updates disabled'"
+    "postinstall": "node ./scripts/init-git.js || echo 'Git init skipped'"
   },
   "bin": {
     "eas": "./bin/eas"
