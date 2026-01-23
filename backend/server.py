@@ -24,10 +24,10 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'swiftfx_db')]
+db = client[os.environ.get('DB_NAME', 'swiftfx')]
 
-# JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'swiftfx-secret-key-2024-very-secure')
+# JWT Configuration - fallback only for local dev, deployment sets via env
+JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-only-fallback-change-in-production')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 7
 
