@@ -8,6 +8,12 @@
     "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "swiftfx",
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    },
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
