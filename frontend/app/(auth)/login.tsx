@@ -73,8 +73,9 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     try {
+      // Use window.location.origin for web to ensure correct redirect across all environments
       const redirectUrl = Platform.OS === 'web'
-        ? `${BACKEND_URL}/`
+        ? (typeof window !== 'undefined' ? window.location.origin + '/' : '/')
         : Linking.createURL('/');
       
       const authUrl = `${AUTH_URL}/?redirect=${encodeURIComponent(redirectUrl)}`;
