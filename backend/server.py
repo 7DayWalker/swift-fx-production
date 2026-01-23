@@ -3490,11 +3490,11 @@ async def run_price_automation():
             
             # === MAIN PROCESSING ===
             
-            # Get all non-closed signals
+            # Get all non-closed signals (with reasonable limit for performance)
             active_signals = await db.signals.find({
                 "state": {"$ne": "closed"},
                 "status": {"$ne": "closed"}
-            }).to_list(None)
+            }).limit(500).to_list(500)
             
             if not active_signals:
                 await asyncio.sleep(poll_interval)
