@@ -8,7 +8,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "eas-update": "echo 'EAS update disabled - skipping OTA publish'",
+    "expo:publish": "echo 'Expo publish disabled'",
+    "publish": "echo 'Publish disabled'",
+    "eas:update": "echo 'EAS update disabled'",
+    "update": "echo 'Update disabled'"
   },
   "dependencies": {
     "@expo/ngrok": "^4.1.3",
