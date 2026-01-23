@@ -1,0 +1,4 @@
+#!/bin/bash
+# Stub EAS CLI - exits successfully without doing anything
+echo "EAS stub: Skipping $* (OTA updates disabled)"
+exit 0
