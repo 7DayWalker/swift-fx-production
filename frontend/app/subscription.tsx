@@ -83,15 +83,42 @@ export default function SubscriptionScreen() {
     };
   }, []);
 
-  // Fetch plans and pending sessions
+  // Fetch plans from Supabase
   const fetchData = useCallback(async () => {
     try {
-      const [plansRes, sessionsRes] = await Promise.all([
-        api.get('/subscription/plans'),
-        api.get('/payments/my-sessions').catch(() => ({ data: [] }))
-      ]);
-      setPlans(plansRes.data.plans || []);
-      setPendingSessions(sessionsRes.data.filter((s: PaymentSession) => s.status === 'pending') || []);
+      const { data: supaPlans, error } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('price_cents', { ascending: true });
+
+      if (error) {
+        console.error('[Sub] Plans fetch error:', error.message);
+      }
+
+      if (supaPlans && supaPlans.length > 0) {
+        // Group rows by tier → build the Plan objects
+        const grouped: Record<string, Plan> = {};
+        supaPlans.forEach((row: any) => {
+          const tier = row.tier;
+          if (!grouped[tier]) {
+            grouped[tier] = {
+              id: tier,
+              name: row.name?.replace(/ \(.*\)/, '') || tier,
+              description: '',
+              features: Array.isArray(row.features) ? row.features : [],
+              pricing: { weekly: 0, monthly: 0, yearly: 0 },
+            };
+          }
+          const cycle = row.billing_cycle === 'quarterly' ? 'monthly' : row.billing_cycle;
+          if (cycle === 'monthly' || cycle === 'yearly' || cycle === 'weekly') {
+            grouped[tier].pricing[cycle] = (row.price_cents || 0) / 100;
+          }
+        });
+        setPlans(Object.values(grouped).filter(p => p.id !== 'free'));
+      }
+      // Payment sessions are no longer fetched from old backend
+      setPendingSessions([]);
     } catch (error) {
       console.error('Failed to fetch subscription data:', error);
     } finally {
