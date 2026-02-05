@@ -147,12 +147,16 @@ export default function SettingsScreen() {
     
     try {
       setSaving(true);
-      await api.put('/settings/profile', { name: editName.trim() });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: editName.trim() })
+        .eq('id', user?.user_id);
+      if (error) throw error;
       setProfile(prev => prev ? { ...prev, name: editName.trim() } : null);
       setShowEditName(false);
       Alert.alert('Success', 'Name updated successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to update name');
+      Alert.alert('Error', error.message || 'Failed to update name');
     } finally {
       setSaving(false);
     }
