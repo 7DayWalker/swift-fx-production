@@ -192,17 +192,15 @@ export default function SettingsScreen() {
     
     try {
       setSaving(true);
-      await api.put('/settings/password', {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
       setShowChangePassword(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
       Alert.alert('Success', 'Password changed successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to change password');
+      Alert.alert('Error', error.message || 'Failed to change password');
     } finally {
       setSaving(false);
     }
