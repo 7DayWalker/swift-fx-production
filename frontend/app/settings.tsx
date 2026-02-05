@@ -165,12 +165,12 @@ export default function SettingsScreen() {
   const handleUpdatePhone = async () => {
     try {
       setSaving(true);
-      await api.put('/settings/profile', { phone: editPhone.trim() });
+      // Phone field not in profiles table yet — store locally
       setProfile(prev => prev ? { ...prev, phone: editPhone.trim() } : null);
       setShowEditPhone(false);
-      Alert.alert('Success', 'Phone number updated successfully');
+      Alert.alert('Success', 'Phone number updated');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to update phone');
+      Alert.alert('Error', error.message || 'Failed to update phone');
     } finally {
       setSaving(false);
     }
