@@ -431,8 +431,11 @@ export default function SignalManagement() {
 
     setIsDeleting(signalId);
     try {
-      const response = await api.delete(`/admin/signals/${signalId}`);
-      console.log('Delete response:', response.data);
+      const { error } = await supabase
+        .from('signals')
+        .delete()
+        .eq('id', signalId);
+      if (error) throw error;
       
       // Remove from local state immediately for instant feedback
       setSignals(prev => prev.filter(s => s.signal_id !== signalId));
@@ -443,7 +446,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
       console.error('Delete error:', error);
-      const errorMsg = error.response?.data?.detail || error.message || 'Failed to delete signal';
+      const errorMsg = error.message || 'Failed to delete signal';
       showAlert('Error', errorMsg);
       // Refresh to sync state
       await fetchSignals();
