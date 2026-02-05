@@ -273,25 +273,40 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
+      // Map UI status back to DB state
+      const stateMap: Record<string, string> = {
+        pending: 'pending',
+        active: 'active',
+        closed: 'closed',
+      };
+      const dbState = stateMap[editData.status] || editData.status;
+
       const updatePayload: any = {
         pair: editData.pair,
         signal_type: editData.signal_type,
-        entry: parseFloat(editData.entry),
+        entry_price: parseFloat(editData.entry),
         stop_loss: parseFloat(editData.stop_loss),
         tp1: parseFloat(editData.tp1),
         tp2: editData.tp2 ? parseFloat(editData.tp2) : null,
         tp3: editData.tp3 ? parseFloat(editData.tp3) : null,
-        tp_hit: editData.tp_hit,
-        status: editData.status,
+        state: dbState,
         visibility: editData.visibility,
       };
       
       // Include final_pips if provided and status is closed
       if (editData.status === 'closed' && editData.final_pips) {
         updatePayload.final_pips = parseFloat(editData.final_pips);
+        updatePayload.closed_at = new Date().toISOString();
+      }
+      if (editData.status === 'active' && !selectedSignal.activated_at) {
+        updatePayload.activated_at = new Date().toISOString();
       }
       
-      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, updatePayload);
+      const { error } = await supabase
+        .from('signals')
+        .update(updatePayload)
+        .eq('id', selectedSignal.signal_id);
+      if (error) throw error;
       
       setShowEditModal(false);
       setSelectedSignal(null);
@@ -303,7 +318,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal updated successfully!');
     } catch (error: any) {
       console.error('Edit error:', error);
-      showAlert('Error', error.response?.data?.detail || 'Failed to update signal');
+      showAlert('Error', error.message || 'Failed to update signal');
     } finally {
       setIsSubmitting(false);
     }
