@@ -98,22 +98,46 @@ export default function SettingsScreen() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      if (!user) return;
       
-      // Fetch profile
-      const profileRes = await api.get('/settings/profile');
-      setProfile(profileRes.data);
-      setEditName(profileRes.data.name || '');
-      setEditPhone(profileRes.data.phone || '');
+      // Fetch profile from Supabase
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.user_id)
+        .single();
       
-      // Fetch notification preferences
-      const notifRes = await api.get('/settings/notifications');
-      setNotifications(notifRes.data.preferences);
+      if (profile && !error) {
+        setProfile({
+          user_id: profile.id,
+          name: profile.name || user.email,
+          email: user.email,
+          role: profile.role,
+          subscription: profile.role === 'admin' ? 'vip' : profile.role,
+          admin_role: profile.admin_role,
+          is_admin: profile.role === 'admin',
+          account_status: 'active',
+          created_at: profile.created_at,
+        });
+        setEditName(profile.name || '');
+      }
+      
+      // Notification prefs stored locally (no backend table yet)
+      const storedNotifs = await AsyncStorage.getItem('notification_prefs');
+      if (storedNotifs) {
+        setNotifications(JSON.parse(storedNotifs));
+      } else {
+        setNotifications({
+          push_enabled: true, email_enabled: true, signals: true,
+          fund_updates: true, referral_rewards: true, support_replies: true,
+        });
+      }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const handleUpdateName = async () => {
     if (!editName.trim() || editName.trim().length < 2) {
