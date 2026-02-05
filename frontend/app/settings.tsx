@@ -213,7 +213,8 @@ export default function SettingsScreen() {
     setNotifications(updated);
     
     try {
-      await api.put('/settings/notifications', { [key]: value });
+      // Store notification preferences locally (no backend table)
+      await AsyncStorage.setItem('notification_prefs', JSON.stringify(updated));
     } catch (error) {
       // Revert on error
       setNotifications(notifications);
