@@ -387,11 +387,18 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      const params: any = { tp_hit: closeTpHit };
-      if (closePrice) params.close_price = parseFloat(closePrice);
-      else if (finalPips) params.final_pips = parseFloat(finalPips);
+      const updatePayload: any = {
+        state: 'closed',
+        closed_at: new Date().toISOString(),
+      };
+      if (closePrice) updatePayload.exit_price = parseFloat(closePrice);
+      if (finalPips) updatePayload.final_pips = parseFloat(finalPips);
 
-      await api.post(`/admin/signals/${selectedSignal.signal_id}/close`, null, { params });
+      const { error } = await supabase
+        .from('signals')
+        .update(updatePayload)
+        .eq('id', selectedSignal.signal_id);
+      if (error) throw error;
       
       setShowCloseModal(false);
       setSelectedSignal(null);
@@ -402,7 +409,7 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'Failed to close signal');
+      showAlert('Error', error.message || 'Failed to close signal');
     } finally {
       setIsSubmitting(false);
     }
