@@ -203,18 +203,23 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      await api.post('/admin/signals', {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from('signals').insert({
         pair: formData.pair,
         signal_type: formData.signal_type,
-        entry: parseFloat(formData.entry),
+        entry_price: parseFloat(formData.entry),
         stop_loss: parseFloat(formData.stop_loss),
         tp1: parseFloat(formData.tp1),
         tp2: formData.tp2 ? parseFloat(formData.tp2) : null,
         tp3: formData.tp3 ? parseFloat(formData.tp3) : null,
-        status: formData.status, // PENDING or ACTIVE
+        state: formData.status, // 'pending' or 'active'
         visibility: formData.visibility,
         analysis: formData.analysis || null,
+        created_by: authUser?.id,
+        activated_at: formData.status === 'active' ? new Date().toISOString() : null,
       });
+      if (error) throw error;
       
       setShowCreateModal(false);
       resetCreateForm();
@@ -225,7 +230,7 @@ export default function SignalManagement() {
       
       showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'Failed to create signal');
+      showAlert('Error', error.message || 'Failed to create signal');
     } finally {
       setIsSubmitting(false);
     }
