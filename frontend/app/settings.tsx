@@ -24,7 +24,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme, ThemeType } from '../src/context/ThemeContext';
-import api from '../src/services/api';
+import { supabase } from '../src/services/supabase';
 
 // Types
 interface UserProfile {
