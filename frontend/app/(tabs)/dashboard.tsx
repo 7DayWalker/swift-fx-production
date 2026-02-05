@@ -16,7 +16,6 @@ import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
-import { api } from '../../src/services/api';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
 
