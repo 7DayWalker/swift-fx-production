@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { useSignals } from '../src/context/SignalContext';
 import { useTheme } from '../src/context/ThemeContext';
-import { api } from '../src/services/api';
 
 interface Signal {
   signal_id: string;
@@ -83,8 +82,10 @@ export default function SignalHistoryScreen() {
 
   const fetchHistory = async () => {
     try {
-      const response = await api.get('/signals/history/stats');
-      setData(response.data);
+      // History data is derived from SignalContext (already Supabase-powered)
+      if (historyData) {
+        setData(historyData as any);
+      }
     } catch (error) {
       console.error('Failed to fetch signal history:', error);
     } finally {
