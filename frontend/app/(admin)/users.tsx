@@ -107,16 +107,18 @@ export default function UserManagement() {
 
     setIsUpdating(true);
     try {
-      await api.put(`/admin/users/${selectedUser.user_id}/role`, null, {
-        params: { role: selectedRole }
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: selectedRole })
+        .eq('id', selectedUser.user_id);
+      if (error) throw error;
       
       setShowEditModal(false);
       fetchUsers();
       const msg = 'User role updated successfully!';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
     } catch (error: any) {
-      const msg = error.response?.data?.detail || 'Failed to update user role';
+      const msg = error.message || 'Failed to update user role';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
       setIsUpdating(false);
