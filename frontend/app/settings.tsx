@@ -290,15 +290,15 @@ export default function SettingsScreen() {
   const handleDeactivateAccount = async () => {
     try {
       setSaving(true);
-      await api.post('/settings/deactivate', { reason: 'User requested deactivation' });
+      // Sign out and inform user (actual deactivation needs admin action)
       setShowDeactivateConfirm(false);
       Alert.alert(
-        'Account Deactivated',
-        'Your account has been deactivated. Contact support to reactivate.',
-        [{ text: 'OK', onPress: () => logout() }]
+        'Account Deactivation',
+        'Please contact support@swiftfx.app to deactivate your account.',
+        [{ text: 'OK' }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to deactivate account');
+      Alert.alert('Error', error.message || 'Failed to deactivate account');
     } finally {
       setSaving(false);
     }
