@@ -247,8 +247,13 @@ export default function SettingsScreen() {
     try {
       setLoadingLegal(true);
       setShowLegalDocument(docType);
-      const res = await api.get(`/settings/legal/${docType}`);
-      setLegalContent(res.data);
+      // Static legal content (no backend needed)
+      const docs: Record<string, LegalDocument> = {
+        terms: { title: 'Terms of Service', last_updated: '2025-01-01', content: 'Terms of Service for Swift FX Signals. By using this application, you agree to these terms. Trading involves risk. Past performance is not indicative of future results.' },
+        privacy: { title: 'Privacy Policy', last_updated: '2025-01-01', content: 'Privacy Policy for Swift FX Signals. We collect and process your data as described in this policy. Your data is stored securely and never sold to third parties.' },
+        risk: { title: 'Risk Disclosure', last_updated: '2025-01-01', content: 'Risk Disclosure: Trading foreign exchange carries a high level of risk. You should be aware of the risks and be willing to accept them in order to invest in the markets.' },
+      };
+      setLegalContent(docs[docType] || { title: docType, last_updated: 'N/A', content: 'Document not available.' });
     } catch (error) {
       Alert.alert('Error', 'Failed to load document');
       setShowLegalDocument(null);
