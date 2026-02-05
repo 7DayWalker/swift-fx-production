@@ -327,7 +327,11 @@ export default function SignalManagement() {
   // ========== ACTIVATE SIGNAL ==========
   const handleActivateSignal = async (signalId: string) => {
     try {
-      await api.post(`/admin/signals/${signalId}/activate`);
+      const { error } = await supabase
+        .from('signals')
+        .update({ state: 'active', activated_at: new Date().toISOString() })
+        .eq('id', signalId);
+      if (error) throw error;
       await fetchSignals();
       
       // Trigger real-time update for all users
@@ -335,14 +339,25 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal activated!');
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'Failed to activate signal');
+      showAlert('Error', error.message || 'Failed to activate signal');
     }
   };
 
   // ========== MARK TP HIT ==========
   const handleMarkTP = async (signalId: string, tpLevel: number) => {
     try {
-      await api.post(`/admin/signals/${signalId}/mark-tp?tp_level=${tpLevel}`);
+      const stateValue = `tp${tpLevel}`;
+      const updatePayload: any = { state: stateValue };
+      // If TP3, also close the signal
+      if (tpLevel === 3) {
+        updatePayload.state = 'closed';
+        updatePayload.closed_at = new Date().toISOString();
+      }
+      const { error } = await supabase
+        .from('signals')
+        .update(updatePayload)
+        .eq('id', signalId);
+      if (error) throw error;
       await fetchSignals();
       
       // Trigger real-time update for all users (TP hit is like an update or close)
@@ -354,7 +369,7 @@ export default function SignalManagement() {
       
       showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
-      showAlert('Error', error.response?.data?.detail || 'Failed to mark TP');
+      showAlert('Error', error.message || 'Failed to mark TP');
     }
   };
 
