@@ -179,22 +179,12 @@ export default function SubscriptionScreen() {
         setIsPurchasing(false);
       }
     } else {
-      // Fallback to web checkout (Stripe) for web platform
-      setIsCreatingSession(true);
-      try {
-        const response = await api.post('/payments/create-session', {
-          plan: planId,
-          billing_cycle: selectedCycle,
-        });
-        router.push(`/pay?session_id=${response.data.session_id}`);
-      } catch (error: any) {
-        Alert.alert(
-          'Unable to Start Checkout',
-          error.response?.data?.detail || 'Please try again or contact support.'
-        );
-      } finally {
-        setIsCreatingSession(false);
-      }
+      // Web checkout – payment integration coming soon
+      Alert.alert(
+        'Contact Support',
+        'To upgrade your plan, please contact support@swiftfx.app or use the mobile app for in-app purchase.',
+      );
+      setIsCreatingSession(false);
     }
   };
 
