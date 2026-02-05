@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
-import { api } from '../../src/services/api';
+import { supabase } from '../../src/services/supabase';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -31,10 +31,11 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
-      await api.post('/auth/forgot-password', null, { params: { email } });
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
       setEmailSent(true);
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Something went wrong');
+      Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setIsLoading(false);
     }
