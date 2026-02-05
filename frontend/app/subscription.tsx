@@ -18,7 +18,7 @@ import { useAuth } from '../src/context/AuthContext';
 import { useSubscription } from '../src/context/SubscriptionContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { SubscriptionBadge } from '../src/components/SubscriptionBadge';
-import { api } from '../src/services/api';
+import { supabase } from '../src/services/supabase';
 import IAPService, { isIAPAvailable, PurchaseResult } from '../src/services/iapService';
 
 type BillingCycle = 'weekly' | 'monthly' | 'yearly';
