@@ -494,7 +494,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Supabase Auth Integration"
+    - "Supabase Signals Fetch"
+    - "Supabase Subscription/Plans Fetch"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
