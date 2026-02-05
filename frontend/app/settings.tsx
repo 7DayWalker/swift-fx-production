@@ -307,14 +307,13 @@ export default function SettingsScreen() {
   const handleDeleteRequest = async () => {
     try {
       setSaving(true);
-      const res = await api.post('/settings/delete-request');
       setShowDeleteConfirm(false);
       Alert.alert(
-        'Deletion Request Submitted',
-        `Your request has been submitted (Ticket: ${res.data.ticket_id}). Our team will process it within 30 days.`
+        'Deletion Request',
+        'Please contact support@swiftfx.app to request account deletion. We will process your request within 30 days.'
       );
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to submit deletion request');
+      Alert.alert('Error', error.message || 'Failed to submit deletion request');
     } finally {
       setSaving(false);
     }
