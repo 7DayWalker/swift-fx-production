@@ -54,8 +54,18 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/admin/users');
-      setUsers(response.data);
+      const { data, error } = await supabase.rpc('get_all_users');
+      if (error) throw error;
+      const mapped = (data || []).map((u: any) => ({
+        user_id: u.user_id,
+        name: u.name || u.email,
+        email: u.email,
+        role: u.role === 'admin' ? 'admin' : u.role,
+        is_admin: u.role === 'admin',
+        admin_role: u.admin_role,
+        created_at: u.created_at,
+      }));
+      setUsers(mapped);
     } catch (error) {
       console.error('Failed to fetch users:', error);
     } finally {
