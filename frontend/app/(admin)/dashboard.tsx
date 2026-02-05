@@ -36,10 +36,24 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/admin/stats');
-      setStats(response.data);
+      const { data, error } = await supabase.rpc('get_admin_stats');
+      if (error) throw error;
+      setStats(data);
     } catch (error) {
       console.error('Failed to fetch admin stats:', error);
+      // Fallback: count signals directly (admin can see all via RLS)
+      try {
+        const { count } = await supabase
+          .from('signals')
+          .select('*', { count: 'exact', head: true });
+        setStats({
+          total_users: 0,
+          premium_users: 0,
+          vip_users: 0,
+          total_signals: count || 0,
+          total_ai_analyses: 0,
+        });
+      } catch { /* ignore */ }
     } finally {
       setIsLoading(false);
     }
