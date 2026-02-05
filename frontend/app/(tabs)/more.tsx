@@ -16,7 +16,6 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
 import { TAB_BAR_HEIGHT } from './_layout';
-import { api } from '../../src/services/api';
 
 export default function MoreScreen() {
   const { user, logout } = useAuth();
@@ -28,18 +27,8 @@ export default function MoreScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [isApprovedInvestor, setIsApprovedInvestor] = useState(false);
   
-  // Check if user is an approved investor
-  useEffect(() => {
-    const checkInvestorStatus = async () => {
-      try {
-        const response = await api.get('/investor/status');
-        setIsApprovedInvestor(response.data.is_investor === true);
-      } catch (error) {
-        setIsApprovedInvestor(false);
-      }
-    };
-    checkInvestorStatus();
-  }, []);
+  // Investor status — not yet available in Supabase (needs table migration)
+  // Defaults to false until fund-related tables are created
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
