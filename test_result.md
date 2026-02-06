@@ -567,6 +567,18 @@ supabase_backend:
         - agent: "testing"
         - comment: "✅ SUPABASE SUBSCRIPTIONS TESTING COMPLETE: Authenticated admin user successfully queries subscriptions via GET /rest/v1/subscriptions?user_id=eq.{user_id}&status=eq.active&select=*,plans(tier). Endpoint returns expected results (0 subscriptions for test setup). Subscriptions table accessible with proper authentication."
 
+  - task: "Supabase Admin Signals CRUD Operations"
+    implemented: true
+    working: true
+    file: "supabase_signals_crud_test.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ SUPABASE ADMIN SIGNALS CRUD COMPREHENSIVE TESTING COMPLETE: All 6/6 critical operations passed (100% success rate). VERIFIED EXACT REQUEST SEQUENCE: 1) LOGIN (POST /auth/v1/token?grant_type=password) - Admin authentication with admin@swiftfx.app / Admin123!@# credentials successful, access_token obtained ✅. 2) READ signals (GET /rest/v1/signals?select=*&order=created_at.desc) - Successfully retrieved 11 signals as expected ✅. 3) CREATE signal (POST /rest/v1/signals) - Successfully created new BTC/USD test signal with ID b9258997-7cd9-49bc-93c2-26208dc8cc96, returned 201 status ✅. 4) UPDATE signal (PATCH /rest/v1/signals?id=eq.{signal_id}) - Successfully updated signal state to 'active' with activated_at timestamp, returned 204 status ✅. 5) DELETE signal (DELETE /rest/v1/signals?id=eq.{signal_id}) - Successfully deleted test signal, returned 204 status ✅. 6) VERIFY count (GET /rest/v1/signals) - Signal count correctly returned to 11 after deletion ✅. All Supabase REST API CRUD operations working correctly with proper authentication, state management, and data persistence. Admin user UUID e87eb3a8-0b34-420f-96bc-903f8b9a921d confirmed working. Frontend migration from FastAPI to Supabase direct queries is fully functional and production-ready."
+
 agent_communication:
   - agent: "main"
   - message: "Initial implementation complete. Backend has all core endpoints working. Frontend has all screens implemented. Login flow tested and working. Need to test signals visibility, AI chart analyzer, and community features."
