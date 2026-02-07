@@ -45,12 +45,8 @@ interface AdminInfo {
 
 export default function AdminManagementScreen() {
   // GATED: Needs admin RBAC table + profiles admin policies in Supabase
-  const router = useRouter();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0E17' }}>
-      <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 12 }} onPress={() => router.back()}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: '#00D4AA' }}>{'← Back'}</Text>
-      </TouchableOpacity>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
         <Text style={{ fontSize: 48, marginBottom: 16 }}>{'🚧'}</Text>
         <Text style={{ fontSize: 22, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 12 }}>Admin Management</Text>
