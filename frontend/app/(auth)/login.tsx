@@ -188,20 +188,10 @@ export default function LoginScreen() {
               <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
 
-            <TouchableOpacity
-              style={[styles.googleButton, { backgroundColor: theme.surface, borderColor: theme.border }, isGoogleLoading && styles.buttonDisabled]}
-              onPress={handleGoogleLogin}
-              disabled={isGoogleLoading}
-            >
-              {isGoogleLoading ? (
-                <ActivityIndicator color={theme.text} />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={20} color={theme.text} />
-                  <Text style={[styles.googleButtonText, { color: theme.text }]}>Continue with Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={[styles.googleButton, { backgroundColor: theme.surface, borderColor: theme.border, opacity: 0.5 }]}>
+              <Ionicons name="logo-google" size={20} color={theme.textSecondary} />
+              <Text style={[styles.googleButtonText, { color: theme.textSecondary }]}>Google sign-in temporarily unavailable</Text>
+            </View>
           </View>
 
           <View style={styles.footer}>
