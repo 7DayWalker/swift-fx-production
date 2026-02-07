@@ -59,6 +59,20 @@ interface FundApplication {
 }
 
 export default function AdminFundApplicationsScreen() {
+  // GATED: Needs fund_applications table in Supabase
+  const router = useRouter();
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0E17' }}>
+      <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 12 }} onPress={() => router.back()}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: '#00D4AA' }}>{'← Back'}</Text>
+      </TouchableOpacity>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>{'🚧'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 12 }}>Fund Applications</Text>
+        <Text style={{ fontSize: 15, color: '#8899AA', textAlign: 'center', lineHeight: 22 }}>This feature is under development and will be available in a future update.</Text>
+      </View>
+    </SafeAreaView>
+  );
   const { theme } = useTheme();
   const router = useRouter();
   const [applications, setApplications] = useState<FundApplication[]>([]);
