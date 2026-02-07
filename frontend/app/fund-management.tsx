@@ -87,6 +87,7 @@ const FUND_MANAGER_PHONE = '2348169427440';
 
 export default function FundManagementScreen() {
   // GATED: Needs fund_applications table in Supabase
+  const router = useRouter();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0E17' }}>
       <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 12 }} onPress={() => router.back()}>
