@@ -610,6 +610,50 @@ export default function AIScreen() {
     );
   }
 
+  // Limit reached screen
+  if (screenState === 'limit_reached') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.errorContainer}>
+            <View style={[styles.errorIconContainer, { backgroundColor: `${theme.warning}15` }]}>
+              <Ionicons name="hourglass-outline" size={64} color={theme.warning} />
+            </View>
+            <Text style={[styles.errorTitle, { color: theme.warning }]}>Weekly Limit Reached</Text>
+            <Text style={[styles.errorMessage, { color: theme.textSecondary }]}>
+              {errorMessage || 'You have used all your weekly AI analyses.'}
+            </Text>
+            <View style={styles.planComparison}>
+              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.planName, { color: theme.primary }]}>Premium</Text>
+                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>10 analyses/week</Text>
+              </View>
+              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.warning }]}>
+                <Text style={[styles.planName, { color: theme.warning }]}>VIP</Text>
+                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>Unlimited</Text>
+              </View>
+            </View>
+            <View style={[styles.errorButtons, { marginTop: 24 }]}>
+              <TouchableOpacity 
+                style={[styles.retryButton, { backgroundColor: theme.warning }]} 
+                onPress={() => router.push('/subscription')}
+              >
+                <Ionicons name="arrow-up-circle" size={20} color="#0A0E17" />
+                <Text style={styles.retryButtonText}>Upgrade Plan</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.backButton, { borderColor: theme.border }]} onPress={resetToUpload}>
+                <Text style={[styles.backButtonText, { color: theme.text }]}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   // Results screen
   if (screenState === 'result' && analysisResult) {
     // Debug: Log the entire analysis result
