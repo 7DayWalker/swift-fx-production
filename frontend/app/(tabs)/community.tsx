@@ -172,17 +172,35 @@ export default function CommunityScreen() {
 
   const toggleLike = async (postId: string) => {
     try {
-      const response = await api.post(`/community/posts/${postId}/like`);
-      setPosts(posts.map(post => {
-        if (post.post_id === postId) {
-          if (response.data.liked) {
-            return { ...post, likes: [...post.likes, user?.user_id || ''] };
-          } else {
-            return { ...post, likes: post.likes.filter(id => id !== user?.user_id) };
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const isCurrentlyLiked = posts.find(p => p.post_id === postId)?.likes?.includes(authUser.id);
+
+      if (isCurrentlyLiked) {
+        // Unlike
+        await supabase.from('post_likes').delete()
+          .eq('post_id', postId)
+          .eq('user_id', authUser.id);
+        setPosts(posts.map(post => {
+          if (post.post_id === postId) {
+            return { ...post, likes: post.likes.filter((id: string) => id !== authUser.id) };
           }
-        }
-        return post;
-      }));
+          return post;
+        }));
+      } else {
+        // Like
+        await supabase.from('post_likes').insert({
+          post_id: postId,
+          user_id: authUser.id,
+        });
+        setPosts(posts.map(post => {
+          if (post.post_id === postId) {
+            return { ...post, likes: [...(post.likes || []), authUser.id] };
+          }
+          return post;
+        }));
+      }
     } catch (error) {
       console.error('Failed to toggle like:', error);
     }
