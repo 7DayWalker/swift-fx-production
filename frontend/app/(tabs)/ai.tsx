@@ -26,25 +26,35 @@ const AI_ANALYZE_URL = `${SUPABASE_URL}/functions/v1/ai-analyze`;
 
 interface AIUsage {
   current_usage: number;
-  weekly_limit: number;
+  weekly_limit: number | string;
   remaining: number;
   has_access: boolean;
 }
 
 interface AnalysisResult {
-  analysis_id: string;
+  success?: boolean;
+  analysis_id: string | null;
   pair: string;
   timeframe: string;
   market_bias: string;
   trend_structure: string;
-  support_levels: number[];
-  resistance_levels: number[];
+  support_levels: string[];
+  resistance_levels: string[];
   trade_insight: string;
   confidence: string;
   disclaimer?: string;
   remaining_analyses?: number;
+  weekly_limit?: number | string;
   created_at?: string;
 }
+
+// Tier-based limits (must match Edge Function)
+const TIER_LIMITS: Record<string, number> = {
+  free: 3,
+  premium: 10,
+  vip: -1,    // unlimited
+  admin: -1,  // unlimited
+};
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
