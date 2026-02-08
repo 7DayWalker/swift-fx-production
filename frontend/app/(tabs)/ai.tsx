@@ -531,11 +531,11 @@ export default function AIScreen() {
             <View style={styles.planComparison}>
               <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <Text style={[styles.planName, { color: theme.primary }]}>Premium</Text>
-                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>5 analyses/week</Text>
+                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>10 analyses/week</Text>
               </View>
               <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.warning }]}>
                 <Text style={[styles.planName, { color: theme.warning }]}>VIP</Text>
-                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>20 analyses/week</Text>
+                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>Unlimited</Text>
               </View>
             </View>
           </View>
