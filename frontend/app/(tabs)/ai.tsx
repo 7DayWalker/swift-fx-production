@@ -494,52 +494,14 @@ export default function AIScreen() {
     return <Text style={style}>{text}</Text>;
   };
 
-  // No access screen for free users
-  if (!isLoadingUsage && !usage?.has_access) {
+  // Loading state
+  if (isLoadingUsage) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-        <ScrollView 
-          contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.noAccessContainer}>
-            <View style={[styles.lockIconContainer, { backgroundColor: `${theme.warning}15` }]}>
-              <Ionicons name="lock-closed" size={64} color={theme.warning} />
-            </View>
-            <Text style={[styles.noAccessTitle, { color: theme.text }]}>AI Chart Analyzer</Text>
-            <Text style={[styles.noAccessSubtitle, { color: theme.textSecondary }]}>
-              This feature requires Premium or VIP subscription
-            </Text>
-            <View style={styles.featureList}>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
-                <Text style={[styles.featureText, { color: theme.text }]}>AI-powered chart analysis</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
-                <Text style={[styles.featureText, { color: theme.text }]}>Market bias detection</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
-                <Text style={[styles.featureText, { color: theme.text }]}>Support & resistance levels</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
-                <Text style={[styles.featureText, { color: theme.text }]}>Trade insights</Text>
-              </View>
-            </View>
-            <View style={styles.planComparison}>
-              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Text style={[styles.planName, { color: theme.primary }]}>Premium</Text>
-                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>10 analyses/week</Text>
-              </View>
-              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.warning }]}>
-                <Text style={[styles.planName, { color: theme.warning }]}>VIP</Text>
-                <Text style={[styles.planLimit, { color: theme.textSecondary }]}>Unlimited</Text>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.analyzingNote, { color: theme.textSecondary, marginTop: 16 }]}>Loading...</Text>
+        </View>
       </SafeAreaView>
     );
   }
