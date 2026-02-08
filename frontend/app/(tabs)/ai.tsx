@@ -330,6 +330,7 @@ export default function AIScreen() {
       });
 
       const data = await response.json();
+      console.log('AI Analysis response status:', response.status);
       console.log('AI Analysis response:', JSON.stringify(data, null, 2));
 
       // Handle different response codes
@@ -341,14 +342,16 @@ export default function AIScreen() {
       }
 
       if (response.status === 401) {
-        setErrorMessage('Session expired. Please log in again.');
+        // Show actual error from Edge Function for debugging
+        const errorDetail = data.error || data.details || 'Session expired. Please log in again.';
+        setErrorMessage(errorDetail);
         setScreenState('error');
         return;
       }
 
       if (!response.ok) {
-        // Other errors (400, 500, 502)
-        const errorMsg = data.error || data.details || 'Analysis failed. Please try again.';
+        // Other errors (400, 500, 502) - show actual error
+        const errorMsg = data.error || data.details || `Analysis failed (${response.status}). Please try again.`;
         setErrorMessage(errorMsg);
         setScreenState('error');
         return;
