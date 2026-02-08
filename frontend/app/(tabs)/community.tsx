@@ -109,34 +109,16 @@ export default function CommunityScreen() {
 
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('content', newPostContent);
-      formData.append('post_type', newPostType);
-      
-      // Add image if selected
-      if (newPostImageBase64 && canUploadImages) {
-        // Convert base64 to blob for upload
-        const byteCharacters = atob(newPostImageBase64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
-        
-        if (Platform.OS === 'web') {
-          const file = new File([blob], 'post_image.jpg', { type: 'image/jpeg' });
-          formData.append('image', file);
-        } else {
-          formData.append('image', blob, 'post_image.jpg');
-        }
-      }
-      
-      await api.post('/community/posts', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      const { error } = await supabase.from('posts').insert({
+        user_id: authUser.id,
+        content: newPostContent.trim(),
+        post_type: newPostType,
+        image_url: null, // Image upload requires Supabase Storage (future)
       });
+      if (error) throw error;
       
       // Reset form
       setNewPostContent('');
@@ -145,7 +127,7 @@ export default function CommunityScreen() {
       setShowCreateModal(false);
       fetchPosts();
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to create post');
+      Alert.alert('Error', error.message || 'Failed to create post');
     } finally {
       setIsSubmitting(false);
     }
