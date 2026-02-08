@@ -43,7 +43,12 @@ serve(async (req: Request) => {
   }
 
   try {
-    // 1. Extract auth token from request
+    // 1. Initialize Supabase clients
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+
+    // Extract auth token from request header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
@@ -53,29 +58,36 @@ serve(async (req: Request) => {
     }
     const token = authHeader.replace("Bearer ", "");
 
-    // 2. Initialize Supabase client with service role for admin operations
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    
-    // Client with user's token for auth verification
+    // Create client with user's JWT token
     const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
     });
     
     // Service client for admin operations (bypasses RLS)
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
 
-    // 3. Verify user authentication
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+    // 2. Verify user authentication by getting user from token
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(token);
     if (authError || !user) {
+      console.error("Auth error:", authError);
       return new Response(
-        JSON.stringify({ error: "Invalid or expired token" }),
+        JSON.stringify({ error: "Invalid or expired token", details: authError?.message }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 4. Fetch user's profile (role, usage data)
+    console.log("Authenticated user:", user.id, user.email);
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("id, role, ai_weekly_used, ai_weekly_reset")
