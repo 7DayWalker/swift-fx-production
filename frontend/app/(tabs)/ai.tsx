@@ -281,38 +281,10 @@ export default function AIScreen() {
       return;
     }
 
-    if (!usage?.has_access) {
-      // Redirect to subscription page when no access
-      if (Platform.OS === 'web') {
-        window.alert('AI Chart Analyzer requires a subscription. Redirecting to plans...');
-      } else {
-        Alert.alert(
-          'Upgrade Required', 
-          'AI Chart Analyzer requires a subscription.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'View Plans', onPress: () => router.push('/subscription') }
-          ]
-        );
-      }
-      router.push('/subscription');
-      return;
-    }
-
-    if (usage && usage.remaining <= 0) {
-      // Show limit reached and redirect to subscription
-      if (Platform.OS === 'web') {
-        window.alert('AI limit reached. Upgrade to continue.');
-      } else {
-        Alert.alert(
-          'AI Limit Reached', 
-          'You have used all your weekly AI analyses. Upgrade for more.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Upgrade', onPress: () => router.push('/subscription') }
-          ]
-        );
-      }
+    // Check if limit reached (frontend check - Edge Function will also verify)
+    if (usage && usage.remaining <= 0 && usage.weekly_limit !== 'unlimited') {
+      setErrorMessage('You have used all your weekly AI analyses.');
+      setScreenState('limit_reached');
       return;
     }
 
