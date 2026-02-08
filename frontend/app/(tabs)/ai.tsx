@@ -17,8 +17,12 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import { api } from '../../src/services/api';
+import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
+
+// Supabase Edge Function URL
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://hrzghlqcfccnmgcipxxo.supabase.co';
+const AI_ANALYZE_URL = `${SUPABASE_URL}/functions/v1/ai-analyze`;
 
 interface AIUsage {
   current_usage: number;
