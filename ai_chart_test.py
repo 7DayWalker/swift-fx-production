@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://postgres-transition.preview.emergentagent.com/api"
+BASE_URL = "https://hybrid-backend-dev.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):
