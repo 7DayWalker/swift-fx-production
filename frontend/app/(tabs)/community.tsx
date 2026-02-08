@@ -75,8 +75,19 @@ export default function CommunityScreen() {
 
   const fetchPosts = async () => {
     try {
-      const response = await api.get('/community/posts');
-      setPosts(response.data);
+      const { data, error } = await supabase.rpc('get_community_posts');
+      if (error) throw error;
+      const mapped = (data || []).map((p: any) => ({
+        post_id: p.id,
+        user_id: p.user_id,
+        user_name: p.user_name || 'User',
+        content: p.content,
+        post_type: p.post_type,
+        image: p.image_url,
+        likes: (p.likes || []).map(String),
+        created_at: p.created_at,
+      }));
+      setPosts(mapped);
     } catch (error) {
       console.error('Failed to fetch posts:', error);
     } finally {
