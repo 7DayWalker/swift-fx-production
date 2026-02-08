@@ -84,14 +84,56 @@ export default function AIScreen() {
 
   useEffect(() => {
     fetchUsage();
-  }, []);
+  }, [user]);
 
   const fetchUsage = async () => {
     try {
-      const response = await api.get('/ai/usage');
-      setUsage(response.data);
+      // Get user's role and usage from Supabase profile
+      if (!user) {
+        setUsage({ current_usage: 0, weekly_limit: 0, remaining: 0, has_access: false });
+        setIsLoadingUsage(false);
+        return;
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role, ai_weekly_used, ai_weekly_reset')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !profile) {
+        console.error('Failed to fetch profile for AI usage:', error);
+        setUsage({ current_usage: 0, weekly_limit: 3, remaining: 3, has_access: true });
+        setIsLoadingUsage(false);
+        return;
+      }
+
+      const role = profile.role || 'free';
+      const limit = TIER_LIMITS[role] ?? TIER_LIMITS.free;
+      const isUnlimited = limit === -1;
+      
+      // Check if we need to reset the weekly counter
+      let currentUsage = profile.ai_weekly_used || 0;
+      const resetDate = profile.ai_weekly_reset ? new Date(profile.ai_weekly_reset) : null;
+      const now = new Date();
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      
+      if (!resetDate || (now.getTime() - resetDate.getTime()) >= weekMs) {
+        // Counter should be reset (Edge Function will handle this on next call)
+        currentUsage = 0;
+      }
+
+      const remaining = isUnlimited ? 999 : Math.max(0, limit - currentUsage);
+      
+      setUsage({
+        current_usage: currentUsage,
+        weekly_limit: isUnlimited ? 'unlimited' : limit,
+        remaining,
+        has_access: true, // All authenticated users have access
+      });
     } catch (error) {
       console.error('Failed to fetch AI usage:', error);
+      setUsage({ current_usage: 0, weekly_limit: 3, remaining: 3, has_access: true });
     } finally {
       setIsLoadingUsage(false);
     }
