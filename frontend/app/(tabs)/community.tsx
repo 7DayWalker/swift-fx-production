@@ -210,8 +210,16 @@ export default function CommunityScreen() {
     setSelectedPost(post);
     setLoadingComments(true);
     try {
-      const response = await api.get(`/community/posts/${post.post_id}/comments`);
-      setComments(response.data);
+      const { data, error } = await supabase.rpc('get_post_comments', { target_post_id: post.post_id });
+      if (error) throw error;
+      const mapped = (data || []).map((c: any) => ({
+        comment_id: c.id,
+        user_id: c.user_id,
+        user_name: c.user_name || 'User',
+        content: c.content,
+        created_at: c.created_at,
+      }));
+      setComments(mapped);
     } catch (error) {
       console.error('Failed to fetch comments:', error);
     } finally {
@@ -223,13 +231,26 @@ export default function CommunityScreen() {
     if (!newComment.trim() || !selectedPost) return;
 
     try {
-      const response = await api.post(`/community/posts/${selectedPost.post_id}/comments`, {
-        content: newComment,
-      });
-      setComments([...comments, response.data]);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase.from('comments').insert({
+        post_id: selectedPost.post_id,
+        user_id: authUser.id,
+        content: newComment.trim(),
+      }).select().single();
+      if (error) throw error;
+
+      setComments([...comments, {
+        comment_id: data.id,
+        user_id: authUser.id,
+        user_name: user?.name || 'You',
+        content: data.content,
+        created_at: data.created_at,
+      }]);
       setNewComment('');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to add comment');
+      Alert.alert('Error', error.message || 'Failed to add comment');
     }
   };
 
