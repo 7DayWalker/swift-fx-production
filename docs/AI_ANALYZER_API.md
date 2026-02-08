@@ -17,7 +17,7 @@ Set these in your Supabase project under Edge Functions → Secrets:
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | Emergent LLM Key (`sk-emergent-d262e87B959A8757cB`) |
+| `OPENAI_API_KEY` | Your Emergent LLM Key (obtain from profile settings) |
 
 Note: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_ANON_KEY` are automatically available in Edge Functions.
 
