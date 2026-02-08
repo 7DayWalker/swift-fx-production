@@ -321,130 +321,68 @@ export default function AIScreen() {
     setErrorMessage(null);
 
     try {
-      const formData = new FormData();
-      
-      // MOBILE FIX: Convert image to PNG format (required by emergentintegrations)
-      // Image is already preprocessed to max 1024px and PNG format
-      
-      let imageFile: File | null = null;
-      
-      if (imageBase64) {
-        // imageBase64 is already preprocessed PNG from processAndSetImage
-        console.log('Using preprocessed PNG image, base64 length:', imageBase64.length);
-        
-        try {
-          // Clean base64 string (remove data URI prefix if present)
-          let cleanBase64 = imageBase64;
-          if (cleanBase64.includes(',')) {
-            cleanBase64 = cleanBase64.split(',')[1];
-          }
-          
-          // Convert base64 to binary
-          const binaryString = atob(cleanBase64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          
-          // Create PNG file (matching what emergentintegrations expects)
-          const blob = new Blob([bytes], { type: 'image/png' });
-          imageFile = new File([blob], 'chart.png', { type: 'image/png' });
-          console.log('Created PNG file, size:', imageFile.size, 'bytes');
-        } catch (conversionError) {
-          console.error('Image conversion failed:', conversionError);
-          throw new Error('Failed to process image. Please try a different image.');
-        }
-      } else if (selectedImage) {
-        // Fetch from URI and convert to PNG (required by emergentintegrations)
-        console.log('Fetching image from URI...');
-        try {
-          const response = await fetch(selectedImage);
-          const blob = await response.blob();
-          
-          if (Platform.OS === 'web' && blob.size > 0) {
-            // Convert to PNG via canvas with 1024px max dimension
-            const MAX_DIMENSION = 1024;
-            const img = new window.Image();
-            const url = URL.createObjectURL(blob);
-            
-            await new Promise<void>((resolve, reject) => {
-              img.onload = () => resolve();
-              img.onerror = reject;
-              img.src = url;
-            });
-            
-            URL.revokeObjectURL(url);
-            
-            // Calculate dimensions
-            let newWidth = img.width;
-            let newHeight = img.height;
-            if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
-              const ratio = Math.min(MAX_DIMENSION / img.width, MAX_DIMENSION / img.height);
-              newWidth = Math.round(img.width * ratio);
-              newHeight = Math.round(img.height * ratio);
-            }
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = newWidth;
-            canvas.height = newHeight;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.fillStyle = '#FFFFFF';
-              ctx.fillRect(0, 0, newWidth, newHeight);
-              ctx.drawImage(img, 0, 0, newWidth, newHeight);
-              const pngBlob = await new Promise<Blob>((resolve) => {
-                canvas.toBlob((b) => resolve(b || blob), 'image/png');
-              });
-              imageFile = new File([pngBlob], 'chart.png', { type: 'image/png' });
-              console.log('Converted URI to PNG, size:', imageFile.size, 'dimensions:', newWidth, 'x', newHeight);
-            }
-          }
-          
-          if (!imageFile) {
-            imageFile = new File([blob], 'chart.png', { type: 'image/png' });
-          }
-        } catch (fetchError) {
-          console.error('Failed to fetch image:', fetchError);
-          throw new Error('Failed to load image. Please select again.');
-        }
+      // Get auth session for the Edge Function call
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Please log in to use AI Analyzer');
       }
-      
-      if (!imageFile || imageFile.size === 0) {
-        throw new Error('Failed to process image. Please try again.');
-      }
-      
-      formData.append('image', imageFile);
-      formData.append('pair', selectedPair);
-      formData.append('timeframe', selectedTimeframe);
-      
-      console.log('Sending analysis request, file size:', imageFile.size, 'type:', imageFile.type);
 
-      const response = await api.post('/ai/analyze', formData, {
+      // Prepare image base64 if available
+      let cleanBase64: string | undefined;
+      if (imageBase64) {
+        cleanBase64 = imageBase64;
+        if (cleanBase64.includes(',')) {
+          cleanBase64 = cleanBase64.split(',')[1];
+        }
+        console.log('Prepared image base64, length:', cleanBase64.length);
+      }
+
+      // Build request payload for Edge Function
+      const payload = {
+        prompt: `Please analyze this ${selectedPair} chart on ${selectedTimeframe} timeframe. Identify the market bias, trend structure, key support and resistance levels, and provide actionable trading insights.`,
+        pair: selectedPair,
+        timeframe: selectedTimeframe,
+        image_base64: cleanBase64,
+      };
+
+      console.log('Calling AI Analyze Edge Function...');
+
+      // Call Supabase Edge Function
+      const response = await fetch(AI_ANALYZE_URL, {
+        method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
-        timeout: 120000, // 2 minute timeout for AI processing
+        body: JSON.stringify(payload),
       });
 
-      // Validate response data before setting
-      const data = response.data;
+      const data = await response.json();
       console.log('AI Analysis response:', JSON.stringify(data, null, 2));
-      
-      // Check if it's an error response masquerading as success
-      if (data && data.detail) {
-        // This is actually an error
-        const errorMsg = typeof data.detail === 'string' 
-          ? data.detail 
-          : Array.isArray(data.detail)
-            ? data.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ')
-            : JSON.stringify(data.detail);
+
+      // Handle different response codes
+      if (response.status === 429) {
+        // Quota exceeded
+        setErrorMessage(data.upgrade_message || 'Weekly AI analysis limit reached. Upgrade for more.');
+        setScreenState('limit_reached');
+        return;
+      }
+
+      if (response.status === 401) {
+        setErrorMessage('Session expired. Please log in again.');
+        setScreenState('error');
+        return;
+      }
+
+      if (!response.ok) {
+        // Other errors (400, 500, 502)
+        const errorMsg = data.error || data.details || 'Analysis failed. Please try again.';
         setErrorMessage(errorMsg);
         setScreenState('error');
         return;
       }
-      
-      // Store the result and navigate to results screen
+
+      // Success - store result
       setAnalysisResult(data);
       setScreenState('result');
       
@@ -452,35 +390,7 @@ export default function AIScreen() {
       fetchUsage();
     } catch (error: any) {
       console.error('AI Analysis error:', error);
-      
-      // Extract error message safely
-      let errorMsg = 'Failed to analyze chart. Please try again.';
-      
-      if (error.response?.data) {
-        const errData = error.response.data;
-        if (typeof errData === 'string') {
-          errorMsg = errData;
-        } else if (errData.detail) {
-          if (typeof errData.detail === 'string') {
-            errorMsg = errData.detail;
-          } else if (Array.isArray(errData.detail)) {
-            // Pydantic validation errors
-            errorMsg = errData.detail.map((d: any) => {
-              if (typeof d === 'string') return d;
-              if (d.msg) return d.msg;
-              return JSON.stringify(d);
-            }).join('; ');
-          } else {
-            errorMsg = JSON.stringify(errData.detail);
-          }
-        } else if (errData.message) {
-          errorMsg = errData.message;
-        }
-      } else if (error.message) {
-        errorMsg = error.message;
-      }
-      
-      setErrorMessage(errorMsg);
+      setErrorMessage(error.message || 'Failed to analyze chart. Please try again.');
       setScreenState('error');
     }
   };
