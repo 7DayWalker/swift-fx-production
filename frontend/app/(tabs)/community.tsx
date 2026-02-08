@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import { api } from '../../src/services/api';
+import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
 
 const { width: screenWidth } = Dimensions.get('window');
