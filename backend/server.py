@@ -7371,6 +7371,119 @@ async def admin_get_iap_stats(admin: User = Depends(require_admin)):
     }
 
 
+# ===================== AI CHART ANALYZER (using emergentintegrations) =====================
+from pydantic import BaseModel as PydanticBaseModel
+
+class AIAnalyzeRequest(PydanticBaseModel):
+    prompt: str
+    pair: str = "Unknown"
+    timeframe: str = "Unknown"
+    image_base64: Optional[str] = None
+
+class AIAnalyzeResponse(PydanticBaseModel):
+    market_bias: str
+    trend_structure: str
+    support_levels: List[str]
+    resistance_levels: List[str]
+    trade_insight: str
+    confidence: str
+
+@api_router.post("/ai/analyze")
+async def ai_analyze_chart(request: AIAnalyzeRequest):
+    """
+    AI Chart Analysis endpoint using emergentintegrations library.
+    No authentication required - frontend handles auth.
+    """
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        
+        if not EMERGENT_LLM_KEY:
+            raise HTTPException(status_code=500, detail="AI service not configured")
+        
+        # System prompt for structured JSON output
+        system_prompt = """You are an expert forex and cryptocurrency chart analyst. 
+Analyze the provided chart description or image and respond ONLY with valid JSON in this exact format:
+{
+  "market_bias": "Bullish" or "Bearish" or "Neutral",
+  "trend_structure": "Brief description of the trend and any patterns observed",
+  "support_levels": ["level1", "level2"],
+  "resistance_levels": ["level1", "level2"],
+  "trade_insight": "Actionable trading insight based on the analysis",
+  "confidence": "High" or "Medium" or "Low"
+}
+Do not include any text outside the JSON object. Be concise but accurate."""
+
+        # Initialize chat with emergentintegrations
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"ai_analyze_{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt
+        )
+        
+        # Use gpt-4o for multimodal (image) support
+        chat.with_model("openai", "gpt-4o")
+        
+        # Build user message
+        user_text = f"Analyze this {request.pair} chart on {request.timeframe} timeframe:\n\n{request.prompt}"
+        
+        # Create message with or without image
+        if request.image_base64:
+            # Clean base64 string
+            image_data = request.image_base64
+            if "," in image_data:
+                image_data = image_data.split(",")[1]
+            
+            user_message = UserMessage(
+                text=user_text,
+                images=[f"data:image/png;base64,{image_data}"]
+            )
+        else:
+            user_message = UserMessage(text=user_text)
+        
+        # Send message and get response
+        response_text = await chat.send_message(user_message)
+        
+        # Parse JSON response
+        try:
+            # Extract JSON from response (in case there's extra text)
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                analysis = json.loads(json_match.group())
+            else:
+                raise ValueError("No JSON found in response")
+            
+            # Validate and normalize response
+            result = {
+                "market_bias": str(analysis.get("market_bias", "Unknown")),
+                "trend_structure": str(analysis.get("trend_structure", response_text)),
+                "support_levels": [str(s) for s in analysis.get("support_levels", [])],
+                "resistance_levels": [str(r) for r in analysis.get("resistance_levels", [])],
+                "trade_insight": str(analysis.get("trade_insight", "")),
+                "confidence": str(analysis.get("confidence", "Low"))
+            }
+            
+            return result
+            
+        except (json.JSONDecodeError, ValueError) as parse_error:
+            logger.warning(f"Failed to parse AI response as JSON: {parse_error}")
+            # Return raw response in structured format
+            return {
+                "market_bias": "Unknown",
+                "trend_structure": response_text[:500],
+                "support_levels": [],
+                "resistance_levels": [],
+                "trade_insight": "Analysis completed but structured parsing failed.",
+                "confidence": "Low"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI Analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+
+
 # Include router
 app.include_router(api_router)
 
