@@ -1788,9 +1788,9 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
     except Exception as e:
         logger.error(f"Failed to send close notification: {e}")
 
-# ===================== AI CHART ANALYZER =====================
-@api_router.post("/ai/analyze")
-async def analyze_chart(
+# ===================== AI CHART ANALYZER (LEGACY - File Upload) =====================
+@api_router.post("/ai/analyze-legacy")
+async def analyze_chart_legacy(
     image: UploadFile = File(...),
     pair: str = Form(...),
     timeframe: str = Form(...),
