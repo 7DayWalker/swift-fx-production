@@ -293,12 +293,6 @@ export default function AIScreen() {
     setErrorMessage(null);
 
     try {
-      // Get auth session for the Edge Function call
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error('Please log in to use AI Analyzer');
-      }
-
       // Prepare image base64 if available
       let cleanBase64: string | undefined;
       if (imageBase64) {
@@ -309,7 +303,7 @@ export default function AIScreen() {
         console.log('Prepared image base64, length:', cleanBase64.length);
       }
 
-      // Build request payload for Edge Function
+      // Build request payload for FastAPI
       const payload = {
         prompt: `Please analyze this ${selectedPair} chart on ${selectedTimeframe} timeframe. Identify the market bias, trend structure, key support and resistance levels, and provide actionable trading insights.`,
         pair: selectedPair,
@@ -317,13 +311,12 @@ export default function AIScreen() {
         image_base64: cleanBase64,
       };
 
-      console.log('Calling AI Analyze Edge Function...');
+      console.log('Calling AI Analyze API...');
 
-      // Call Supabase Edge Function
+      // Call FastAPI backend endpoint
       const response = await fetch(AI_ANALYZE_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -333,32 +326,31 @@ export default function AIScreen() {
       console.log('AI Analysis response status:', response.status);
       console.log('AI Analysis response:', JSON.stringify(data, null, 2));
 
-      // Handle different response codes
-      if (response.status === 429) {
-        // Quota exceeded
-        setErrorMessage(data.upgrade_message || 'Weekly AI analysis limit reached. Upgrade for more.');
-        setScreenState('limit_reached');
-        return;
-      }
-
-      if (response.status === 401) {
-        // Show actual error from Edge Function for debugging
-        const errorDetail = data.error || data.details || 'Session expired. Please log in again.';
-        setErrorMessage(errorDetail);
-        setScreenState('error');
-        return;
-      }
-
       if (!response.ok) {
-        // Other errors (400, 500, 502) - show actual error
-        const errorMsg = data.error || data.details || `Analysis failed (${response.status}). Please try again.`;
+        // Handle errors from FastAPI
+        const errorMsg = data.detail || data.error || `Analysis failed (${response.status}). Please try again.`;
         setErrorMessage(errorMsg);
         setScreenState('error');
         return;
       }
 
-      // Success - store result
-      setAnalysisResult(data);
+      // Success - map FastAPI response to expected format
+      const analysisData = {
+        success: true,
+        pair: selectedPair,
+        timeframe: selectedTimeframe,
+        market_bias: data.market_bias || 'Unknown',
+        trend_structure: data.trend_structure || '',
+        support_levels: data.support_levels || [],
+        resistance_levels: data.resistance_levels || [],
+        trade_insight: data.trade_insight || '',
+        confidence: data.confidence || 'Low',
+        remaining_analyses: usage?.remaining ? usage.remaining - 1 : 0,
+        weekly_limit: usage?.weekly_limit || 3,
+        disclaimer: 'AI-generated analysis for educational purposes only. Always do your own research.',
+      };
+      
+      setAnalysisResult(analysisData);
       setScreenState('result');
       
       // Refresh usage after analysis
