@@ -7395,7 +7395,7 @@ async def ai_analyze_chart(request: AIAnalyzeRequest):
     No authentication required - frontend handles auth.
     """
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         
         if not EMERGENT_LLM_KEY:
             raise HTTPException(status_code=500, detail="AI service not configured")
@@ -7433,9 +7433,12 @@ Do not include any text outside the JSON object. Be concise but accurate."""
             if "," in image_data:
                 image_data = image_data.split(",")[1]
             
+            # Use ImageContent for base64 images
+            image_content = ImageContent(image_base64=image_data)
+            
             user_message = UserMessage(
                 text=user_text,
-                images=[f"data:image/png;base64,{image_data}"]
+                file_contents=[image_content]
             )
         else:
             user_message = UserMessage(text=user_text)
