@@ -20,9 +20,9 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
 
-// Supabase Edge Function URL
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://hrzghlqcfccnmgcipxxo.supabase.co';
-const AI_ANALYZE_URL = `${SUPABASE_URL}/functions/v1/ai-analyze`;
+// FastAPI Backend URL for AI Analysis
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
+const AI_ANALYZE_URL = `${API_BASE_URL}/api/ai/analyze`;
 
 interface AIUsage {
   current_usage: number;
