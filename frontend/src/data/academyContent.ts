@@ -222,6 +222,122 @@ What drives supply and demand is more complex: economic data, news events, and m
         { question: 'What happens when country raises rates?', options: ['Currency weakens', 'Currency strengthens', 'No effect', 'Trading stops'], correctIndex: 1, explanation: 'Higher rates attract investment, strengthening currency.' }
       ]}
     ]
+  },
+  {
+    id: 'crypto-basics',
+    title: 'Cryptocurrency Fundamentals',
+    description: 'Understanding digital assets and blockchain',
+    category: 'beginner',
+    lessons: [
+      {
+        id: 1,
+        title: 'What is Cryptocurrency?',
+        duration: '7 min',
+        type: 'video',
+        overview: `Cryptocurrency is digital money that uses cryptography for security. Unlike traditional currencies controlled by governments, crypto operates on decentralized networks.
+
+Bitcoin, created in 2009, was the first cryptocurrency. It introduced blockchain technology - a public ledger recording all transactions. Since then, thousands of cryptocurrencies have emerged.
+
+Key characteristics: decentralized (no central authority), transparent (public blockchain), secure (cryptographic protection), and borderless (works anywhere with internet).`,
+        keyTakeaways: [
+          'Cryptocurrency is decentralized digital money',
+          'Bitcoin was the first, created in 2009',
+          'Blockchain records all transactions publicly',
+          'Crypto is borderless and operates 24/7'
+        ],
+        youtubeId: 'rYQgy8QDEBI',
+        youtubeTitle: 'What is Cryptocurrency?'
+      },
+      {
+        id: 2,
+        title: 'How Blockchain Works',
+        duration: '8 min',
+        type: 'video',
+        overview: `Blockchain is a distributed ledger technology that records transactions across many computers. Each "block" contains transaction data, a timestamp, and a link to the previous block.
+
+Once recorded, transactions cannot be altered - this immutability creates trust without needing intermediaries. Miners or validators confirm transactions through consensus mechanisms.
+
+Understanding blockchain helps you evaluate crypto projects. Strong blockchain = secure network. Weak blockchain = potential vulnerabilities.`,
+        keyTakeaways: [
+          'Blockchain = distributed ledger across computers',
+          'Blocks contain transactions linked together',
+          'Transactions are immutable once confirmed',
+          'Consensus mechanisms validate transactions'
+        ],
+        youtubeId: 'SSo_EIwHSd4',
+        youtubeTitle: 'How Blockchain Works'
+      },
+      {
+        id: 3,
+        title: 'Bitcoin vs Altcoins',
+        duration: '6 min',
+        type: 'video',
+        overview: `Bitcoin (BTC) is the original cryptocurrency - the "digital gold" with the largest market cap. It's primarily used as a store of value and payment system.
+
+Altcoins are all other cryptocurrencies. Ethereum enables smart contracts. Solana offers high speed. Each altcoin has different use cases and technology.
+
+For beginners: start with Bitcoin and Ethereum. They have the most liquidity, information, and track record. Altcoins are higher risk but potentially higher reward.`,
+        keyTakeaways: [
+          'Bitcoin is the original and largest cryptocurrency',
+          'Altcoins = all other cryptocurrencies',
+          'Ethereum enables smart contracts and DeFi',
+          'Start with BTC/ETH before exploring altcoins'
+        ],
+        youtubeId: 'MhldkvdS_rM',
+        youtubeTitle: 'Bitcoin vs Altcoins Explained'
+      },
+      {
+        id: 4,
+        title: 'Crypto Wallets and Security',
+        duration: '8 min',
+        type: 'text',
+        overview: `Crypto wallets store your private keys - the passwords to access your crypto. Without proper security, you can lose everything.
+
+Hot wallets (software) are connected to internet - convenient but less secure. Cold wallets (hardware) are offline - more secure for long-term storage.
+
+Golden rules: Never share your seed phrase. Use hardware wallets for large holdings. Enable 2FA everywhere. Only use reputable exchanges. Not your keys, not your crypto.`,
+        keyTakeaways: [
+          'Wallets store private keys, not actual crypto',
+          'Hot wallets = convenient, less secure',
+          'Cold wallets = secure for long-term storage',
+          'Never share your seed phrase with anyone'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Crypto Trading Basics',
+        duration: '7 min',
+        type: 'video',
+        overview: `Crypto markets trade 24/7/365 - never closes. This creates unique opportunities and risks compared to forex. Volatility is typically much higher.
+
+You can trade crypto on centralized exchanges (Binance, Coinbase) or decentralized exchanges (Uniswap). Each has pros and cons.
+
+Common pairs: BTC/USD, ETH/USD, BTC/USDT. Stablecoins (USDT, USDC) maintain $1 value and are used as trading pairs.`,
+        keyTakeaways: [
+          'Crypto markets trade 24/7/365',
+          'Volatility is typically higher than forex',
+          'CEX (centralized) vs DEX (decentralized) exchanges',
+          'Stablecoins maintain $1 value for trading'
+        ],
+        youtubeId: 'GHH7dkdGYVY',
+        youtubeTitle: 'Crypto Trading Basics'
+      },
+      {
+        id: 6,
+        title: 'Crypto Fundamentals Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your cryptocurrency knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What was the first cryptocurrency?', options: ['Ethereum', 'Bitcoin', 'Dogecoin', 'Litecoin'], correctIndex: 1, explanation: 'Bitcoin was created in 2009 as the first cryptocurrency.' },
+          { question: 'What is blockchain?', options: ['A type of wallet', 'A distributed ledger recording transactions', 'A crypto exchange', 'A trading strategy'], correctIndex: 1, explanation: 'Blockchain is a distributed ledger technology.' },
+          { question: 'Which wallet type is most secure for long-term?', options: ['Hot wallet', 'Exchange wallet', 'Cold/hardware wallet', 'Paper wallet'], correctIndex: 2, explanation: 'Cold wallets are offline and most secure.' },
+          { question: 'When do crypto markets close?', options: ['Weekends', 'At night', 'Never - 24/7/365', 'Holidays'], correctIndex: 2, explanation: 'Crypto markets never close.' },
+          { question: 'What are stablecoins?', options: ['Volatile coins', 'Coins pegged to $1 value', 'Mining rewards', 'NFTs'], correctIndex: 1, explanation: 'Stablecoins maintain stable value, typically $1.' }
+        ]
+      }
+    ]
   }
 ];
 
