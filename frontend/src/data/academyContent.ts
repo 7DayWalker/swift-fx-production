@@ -1763,6 +1763,204 @@ Optimal Trade Entry (OTE): the zone between 61.8% and 78.6% Fibonacci retracemen
         { question: 'Elite traders believe trading is:', options: ['Get rich quick', 'A craft requiring years to master', 'Pure luck', 'Easy with right indicator'], correctIndex: 1, explanation: 'Trading is a skill developed over years.' }
       ]}
     ]
+  },
+  {
+    id: 'defi-trading',
+    title: 'DeFi Trading Strategies',
+    description: 'Decentralized finance for traders',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'Understanding DeFi',
+        duration: '10 min',
+        type: 'video',
+        overview: `DeFi (Decentralized Finance) removes intermediaries from financial services. Instead of banks, smart contracts execute transactions automatically on blockchain.
+
+Key DeFi primitives: Decentralized exchanges (DEXs), lending protocols, yield farming, and liquidity pools. These create new trading opportunities unavailable in traditional markets.
+
+Ethereum hosts most DeFi, but Solana, Avalanche, and others offer alternatives with different tradeoffs (speed vs security vs cost).`,
+        keyTakeaways: [
+          'DeFi removes traditional intermediaries',
+          'Smart contracts automate financial services',
+          'DEXs, lending, yield farming are key primitives',
+          'Ethereum leads but alternatives exist'
+        ],
+        youtubeId: 'k9HYC0EJU6E',
+        youtubeTitle: 'Understanding DeFi'
+      },
+      {
+        id: 2,
+        title: 'DEX Trading',
+        duration: '9 min',
+        type: 'video',
+        overview: `DEXs like Uniswap use automated market makers (AMMs) instead of order books. Liquidity pools enable trading without counterparties.
+
+Advantages: No KYC, immediate settlement, access to new tokens. Disadvantages: Higher fees (gas), slippage on large orders, smart contract risk.
+
+DEX aggregators (1inch, Jupiter) find best prices across multiple DEXs. Always check slippage settings and gas costs before executing.`,
+        keyTakeaways: [
+          'AMMs replace traditional order books',
+          'No KYC but higher fees and slippage',
+          'New tokens available before CEX listing',
+          'Use aggregators for best prices'
+        ],
+        youtubeId: 'dVJzcFDo498',
+        youtubeTitle: 'DEX Trading Guide'
+      },
+      {
+        id: 3,
+        title: 'Yield Farming Basics',
+        duration: '10 min',
+        type: 'video',
+        overview: `Yield farming generates returns by providing liquidity or staking tokens. APYs can range from 5% to 1000%+, but higher yields = higher risk.
+
+Impermanent loss occurs when providing liquidity to volatile pairs. If one token moves significantly, you end up with more of the losing token.
+
+Evaluate protocols carefully: TVL (total value locked), audit status, team reputation. Many yield farms are scams or unsustainable.`,
+        keyTakeaways: [
+          'Yield farming earns returns on idle crypto',
+          'Higher APY = higher risk usually',
+          'Impermanent loss is real risk',
+          'Research protocols: TVL, audits, team'
+        ],
+        youtubeId: 'l0vRTi8_FRk',
+        youtubeTitle: 'Yield Farming Explained'
+      },
+      {
+        id: 4,
+        title: 'DeFi Risk Management',
+        duration: '9 min',
+        type: 'text',
+        overview: `DeFi introduces unique risks beyond traditional trading:
+
+Smart Contract Risk: Bugs in code can result in total loss. Only use audited protocols with proven track records.
+
+Rug Pulls: Developers abandon project and take liquidity. Watch for anonymous teams and no audits.
+
+Gas Costs: Ethereum gas can make small trades unprofitable. Layer 2s (Arbitrum, Optimism) reduce costs.
+
+Never invest more than you can afford to lose. Start small to learn the mechanics before scaling up.`,
+        keyTakeaways: [
+          'Smart contract bugs can cause total loss',
+          'Rug pulls are common - do research',
+          'Gas costs can eat profits on small trades',
+          'Start small, only use what you can lose'
+        ]
+      },
+      {
+        id: 5,
+        title: 'DeFi Trading Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your DeFi knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What do DEXs use instead of order books?', options: ['Market makers', 'Automated Market Makers (AMMs)', 'Brokers', 'Banks'], correctIndex: 1, explanation: 'AMMs use liquidity pools for trading.' },
+          { question: 'What is impermanent loss?', options: ['Permanent losses', 'Loss from price divergence in LP', 'Exchange fees', 'Network fees'], correctIndex: 1, explanation: 'Impermanent loss occurs when LP token prices diverge.' },
+          { question: 'Why use DEX aggregators?', options: ['More complexity', 'Find best prices across DEXs', 'Required by law', 'No reason'], correctIndex: 1, explanation: 'Aggregators find optimal prices across multiple DEXs.' },
+          { question: 'What is a rug pull?', options: ['Carpet cleaning', 'Developers abandoning project with funds', 'Normal trading', 'Price increase'], correctIndex: 1, explanation: 'Rug pulls = developers taking liquidity and running.' },
+          { question: 'How to reduce Ethereum gas costs?', options: ['Use mainnet only', 'Use Layer 2 solutions', 'Ignore gas', 'Trade more'], correctIndex: 1, explanation: 'L2s like Arbitrum significantly reduce gas costs.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'crypto-derivatives',
+    title: 'Crypto Derivatives Trading',
+    description: 'Futures, perpetuals, and options',
+    category: 'advanced',
+    lessons: [
+      {
+        id: 1,
+        title: 'Crypto Futures Explained',
+        duration: '10 min',
+        type: 'video',
+        overview: `Crypto futures are contracts to buy/sell at a future date. They allow leverage (up to 100x on some exchanges) and the ability to short.
+
+Quarterly futures expire on set dates. Perpetual futures have no expiry - they use funding rates to keep price aligned with spot.
+
+Leverage amplifies both gains AND losses. 10x leverage means a 10% move can liquidate your position entirely.`,
+        keyTakeaways: [
+          'Futures allow leverage and shorting',
+          'Perpetuals have no expiry, use funding rates',
+          'Leverage amplifies gains AND losses',
+          '10x leverage = 10% move can liquidate you'
+        ],
+        youtubeId: 'Lhf_2gJJS1I',
+        youtubeTitle: 'Crypto Futures Explained'
+      },
+      {
+        id: 2,
+        title: 'Funding Rates Strategy',
+        duration: '9 min',
+        type: 'video',
+        overview: `Funding rates are periodic payments between long and short traders. Positive funding = longs pay shorts. Negative = shorts pay longs.
+
+When funding is extremely positive, market is overleveraged long - potential for correction. Extremely negative suggests oversold conditions.
+
+Advanced traders use funding as a signal and sometimes arbitrage by being opposite the funding direction with spot hedge.`,
+        keyTakeaways: [
+          'Funding balances perpetual price with spot',
+          'Extreme positive funding = overleveraged longs',
+          'Can be used as contrarian signal',
+          'Funding arbitrage is advanced strategy'
+        ],
+        youtubeId: 'YOw6mbA7uQw',
+        youtubeTitle: 'Funding Rate Strategies'
+      },
+      {
+        id: 3,
+        title: 'Liquidation and Risk',
+        duration: '9 min',
+        type: 'video',
+        overview: `Liquidation occurs when your margin is insufficient to maintain the position. The exchange closes your trade at a loss.
+
+Higher leverage = closer liquidation price. With 10x, a 10% adverse move liquidates. With 100x, just 1% liquidates.
+
+Professional traders rarely use more than 5-10x. They focus on position sizing and stop losses, not max leverage.`,
+        keyTakeaways: [
+          'Liquidation = forced position closure',
+          'Higher leverage = closer liquidation',
+          'Pros rarely use more than 5-10x',
+          'Position sizing > leverage amount'
+        ],
+        youtubeId: 'yJqjsJyKJ7c',
+        youtubeTitle: 'Avoiding Liquidation'
+      },
+      {
+        id: 4,
+        title: 'Crypto Options Basics',
+        duration: '10 min',
+        type: 'text',
+        overview: `Options give the right (not obligation) to buy (call) or sell (put) at a specific price by a certain date.
+
+Buying options: Limited risk (premium paid), unlimited potential profit. Selling options: Premium income but potentially unlimited risk.
+
+Crypto options are less liquid than futures. Major platforms: Deribit, OKX. Greeks (delta, gamma, theta, vega) measure option sensitivity.`,
+        keyTakeaways: [
+          'Calls = right to buy, Puts = right to sell',
+          'Buying = limited risk, unlimited potential',
+          'Selling = income but unlimited risk',
+          'Less liquid than futures in crypto'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Crypto Derivatives Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your derivatives knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What keeps perpetual futures aligned with spot?', options: ['Expiry dates', 'Funding rates', 'Nothing', 'Exchange rules'], correctIndex: 1, explanation: 'Funding rates balance perpetual and spot prices.' },
+          { question: 'With 10x leverage, what move liquidates?', options: ['1%', '5%', '10%', '50%'], correctIndex: 2, explanation: '10x leverage = 10% adverse move liquidates.' },
+          { question: 'Positive funding rate means:', options: ['Shorts pay longs', 'Longs pay shorts', 'No payments', 'Market closed'], correctIndex: 1, explanation: 'Positive funding = longs pay shorts.' },
+          { question: 'What is a call option?', options: ['Right to sell', 'Right to buy', 'Obligation to buy', 'Margin call'], correctIndex: 1, explanation: 'Call = right to buy at strike price.' },
+          { question: 'How much leverage do pros typically use?', options: ['50-100x', '5-10x', 'Always max', 'None'], correctIndex: 1, explanation: 'Professional traders rarely exceed 5-10x leverage.' }
+        ]
+      }
+    ]
   }
 ];
 
