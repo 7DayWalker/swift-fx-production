@@ -1060,6 +1060,200 @@ Stop loss placement: beyond the breakout candle or below the last swing low for 
         { question: 'How can correlation divergence help?', options: ['More trades', 'Signals weakness in moves', 'Increases profit', 'No use'], correctIndex: 1, explanation: 'When correlated pairs diverge, the move may be weak.' }
       ]}
     ]
+  },
+  {
+    id: 'crypto-technical',
+    title: 'Crypto Technical Analysis',
+    description: 'Advanced chart analysis for digital assets',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Bitcoin Chart Patterns',
+        duration: '9 min',
+        type: 'video',
+        overview: `Bitcoin has unique chart behaviors compared to forex. The 24/7 market means patterns can complete at any time, and weekend gaps don't exist.
+
+Key BTC-specific patterns: Bull flags after halvings, accumulation ranges after 80% drawdowns, blow-off tops with parabolic rises, and capitulation wicks marking bottoms.
+
+Bitcoin respects technical levels well due to algorithmic trading. Round numbers ($50K, $100K) act as strong psychological barriers.`,
+        keyTakeaways: [
+          'BTC trades 24/7 - no weekend gaps',
+          'Halving events create predictable cycles',
+          'Round numbers are strong psychological levels',
+          'Capitulation wicks often mark cycle bottoms'
+        ],
+        youtubeId: 'kdOqxvwv7KQ',
+        youtubeTitle: 'Bitcoin Technical Analysis'
+      },
+      {
+        id: 2,
+        title: 'Altcoin Analysis',
+        duration: '10 min',
+        type: 'video',
+        overview: `Altcoins are highly correlated with Bitcoin. When BTC dumps, alts dump harder. When BTC rallies, alts often outperform (alt season).
+
+Check BTC dominance chart - when it falls, money flows into alts. Rising dominance means capital consolidating into Bitcoin.
+
+Key altcoin metrics: Trading volume, liquidity, market cap. Low-cap coins are manipulated easily. Stick to top 50 for technical analysis reliability.`,
+        keyTakeaways: [
+          'Altcoins highly correlated with BTC',
+          'BTC dominance shows capital flow',
+          'Falling dominance = alt season potential',
+          'Stick to high-cap coins for reliable TA'
+        ],
+        youtubeId: 'BVbSFLqPXqg',
+        youtubeTitle: 'Altcoin Analysis Guide'
+      },
+      {
+        id: 3,
+        title: 'Crypto Support and Resistance',
+        duration: '8 min',
+        type: 'video',
+        overview: `Crypto S/R works similarly to forex but with key differences. Previous ATH (all-time high) becomes major resistance. Psychological levels ($10K, $50K, $100K) are critical.
+
+On-chain data adds another layer: realized price (average cost basis of all coins), whale accumulation zones, and exchange inflow/outflow levels.
+
+Higher timeframe S/R is most reliable. Daily and weekly levels trump hourly ones, especially during high volatility.`,
+        keyTakeaways: [
+          'Previous ATH becomes major resistance',
+          'Psychological round numbers are critical',
+          'On-chain data provides additional S/R',
+          'Higher timeframe levels are most reliable'
+        ],
+        youtubeId: 'E5gX5ReDMDU',
+        youtubeTitle: 'Crypto Support Resistance'
+      },
+      {
+        id: 4,
+        title: 'Crypto Volume and Liquidity',
+        duration: '9 min',
+        type: 'text',
+        overview: `Volume analysis in crypto is essential but tricky. Exchange volumes can be faked (wash trading). Use aggregated data from multiple sources.
+
+Liquidity varies dramatically. BTC/ETH have deep liquidity. Small altcoins can move 50% on small orders. Always check order book depth before trading.
+
+High volume at key levels confirms breakouts. Low volume pumps often retrace completely. Volume profile shows where traders are positioned.`,
+        keyTakeaways: [
+          'Exchange volumes can be manipulated',
+          'BTC/ETH have best liquidity',
+          'Small altcoins move dramatically on low volume',
+          'Volume confirms breakout validity'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Crypto Technical Analysis Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your crypto TA knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'When does the crypto market close?', options: ['Weekends', 'At night', 'Never - 24/7', 'Holidays'], correctIndex: 2, explanation: 'Crypto trades 24/7/365.' },
+          { question: 'What does falling BTC dominance indicate?', options: ['BTC strengthening', 'Money flowing to altcoins', 'Market crash', 'Nothing'], correctIndex: 1, explanation: 'Falling dominance = capital moving to alts.' },
+          { question: 'Why is previous ATH significant?', options: ['Random level', 'Becomes major resistance', 'No significance', 'Changes daily'], correctIndex: 1, explanation: 'ATH becomes psychological resistance.' },
+          { question: 'What is wash trading?', options: ['Cleaning coins', 'Fake volume trading', 'Legitimate trading', 'Stop losses'], correctIndex: 1, explanation: 'Wash trading creates fake volume.' },
+          { question: 'Which crypto pairs have best liquidity?', options: ['Small altcoins', 'BTC and ETH pairs', 'New tokens', 'Memecoins'], correctIndex: 1, explanation: 'BTC/ETH have deepest liquidity.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'crypto-onchain',
+    title: 'On-Chain Analysis',
+    description: 'Blockchain data for trading decisions',
+    category: 'intermediate',
+    lessons: [
+      {
+        id: 1,
+        title: 'Introduction to On-Chain Data',
+        duration: '8 min',
+        type: 'video',
+        overview: `On-chain analysis examines blockchain data to understand market behavior. Unlike traditional markets, crypto transactions are public and verifiable.
+
+Key metrics: Active addresses, transaction volume, exchange flows, wallet balances, and miner behavior. This data reveals what market participants are actually doing.
+
+On-chain complements technical analysis. When both align, you have higher-probability setups. Divergences between price and on-chain can signal reversals.`,
+        keyTakeaways: [
+          'Blockchain data is public and verifiable',
+          'Shows actual behavior, not just price',
+          'Complements technical analysis',
+          'Divergences signal potential reversals'
+        ],
+        youtubeId: 'PKCnecSW9s8',
+        youtubeTitle: 'On-Chain Analysis Intro'
+      },
+      {
+        id: 2,
+        title: 'Exchange Flows',
+        duration: '9 min',
+        type: 'video',
+        overview: `Exchange inflows: Coins moving to exchanges, often to sell. High inflows can precede dumps.
+
+Exchange outflows: Coins leaving exchanges to private wallets. Indicates accumulation and long-term holding.
+
+Net flow (inflow - outflow) is key. Sustained negative net flow = bullish. Sustained positive net flow = potential selling pressure.`,
+        keyTakeaways: [
+          'Inflows = coins to exchanges, potential selling',
+          'Outflows = accumulation, bullish signal',
+          'Net flow shows overall direction',
+          'Sustained patterns are most significant'
+        ],
+        youtubeId: 'HJvEMncjxI8',
+        youtubeTitle: 'Exchange Flow Analysis'
+      },
+      {
+        id: 3,
+        title: 'Whale Watching',
+        duration: '8 min',
+        type: 'video',
+        overview: `Whales are addresses holding large amounts of crypto. Their movements can significantly impact price. Tracking whale behavior provides early warnings.
+
+Watch for: Large wallet accumulation during dips, whale transfers to exchanges (selling), and new whale wallets appearing (institutional entry).
+
+Tools like Whale Alert track large transactions in real-time. Combine with price action for context - not all large transfers mean selling.`,
+        keyTakeaways: [
+          'Whales hold significant market influence',
+          'Accumulation during dips = bullish',
+          'Exchange transfers may signal selling',
+          'Context matters - not all transfers are sales'
+        ],
+        youtubeId: 'Qd8I8UFSZMI',
+        youtubeTitle: 'Whale Watching Guide'
+      },
+      {
+        id: 4,
+        title: 'HODL Waves and Supply',
+        duration: '8 min',
+        type: 'text',
+        overview: `HODL waves show age distribution of coins. Coins held longer = stronger hands. When long-term holders sell, it often signals tops.
+
+Realized cap vs Market cap: Realized cap values coins at price last moved. Gap between them shows unrealized profit/loss in the market.
+
+Supply metrics: Illiquid supply (coins not moving), liquid supply on exchanges. Decreasing liquid supply with rising price = bullish.`,
+        keyTakeaways: [
+          'HODL waves show coin age distribution',
+          'Long-term holders selling = potential top',
+          'Realized cap shows cost basis',
+          'Decreasing liquid supply = bullish'
+        ]
+      },
+      {
+        id: 5,
+        title: 'On-Chain Analysis Quiz',
+        duration: '5 min',
+        type: 'quiz',
+        overview: 'Test your on-chain analysis knowledge.',
+        keyTakeaways: [],
+        quizQuestions: [
+          { question: 'What do exchange inflows typically indicate?', options: ['Bullish signal', 'Potential selling', 'Market close', 'Nothing'], correctIndex: 1, explanation: 'Coins moving to exchanges often precede selling.' },
+          { question: 'What does negative net flow mean?', options: ['Selling pressure', 'More leaving exchanges than entering', 'Crash imminent', 'No trading'], correctIndex: 1, explanation: 'Negative net flow = more outflows = accumulation.' },
+          { question: 'Who are whales?', options: ['Small traders', 'Large holders that move markets', 'Exchanges', 'Miners only'], correctIndex: 1, explanation: 'Whales are large holders with market influence.' },
+          { question: 'What do HODL waves show?', options: ['Price prediction', 'Age of coins', 'Trade volume', 'New wallets'], correctIndex: 1, explanation: 'HODL waves show how long coins have been held.' },
+          { question: 'Decreasing liquid supply with rising price is:', options: ['Bearish', 'Bullish', 'Neutral', 'Irrelevant'], correctIndex: 1, explanation: 'Less available supply + demand = price increase.' }
+        ]
+      }
+    ]
   }
 ];
 
