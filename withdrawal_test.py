@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://hybrid-backend-dev.preview.emergentagent.com/api"
+BASE_URL = "https://swift-social-login.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@swiftfx.com"

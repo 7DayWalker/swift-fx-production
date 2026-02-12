@@ -1,156 +1,162 @@
 <analysis>
-**original_problem_statement:**
-The user initially requested the completion and testing of a Light/Dark theme system and fixing data population bugs on the Settings and Referral pages. After this was completed, the user requested that Light Mode be extended to all user-facing screens, and provided feedback on several UI inconsistencies which were then fixed.
+Perfect. You don’t need philosophy — you need a **clean, accurate fork summary** that prevents Emergent from reopening solved problems or chasing ghosts.
 
-The primary and current task is a major new feature: replace the existing Stripe payment system with native Apple In-App Purchases (IAP) and Google Play Billing for all mobile subscriptions. The implementation must be done with placeholder credentials, as the user does not have them yet. The backend should be the source of truth for subscription status, and the system must handle the full subscription lifecycle (purchase, renewal, cancellation, etc.) via server-side receipt validation and webhooks.
+Below is a **concise, corrected fork continuation summary** you can paste directly into Emergent.
 
-PRODUCT REQUIREMENTS:
-1.  **IAP System:** Implement a full end-to-end IAP flow for iOS and Android for 'premium' and 'vip' monthly subscriptions.
-2.  **Backend Authority:** The backend must validate all receipts with Apple/Google and grant user access. The client must never unlock features directly.
-3.  **Lifecycle Management:** Handle all subscription states (active, expired, canceled, renewed) via server-to-server notifications (webhooks).
-4.  **UI:** The subscription page must show the current plan, allow purchase/upgrade, and include Manage Subscription and Restore Purchases buttons.
-5.  **Placeholders:** The entire implementation must use environment variables and placeholders for API keys, secrets, and product IDs, to be configured later.
-6.  **Web Compatibility:** The app must not crash in the web preview, even though IAP is a native-only feature.
+---
 
-**User's preferred language**: English
+# ✅ SWIFT FX – CORRECT FORK CONTINUATION SUMMARY
 
-**what currently exists?**
-A full-stack Expo (React Native) and FastAPI/MongoDB application.
--   A v1 Light/Dark theme system is implemented and tested. User-facing screens have been updated to support both themes, while admin screens are intentionally locked to Dark Mode.
--   The backend () has been significantly expanded with placeholder endpoints for IAP receipt validation (, ) and webhooks (, ).
--   The  library has been added to the frontend.
--   A new service file, , has been created to handle IAP logic.
--   The subscription screen () has been partially refactored to integrate IAP, including new UI for restoring purchases.
--   A documentation file, , has been created outlining the steps to configure the IAP system with real credentials.
+## 📌 PROJECT STATE (ACCURATE)
 
-**Last working item**:
--   Last item agent was working: The agent was addressing a critical crash in the Expo web preview. The crash is caused by the  library, which requires native modules not available in a web environment. The user instructed the agent to guard all IAP-related code to ensure it only runs on native platforms (iOS/Android) and is disabled on the web. The agent's last attempt to fix this by simply overwriting  was unsuccessful, and it concluded that a more robust isolation strategy is needed.
--   Status: **IN PROGRESS**
--   Agent Testing Done: N
--   Which testing method agent to use? **NA**. The immediate goal is to fix the web preview crash. No testing is possible until the app can run. After the fix, manual verification via screenshot tool is needed to confirm the subscription page loads without error on the web.
--   User Testing Done: N
+This is a React Native (Expo) application using a hybrid backend:
 
-**All Pending/In progress Issue list**:
--   Issue 1: (P0) Frontend web preview crashes on startup due to .
+* **Supabase** → Auth, Database, RLS, Signals, Community, Roles
+* **FastAPI** → AI Analyzer only (due to Python-only )
+* Supabase Edge Functions for AI are permanently abandoned.
 
-**Issues Detail:**
--   **Issue 1: Frontend web preview crashes on startup due to .**
-    -   **Attempted fixes:** The agent attempted to use a conditional  inside  to prevent the module from loading on the web. This failed because the Metro bundler still tries to resolve the dependency for the web bundle, leading to a crash.
-    -   **Next debug checklist:**
-        1.  Implement a platform-specific file extension strategy. Create two versions of the IAP service:
-            -   : Contains the real  implementation.
-            -   : Contains mock/stub implementations for all exported functions. These stubs should do nothing or return empty/default values (e.g., empty arrays for products,  for purchases).
-        2.  In any file that uses the IAP service (like ), change the import from  to just . The bundler will automatically select the correct  or  file based on the platform.
-        3.  Delete the old  file after creating the platform-specific versions to avoid confusion.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a **critical blocker**. Fixing it will make the web preview usable again, unblocking all further frontend development and testing.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Frontend (just to ensure it loads without crashing).
-    -   **Blocked on other issue:** None.
+---
 
-**In progress Task List**:
--   **Task 1: Implement Apple & Google In-App Purchases (IAP) (P0)**
-    -   **Where to resume:** The immediate next step is to resolve the web preview crash as described in Issue 1. Once the app is running again, the agent must verify that the  screen loads correctly on the web with the mocked IAP service.
-    -   **What will be achieved with this?** A complete, stable, end-to-end IAP system with placeholder credentials, ready for native-build testing and future store configuration. The application will be stable for development on all platforms.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Frontend
-    -   **Blocked on something:** Blocked on Issue 1.
+## ✅ COMPLETED PHASES
 
-**Upcoming and Future Tasks**
--   **Upcoming Tasks**:
-    -   (P1) **Re-enable Automatic Signal Engine**: This is a core backend feature in  that is currently disabled and needs to be reactivated.
--   **Future Tasks**:
-    -   (P1) **Admin FAQ Management**: Implement CRUD functionality for admins to manage FAQ content.
-    -   (P1) **Admin Notes**: Add functionality for admins to add notes to user fund applications.
-    -   (P2) **Refine Light/Dark Mode**: While all user-facing screens were touched, a full audit may be needed to catch any remaining hardcoded colors in nested components or modals. Admin screens are still hardcoded dark by design.
-    -   (P2) **Implement remaining Community features**: Add support for liking and commenting on posts.
+### Phase 1 – Community System
 
-**Completed work in this session**
--   **Light/Dark Mode System (v1):** A fully functional theme system was implemented and tested. It persists user choice and correctly applies themes globally on user-facing screens. A key architectural decision was made to keep the admin area strictly in Dark Mode.
--   **UI Bug Fixes:** Resolved data population issues on the Settings and Referral pages (which turned out to be environment-related) and fixed numerous Light Mode UI inconsistencies reported by the user across the Academy, More, Signal History, and Community screens.
--   **IAP Backend Implementation:** The  file was updated with a full suite of (placeholder) endpoints for handling IAP configuration, receipt validation, and server-to-server webhooks for both Apple and Google.
--   **IAP Frontend Scaffolding:** Installed the  library, created a dedicated , and refactored the  screen to use the new IAP flow.
+* Fully migrated to Supabase
+* RLS enabled
+* SQL helper functions implemented
+* Working end-to-end
 
-**Earlier issues found/mentioned but not fixed**
-None. All previously mentioned issues (data fetching on Settings/Referral, theme inconsistencies) were resolved during this session.
+Status: COMPLETE
 
-**Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork:** Data fetching issues on the Settings and Referral pages.
--   **Recurrence count:** 1
--   **Status:** RESOLVED. These issues were confirmed to be related to the testing environment's authentication state and are no longer present in a standard user flow.
+---
 
-**Code Architecture**
+### Phase 2 – AI Analyzer
 
+Architecture:
 
-**Key Technical Concepts**
--   **Light/Dark Mode Theming:** Using React Context (),  for persistence, and a custom hook () to provide theme-dependent styles across the application.
--   **Platform-Specific UI/Logic:** A key concept for the IAP implementation, where native modules must be isolated from the web build to prevent crashes.
--   **In-App Purchases (IAP):** Integration with  for handling native mobile payments.
--   **Server-Side Receipt Validation:** The backend is designed to be the source of truth for subscriptions by validating purchase receipts directly with Apple and Google servers.
+* FastAPI endpoint: 
+* Uses  (Python-only)
+* Multimodal image + prompt support
+* Strict JSON response
+* Usage limits enforced via 
+* History stored in 
 
-**key DB schema**
--   **iap_transactions**: {, , , , , , , , } (NEW)
+Important:
 
-**changes in tech stack**
--   Added  to the frontend for handling mobile subscriptions.
+* Supabase Edge Function version is deprecated and must NOT be used.
+* FastAPI implementation is the final architecture.
 
-**All files of reference**
--   **/app/frontend/src/services/iapService.ts**: The source of the current crash. This file needs to be split into platform-specific versions ( and ).
--   **/app/frontend/app/subscription.tsx**: The primary UI for the IAP flow. It depends on .
--   **/app/backend/server.py**: Contains the new backend logic for IAP validation and webhooks.
--   **/app/docs/IAP_SETUP.md**: Contains instructions for the user on how to configure the IAP system later.
+Status: COMPLETE & WORKING
 
-**Areas that need refactoring**:
--   The  file has grown to over 7,000 lines and is critically in need of being split into smaller, more manageable router files by feature (e.g., , , ).
+---
 
-**key api endpoints**
--   : GET - Fetches product IDs for the frontend.
--   : POST - Validates an Apple purchase receipt.
--   : POST - Validates a Google purchase token.
--   : POST - Receives server-to-server notifications from Apple.
--   : POST - Receives server-to-server notifications from Google.
+### Academy
 
-**Critical Info for New Agent**
--   **Your immediate and only priority is to fix the web preview crash.** The application is currently unusable in the development environment. Follow the plan in Issues Detail to create platform-specific versions of  to isolate the native code.
--   Do not attempt to test the full IAP flow. This environment does not support native builds. The goal is to make the app *stable* on the web by mocking the IAP functionality.
--   The user has made a clear architectural decision for theming: user-facing screens support light/dark, but admin screens are always dark. Do not change this.
--   The backend  is extremely large. Be careful when making edits and be aware that it's a major candidate for future refactoring.
+* Crypto courses added (Beginner / Intermediate / Advanced)
+* Stored in 
+* No backend dependency
 
-**documents created in this job**
--   
+Status: COMPLETE
 
-**Last 10 User Messages and any pending HUMAN messages**
--   **10. User:** Requests to fix IAP crash on web by guarding native code. (IN PROGRESS)
--   **9. User:** Confirms agent should proceed with IAP implementation using placeholder credentials. (COMPLETED)
--   **8. User:** Submits a detailed Product Requirements Document for implementing Apple & Google In-App Purchases. (IN PROGRESS)
--   **7. User:** Reports Signal History and Community modals are still in dark mode. (COMPLETED)
--   **6. User:** Reports Academy light mode is incomplete and logout popup is still dark. (COMPLETED)
--   **5. User:** Instructs agent to fix remaining theming inconsistencies in the user area only. (COMPLETED)
--   **4. User:** Asks agent to complete remaining secondary screens for full light mode. (COMPLETED)
--   **3. User:** Asks agent to extend Light Mode to remaining user screens. (COMPLETED)
--   **2. User:** Provides a clear architectural decision for the theme system (User: partial Light/Dark, Admin: Dark only). (COMPLETED)
--   **1. User:** Asks for a summary of completed work and next steps. (COMPLETED)
+---
 
-**Project Health Check:**
--   **Broken**:
-    -   The frontend web preview is crashing on startup, blocking all frontend development.
--   **Mocked**:
-    -   The entire In-App Purchase flow relies on placeholder credentials and endpoints. The  will also be a mock.
+### Role System
 
-**3rd Party Integrations**
--    (v14.7.1): For handling Apple and Google In-App Purchases on native devices.
+* ENUM  includes , , 
+* Super Admin user created
+* RLS aligned with role hierarchy
 
-**Testing status**
--   Testing agent used after significant changes: YES
--   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: None
--   Known regressions: The entire frontend web preview is non-functional due to the  integration.
+Status: COMPLETE
 
-**Credentials to test flow:**
--   **Super Admin**:  / 
--   **VIP User**:  / 
+---
 
-**What agent forgot to execute**
-The agent did not successfully fix the web preview crash caused by . It correctly identified the root cause but its initial fix was insufficient. The immediate next step is to implement a more robust platform-specific solution.
+## 🔒 GATED SCREENS (INTENTIONAL)
 
+Several screens are intentionally gated or disabled:
+
+* Fund System
+* Referrals
+* Support Tickets
+* Legacy Admin Management
+* Withdrawals
+* Payment confirmation screen
+
+These are NOT broken.
+They are intentionally inactive pending future phases.
+
+Do NOT attempt to revive legacy FastAPI endpoints.
+
+---
+
+## 🔄 CURRENT ACTIVE TASK
+
+### Phase 3 – Google OAuth (Frontend Only)
+
+Google OAuth is already fully configured in Supabase:
+
+* Provider enabled
+* Client ID & Secret configured
+* Redirect URLs configured
+
+Remaining work:
+
+* Implement  on frontend
+* Ensure Expo deep linking works
+* Ensure session persistence
+* Do NOT reintroduce manual token storage
+* Do NOT modify existing email/password flow
+
+Priority: HIGH
+
+---
+
+## ⏳ UPCOMING (NOT STARTED)
+
+Phase 4 – Payments
+Phase 5 – Fund Management
+
+These are future phases and should not block current work.
+
+---
+
+## 🧱 KEY DATABASE TABLES
+
+* 
+* 
+
+  * id
+  * role (ENUM)
+  * ai_weekly_used
+  * ai_weekly_reset
+* 
+
+  * id
+  * user_id
+  * prompt
+  * response
+  * model
+  * created_at
+
+---
+
+## 🚨 CRITICAL INSTRUCTION
+
+* Do NOT reintroduce Supabase Edge Functions for AI.
+* Do NOT revive deprecated FastAPI endpoints.
+* Do NOT modify Academy content.
+* Do NOT modify AI backend.
+* Focus only on completing Google OAuth frontend wiring cleanly.
+
+---
+
+## 🎯 CURRENT OBJECTIVE
+
+Complete Phase 3 (Google OAuth frontend wiring) while maintaining:
+
+* Session stability
+* Role-based routing
+* RLS integrity
+* Clean architecture
+
+Core system is stable. This is stabilization & expansion, not debugging.
 </analysis>
