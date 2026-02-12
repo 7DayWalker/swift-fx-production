@@ -39,7 +39,7 @@ The backend validates all purchases and is the source of truth for subscription 
 ```bash
 # Apple App Store
 APPLE_SHARED_SECRET=""        # From App Store Connect
-APPLE_BUNDLE_ID="com.swiftfx.app"
+APPLE_BUNDLE_ID="com.swiftfx.signals"
 APPLE_ENVIRONMENT="sandbox"   # "sandbox" or "production"
 
 # Apple App Store Server API (optional, for advanced features)
@@ -48,7 +48,7 @@ APPLE_ISSUER_ID=""
 APPLE_PRIVATE_KEY=""
 
 # Google Play
-GOOGLE_PACKAGE_NAME="com.swiftfx.app"
+GOOGLE_PACKAGE_NAME="com.swiftfx.signals"
 GOOGLE_SERVICE_ACCOUNT_JSON="" # Base64 encoded service account JSON
 
 # IAP Product IDs (configurable)

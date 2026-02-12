@@ -15,7 +15,7 @@ const REFERRAL_TIMESTAMP_KEY = 'referral_timestamp';
 
 // App Store URLs (Placeholder - Update when app is live)
 export const APP_STORE_URLS = {
-  android: 'https://play.google.com/store/apps/details?id=com.swiftfx.app',
+  android: 'https://play.google.com/store/apps/details?id=com.swiftfx.signals',
   ios: 'https://apps.apple.com/app/id0000000000',
 };
 

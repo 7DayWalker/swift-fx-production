@@ -37,7 +37,7 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 # ===================== IAP CONFIGURATION =====================
 # Apple App Store
 APPLE_SHARED_SECRET = os.environ.get('APPLE_SHARED_SECRET', '')
-APPLE_BUNDLE_ID = os.environ.get('APPLE_BUNDLE_ID', 'com.swiftfx.app')
+APPLE_BUNDLE_ID = os.environ.get('APPLE_BUNDLE_ID', 'com.swiftfx.signals')
 APPLE_ENVIRONMENT = os.environ.get('APPLE_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
 APPLE_KEY_ID = os.environ.get('APPLE_KEY_ID', '')
 APPLE_ISSUER_ID = os.environ.get('APPLE_ISSUER_ID', '')
@@ -45,7 +45,7 @@ APPLE_PRIVATE_KEY = os.environ.get('APPLE_PRIVATE_KEY', '')
 APPLE_WEBHOOK_SECRET = os.environ.get('APPLE_WEBHOOK_SECRET', '')
 
 # Google Play Billing
-GOOGLE_PACKAGE_NAME = os.environ.get('GOOGLE_PACKAGE_NAME', 'com.swiftfx.app')
+GOOGLE_PACKAGE_NAME = os.environ.get('GOOGLE_PACKAGE_NAME', 'com.swiftfx.signals')
 GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 GOOGLE_PUBSUB_TOPIC = os.environ.get('GOOGLE_PUBSUB_TOPIC', '')
 GOOGLE_WEBHOOK_TOKEN = os.environ.get('GOOGLE_WEBHOOK_TOKEN', '')

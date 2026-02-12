@@ -22,7 +22,7 @@
     "runtimeVersion": "1.0.0",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.swiftfx.app",
+      "bundleIdentifier": "com.swiftfx.signals",
       "associatedDomains": [
         "applinks:swiftfx.app",
         "webcredentials:swiftfx.app"
@@ -36,7 +36,7 @@
       }
     },
     "android": {
-      "package": "com.swiftfx.app",
+      "package": "com.swiftfx.signals",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
