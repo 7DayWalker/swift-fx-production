@@ -376,49 +376,100 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [refreshAll]);
 
-  // Initial load
+  // SINGLE useEffect for userId changes - fetches tier and signals
+  // This is the ONLY place that should call fetchUserTier
   useEffect(() => {
-    if (token) {
+    console.log('[SignalContext] useEffect[userId, token] triggered - userId:', userId, 'token:', !!token);
+    
+    if (token && userId) {
       setIsLoading(true);
+      // Reset tier fetched ref when user changes
+      tierFetchedForUserRef.current = null;
+      
       // Fetch user tier first, then signals
       fetchUserTier().then(() => {
         refreshAll().finally(() => setIsLoading(false));
       });
       startPolling();
-    } else {
+    } else if (!token) {
+      // Logged out - reset everything
       setSignals([]);
       setStats(null);
       setHistoryData(null);
       setLastUpdated(null);
       setUserTier('free');
+      tierFetchedForUserRef.current = null;
       stopPolling();
     }
     return () => stopPolling();
-  }, [token]);
+  }, [userId, token]); // ONLY primitive dependencies - no functions
 
-  // Re-fetch user tier when user changes
+  // Re-apply access checks when userTier changes - but DON'T trigger fetches
   useEffect(() => {
-    fetchUserTier();
-  }, [fetchUserTier]);
-
-  // Re-apply access checks when userTier changes
-  useEffect(() => {
+    console.log('[SignalContext] useEffect[userTier] triggered - userTier:', userTier, 'signals.length:', signals.length);
+    
     if (signals.length > 0) {
-      // Re-map signals with new user tier
+      // Re-map signals with new user tier - use functional update to avoid stale closure
       setSignals((prev) => prev.map((s) => ({
         ...s,
         locked: !canAccessSignal(userTier, s.visibility)
       })));
     }
-  }, [userTier]);
+  }, [userTier]); // Only depends on userTier - signals.length check is inside
 
-  // Recompute stats whenever signals change
+  // Recompute stats whenever signals change - use refs to avoid dependency on callbacks
+  const signalsRef = useRef(signals);
+  signalsRef.current = signals;
+  
   useEffect(() => {
-    if (signals.length > 0) {
-      refreshStats();
-      refreshHistory();
+    if (signals.length > 0 && token) {
+      // Compute stats inline instead of calling callbacks
+      const closed = signals.filter((s) => s.status === 'closed');
+      const winning = closed.filter((s) => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return pips > 0;
+      });
+
+      const totalPips = closed.reduce((sum, s) => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return sum + (isNaN(pips) ? 0 : pips);
+      }, 0);
+
+      const pipsArray = closed.map((s) => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return isNaN(pips) ? 0 : pips;
+      });
+
+      const rawWinRate = closed.length > 0 ? (winning.length / closed.length) * 100 : 0;
+
+      setStats({
+        total_signals: signals.length,
+        winning_trades: winning.length,
+        losing_trades: closed.length - winning.length,
+        win_rate: Math.round(rawWinRate * 10) / 10,
+        total_pips: Math.round(totalPips * 10) / 10,
+        average_pips: closed.length > 0 ? Math.round((totalPips / closed.length) * 10) / 10 : 0,
+        best_trade: pipsArray.length > 0 ? Math.round(Math.max(...pipsArray) * 10) / 10 : 0,
+        worst_trade: pipsArray.length > 0 ? Math.round(Math.min(...pipsArray) * 10) / 10 : 0,
+      });
+
+      // Update history data
+      setHistoryData({
+        stats: {
+          total_signals: signals.length,
+          winning_trades: winning.length,
+          losing_trades: closed.length - winning.length,
+          win_rate: closed.length > 0 ? Math.round((winning.length / closed.length) * 100 * 10) / 10 : 0,
+          total_pips: Math.round(totalPips * 10) / 10,
+          average_pips: closed.length > 0 ? Math.round((totalPips / closed.length) * 10) / 10 : 0,
+          best_trade: 0,
+          worst_trade: 0,
+        },
+        signals: closed,
+        access_level: 'full',
+      });
     }
-  }, [signals, refreshStats, refreshHistory]);
+  }, [signals, token]); // Only depends on signals array and token
 
   return (
     <SignalContext.Provider
