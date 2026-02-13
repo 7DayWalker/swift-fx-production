@@ -64,11 +64,19 @@ Build a cross-platform trading signals app (React Native/Expo) with AI chart ana
   - No client-side bypass possible
 - **Subscription Authority**: SQL functions created for database-driven tier access
   - `get_my_active_tier()` - derives tier from subscriptions table
-  - Updated signals RLS to use subscription-based access
   - Updated `get_admin_stats()` to count subscribers from subscriptions table
 - **Role ENUM Migration Ready**: SQL migration files prepared
   - `docs/step9_subscription_enforcement.sql` - Core functions
   - `docs/step10_role_enum_migration.sql` - ENUM change (user/admin/super_admin only)
+
+### Phase 5 — Frontend Signal Visibility Gating ✅ (Dec 2025)
+- **RLS Policy Update**: `step11_signals_rls_select_all.sql` - SELECT allows all authenticated users
+- **Frontend Gating**: Signal access now enforced in frontend with locked overlays
+  - Created `src/utils/signalAccess.ts` - `canAccessSignal()`, `getUpgradeMessage()`
+  - `SignalContext.tsx` - fetches user tier from subscriptions table, applies `locked` flag
+  - Free users see Premium/VIP signals with locked overlay
+  - Premium users see VIP signals with locked overlay
+  - VIP/Admin users see all signals unlocked
 
 ## Access Control Architecture (Updated Dec 2025)
 
@@ -77,16 +85,17 @@ Build a cross-platform trading signals app (React Native/Expo) with AI chart ana
 | Identity | Supabase Auth |
 | Admin Authority | `profiles.role` (user/admin/super_admin) |
 | Subscription Tier | `subscriptions` table (free/premium/vip derived) |
-| Signal Access | `get_my_active_tier()` RLS function |
+| Signal Access | Frontend `canAccessSignal()` + locked overlay |
 
 ## Prioritized Backlog
 
-### P0 — Subscription Enforcement (Supabase)
+### P0 — Run SQL Migrations (Supabase)
 - **REQUIRED**: Run `step9_subscription_enforcement.sql` in Supabase SQL Editor
 - **REQUIRED**: Run `step10_role_enum_migration.sql` after verifying step9
+- **REQUIRED**: Run `step11_signals_rls_select_all.sql` for frontend visibility gating
 - Verify `get_my_active_tier()` returns correct tier for test users
 
-### P1 — Phase 5: Payments
+### P1 — Phase 6: Payments
 - Stripe/IAP integration
 - Subscription purchase flow
 - Wire payment completion to subscriptions table
