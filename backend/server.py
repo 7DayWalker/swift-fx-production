@@ -11,8 +11,6 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Any, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
-import bcrypt
-import jwt
 import httpx
 import base64
 from enum import Enum
@@ -21,15 +19,18 @@ from urllib.parse import quote
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection (retained for non-user collections: signals, posts, etc.)
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ.get('DB_NAME', 'swiftfx')]
 
-# JWT Configuration - fallback only for local dev, deployment sets via env
-JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-only-fallback-change-in-production')
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_DAYS = 7
+# Supabase auth integration
+from supabase_auth import (
+    get_supabase_user,
+    fetch_profile, fetch_profile_by_email, update_profile, list_profiles, count_profiles,
+    delete_profile, list_auth_users, get_auth_user, get_auth_user_email,
+    create_auth_user, delete_auth_user, update_auth_user,
+)
 
 # Emergent LLM Key for Claude Vision
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
