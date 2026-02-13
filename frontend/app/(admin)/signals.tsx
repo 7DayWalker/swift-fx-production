@@ -222,14 +222,20 @@ export default function SignalManagement() {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
+      const entry = parseFloat(formData.entry);
+      const stopLoss = parseFloat(formData.stop_loss);
+      const tp1 = parseFloat(formData.tp1);
+      const riskReward = calculateRiskReward(entry, stopLoss, tp1, formData.signal_type);
+
       const { error } = await supabase.from('signals').insert({
         pair: formData.pair,
         signal_type: formData.signal_type,
-        entry_price: parseFloat(formData.entry),
-        stop_loss: parseFloat(formData.stop_loss),
-        take_profit_1: parseFloat(formData.tp1),
+        entry_price: entry,
+        stop_loss: stopLoss,
+        take_profit_1: tp1,
         take_profit_2: formData.tp2 ? parseFloat(formData.tp2) : null,
         take_profit_3: formData.tp3 ? parseFloat(formData.tp3) : null,
+        risk_reward: riskReward,
         state: formData.status, // 'pending' or 'active'
         visibility: formData.visibility,
         analysis: formData.analysis || null,
