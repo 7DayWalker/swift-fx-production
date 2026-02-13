@@ -127,7 +127,7 @@ interface SubscriptionCardProps {
 }
 
 export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
-  const { status, getPlanBadgeColor, isLoading } = useSubscription();
+  const { status, isLoading } = useSubscription();
   const { theme } = useTheme();
 
   if (isLoading || !status) {
@@ -138,11 +138,12 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
     );
   }
 
-  const badgeColor = getPlanBadgeColor();
+  const tier = status.subscription || 'free';
+  const colors = TIER_COLORS[tier] || TIER_COLORS.free;
   const isExpiring = status.subscription_expiry && new Date(status.subscription_expiry) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: badgeColor, borderWidth: 2 }]}>
+    <View style={[styles.card, { backgroundColor: theme.card, borderColor: colors.border, borderWidth: 1 }]}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleRow}>
           <Text style={[styles.cardTitle, { color: theme.text }]}>Current Plan</Text>
