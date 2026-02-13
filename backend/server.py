@@ -1715,11 +1715,8 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
         # Remove _id from the response (MongoDB adds it after insert)
         analysis_doc.pop("_id", None)
         
-        # Increment usage (both new and legacy fields for backward compatibility)
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$inc": {"ai_weekly_used": 1, "ai_usage_count": 1}}
-        )
+        # Increment usage via Supabase profile
+        await update_profile(current_user.user_id, {"ai_weekly_used": current_usage + 1})
         
         remaining = max(0, weekly_limit - current_usage - 1)
         
@@ -2236,10 +2233,7 @@ async def update_profile(name: Optional[str] = None, current_user: User = Depend
         update_doc["name"] = name
     
     if update_doc:
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$set": update_doc}
-        )
+        await update_profile(current_user.user_id, update_doc)
     
     return {"message": "Profile updated"}
 
@@ -2379,12 +2373,9 @@ async def admin_update_user_subscription(
             update_doc["subscription_expiry"] = None
         update_doc["subscription_status"] = "active"
     
-    result = await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": update_doc}
-    )
+    result_ok = await update_profile(user_id, update_doc)
     
-    if result.modified_count == 0:
+    if not result_ok:
         raise HTTPException(status_code=400, detail="No changes made")
     
     return {
