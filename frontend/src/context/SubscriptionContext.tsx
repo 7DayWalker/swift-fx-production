@@ -116,6 +116,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch subscription status from Supabase
+  // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
   const fetchStatus = useCallback(async () => {
     if (!token || !user) {
       setStatus(null);
@@ -124,7 +125,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // 1. Fetch profile
+      // STEP 1: Fetch profile to check admin roles FIRST (highest precedence)
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, admin_role')
@@ -132,36 +133,72 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .single();
 
       const profileRole = profile?.role ?? 'free';
-      const isAdmin = profileRole === 'admin';
+      // RULE 1 & 2: super_admin or admin → VIP (highest precedence)
+      const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
 
-      // 2. Fetch active subscription (latest)
-      const { data: sub } = await supabase
+      console.log('[SubscriptionContext] Profile role:', profileRole, 'isAdmin:', isAdmin);
+
+      // If admin, grant VIP immediately
+      if (isAdmin) {
+        console.log('[SubscriptionContext] Admin detected, granting VIP access');
+        const features = buildFeatures('vip', true);
+        setStatus({
+          user_id: user.user_id,
+          subscription: 'vip',
+          subscription_raw: profileRole,
+          subscription_expiry: null,
+          subscription_active: true,
+          role: profileRole,
+          is_admin: true,
+          features,
+        });
+        setError(null);
+        return;
+      }
+
+      // STEP 2: Fetch active subscriptions
+      // Query: status = 'active' (filter expiry in JS to handle NULL)
+      const { data: subscriptions } = await supabase
         .from('subscriptions')
-        .select('*, plans(tier)')
+        .select('id, status, current_period_end, plans(tier)')
         .eq('user_id', user.user_id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .eq('status', 'active');
 
-      // 3. Derive tier
+      const now = new Date().toISOString();
+
+      // Filter active subscriptions: current_period_end IS NULL OR current_period_end > now
+      const activeSubscriptions = (subscriptions || []).filter((sub) => {
+        if (!sub.current_period_end) return true; // NULL means never expires
+        return sub.current_period_end > now;
+      });
+
+      console.log('[SubscriptionContext] Active subscriptions:', activeSubscriptions);
+
+      // Derive tier from highest active subscription
       let tier: SubscriptionPlan = 'free';
       let subscriptionActive = false;
       let expiryDate: string | null = null;
 
-      if (isAdmin) {
-        tier = 'vip';
-        subscriptionActive = true;
-      } else if (sub?.plans?.tier) {
-        tier = sub.plans.tier as SubscriptionPlan;
-        subscriptionActive = true;
-        expiryDate = sub.current_period_end;
-      } else if (['premium', 'vip'].includes(profileRole)) {
-        tier = profileRole as SubscriptionPlan;
+      if (activeSubscriptions.length > 0) {
+        // Find the highest tier among active subscriptions
+        const tierPriority: Record<string, number> = { vip: 2, premium: 1, free: 0 };
+        let highestPriority = 0;
+
+        for (const sub of activeSubscriptions) {
+          const subTier = ((sub.plans as any)?.tier || 'free').toLowerCase();
+          const priority = tierPriority[subTier] ?? 0;
+          if (priority > highestPriority) {
+            highestPriority = priority;
+            tier = subTier as SubscriptionPlan;
+            expiryDate = sub.current_period_end;
+          }
+        }
         subscriptionActive = true;
       }
 
-      const features = buildFeatures(tier, isAdmin);
+      console.log('[SubscriptionContext] FINAL RESOLVED TIER:', tier);
+
+      const features = buildFeatures(tier, false);
 
       setStatus({
         user_id: user.user_id,
@@ -170,7 +207,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         subscription_expiry: expiryDate,
         subscription_active: subscriptionActive,
         role: profileRole,
-        is_admin: isAdmin,
+        is_admin: false,
         features,
       });
       setError(null);
