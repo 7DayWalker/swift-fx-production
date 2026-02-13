@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
+import { canAccessSignal, SubscriptionTier } from '../utils/signalAccess';
 
 // Signal interface — kept identical to what screens expect
 interface Signal {
