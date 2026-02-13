@@ -81,11 +81,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ===================== ENUMS =====================
+# UPDATED: Role now only represents admin authority, not subscription tier
+# Subscription tiers (free/premium/vip) are derived from subscriptions table
 class UserRole(str, Enum):
+    USER = "user"          # Regular user (subscription tier from subscriptions table)
+    ADMIN = "admin"        # Admin user
+    SUPER_ADMIN = "super_admin"  # Super admin user
+    # DEPRECATED - kept for backward compatibility during migration
     FREE = "free"
     PREMIUM = "premium"
     VIP = "vip"
-    ADMIN = "admin"
 
 # NEW: Admin Role Types for RBAC
 class AdminRole(str, Enum):
