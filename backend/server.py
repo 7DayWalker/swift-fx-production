@@ -7032,16 +7032,66 @@ class AIAnalyzeResponse(PydanticBaseModel):
     confidence: str
 
 @api_router.post("/ai/analyze")
-async def ai_analyze_chart(request: AIAnalyzeRequest):
+async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depends(require_auth)):
     """
     AI Chart Analysis endpoint using emergentintegrations library.
-    No authentication required - frontend handles auth.
+    Requires Supabase authentication and active subscription.
+    Server-side enforcement of AI usage limits.
     """
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         
         if not EMERGENT_LLM_KEY:
             raise HTTPException(status_code=500, detail="AI service not configured")
+        
+        # Fetch user profile for subscription check
+        user_doc = await fetch_profile(current_user.user_id)
+        if not user_doc:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        # Get effective subscription (accounting for expiry)
+        effective_subscription = get_effective_subscription(user_doc)
+        
+        # Get weekly limit based on subscription tier
+        # Free: 3, Premium: 10, VIP: unlimited (999999)
+        weekly_limit = get_ai_weekly_limit(effective_subscription)
+        
+        # Check and reset weekly counter if needed
+        reset_date = user_doc.get("ai_weekly_reset")
+        current_usage = user_doc.get("ai_weekly_used", 0)
+        
+        if reset_date:
+            if isinstance(reset_date, str):
+                reset_date = datetime.fromisoformat(reset_date.replace('Z', '+00:00'))
+            elif reset_date.tzinfo is None:
+                reset_date = reset_date.replace(tzinfo=timezone.utc)
+            
+            if reset_date < datetime.now(timezone.utc):
+                # Reset weekly counter
+                await update_profile(current_user.user_id, {
+                    "ai_weekly_used": 0,
+                    "ai_weekly_reset": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+                })
+                current_usage = 0
+        else:
+            # Initialize reset date if not set
+            await update_profile(current_user.user_id, {
+                "ai_weekly_reset": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            })
+        
+        # Enforce usage limit (server-side - no client bypass)
+        if current_usage >= weekly_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=f"AI analysis limit reached ({weekly_limit}/week). Upgrade your subscription for more analyses."
+            )
+        
+        # Atomically increment usage counter BEFORE analysis (prevents race conditions)
+        await update_profile(current_user.user_id, {
+            "ai_weekly_used": current_usage + 1
+        })
+        
+        logger.info(f"[AI] User {current_user.user_id} ({effective_subscription}) - Usage: {current_usage + 1}/{weekly_limit}")
         
         # System prompt for structured JSON output
         system_prompt = """You are an expert forex and cryptocurrency chart analyst. 
