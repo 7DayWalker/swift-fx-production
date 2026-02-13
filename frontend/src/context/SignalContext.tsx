@@ -367,6 +367,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
         closedSignals,
         stats,
         historyData,
+        userTier,
         isLoading,
         isRefreshing,
         lastUpdated,
