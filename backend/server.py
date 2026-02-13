@@ -2518,28 +2518,15 @@ async def setup_admin(email: EmailStr, password: str, admin_key: str):
     
     existing = await fetch_profile_by_email(email)
     if existing:
-        # Update existing user to admin
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {"is_admin": True, "role": UserRole.VIP}}
-        )
+        # Update existing user to admin via Supabase profiles
+        await update_profile(existing["id"], {"role": UserRole.ADMIN.value, "admin_role": "super_admin", "admin_enabled": True})
         return {"message": "Existing user upgraded to admin"}
     
-    user_id = f"admin_{uuid.uuid4().hex[:12]}"
-    user_doc = {
-        "user_id": user_id,
-        "name": "Admin",
-        "email": email,
-        "password_hash": hash_password(password),
-        "role": UserRole.VIP,
-        "subscription_status": "active",
-        "is_admin": True,
-        "created_at": datetime.now(timezone.utc)
-    }
-    
-    # User creation handled via Supabase Auth Admin API
-    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
-    return {"message": "Admin account created", "user_id": user_id}
+    # Create admin via Supabase Auth Admin API
+    new_user = await create_auth_user(email, password, {"name": "Admin"})
+    if not new_user:
+        raise HTTPException(status_code=500, detail="Failed to create admin account")
+    return {"message": "Admin account created", "user_id": new_user.get("id", "")}
 
 
 # ===================== PRICE-BASED SIGNAL AUTOMATION =====================
@@ -4525,10 +4512,7 @@ async def update_admin(
         update_fields["name"] = update_data.name
     
     if update_fields:
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": update_fields}
-        )
+        await update_profile(user_id, update_fields)
         
         await log_admin_action(
             super_admin.user_id,
@@ -4870,10 +4854,7 @@ async def claim_referral_reward(
         update_fields["subscription"] = "premium"
         update_fields["role"] = UserRole.PREMIUM.value
     
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": update_fields}
-    )
+    await update_profile(current_user.user_id, update_fields)
     
     # Mark reward as applied
     await db.referrals.update_one(
@@ -5928,10 +5909,7 @@ async def update_user_profile(
     if update.phone is not None:
         update_data["phone"] = update.phone.strip()
     
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": update_data}
-    )
+    await update_profile(current_user.user_id, update_data)
     
     logger.info(f"[Settings] User {current_user.user_id} updated profile")
     
@@ -6197,19 +6175,11 @@ async def admin_restore_user(
     if user_doc.get("account_status") == AccountStatus.ACTIVE.value:
         raise HTTPException(status_code=400, detail="Account is already active")
     
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "account_status": AccountStatus.ACTIVE.value,
-            "restored_at": datetime.now(timezone.utc).isoformat(),
-            "restored_by": admin.user_id,
-        },
-        "$unset": {
-            "deactivated_at": "",
-            "deactivated_by": "",
-            "deactivation_reason": "",
-        }}
-    )
+    await update_profile(user_id, {
+        "account_status": AccountStatus.ACTIVE.value,
+        "restored_at": datetime.now(timezone.utc).isoformat(),
+        "restored_by": admin.user_id,
+    })
     
     await log_admin_action(
         admin.user_id,
