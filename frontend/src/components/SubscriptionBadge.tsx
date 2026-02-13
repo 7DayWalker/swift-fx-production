@@ -4,56 +4,107 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useTheme } from '../context/ThemeContext';
 
+// Color palette for subscription tiers
+const TIER_COLORS = {
+  free: {
+    bg: 'rgba(107, 114, 128, 0.15)', // subtle grey
+    text: '#9CA3AF',
+    border: 'rgba(107, 114, 128, 0.3)',
+  },
+  premium: {
+    bg: 'rgba(217, 119, 6, 0.12)', // subtle amber/gold
+    text: '#D97706',
+    border: 'rgba(217, 119, 6, 0.25)',
+  },
+  vip: {
+    bg: 'rgba(124, 58, 237, 0.12)', // subtle deep purple
+    text: '#8B5CF6',
+    border: 'rgba(124, 58, 237, 0.25)',
+  },
+};
+
 interface SubscriptionBadgeProps {
   size?: 'small' | 'medium' | 'large';
   showIcon?: boolean;
   onPress?: () => void;
+  variant?: 'default' | 'minimal'; // minimal = text only, very subtle
 }
 
 export function SubscriptionBadge({ 
   size = 'medium', 
   showIcon = true,
-  onPress 
+  onPress,
+  variant = 'default',
 }: SubscriptionBadgeProps) {
-  const { status, getPlanBadgeColor, getPlanDisplayName, isLoading } = useSubscription();
+  const { status, getPlanDisplayName, isLoading } = useSubscription();
   const { theme } = useTheme();
 
   if (isLoading || !status) {
     return (
-      <View style={[styles.badge, styles[`badge_${size}`], { backgroundColor: '#6B7280' }]}>
-        <Text style={[styles.badgeText, styles[`text_${size}`], { color: '#FFFFFF' }]}>
+      <View style={[styles.badge, styles[`badge_${size}`], { backgroundColor: TIER_COLORS.free.bg }]}>
+        <Text style={[styles.badgeText, styles[`text_${size}`], { color: TIER_COLORS.free.text }]}>
           ...
         </Text>
       </View>
     );
   }
 
-  const badgeColor = getPlanBadgeColor();
+  const tier = status.subscription || 'free';
+  const colors = TIER_COLORS[tier] || TIER_COLORS.free;
   const planName = getPlanDisplayName();
 
-  const getIcon = () => {
-    switch (status.subscription) {
+  const getIcon = (): keyof typeof Ionicons.glyphMap => {
+    switch (tier) {
       case 'vip':
-        return 'diamond';
+        return 'diamond-outline';
       case 'premium':
-        return 'star';
+        return 'star-outline';
       case 'free':
       default:
-        return 'person';
+        return 'person-outline';
     }
   };
 
+  // Minimal variant - just text, very subtle
+  if (variant === 'minimal') {
+    const minimalContent = (
+      <View style={[styles.minimalBadge, { borderColor: colors.border }]}>
+        <Text style={[styles.minimalText, styles[`text_${size}`], { color: colors.text }]}>
+          {planName}
+        </Text>
+      </View>
+    );
+
+    if (onPress) {
+      return (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+          {minimalContent}
+        </TouchableOpacity>
+      );
+    }
+    return minimalContent;
+  }
+
+  // Default variant - subtle pill badge
   const content = (
-    <View style={[styles.badge, styles[`badge_${size}`], { backgroundColor: badgeColor }]}>
+    <View style={[
+      styles.badge, 
+      styles[`badge_${size}`], 
+      { 
+        backgroundColor: colors.bg,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }
+    ]}>
       {showIcon && (
         <Ionicons 
           name={getIcon()} 
           size={size === 'small' ? 10 : size === 'medium' ? 12 : 14} 
-          color="#FFFFFF" 
+          color={colors.text} 
           style={styles.icon}
         />
       )}
-      <Text style={[styles.badgeText, styles[`text_${size}`], { color: '#FFFFFF' }]}>
+      <Text style={[styles.badgeText, styles[`text_${size}`], { color: colors.text }]}>
         {planName}
       </Text>
     </View>
