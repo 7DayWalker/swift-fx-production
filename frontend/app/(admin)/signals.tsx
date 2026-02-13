@@ -213,21 +213,26 @@ export default function SignalManagement() {
 
   // ========== CREATE SIGNAL (WITH STATUS CHOICE) ==========
   const handleCreateSignal = async () => {
+    console.log("=== HANDLE CREATE SIGNAL CALLED ===");
+    
     if (!formData.entry || !formData.stop_loss || !formData.tp1) {
+      console.log("=== VALIDATION FAILED ===", { entry: formData.entry, stop_loss: formData.stop_loss, tp1: formData.tp1 });
       showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
       return;
     }
 
+    console.log("=== VALIDATION PASSED ===");
     setIsSubmitting(true);
+    
     try {
+      console.log("=== FETCHING AUTH USER ===");
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       
-      console.log('=== SIGNAL CREATE DEBUG ===');
-      console.log('Auth User:', authUser);
-      console.log('Auth Error:', authError);
+      console.log("=== SIGNAL CREATE DEBUG ===", authUser);
+      console.log("Auth Error:", authError);
 
       if (!authUser) {
-        console.error('NO AUTH USER - Cannot create signal');
+        console.error("NO AUTH USER - Cannot create signal");
         showAlert('Error', 'Not authenticated. Please log in again.');
         setIsSubmitting(false);
         return;
@@ -238,7 +243,7 @@ export default function SignalManagement() {
       const tp1 = parseFloat(formData.tp1);
       const riskReward = calculateRiskReward(entry, stopLoss, tp1, formData.signal_type);
 
-      const insertPayload = {
+      const payload = {
         pair: formData.pair,
         signal_type: formData.signal_type,
         entry_price: entry,
@@ -254,29 +259,14 @@ export default function SignalManagement() {
         activated_at: formData.status === 'active' ? new Date().toISOString() : null,
       };
 
-      console.log('=== INSERT PAYLOAD ===');
-      console.log('Full Payload:', JSON.stringify(insertPayload, null, 2));
-      console.log('Payload field types:');
-      console.log('  pair:', typeof insertPayload.pair, insertPayload.pair);
-      console.log('  signal_type:', typeof insertPayload.signal_type, insertPayload.signal_type);
-      console.log('  entry_price:', typeof insertPayload.entry_price, insertPayload.entry_price);
-      console.log('  stop_loss:', typeof insertPayload.stop_loss, insertPayload.stop_loss);
-      console.log('  take_profit_1:', typeof insertPayload.take_profit_1, insertPayload.take_profit_1);
-      console.log('  take_profit_2:', typeof insertPayload.take_profit_2, insertPayload.take_profit_2);
-      console.log('  take_profit_3:', typeof insertPayload.take_profit_3, insertPayload.take_profit_3);
-      console.log('  risk_reward:', typeof insertPayload.risk_reward, insertPayload.risk_reward);
-      console.log('  state:', typeof insertPayload.state, insertPayload.state);
-      console.log('  visibility:', typeof insertPayload.visibility, insertPayload.visibility);
-      console.log('  created_by:', typeof insertPayload.created_by, insertPayload.created_by);
-      console.log('  activated_at:', typeof insertPayload.activated_at, insertPayload.activated_at);
+      console.log("=== INSERT PAYLOAD ===", payload);
 
-      // Check for undefined values
-      const undefinedFields = Object.entries(insertPayload).filter(([k, v]) => v === undefined);
-      if (undefinedFields.length > 0) {
-        console.error('UNDEFINED FIELDS DETECTED:', undefinedFields);
-      }
-
-      const { data, error } = await supabase.from('signals').insert(insertPayload).select();
+      const { data, error } = await supabase
+        .from("signals")
+        .insert(payload)
+        .select();
+      
+      console.log("=== SUPABASE RESPONSE ===", { data, error });
       
       console.log('=== SUPABASE RESPONSE ===');
       console.log('Data:', data);
