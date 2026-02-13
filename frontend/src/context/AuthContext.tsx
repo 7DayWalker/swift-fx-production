@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -12,13 +15,15 @@ interface User {
   is_admin?: boolean;
 }
 
+type OAuthProvider = 'google' | 'apple';
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
-  loginWithGoogle: (sessionId: string) => Promise<User>;
+  signInWithProvider: (provider: OAuthProvider) => Promise<void>;
   register: (name: string, email: string, password: string, referralCode?: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
