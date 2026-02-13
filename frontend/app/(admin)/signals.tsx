@@ -220,14 +220,25 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      
+      console.log('=== SIGNAL CREATE DEBUG ===');
+      console.log('Auth User:', authUser);
+      console.log('Auth Error:', authError);
+
+      if (!authUser) {
+        console.error('NO AUTH USER - Cannot create signal');
+        showAlert('Error', 'Not authenticated. Please log in again.');
+        setIsSubmitting(false);
+        return;
+      }
 
       const entry = parseFloat(formData.entry);
       const stopLoss = parseFloat(formData.stop_loss);
       const tp1 = parseFloat(formData.tp1);
       const riskReward = calculateRiskReward(entry, stopLoss, tp1, formData.signal_type);
 
-      const { error } = await supabase.from('signals').insert({
+      const insertPayload = {
         pair: formData.pair,
         signal_type: formData.signal_type,
         entry_price: entry,
@@ -236,13 +247,54 @@ export default function SignalManagement() {
         take_profit_2: formData.tp2 ? parseFloat(formData.tp2) : null,
         take_profit_3: formData.tp3 ? parseFloat(formData.tp3) : null,
         risk_reward: riskReward,
-        state: formData.status, // 'pending' or 'active'
+        state: formData.status,
         visibility: formData.visibility,
         analysis: formData.analysis || null,
-        created_by: authUser?.id,
+        created_by: authUser.id,
         activated_at: formData.status === 'active' ? new Date().toISOString() : null,
-      });
-      if (error) throw error;
+      };
+
+      console.log('=== INSERT PAYLOAD ===');
+      console.log('Full Payload:', JSON.stringify(insertPayload, null, 2));
+      console.log('Payload field types:');
+      console.log('  pair:', typeof insertPayload.pair, insertPayload.pair);
+      console.log('  signal_type:', typeof insertPayload.signal_type, insertPayload.signal_type);
+      console.log('  entry_price:', typeof insertPayload.entry_price, insertPayload.entry_price);
+      console.log('  stop_loss:', typeof insertPayload.stop_loss, insertPayload.stop_loss);
+      console.log('  take_profit_1:', typeof insertPayload.take_profit_1, insertPayload.take_profit_1);
+      console.log('  take_profit_2:', typeof insertPayload.take_profit_2, insertPayload.take_profit_2);
+      console.log('  take_profit_3:', typeof insertPayload.take_profit_3, insertPayload.take_profit_3);
+      console.log('  risk_reward:', typeof insertPayload.risk_reward, insertPayload.risk_reward);
+      console.log('  state:', typeof insertPayload.state, insertPayload.state);
+      console.log('  visibility:', typeof insertPayload.visibility, insertPayload.visibility);
+      console.log('  created_by:', typeof insertPayload.created_by, insertPayload.created_by);
+      console.log('  activated_at:', typeof insertPayload.activated_at, insertPayload.activated_at);
+
+      // Check for undefined values
+      const undefinedFields = Object.entries(insertPayload).filter(([k, v]) => v === undefined);
+      if (undefinedFields.length > 0) {
+        console.error('UNDEFINED FIELDS DETECTED:', undefinedFields);
+      }
+
+      const { data, error } = await supabase.from('signals').insert(insertPayload).select();
+      
+      console.log('=== SUPABASE RESPONSE ===');
+      console.log('Data:', data);
+      console.log('Error:', error);
+      if (error) {
+        console.error('Error Code:', error.code);
+        console.error('Error Message:', error.message);
+        console.error('Error Details:', error.details);
+        console.error('Error Hint:', error.hint);
+        console.error('Full Error Object:', JSON.stringify(error, null, 2));
+      }
+
+      if (error) {
+        throw error;
+      }
+      
+      console.log('=== SIGNAL CREATED SUCCESSFULLY ===');
+      console.log('Created Signal:', data);
       
       setShowCreateModal(false);
       resetCreateForm();
@@ -253,7 +305,17 @@ export default function SignalManagement() {
       
       showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to create signal');
+      console.error('=== SIGNAL CREATE ERROR ===');
+      console.error('Error Type:', error?.constructor?.name);
+      console.error('Error Message:', error?.message);
+      console.error('Error Code:', error?.code);
+      console.error('Error Details:', error?.details);
+      console.error('Error Hint:', error?.hint);
+      console.error('Full Error:', error);
+      console.error('Error JSON:', JSON.stringify(error, null, 2));
+      
+      const errorMsg = error?.message || error?.details || 'Failed to create signal';
+      showAlert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
     }
