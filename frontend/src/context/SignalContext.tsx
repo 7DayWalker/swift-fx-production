@@ -132,43 +132,83 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const closedSignals = signals.filter((s) => s.status === 'closed');
 
   // Fetch user's subscription tier
+  // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
   const fetchUserTier = useCallback(async () => {
     if (!user?.id) {
+      console.log('[SignalContext] No user ID, defaulting to free');
       setUserTier('free');
       return;
     }
 
     try {
-      // Check active subscription from subscriptions table
-      const { data: subscription, error } = await supabase
-        .from('subscriptions')
-        .select('*, plans(tier)')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .gt('current_period_end', new Date().toISOString())
-        .order('current_period_end', { ascending: false })
-        .limit(1)
+      // STEP 1: Fetch profile to check admin roles FIRST (highest precedence)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
         .single();
 
-      if (error || !subscription) {
-        // No active subscription, check if admin (admins get VIP access)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+      if (profileError) {
+        console.warn('[SignalContext] Profile fetch error:', profileError.message);
+      }
 
-        if (profile?.role === 'admin' || profile?.role === 'super_admin') {
-          setUserTier('vip');
-        } else {
-          setUserTier('free');
-        }
+      const profileRole = profile?.role;
+      console.log('[SignalContext] Profile role:', profileRole);
+
+      // RULE 1 & 2: super_admin or admin → VIP (highest precedence)
+      if (profileRole === 'super_admin' || profileRole === 'admin') {
+        console.log('[SignalContext] Admin detected, granting VIP access');
+        setUserTier('vip');
         return;
       }
 
-      // Get tier from subscription's plan
-      const tier = (subscription.plans as any)?.tier || 'free';
-      setUserTier(tier as SubscriptionTier);
+      // STEP 2: Check active subscription from subscriptions table
+      // Query: status = 'active' AND (current_period_end IS NULL OR current_period_end > now())
+      const now = new Date().toISOString();
+      const { data: subscriptions, error: subError } = await supabase
+        .from('subscriptions')
+        .select('id, status, current_period_end, plans(tier)')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      if (subError) {
+        console.warn('[SignalContext] Subscription fetch error:', subError.message);
+      }
+
+      console.log('[SignalContext] Raw subscriptions:', subscriptions);
+
+      // Filter active subscriptions: current_period_end IS NULL OR current_period_end > now
+      const activeSubscriptions = (subscriptions || []).filter((sub) => {
+        if (!sub.current_period_end) return true; // NULL means never expires
+        return sub.current_period_end > now;
+      });
+
+      console.log('[SignalContext] Active subscriptions after filter:', activeSubscriptions);
+
+      if (activeSubscriptions.length > 0) {
+        // Find the highest tier among active subscriptions
+        const tierPriority: Record<string, number> = { vip: 2, premium: 1, free: 0 };
+        let highestTier: SubscriptionTier = 'free';
+        let highestPriority = 0;
+
+        for (const sub of activeSubscriptions) {
+          const subTier = ((sub.plans as any)?.tier || 'free').toLowerCase() as SubscriptionTier;
+          const priority = tierPriority[subTier] ?? 0;
+          if (priority > highestPriority) {
+            highestPriority = priority;
+            highestTier = subTier;
+          }
+        }
+
+        console.log('[SignalContext] FINAL RESOLVED TIER:', highestTier);
+        setUserTier(highestTier);
+        return;
+      }
+
+      // No active subscription found
+      console.log('[SignalContext] No active subscription, defaulting to free');
+      console.log('[SignalContext] FINAL RESOLVED TIER: free');
+      setUserTier('free');
     } catch (err) {
       console.error('[SignalContext] fetchUserTier error:', err);
       setUserTier('free');
