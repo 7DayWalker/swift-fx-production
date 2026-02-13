@@ -80,10 +80,10 @@ const mapRow = (row: any): Signal => ({
   signal_type: row.signal_type,
   entry: row.entry_price != null ? Number(row.entry_price) : undefined,
   stop_loss: row.stop_loss != null ? Number(row.stop_loss) : undefined,
-  tp1: row.tp1 != null ? Number(row.tp1) : undefined,
-  tp2: row.tp2 != null ? Number(row.tp2) : undefined,
-  tp3: row.tp3 != null ? Number(row.tp3) : undefined,
-  take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
+  tp1: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
+  tp2: row.take_profit_2 != null ? Number(row.take_profit_2) : undefined,
+  tp3: row.take_profit_3 != null ? Number(row.take_profit_3) : undefined,
+  take_profit: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
   risk_reward: row.risk_reward != null ? Number(row.risk_reward) : undefined,
   // Map DB state → old 'status' names (tp1/tp2/tp3 → 'active', closed → 'closed')
   status: ['pending'].includes(row.state)
