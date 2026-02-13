@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   badge_medium: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
   },
@@ -280,17 +280,29 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   badgeText: {
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   text_small: {
     fontSize: 10,
   },
   text_medium: {
-    fontSize: 12,
+    fontSize: 11,
   },
   text_large: {
-    fontSize: 14,
+    fontSize: 13,
+  },
+  // Minimal variant styles
+  minimalBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  minimalText: {
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 
   // Card styles
