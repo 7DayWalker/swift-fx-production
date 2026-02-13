@@ -4540,8 +4540,10 @@ async def delete_admin(
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
     
+    admin_email = await get_auth_user_email(user_id) or ""
+    
     # Cannot delete protected Super Admins
-    if is_protected_super_admin(admin["email"]):
+    if is_protected_super_admin(admin_email):
         raise HTTPException(
             status_code=403,
             detail="Cannot delete protected Super Admin accounts"
@@ -4562,7 +4564,7 @@ async def delete_admin(
         "delete",
         "admin",
         user_id,
-        {"email": admin["email"]}
+        {"email": admin_email}
     )
     
     return {"success": True, "message": "Admin deleted successfully"}
