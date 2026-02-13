@@ -191,12 +191,13 @@ export function SignalProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setSignals((data || []).map(mapRow));
+      // Map signals with access check based on user tier
+      setSignals((data || []).map((row) => mapRowWithAccess(row, userTier)));
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[Signals] refreshSignals failed:', err);
     }
-  }, [token]);
+  }, [token, userTier]);
 
   const refreshStats = useCallback(async () => {
     if (!token) return;
