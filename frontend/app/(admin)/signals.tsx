@@ -209,9 +209,9 @@ export default function SignalManagement() {
         signal_type: formData.signal_type,
         entry_price: parseFloat(formData.entry),
         stop_loss: parseFloat(formData.stop_loss),
-        tp1: parseFloat(formData.tp1),
-        tp2: formData.tp2 ? parseFloat(formData.tp2) : null,
-        tp3: formData.tp3 ? parseFloat(formData.tp3) : null,
+        take_profit_1: parseFloat(formData.tp1),
+        take_profit_2: formData.tp2 ? parseFloat(formData.tp2) : null,
+        take_profit_3: formData.tp3 ? parseFloat(formData.tp3) : null,
         state: formData.status, // 'pending' or 'active'
         visibility: formData.visibility,
         analysis: formData.analysis || null,
