@@ -1432,7 +1432,7 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
                 continue
             
             # Get user info to check role and notification preferences
-            user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+            user = await fetch_profile(user_id)
             if not user:
                 continue
             
@@ -1515,7 +1515,7 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not token.startswith("ExponentPushToken") or not user_id:
                 continue
             
-            user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+            user = await fetch_profile(user_id)
             if not user:
                 continue
             
@@ -1575,7 +1575,7 @@ async def analyze_chart_legacy(
     current_user: User = Depends(require_auth)
 ):
     # Get user document for subscription check
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -1603,26 +1603,20 @@ async def analyze_chart_legacy(
         
         if reset_date < datetime.now(timezone.utc):
             # Reset weekly counter
-            await db.users.update_one(
-                {"user_id": current_user.user_id},
-                {"$set": {
+            await update_profile(current_user.user_id, {
                     "ai_weekly_used": 0,
                     "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
                     # Also reset legacy fields
                     "ai_usage_count": 0,
                     "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-                }}
-            )
+                })
             current_usage = 0
     else:
         # Initialize reset date if not set
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$set": {
+        await update_profile(current_user.user_id, {
                 "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
                 "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-            }}
-        )
+            })
     
     # Check usage limit (VIP has unlimited = 999999)
     if current_usage >= weekly_limit:
@@ -1751,7 +1745,7 @@ async def get_ai_history(current_user: User = Depends(require_auth)):
 
 @api_router.get("/ai/usage")
 async def get_ai_usage(current_user: User = Depends(require_auth)):
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -1965,7 +1959,7 @@ async def create_payment_session(
         raise HTTPException(status_code=400, detail="Invalid billing cycle")
     
     # Check if user already has this or higher plan
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     current_subscription = get_effective_subscription(user_doc)
     
     plan_hierarchy = {"free": 0, "premium": 1, "vip": 2}
@@ -2107,16 +2101,13 @@ async def payment_webhook(webhook_data: PaymentWebhook):
             expiry = datetime.now(timezone.utc) + timedelta(days=365)
         
         # UPGRADE USER SUBSCRIPTION - The ONLY place this happens
-        await db.users.update_one(
-            {"user_id": session["user_id"]},
-            {"$set": {
+        await update_profile(session["user_id"], {
                 "subscription": session["plan"],
                 "role": session["plan"],
                 "subscription_status": "active",
                 "subscription_expiry": expiry,
                 "billing_cycle": billing_cycle
-            }}
-        )
+            })
         
         # Mark session as paid
         await db.payment_sessions.update_one(
@@ -2234,10 +2225,7 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
 
 @api_router.put("/notifications/preferences")
 async def update_notification_preferences(preferences: Dict[str, bool], current_user: User = Depends(require_auth)):
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {"notification_preferences": preferences}}
-    )
+    await update_profile(current_user.user_id, {"notification_preferences": preferences})
     return {"message": "Preferences updated"}
 
 # ===================== USER PROFILE ENDPOINTS =====================
@@ -2257,17 +2245,14 @@ async def update_profile(name: Optional[str] = None, current_user: User = Depend
 
 @api_router.put("/profile/password")
 async def change_password(current_password: str, new_password: str, current_user: User = Depends(require_auth)):
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc.get("password_hash"):
         raise HTTPException(status_code=400, detail="Cannot change password for OAuth accounts")
     
     if not verify_password(current_password, user_doc["password_hash"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {"password_hash": hash_password(new_password)}}
-    )
+    await update_profile(current_user.user_id, {"password_hash": hash_password(new_password)})
     
     return {"message": "Password changed successfully"}
 
@@ -2324,24 +2309,21 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user)
 # ===================== ADMIN ENDPOINTS =====================
 @api_router.get("/admin/users")
 async def get_all_users(admin: User = Depends(require_admin)):
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    users = await list_profiles()
     return users
 
 @api_router.put("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, role: UserRole, admin: User = Depends(require_admin)):
-    result = await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {"role": role}}
-    )
+    result = await update_profile(user_id, {"role": role})
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User role updated"}
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(admin: User = Depends(require_admin)):
-    total_users = await db.users.count_documents({})
-    premium_users = await db.users.count_documents({"role": "premium"})
-    vip_users = await db.users.count_documents({"role": "vip"})
+    total_users = await count_profiles()
+    premium_users = await count_profiles("premium")
+    vip_users = await count_profiles("vip")
     total_signals = await db.signals.count_documents({})
     total_ai_analyses = await db.ai_analyses.count_documents({})
     
@@ -2374,7 +2356,7 @@ async def admin_update_user_subscription(
         raise HTTPException(status_code=400, detail=f"Invalid subscription. Must be one of: {valid_subscriptions}")
     
     # Find user
-    user = await db.users.find_one({"user_id": user_id})
+    user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2416,19 +2398,16 @@ async def admin_update_user_subscription(
 @api_router.post("/admin/users/{user_id}/reset-ai-usage")
 async def admin_reset_user_ai_usage(user_id: str, admin: User = Depends(require_admin)):
     """Admin endpoint to reset a user's AI usage counter"""
-    user = await db.users.find_one({"user_id": user_id})
+    user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    result = await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
+    result = await update_profile(user_id, {
             "ai_weekly_used": 0,
             "ai_usage_count": 0,
             "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
             "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-        }}
-    )
+        })
     
     return {
         "message": "AI usage reset successfully",
@@ -2440,7 +2419,7 @@ async def admin_reset_user_ai_usage(user_id: str, admin: User = Depends(require_
 @api_router.get("/admin/users/{user_id}/details")
 async def admin_get_user_details(user_id: str, admin: User = Depends(require_admin)):
     """Admin endpoint to get detailed user information including subscription status"""
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2462,7 +2441,7 @@ async def check_fund_management_access(current_user: User = Depends(require_auth
     Guard endpoint for Fund Management (VIP only).
     Returns 403 if user does not have VIP subscription.
     """
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2489,7 +2468,7 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
     Guard endpoint for Academy (VIP only).
     Returns 403 if user does not have VIP subscription.
     """
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2514,7 +2493,7 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
 @api_router.get("/subscription/status")
 async def get_subscription_status(current_user: User = Depends(require_auth)):
     """Get current user's subscription status - used for real-time UI sync"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id}, {"_id": 0, "password_hash": 0})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2553,7 +2532,7 @@ async def setup_admin(email: EmailStr, password: str, admin_key: str):
     if admin_key != "SWIFTFX_ADMIN_SETUP_2024":
         raise HTTPException(status_code=403, detail="Invalid admin key")
     
-    existing = await db.users.find_one({"email": email})
+    existing = await fetch_profile_by_email(email)
     if existing:
         # Update existing user to admin
         await db.users.update_one(
@@ -2574,7 +2553,8 @@ async def setup_admin(email: EmailStr, password: str, admin_key: str):
         "created_at": datetime.now(timezone.utc)
     }
     
-    await db.users.insert_one(user_doc)
+    # User creation handled via Supabase Auth Admin API
+    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
     return {"message": "Admin account created", "user_id": user_id}
 
 
@@ -3378,7 +3358,7 @@ async def startup_event():
 async def initialize_super_admins():
     """Create or update protected Super Admin accounts on startup"""
     for email in PROTECTED_SUPER_ADMINS:
-        existing = await db.users.find_one({"email": email.lower()})
+        existing = await fetch_profile_by_email(email.lower())
         
         if existing:
             # Ensure they have Super Admin role (cannot be downgraded)
@@ -3419,7 +3399,8 @@ async def initialize_super_admins():
                 "notification_preferences": {"signals": True, "community": True},
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
-            await db.users.insert_one(user_doc)
+            # User creation handled via Supabase Auth Admin API
+    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
             logger.info(f"[RBAC] Created Super Admin account for {email}")
             logger.info(f"[RBAC] Temporary password for {email}: {temp_password}")
     
@@ -3617,7 +3598,7 @@ async def submit_fund_application(
     Requires Premium or VIP subscription.
     """
     # Get user document for subscription check
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -4459,7 +4440,7 @@ async def get_my_admin_info(current_user: User = Depends(require_admin)):
 @api_router.get("/admin/rbac/admins")
 async def list_all_admins(super_admin: User = Depends(require_super_admin)):
     """List all admin accounts. Super Admin only."""
-    admins = await db.users.find({"role": "admin"}).to_list(100)
+    admins = await list_profiles({"role": "admin"})
     
     result = []
     for admin in admins:
@@ -4491,7 +4472,7 @@ async def create_admin(
 ):
     """Create a new admin account. Super Admin only."""
     # Check if email already exists
-    existing = await db.users.find_one({"email": admin_data.email.lower()})
+    existing = await fetch_profile_by_email(admin_data.email.lower())
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -4524,7 +4505,8 @@ async def create_admin(
         "created_at": now.isoformat(),
     }
     
-    await db.users.insert_one(user_doc)
+    # User creation handled via Supabase Auth Admin API
+    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
     
     await log_admin_action(
         super_admin.user_id,
@@ -4558,7 +4540,7 @@ async def update_admin(
     super_admin: User = Depends(require_super_admin)
 ):
     """Update an admin's role or status. Super Admin only."""
-    admin = await db.users.find_one({"user_id": user_id, "role": "admin"})
+    admin = await fetch_profile(user_id)
     
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -4611,7 +4593,7 @@ async def delete_admin(
     super_admin: User = Depends(require_super_admin)
 ):
     """Delete an admin account. Super Admin only. Cannot delete protected Super Admins."""
-    admin = await db.users.find_one({"user_id": user_id, "role": "admin"})
+    admin = await fetch_profile(user_id)
     
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -4630,7 +4612,7 @@ async def delete_admin(
             detail="Cannot delete your own account"
         )
     
-    await db.users.delete_one({"user_id": user_id})
+    await delete_auth_user(user_id); await delete_profile(user_id)
     
     await log_admin_action(
         super_admin.user_id,
@@ -4744,17 +4726,14 @@ async def get_all_roles_permissions(current_user: User = Depends(require_admin))
 @api_router.get("/referral/my-code")
 async def get_my_referral_code(current_user: User = Depends(require_auth)):
     """Get current user's referral code and stats"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     
     referral_code = user_doc.get("referral_code")
     
     # Generate code if not exists (for existing users)
     if not referral_code:
         referral_code = generate_referral_code(current_user.user_id)
-        await db.users.update_one(
-            {"user_id": current_user.user_id},
-            {"$set": {"referral_code": referral_code}}
-        )
+        await update_profile(current_user.user_id, {"referral_code": referral_code})
     
     # Get referral stats
     total_referrals = await db.referrals.count_documents({"referrer_id": current_user.user_id})
@@ -4805,7 +4784,7 @@ async def get_my_referral_code(current_user: User = Depends(require_auth)):
 @api_router.get("/referral/validate/{code}")
 async def validate_referral_code(code: str):
     """Validate a referral code before registration"""
-    user = await db.users.find_one({"referral_code": code.upper()})
+    user = (await list_profiles({"referral_code": code.upper()}) or [None])[0]
     
     if not user:
         return {"valid": False, "message": "Invalid referral code"}
@@ -4909,7 +4888,7 @@ async def claim_referral_reward(
     days_to_add = 14 if reward_type == "premium_14_days" else 7
     
     # Get current user's subscription
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     current_expiry = user_doc.get("subscription_expiry")
     current_subscription = user_doc.get("subscription", "free")
     
@@ -4989,7 +4968,7 @@ async def get_all_referrals(
     for ref in referrals:
         ref.pop("_id", None)
         # Get referrer info
-        referrer = await db.users.find_one({"user_id": ref["referrer_id"]})
+        referrer = await fetch_profile(ref["referrer_id"])
         if referrer:
             ref["referrer_name"] = referrer.get("name", "Unknown")
             ref["referrer_email"] = referrer.get("email", "Unknown")
@@ -5498,7 +5477,7 @@ async def admin_get_ticket_details(
     ticket["_id"] = str(ticket["_id"])
     
     # Get user details
-    user = await db.users.find_one({"user_id": ticket["user_id"]})
+    user = await fetch_profile(ticket["user_id"])
     user_info = {
         "name": user.get("name", "Unknown") if user else "Unknown",
         "email": user.get("email", "Unknown") if user else "Unknown",
@@ -5958,7 +5937,7 @@ By using Swift FX Signals, you acknowledge that:
 @api_router.get("/settings/profile")
 async def get_user_profile(current_user: User = Depends(get_current_user)):
     """Get current user's profile information"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6009,7 +5988,7 @@ async def change_password(
     current_user: User = Depends(get_current_user)
 ):
     """Change user password"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6023,13 +6002,10 @@ async def change_password(
     
     # Hash and update new password
     new_hash = hash_password(password_change.new_password)
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {
+    await update_profile(current_user.user_id, {
             "password_hash": new_hash,
             "password_changed_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     logger.info(f"[Settings] User {current_user.user_id} changed password")
     
@@ -6038,7 +6014,7 @@ async def change_password(
 @api_router.get("/settings/notifications")
 async def get_notification_preferences(current_user: User = Depends(get_current_user)):
     """Get user notification preferences"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6067,7 +6043,7 @@ async def update_notification_preferences(
     current_user: User = Depends(get_current_user)
 ):
     """Update notification preferences"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6095,10 +6071,7 @@ async def update_notification_preferences(
     if update.support_replies is not None:
         current_prefs["support_replies"] = update.support_replies
     
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {"notification_settings": current_prefs}}
-    )
+    await update_profile(current_user.user_id, {"notification_settings": current_prefs})
     
     logger.info(f"[Settings] User {current_user.user_id} updated notification preferences")
     
@@ -6122,14 +6095,11 @@ async def deactivate_account(
     if is_protected_super_admin(current_user.email):
         raise HTTPException(status_code=403, detail="Protected admin accounts cannot be deactivated")
     
-    await db.users.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": {
+    await update_profile(current_user.user_id, {
             "account_status": AccountStatus.DEACTIVATED.value,
             "deactivated_at": datetime.now(timezone.utc).isoformat(),
             "deactivation_reason": request.reason,
-        }}
-    )
+        })
     
     logger.info(f"[Settings] User {current_user.user_id} deactivated account")
     
@@ -6185,7 +6155,7 @@ async def request_account_deletion(
 @api_router.get("/settings/sessions")
 async def get_user_sessions(current_user: User = Depends(get_current_user)):
     """Get user session information (prepared for multi-device control)"""
-    user_doc = await db.users.find_one({"user_id": current_user.user_id})
+    user_doc = await fetch_profile(current_user.user_id)
     
     return {
         "current_session": {
@@ -6204,7 +6174,7 @@ async def admin_get_user_settings(
     admin: User = Depends(require_admin)
 ):
     """Get a user's settings (read-only for admins)"""
-    user_doc = await db.users.find_one({"user_id": user_id})
+    user_doc = await fetch_profile(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6228,7 +6198,7 @@ async def admin_deactivate_user(
     if admin.admin_role != AdminRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="Only Super Admin can deactivate accounts")
     
-    user_doc = await db.users.find_one({"user_id": user_id})
+    user_doc = await fetch_profile(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6236,15 +6206,12 @@ async def admin_deactivate_user(
     if is_protected_super_admin(user_doc.get("email", "")):
         raise HTTPException(status_code=403, detail="Cannot deactivate protected Super Admin accounts")
     
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
+    await update_profile(user_id, {
             "account_status": AccountStatus.DEACTIVATED.value,
             "deactivated_at": datetime.now(timezone.utc).isoformat(),
             "deactivated_by": admin.user_id,
             "deactivation_reason": reason,
-        }}
-    )
+        })
     
     await log_admin_action(
         admin.user_id,
@@ -6268,7 +6235,7 @@ async def admin_restore_user(
     if admin.admin_role != AdminRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="Only Super Admin can restore accounts")
     
-    user_doc = await db.users.find_one({"user_id": user_id})
+    user_doc = await fetch_profile(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -6517,9 +6484,7 @@ async def verify_apple_purchase(
         # Update user subscription
         expiry_date = parsed.get('expiry_date')
         
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
+        await update_profile(user_id, {
                 "subscription": plan,
                 "subscription_status": "active",
                 "subscription_expiry": expiry_date,
@@ -6528,8 +6493,7 @@ async def verify_apple_purchase(
                 "subscription_auto_renew": parsed.get('auto_renew', True),
                 "subscription_is_trial": parsed.get('is_trial', False),
                 "updated_at": datetime.now(timezone.utc).isoformat()
-            }}
-        )
+            })
         
         # Store transaction record
         transaction = {
@@ -6761,9 +6725,7 @@ async def verify_google_purchase(
         # Update user subscription
         auto_renewing = validation_result.get('autoRenewing', validation_result.get('auto_renewing', True))
         
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
+        await update_profile(user_id, {
                 "subscription": plan,
                 "subscription_status": "active",
                 "subscription_expiry": expiry_date.isoformat(),
@@ -6772,8 +6734,7 @@ async def verify_google_purchase(
                 "subscription_auto_renew": auto_renewing,
                 "subscription_is_trial": False,
                 "updated_at": datetime.now(timezone.utc).isoformat()
-            }}
-        )
+            })
         
         # Store transaction record
         order_id = validation_result.get('orderId', f"google_{uuid.uuid4().hex[:12]}")
@@ -7007,7 +6968,7 @@ async def get_iap_status(current_user: User = Depends(require_auth)):
     """Get user's IAP subscription status"""
     user_id = current_user.user_id
     
-    user = await db.users.find_one({"user_id": user_id})
+    user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -7128,8 +7089,8 @@ async def admin_get_iap_stats(admin: User = Depends(require_admin)):
     cancelled_count = await db.iap_transactions.count_documents({"status": "cancelled"})
     
     # Count active subscriptions by plan
-    premium_users = await db.users.count_documents({"subscription": "premium", "subscription_platform": {"$exists": True}})
-    vip_users = await db.users.count_documents({"subscription": "vip", "subscription_platform": {"$exists": True}})
+    premium_users = await count_profiles("premium")
+    vip_users = await count_profiles("vip")
     
     return {
         "by_platform": {
