@@ -10,12 +10,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
-import * as SplashScreen from 'expo-splash-screen';
 import NotificationService from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
-
-// Prevent splash screen from auto-hiding (top-level, outside component)
-SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
@@ -69,13 +65,6 @@ export default function RootLayout() {
     ...Ionicons.font,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded]);
-
-  // Return null while fonts are loading (no extra components)
   if (!fontsLoaded) {
     return null;
   }
