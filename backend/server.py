@@ -732,11 +732,11 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     
-    # Get user's effective subscription
+    # Get user's effective subscription from Supabase profile
     if current_user:
-        user_doc = await db.users.find_one({"user_id": current_user.user_id})
-        user_subscription = get_effective_subscription(user_doc) if user_doc else "free"
-        is_admin = user_doc.get("role") == "admin" if user_doc else False
+        user_role = current_user.role
+        is_admin = user_role == UserRole.ADMIN.value
+        user_subscription = user_role if user_role in ("premium", "vip") else "free"
     else:
         user_subscription = "free"
         is_admin = False
