@@ -134,7 +134,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   // Fetch user's subscription tier
   // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
   const fetchUserTier = useCallback(async () => {
-    if (!user?.id) {
+    if (!user?.user_id) {
       console.log('[SignalContext] No user ID, defaulting to free');
       setUserTier('free');
       return;
@@ -145,7 +145,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('id', user.user_id)
         .single();
 
       if (profileError) {
@@ -168,7 +168,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       const { data: subscriptions, error: subError } = await supabase
         .from('subscriptions')
         .select('id, status, current_period_end, plans(tier)')
-        .eq('user_id', user.id)
+        .eq('user_id', user.user_id)
         .eq('status', 'active');
 
       if (subError) {
@@ -213,7 +213,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       console.error('[SignalContext] fetchUserTier error:', err);
       setUserTier('free');
     }
-  }, [user?.id]);
+  }, [user?.user_id]);
 
   // ---- Data fetching ----
 
