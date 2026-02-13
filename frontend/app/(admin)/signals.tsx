@@ -55,6 +55,24 @@ const safeNum = (value: any, fallback: number = 0): number => {
   return isNaN(num) ? fallback : num;
 };
 
+// Calculate risk/reward ratio
+const calculateRiskReward = (
+  entry: number,
+  stopLoss: number,
+  takeProfit: number,
+  signalType: 'buy' | 'sell'
+): number => {
+  if (signalType === 'buy') {
+    const risk = Math.abs(entry - stopLoss);
+    const reward = Math.abs(takeProfit - entry);
+    return risk > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
+  } else {
+    const risk = Math.abs(stopLoss - entry);
+    const reward = Math.abs(entry - takeProfit);
+    return risk > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
+  }
+};
+
 export default function SignalManagement() {
   const router = useRouter();
   
