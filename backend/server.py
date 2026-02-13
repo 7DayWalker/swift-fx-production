@@ -4426,29 +4426,25 @@ async def create_admin(
                 detail="Cannot create Super Admin accounts. Only protected emails can be Super Admins."
             )
     
-    # Create admin user
-    user_id = f"admin_{uuid.uuid4().hex[:12]}"
-    password_hash = bcrypt.hashpw(admin_data.password.encode(), bcrypt.gensalt()).decode()
+    # Create admin user via Supabase Auth Admin API
+    new_user = await create_auth_user(
+        admin_data.email.lower(), 
+        admin_data.password,
+        {"name": admin_data.name}
+    )
+    if not new_user:
+        raise HTTPException(status_code=500, detail="Failed to create admin user in Supabase Auth")
+    
+    user_id = new_user["id"]
     now = datetime.now(timezone.utc)
     
-    user_doc = {
-        "user_id": user_id,
+    # Update the auto-created profile with admin role
+    await update_profile(user_id, {
         "name": admin_data.name,
-        "email": admin_data.email.lower(),
-        "password_hash": password_hash,
         "role": UserRole.ADMIN.value,
         "admin_role": admin_data.admin_role.value,
         "admin_enabled": True,
-        "subscription": "vip",
-        "subscription_expiry": None,
-        "subscription_status": "active",
-        "ai_weekly_used": 0,
-        "notification_preferences": {"signals": True, "community": True},
-        "created_at": now.isoformat(),
-    }
-    
-    # User creation handled via Supabase Auth Admin API
-    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
+    })
     
     await log_admin_action(
         super_admin.user_id,
@@ -5918,27 +5914,16 @@ async def update_user_profile(
 @api_router.put("/settings/password")
 async def change_password(
     password_change: PasswordChange,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
-    """Change user password"""
-    user_doc = await fetch_profile(current_user.user_id)
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
+    """Change user password via Supabase Auth Admin API"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Verify current password
-    if not verify_password(password_change.current_password, user_doc.get("password_hash", "")):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
-    # Validate new password
-    if len(password_change.new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
-    
-    # Hash and update new password
-    new_hash = hash_password(password_change.new_password)
-    await update_profile(current_user.user_id, {
-            "password_hash": new_hash,
-            "password_changed_at": datetime.now(timezone.utc).isoformat()
-        })
+    # Update password via Supabase Auth Admin API
+    success = await update_auth_user(current_user.user_id, {"password": password_change.new_password})
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update password")
     
     logger.info(f"[Settings] User {current_user.user_id} changed password")
     
