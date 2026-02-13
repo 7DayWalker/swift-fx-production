@@ -4384,15 +4384,20 @@ async def list_all_admins(super_admin: User = Depends(require_super_admin)):
     """List all admin accounts. Super Admin only."""
     admins = await list_profiles({"role": "admin"})
     
+    # Fetch emails from auth.users for all admins
+    auth_users = await list_auth_users()
+    email_map = {u["id"]: u.get("email", "") for u in auth_users}
+    
     result = []
     for admin in admins:
+        admin_email = email_map.get(admin["id"], "")
         result.append({
-            "user_id": admin["user_id"],
-            "email": admin["email"],
+            "user_id": admin["id"],
+            "email": admin_email,
             "name": admin.get("name", "Unknown"),
             "admin_role": admin.get("admin_role"),
             "admin_enabled": admin.get("admin_enabled", True),
-            "is_protected": is_protected_super_admin(admin["email"]),
+            "is_protected": is_protected_super_admin(admin_email),
             "created_at": admin.get("created_at"),
         })
     
