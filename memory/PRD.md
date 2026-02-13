@@ -78,6 +78,23 @@ Build a cross-platform trading signals app (React Native/Expo) with AI chart ana
   - Premium users see VIP signals with locked overlay
   - VIP/Admin users see all signals unlocked
 
+### Phase 5.1 — Access Resolution Bug Fix ✅ (Dec 2025)
+- **P0 Bug Fixed**: Tier resolution logic completely rewritten in 3 files:
+  - `SignalContext.tsx` - `fetchUserTier()` now follows correct precedence
+  - `SubscriptionContext.tsx` - `fetchStatus()` aligned with same logic
+  - `AuthContext.tsx` - `buildUser()` now recognizes `super_admin` role
+- **Correct Precedence Order**:
+  1. `super_admin` profile role → VIP access
+  2. `admin` profile role → VIP access  
+  3. Active VIP subscription → VIP access
+  4. Active Premium subscription → Premium access
+  5. No subscription → Free access
+- **Fixed Query Issues**:
+  - Removed `.gt('current_period_end', now)` that silently filtered out NULL (never-expiring) subscriptions
+  - Now properly handles NULL `current_period_end` (lifetime subscriptions)
+  - Selects highest tier when multiple active subscriptions exist
+- **Debug Logging Added**: `console.log('[SignalContext] FINAL RESOLVED TIER:', tier)` for verification
+
 ## Access Control Architecture (Updated Dec 2025)
 
 | Concern | Authority Source |
