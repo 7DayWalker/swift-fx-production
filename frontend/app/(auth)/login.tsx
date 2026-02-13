@@ -18,25 +18,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import Constants from 'expo-constants';
-
-const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL || '';
-const AUTH_URL = 'https://auth.emergentagent.com';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const { login, loginWithGoogle } = useAuth();
+  const [oauthLoading, setOauthLoading] = useState<'apple' | 'google' | null>(null);
+  const { login, signInWithProvider } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
 
   const handleLogin = async () => {
-    console.log('handleLogin called', { email, password: password ? '***' : '' });
     if (!email || !password) {
       if (Platform.OS === 'web') {
         window.alert('Please fill in all fields');
@@ -48,60 +41,47 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      console.log('Attempting login...');
       const userData = await login(email, password);
-      console.log('Login successful, navigating...', userData);
-      
-      // Redirect based on admin status
       if (userData.is_admin) {
         router.replace('/(admin)/dashboard');
       } else {
         router.replace('/(tabs)/dashboard');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      const msg = error.message || 'Invalid credentials';
       if (Platform.OS === 'web') {
-        window.alert(error.message || 'Invalid credentials');
+        window.alert(msg);
       } else {
-        Alert.alert('Login Failed', error.message || 'Invalid credentials');
+        Alert.alert('Login Failed', msg);
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true);
+  const handleOAuthLogin = async (provider: 'apple' | 'google') => {
+    setOauthLoading(provider);
     try {
-      // Use window.location.origin for web to ensure correct redirect across all environments
-      const redirectUrl = Platform.OS === 'web'
-        ? (typeof window !== 'undefined' ? window.location.origin + '/' : '/')
-        : Linking.createURL('/');
-      
-      const authUrl = `${AUTH_URL}/?redirect=${encodeURIComponent(redirectUrl)}`;
-      
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-      
-      if (result.type === 'success' && result.url) {
-        // Extract session_id from URL
-        const url = result.url;
-        let sessionId = '';
-        
-        if (url.includes('#session_id=')) {
-          sessionId = url.split('#session_id=')[1]?.split('&')[0];
-        } else if (url.includes('?session_id=')) {
-          sessionId = url.split('?session_id=')[1]?.split('&')[0];
-        }
-        
-        if (sessionId) {
-          await loginWithGoogle(sessionId);
-          router.replace('/(tabs)/dashboard');
-        }
+      await signInWithProvider(provider);
+      // On native, onAuthStateChange handles user state.
+      // On web, the page redirects so this code won't execute.
+      // After session is set, the auth listener routes appropriately.
+      // We add a small delay then navigate (native only, web redirects)
+      if (Platform.OS !== 'web') {
+        router.replace('/(tabs)/dashboard');
       }
     } catch (error: any) {
-      Alert.alert('Google Login Failed', error.message || 'Something went wrong');
+      const msg = error.message || 'Something went wrong';
+      // Don't show error for intentional cancellation
+      if (msg !== 'Authentication cancelled') {
+        if (Platform.OS === 'web') {
+          window.alert(msg);
+        } else {
+          Alert.alert('Login Failed', msg);
+        }
+      }
     } finally {
-      setIsGoogleLoading(false);
+      setOauthLoading(null);
     }
   };
 
@@ -118,8 +98,8 @@ export default function LoginScreen() {
         >
           <View style={styles.header}>
             <View style={styles.logoWrapper}>
-              <Image 
-                source={require('../../assets/images/logo.png')} 
+              <Image
+                source={require('../../assets/images/logo.png')}
                 style={styles.logo}
                 resizeMode="contain"
               />
@@ -139,6 +119,7 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                data-testid="login-email-input"
               />
             </View>
 
@@ -151,6 +132,7 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                data-testid="login-password-input"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
@@ -170,10 +152,11 @@ export default function LoginScreen() {
             <Pressable
               style={[styles.loginButton, { backgroundColor: theme.primary }, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isLoading || oauthLoading !== null}
               accessibilityRole="button"
               accessibilityLabel="Sign In"
               testID="sign-in-button"
+              data-testid="sign-in-button"
             >
               {isLoading ? (
                 <ActivityIndicator color="#0A0E17" />
@@ -184,14 +167,45 @@ export default function LoginScreen() {
 
             <View style={styles.divider}>
               <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>or</Text>
+              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>OR</Text>
               <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
 
-            <View style={[styles.googleButton, { backgroundColor: theme.surface, borderColor: theme.border, opacity: 0.5 }]}>
-              <Ionicons name="logo-google" size={20} color={theme.textSecondary} />
-              <Text style={[styles.googleButtonText, { color: theme.textSecondary }]}>Google sign-in temporarily unavailable</Text>
-            </View>
+            {/* Apple OAuth Button */}
+            <Pressable
+              style={[styles.oauthButton, styles.appleButton]}
+              onPress={() => handleOAuthLogin('apple')}
+              disabled={isLoading || oauthLoading !== null}
+              testID="apple-sign-in-button"
+              data-testid="apple-sign-in-button"
+            >
+              {oauthLoading === 'apple' ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
+                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Google OAuth Button */}
+            <Pressable
+              style={[styles.oauthButton, styles.googleButton, { borderColor: theme.border }]}
+              onPress={() => handleOAuthLogin('google')}
+              disabled={isLoading || oauthLoading !== null}
+              testID="google-sign-in-button"
+              data-testid="google-sign-in-button"
+            >
+              {oauthLoading === 'google' ? (
+                <ActivityIndicator color="#4285F4" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={18} color="#4285F4" />
+                  <Text style={[styles.googleButtonText, { color: theme.text }]}>Continue with Google</Text>
+                </>
+              )}
+            </Pressable>
           </View>
 
           <View style={styles.footer}>
@@ -211,7 +225,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E17',
   },
   keyboardView: {
     flex: 1,
@@ -239,12 +252,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#8A8D98',
   },
   form: {
     marginBottom: 30,
@@ -252,12 +263,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1F2E',
     borderRadius: 12,
     paddingHorizontal: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   inputIcon: {
     marginRight: 12,
@@ -265,7 +274,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 50,
-    color: '#FFFFFF',
     fontSize: 16,
   },
   forgotPassword: {
@@ -273,13 +281,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#00D4AA',
     fontSize: 14,
   },
   loginButton: {
-    backgroundColor: '#00D4AA',
     borderRadius: 12,
-    height: 50,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -295,44 +301,52 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 16,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#2A2F3E',
   },
   dividerText: {
-    color: '#8A8D98',
     paddingHorizontal: 16,
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
-  googleButton: {
+  oauthButton: {
     flexDirection: 'row',
-    backgroundColor: '#2A2F3E',
     borderRadius: 12,
-    height: 50,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3A3F4E',
+    marginBottom: 12,
   },
-  googleButtonText: {
+  appleButton: {
+    backgroundColor: '#000000',
+  },
+  appleButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 12,
+    marginLeft: 10,
+  },
+  googleButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   footerText: {
-    color: '#8A8D98',
     fontSize: 14,
   },
   footerLink: {
-    color: '#00D4AA',
     fontSize: 14,
     fontWeight: '600',
   },
