@@ -604,62 +604,59 @@ class DeviceTokenRegister(BaseModel):
     token: str
     platform: str  # ios, android, web
 
-# ===================== HELPER FUNCTIONS =====================
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+# ===================== SUPABASE AUTH HELPERS =====================
 
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[User]:
+    """Decode Supabase JWT and return User from profiles table. Returns None if unauthenticated."""
+    if not authorization:
+        return None
 
-def create_token(user_id: str) -> str:
-    payload = {
-        "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def decode_token(token: str) -> Optional[str]:
+    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload.get("user_id")
+        claims = await get_supabase_user(token)
     except Exception:
         return None
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[User]:
-    if not authorization:
-        return None
-    
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    user_id = decode_token(token)
-    
+    user_id = claims.get("sub")
     if not user_id:
         return None
-    
-    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
-    if user_doc:
-        return User(**user_doc)
-    return None
+
+    profile = await fetch_profile(user_id)
+    if not profile:
+        return None
+
+    email = claims.get("email", "")
+    return User(
+        user_id=profile["id"],
+        name=profile.get("name", ""),
+        email=email,
+        role=profile.get("role", "free"),
+        admin_role=profile.get("admin_role"),
+        admin_enabled=profile.get("admin_enabled", True),
+        ai_weekly_used=profile.get("ai_weekly_used", 0),
+        ai_weekly_reset=profile.get("ai_weekly_reset"),
+        notification_preferences=profile.get("notification_preferences", {"signals": True, "community": True}),
+        created_at=profile.get("created_at", datetime.now(timezone.utc)),
+        picture=profile.get("picture"),
+    )
+
 
 async def require_auth(authorization: Optional[str] = Header(None)) -> User:
+    """Require a valid Supabase session. Raises 401 if not authenticated."""
     user = await get_current_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+
 async def require_admin(authorization: Optional[str] = Header(None)) -> User:
+    """Require an authenticated admin. Raises 403 if not admin."""
     user = await require_auth(authorization)
-    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
-    
-    if not user_doc:
-        raise HTTPException(status_code=403, detail="User not found")
-    
-    # Check if user has admin role
-    if user_doc.get("role") != UserRole.ADMIN.value:
+    if user.role != UserRole.ADMIN.value:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    # Check if admin is enabled
-    if not user_doc.get("admin_enabled", True):
+    if not user.admin_enabled:
         raise HTTPException(status_code=403, detail="Admin account is disabled")
+    return user
     
     # Populate admin_role in user object
     admin_role_str = user_doc.get("admin_role")
