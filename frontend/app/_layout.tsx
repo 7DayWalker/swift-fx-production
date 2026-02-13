@@ -65,25 +65,19 @@ function RootLayoutContent() {
 
 export default function RootLayout() {
   // Load Ionicons font for web compatibility
-  const [fontsLoaded, fontError] = useFonts({
+  const [fontsLoaded] = useFonts({
     ...Ionicons.font,
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {
-        // Ignore errors
-      });
+    if (fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded]);
 
-  // Show loading indicator while fonts are loading
-  if (!fontsLoaded && !fontError) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366F1" />
-      </View>
-    );
+  // Return null while fonts are loading (no extra components)
+  if (!fontsLoaded) {
+    return null;
   }
 
   return (
@@ -106,11 +100,5 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0A0A0F',
   },
 });
