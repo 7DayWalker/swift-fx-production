@@ -285,9 +285,9 @@ export default function SignalManagement() {
         signal_type: editData.signal_type,
         entry_price: parseFloat(editData.entry),
         stop_loss: parseFloat(editData.stop_loss),
-        tp1: parseFloat(editData.tp1),
-        tp2: editData.tp2 ? parseFloat(editData.tp2) : null,
-        tp3: editData.tp3 ? parseFloat(editData.tp3) : null,
+        take_profit_1: parseFloat(editData.tp1),
+        take_profit_2: editData.tp2 ? parseFloat(editData.tp2) : null,
+        take_profit_3: editData.tp3 ? parseFloat(editData.tp3) : null,
         state: dbState,
         visibility: editData.visibility,
       };
