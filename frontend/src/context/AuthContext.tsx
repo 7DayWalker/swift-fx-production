@@ -129,9 +129,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return appUser;
   };
 
-  const loginWithGoogle = async (_sessionId: string): Promise<User> => {
-    // Google OAuth via Supabase (placeholder – can wire to signInWithOAuth later)
-    throw new Error('Google login is not yet available. Please use email & password.');
+  const signInWithProvider = async (provider: OAuthProvider): Promise<void> => {
+    if (Platform.OS === 'web') {
+      // Web: standard redirect flow — Supabase handles the callback via detectSessionInUrl
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin : '/';
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+      if (error) throw error;
+      // Page redirects; onAuthStateChange picks up session on return
+      return;
+    }
+
+    // Native (iOS / Android): open in-app browser, capture redirect with tokens
+    const redirectTo = Linking.createURL('/');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error) throw error;
+    if (!data?.url) throw new Error('No OAuth URL returned');
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+    if (result.type === 'success' && result.url) {
+      // Supabase returns tokens in the URL hash fragment
+      const hashPart = result.url.split('#')[1];
+      if (hashPart) {
+        const params: Record<string, string> = {};
+        hashPart.split('&').forEach((pair) => {
+          const [key, value] = pair.split('=');
+          if (key && value) params[decodeURIComponent(key)] = decodeURIComponent(value);
+        });
+
+        const { access_token, refresh_token } = params;
+        if (access_token && refresh_token) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          if (sessionError) throw sessionError;
+          // onAuthStateChange fires → fetchProfile → user state updated
+          return;
+        }
+      }
+      throw new Error('Authentication completed but no session tokens received');
+    }
+
+    if (result.type === 'cancel' || result.type === 'dismiss') {
+      throw new Error('Authentication cancelled');
+    }
   };
 
   const register = async (
