@@ -95,6 +95,16 @@ Build a cross-platform trading signals app (React Native/Expo) with AI chart ana
   - Selects highest tier when multiple active subscriptions exist
 - **Debug Logging Added**: `console.log('[SignalContext] FINAL RESOLVED TIER:', tier)` for verification
 
+### Phase 5.2 — Subscription Badge Enhancement ✅ (Dec 2025)
+- **Subtle Header Badge**: Premium-looking tier indicator in dashboard header
+- **Color Scheme**:
+  - FREE → Neutral grey (#9CA3AF)
+  - PREMIUM → Amber/Gold (#D97706)  
+  - VIP → Deep Purple (#8B5CF6)
+- **Design**: Semi-transparent background with matching border, outline icons
+- **Variants**: `default` (pill with icon) and `minimal` (text-only border)
+- **Benefits**: Reinforces value, encourages upgrades, aids debugging/support
+
 ## Access Control Architecture (Updated Dec 2025)
 
 | Concern | Authority Source |
