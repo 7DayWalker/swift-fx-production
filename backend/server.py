@@ -5876,7 +5876,7 @@ By using Swift FX Signals, you acknowledge that:
 # ==================== USER SETTINGS ENDPOINTS ====================
 
 @api_router.get("/settings/profile")
-async def get_user_profile(current_user: User = Depends(get_current_user)):
+async def get_user_profile(current_user: User = Depends(require_auth)):
     """Get current user's profile information"""
     user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
