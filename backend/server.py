@@ -2489,13 +2489,13 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
     ai_limit = get_ai_weekly_limit(effective_subscription)
     
     return {
-        "user_id": user_doc.get("user_id"),
+        "user_id": user_doc.get("id"),
         "subscription": effective_subscription,
-        "subscription_raw": user_doc.get("subscription", "free"),
-        "subscription_expiry": user_doc.get("subscription_expiry"),
+        "subscription_raw": user_doc.get("role", "free"),
+        "subscription_expiry": None,
         "subscription_active": is_active,
         "role": user_doc.get("role", "free"),
-        "is_admin": user_doc.get("is_admin", False),
+        "is_admin": user_doc.get("role") == "admin",
         "features": {
             "signals_access": effective_subscription,  # "free", "premium", or "vip"
             "ai_analyzer": True,  # All users have access, just different limits
@@ -5874,15 +5874,15 @@ async def get_user_profile(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     
     return {
-        "user_id": user_doc["user_id"],
+        "user_id": user_doc["id"],
         "name": user_doc.get("name", ""),
-        "email": user_doc.get("email", ""),
+        "email": current_user.email,
         "phone": user_doc.get("phone", ""),
         "role": user_doc.get("role", "free"),
-        "subscription": user_doc.get("subscription", "free"),
-        "subscription_expiry": user_doc.get("subscription_expiry"),
+        "subscription": user_doc.get("role", "free"),
+        "subscription_expiry": None,
         "admin_role": user_doc.get("admin_role"),
-        "is_admin": user_doc.get("is_admin", False),
+        "is_admin": user_doc.get("role") == "admin",
         "account_status": user_doc.get("account_status", "active"),
         "created_at": user_doc.get("created_at"),
         "last_login": user_doc.get("last_login"),
