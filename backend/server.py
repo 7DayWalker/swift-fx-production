@@ -4488,8 +4488,10 @@ async def update_admin(
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
     
-    # Cannot modify protected Super Admins (except by another Super Admin to disable temporarily)
-    if is_protected_super_admin(admin["email"]):
+    admin_email = await get_auth_user_email(user_id) or ""
+    
+    # Cannot modify protected Super Admins
+    if is_protected_super_admin(admin_email):
         if update_data.admin_role is not None and update_data.admin_role != AdminRole.SUPER_ADMIN:
             raise HTTPException(
                 status_code=403,
@@ -4498,7 +4500,7 @@ async def update_admin(
     
     # Cannot promote to Super Admin unless protected email
     if update_data.admin_role == AdminRole.SUPER_ADMIN:
-        if not is_protected_super_admin(admin["email"]):
+        if not is_protected_super_admin(admin_email):
             raise HTTPException(
                 status_code=403,
                 detail="Cannot promote to Super Admin. Only protected emails can be Super Admins."
