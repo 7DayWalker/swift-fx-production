@@ -3354,46 +3354,17 @@ async def initialize_super_admins():
         if existing:
             # Ensure they have Super Admin role (cannot be downgraded)
             if existing.get("role") != UserRole.ADMIN.value or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value or not existing.get("is_admin"):
-                await db.users.update_one(
-                    {"email": email.lower()},
-                    {"$set": {
-                        "role": UserRole.ADMIN.value,
-                        "admin_role": AdminRole.SUPER_ADMIN.value,
-                        "admin_enabled": True,
-                        "is_admin": True,
-                        "subscription": "vip"
-                    }}
-                )
+                await update_profile(existing["id"], {
+                    "role": UserRole.ADMIN.value,
+                    "admin_role": AdminRole.SUPER_ADMIN.value,
+                    "admin_enabled": True,
+                })
                 logger.info(f"[RBAC] Restored Super Admin role for {email}")
             else:
                 logger.info(f"[RBAC] Super Admin {email} verified")
         else:
-            # Create new Super Admin account
-            user_id = f"super_{uuid.uuid4().hex[:12]}"
-            # Generate a secure random password hash (they'll need to reset)
-            temp_password = f"SuperAdmin_{uuid.uuid4().hex[:8]}!"
-            password_hash = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
-            
-            user_doc = {
-                "user_id": user_id,
-                "name": "Super Admin",
-                "email": email.lower(),
-                "password_hash": password_hash,
-                "role": UserRole.ADMIN.value,
-                "admin_role": AdminRole.SUPER_ADMIN.value,
-                "admin_enabled": True,
-                "is_admin": True,
-                "subscription": "vip",
-                "subscription_expiry": None,
-                "subscription_status": "active",
-                "ai_weekly_used": 0,
-                "notification_preferences": {"signals": True, "community": True},
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            # User creation handled via Supabase Auth Admin API
-    await create_auth_user(user_doc.get("email", ""), user_doc.get("password_hash", "temp123"), {"name": user_doc.get("name", "")})
-            logger.info(f"[RBAC] Created Super Admin account for {email}")
-            logger.info(f"[RBAC] Temporary password for {email}: {temp_password}")
+            # Super Admin must be created in Supabase dashboard first
+            logger.info(f"[RBAC] Super Admin {email} not found in profiles - must be created via Supabase Auth")
     
     logger.info("[RBAC] Super Admin initialization complete")
 
