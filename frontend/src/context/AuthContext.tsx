@@ -37,7 +37,8 @@ const buildUser = (
   profile: { name?: string; role?: string; admin_role?: string } | null,
 ): User => {
   const profileRole = profile?.role ?? 'free';
-  const isAdmin = profileRole === 'admin';
+  // Both admin and super_admin get admin privileges and VIP access
+  const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
 
   return {
     user_id: sbUser.id,
