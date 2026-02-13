@@ -265,11 +265,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   );
 
   const getPlanBadgeColor = useCallback((): string => {
-    if (!status) return '#6B7280';
+    if (!status) return '#6B7280'; // neutral grey
     switch (status.subscription) {
-      case 'vip': return '#8B5CF6';
-      case 'premium': return '#F59E0B';
-      default: return '#6B7280';
+      case 'vip': return '#7C3AED'; // deep purple
+      case 'premium': return '#D97706'; // amber/gold
+      default: return '#6B7280'; // neutral grey
     }
   }, [status]);
 
