@@ -693,11 +693,11 @@ def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) 
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
     signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
-    # Get user's effective subscription
+    # Get user's effective subscription from Supabase profile
     if current_user:
-        user_doc = await db.users.find_one({"user_id": current_user.user_id})
-        user_subscription = get_effective_subscription(user_doc) if user_doc else "free"
-        is_admin = user_doc.get("role") == "admin" if user_doc else False
+        user_role = current_user.role
+        is_admin = user_role == UserRole.ADMIN.value
+        user_subscription = user_role if user_role in ("premium", "vip") else "free"
     else:
         user_subscription = "free"
         is_admin = False
@@ -712,10 +712,7 @@ async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
         # Check if user subscription can access this signal
         elif can_access_visibility(user_subscription, signal_visibility):
             result.append(signal)
-        # Don't send blocked signals to frontend at all (per requirements)
-        # But we can optionally show limited info
         else:
-            # Return limited info for locked signals so UI can show upgrade prompts
             result.append({
                 "signal_id": signal["signal_id"],
                 "pair": signal["pair"],
