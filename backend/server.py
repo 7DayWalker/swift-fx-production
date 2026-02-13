@@ -2510,23 +2510,8 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
     }
 
 # ===================== SETUP ADMIN =====================
-@api_router.post("/setup/admin")
-async def setup_admin(email: EmailStr, password: str, admin_key: str):
-    """One-time setup for first admin account"""
-    if admin_key != "SWIFTFX_ADMIN_SETUP_2024":
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-    
-    existing = await fetch_profile_by_email(email)
-    if existing:
-        # Update existing user to admin via Supabase profiles
-        await update_profile(existing["id"], {"role": UserRole.ADMIN.value, "admin_role": "super_admin", "admin_enabled": True})
-        return {"message": "Existing user upgraded to admin"}
-    
-    # Create admin via Supabase Auth Admin API
-    new_user = await create_auth_user(email, password, {"name": "Admin"})
-    if not new_user:
-        raise HTTPException(status_code=500, detail="Failed to create admin account")
-    return {"message": "Admin account created", "user_id": new_user.get("id", "")}
+# REMOVED: /api/setup/admin endpoint was a security vulnerability
+# Admin creation is now handled through Supabase dashboard only
 
 
 # ===================== PRICE-BASED SIGNAL AUTOMATION =====================
