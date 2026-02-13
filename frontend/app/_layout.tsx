@@ -66,6 +66,28 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  // Load Ionicons font for web compatibility
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {
+        // Ignore errors
+      });
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Show loading indicator while fonts are loading
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6366F1" />
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
