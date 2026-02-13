@@ -2227,7 +2227,7 @@ async def update_notification_preferences(preferences: Dict[str, bool], current_
 
 # ===================== USER PROFILE ENDPOINTS =====================
 @api_router.put("/profile")
-async def update_profile(name: Optional[str] = None, current_user: User = Depends(require_auth)):
+async def update_user_profile(name: Optional[str] = None, current_user: User = Depends(require_auth)):
     update_doc = {}
     if name:
         update_doc["name"] = name
@@ -2238,17 +2238,10 @@ async def update_profile(name: Optional[str] = None, current_user: User = Depend
     return {"message": "Profile updated"}
 
 @api_router.put("/profile/password")
-async def change_password(current_password: str, new_password: str, current_user: User = Depends(require_auth)):
-    user_doc = await fetch_profile(current_user.user_id)
-    if not user_doc.get("password_hash"):
-        raise HTTPException(status_code=400, detail="Cannot change password for OAuth accounts")
-    
-    if not verify_password(current_password, user_doc["password_hash"]):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
-    await update_profile(current_user.user_id, {"password_hash": hash_password(new_password)})
-    
-    return {"message": "Password changed successfully"}
+async def change_user_password(current_password: str, new_password: str, current_user: User = Depends(require_auth)):
+    """Password changes are handled via Supabase Auth. This endpoint is deprecated."""
+    # Supabase manages passwords - use supabase.auth.updateUser() on frontend
+    raise HTTPException(status_code=400, detail="Password changes should be done via the app settings using Supabase Auth")
 
 # ===================== DASHBOARD ENDPOINTS =====================
 @api_router.get("/dashboard")
