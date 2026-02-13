@@ -100,8 +100,15 @@ const mapRow = (row: any): Signal => ({
   created_at: row.created_at,
   activated_at: row.activated_at,
   closed_at: row.closed_at,
-  locked: false,
+  locked: false, // Will be set based on user tier in provider
 });
+
+/** Map with access check - sets locked based on user tier */
+const mapRowWithAccess = (row: any, userTier: SubscriptionTier): Signal => {
+  const signal = mapRow(row);
+  signal.locked = !canAccessSignal(userTier, signal.visibility);
+  return signal;
+};
 
 export function SignalProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
@@ -109,6 +116,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [stats, setStats] = useState<SignalStats | null>(null);
   const [historyData, setHistoryData] = useState<SignalHistoryData | null>(null);
+  const [userTier, setUserTier] = useState<SubscriptionTier>('free');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -122,6 +130,50 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const activeSignals = signals.filter((s) => s.status === 'active');
   const pendingSignals = signals.filter((s) => s.status === 'pending');
   const closedSignals = signals.filter((s) => s.status === 'closed');
+
+  // Fetch user's subscription tier
+  const fetchUserTier = useCallback(async () => {
+    if (!user?.id) {
+      setUserTier('free');
+      return;
+    }
+
+    try {
+      // Check active subscription from subscriptions table
+      const { data: subscription, error } = await supabase
+        .from('subscriptions')
+        .select('*, plans(tier)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .gt('current_period_end', new Date().toISOString())
+        .order('current_period_end', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !subscription) {
+        // No active subscription, check if admin (admins get VIP access)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+          setUserTier('vip');
+        } else {
+          setUserTier('free');
+        }
+        return;
+      }
+
+      // Get tier from subscription's plan
+      const tier = (subscription.plans as any)?.tier || 'free';
+      setUserTier(tier as SubscriptionTier);
+    } catch (err) {
+      console.error('[SignalContext] fetchUserTier error:', err);
+      setUserTier('free');
+    }
+  }, [user?.id]);
 
   // ---- Data fetching ----
 
