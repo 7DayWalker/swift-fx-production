@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useTheme } from '../context/ThemeContext';
 
-// Color palette for subscription tiers
-const TIER_COLORS = {
+// Color palette for subscription tiers - exported for consistent styling
+export const TIER_COLORS = {
   free: {
     bg: 'rgba(107, 114, 128, 0.15)', // subtle grey
     text: '#9CA3AF',
@@ -21,7 +21,7 @@ const TIER_COLORS = {
     text: '#8B5CF6',
     border: 'rgba(124, 58, 237, 0.25)',
   },
-};
+} as const;
 
 interface SubscriptionBadgeProps {
   size?: 'small' | 'medium' | 'large';
