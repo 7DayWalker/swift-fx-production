@@ -106,7 +106,10 @@ Build a cross-platform trading signals app (React Native/Expo) with AI chart ana
 
 ## Prioritized Backlog
 
-### P0 — Run SQL Migrations (Supabase)
+### P0 — COMPLETED ✅
+- ~~Access Resolution Bug~~ - Fixed tier resolution for Premium/VIP users (Dec 2025)
+
+### P1 — Run SQL Migrations (Supabase)
 - **REQUIRED**: Run `step9_subscription_enforcement.sql` in Supabase SQL Editor
 - **REQUIRED**: Run `step10_role_enum_migration.sql` after verifying step9
 - **REQUIRED**: Run `step11_signals_rls_select_all.sql` for frontend visibility gating
