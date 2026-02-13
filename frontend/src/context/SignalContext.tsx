@@ -52,6 +52,7 @@ interface SignalContextType {
   closedSignals: Signal[];
   stats: SignalStats | null;
   historyData: SignalHistoryData | null;
+  userTier: SubscriptionTier;
   isLoading: boolean;
   isRefreshing: boolean;
   lastUpdated: Date | null;
