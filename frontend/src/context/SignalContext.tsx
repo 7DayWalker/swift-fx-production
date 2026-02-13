@@ -238,6 +238,9 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   }, [userId]); // ONLY depends on userId primitive
 
   // ---- Data fetching ----
+  // Store userTier in ref to avoid dependency in refreshSignals
+  const userTierRef = useRef<SubscriptionTier>(userTier);
+  userTierRef.current = userTier;
 
   const refreshSignals = useCallback(async () => {
     if (!token) return;
@@ -253,13 +256,14 @@ export function SignalProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Map signals with access check based on user tier
-      setSignals((data || []).map((row) => mapRowWithAccess(row, userTier)));
+      // Map signals with access check using ref to avoid recreating callback
+      const currentTier = userTierRef.current;
+      setSignals((data || []).map((row) => mapRowWithAccess(row, currentTier)));
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[Signals] refreshSignals failed:', err);
     }
-  }, [token, userTier]);
+  }, [token]); // Only depends on token - userTier accessed via ref
 
   const refreshStats = useCallback(async () => {
     if (!token) return;
