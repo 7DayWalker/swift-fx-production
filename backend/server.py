@@ -655,25 +655,15 @@ async def require_auth(authorization: Optional[str] = Header(None)) -> User:
 
 
 async def require_admin(authorization: Optional[str] = Header(None)) -> User:
-    """Require an authenticated admin. Raises 403 if not admin."""
+    """Require an authenticated admin or super_admin. Raises 403 if not admin."""
     user = await require_auth(authorization)
-    if user.role != UserRole.ADMIN.value:
+    # Accept both 'admin' and 'super_admin' roles
+    if user.role not in (UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value, 'admin', 'super_admin'):
         raise HTTPException(status_code=403, detail="Admin access required")
     if not user.admin_enabled:
         raise HTTPException(status_code=403, detail="Admin account is disabled")
     return user
-    
-    # Populate admin_role in user object
-    admin_role_str = user_doc.get("admin_role")
-    if admin_role_str:
-        try:
-            user.admin_role = AdminRole(admin_role_str)
-        except ValueError:
-            user.admin_role = None
-    
-    user.admin_enabled = user_doc.get("admin_enabled", True)
-    
-    return user
+
 
 def calculate_risk_reward(entry: float, stop_loss: float, take_profit: float, signal_type: SignalType) -> float:
     if signal_type == SignalType.BUY:
