@@ -318,17 +318,37 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token) {
       setIsLoading(true);
-      refreshAll().finally(() => setIsLoading(false));
+      // Fetch user tier first, then signals
+      fetchUserTier().then(() => {
+        refreshAll().finally(() => setIsLoading(false));
+      });
       startPolling();
     } else {
       setSignals([]);
       setStats(null);
       setHistoryData(null);
       setLastUpdated(null);
+      setUserTier('free');
       stopPolling();
     }
     return () => stopPolling();
   }, [token]);
+
+  // Re-fetch user tier when user changes
+  useEffect(() => {
+    fetchUserTier();
+  }, [fetchUserTier]);
+
+  // Re-apply access checks when userTier changes
+  useEffect(() => {
+    if (signals.length > 0) {
+      // Re-map signals with new user tier
+      setSignals((prev) => prev.map((s) => ({
+        ...s,
+        locked: !canAccessSignal(userTier, s.visibility)
+      })));
+    }
+  }, [userTier]);
 
   // Recompute stats whenever signals change
   useEffect(() => {
