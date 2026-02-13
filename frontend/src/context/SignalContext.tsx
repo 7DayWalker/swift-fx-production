@@ -113,6 +113,9 @@ const mapRowWithAccess = (row: any, userTier: SubscriptionTier): Signal => {
 export function SignalProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
 
+  // Extract user_id once to use as stable dependency
+  const userId = user?.user_id;
+
   const [signals, setSignals] = useState<Signal[]>([]);
   const [stats, setStats] = useState<SignalStats | null>(null);
   const [historyData, setHistoryData] = useState<SignalHistoryData | null>(null);
@@ -125,18 +128,33 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const [isPolling, setIsPolling] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  
+  // Track if tier has been fetched for current user to prevent duplicate calls
+  const tierFetchedForUserRef = useRef<string | null>(null);
+
+  // DEBUG: Track renders
+  console.log('[SignalContext] RENDER - userId:', userId, 'userTier:', userTier);
 
   // Derived lists
   const activeSignals = signals.filter((s) => s.status === 'active');
   const pendingSignals = signals.filter((s) => s.status === 'pending');
   const closedSignals = signals.filter((s) => s.status === 'closed');
 
-  // Fetch user's subscription tier
+  // Fetch user's subscription tier - ONLY depends on userId (primitive)
   // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
   const fetchUserTier = useCallback(async () => {
-    if (!user?.user_id) {
+    console.log('[SignalContext] fetchUserTier called - userId:', userId, 'alreadyFetchedFor:', tierFetchedForUserRef.current);
+    
+    if (!userId) {
       console.log('[SignalContext] No user ID, defaulting to free');
       setUserTier('free');
+      tierFetchedForUserRef.current = null;
+      return;
+    }
+
+    // Skip if already fetched for this user
+    if (tierFetchedForUserRef.current === userId) {
+      console.log('[SignalContext] Tier already fetched for this user, skipping');
       return;
     }
 
@@ -145,7 +163,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.user_id)
+        .eq('id', userId)
         .single();
 
       if (profileError) {
@@ -158,17 +176,18 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       // RULE 1 & 2: super_admin or admin → VIP (highest precedence)
       if (profileRole === 'super_admin' || profileRole === 'admin') {
         console.log('[SignalContext] Admin detected, granting VIP access');
+        console.log('[SignalContext] FINAL RESOLVED TIER: vip');
         setUserTier('vip');
+        tierFetchedForUserRef.current = userId;
         return;
       }
 
       // STEP 2: Check active subscription from subscriptions table
-      // Query: status = 'active' AND (current_period_end IS NULL OR current_period_end > now())
       const now = new Date().toISOString();
       const { data: subscriptions, error: subError } = await supabase
         .from('subscriptions')
         .select('id, status, current_period_end, plans(tier)')
-        .eq('user_id', user.user_id)
+        .eq('user_id', userId)
         .eq('status', 'active');
 
       if (subError) {
@@ -202,6 +221,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
 
         console.log('[SignalContext] FINAL RESOLVED TIER:', highestTier);
         setUserTier(highestTier);
+        tierFetchedForUserRef.current = userId;
         return;
       }
 
@@ -209,11 +229,13 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       console.log('[SignalContext] No active subscription, defaulting to free');
       console.log('[SignalContext] FINAL RESOLVED TIER: free');
       setUserTier('free');
+      tierFetchedForUserRef.current = userId;
     } catch (err) {
       console.error('[SignalContext] fetchUserTier error:', err);
       setUserTier('free');
+      tierFetchedForUserRef.current = userId;
     }
-  }, [user?.user_id]);
+  }, [userId]); // ONLY depends on userId primitive
 
   // ---- Data fetching ----
 
