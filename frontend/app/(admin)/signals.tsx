@@ -304,14 +304,20 @@ export default function SignalManagement() {
       };
       const dbState = stateMap[editData.status] || editData.status;
 
+      const entry = parseFloat(editData.entry);
+      const stopLoss = parseFloat(editData.stop_loss);
+      const tp1 = parseFloat(editData.tp1);
+      const riskReward = calculateRiskReward(entry, stopLoss, tp1, editData.signal_type as 'buy' | 'sell');
+
       const updatePayload: any = {
         pair: editData.pair,
         signal_type: editData.signal_type,
-        entry_price: parseFloat(editData.entry),
-        stop_loss: parseFloat(editData.stop_loss),
-        take_profit_1: parseFloat(editData.tp1),
+        entry_price: entry,
+        stop_loss: stopLoss,
+        take_profit_1: tp1,
         take_profit_2: editData.tp2 ? parseFloat(editData.tp2) : null,
         take_profit_3: editData.tp3 ? parseFloat(editData.tp3) : null,
+        risk_reward: riskReward,
         state: dbState,
         visibility: editData.visibility,
       };
