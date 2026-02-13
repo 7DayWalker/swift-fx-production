@@ -7,9 +7,17 @@ import { SignalProvider } from '../src/context/SignalContext';
 import { SubscriptionProvider } from '../src/context/SubscriptionContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
 import NotificationService from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
+
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignore errors (e.g., if splash screen is already hidden)
+});
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
