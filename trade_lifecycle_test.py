@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://swift-tier-enforce.preview.emergentagent.com/api"
+BASE_URL = "https://swiftfx-auth-fix.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

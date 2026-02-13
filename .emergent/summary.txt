@@ -1,257 +1,155 @@
 <analysis>
-original_problem_statement
+original_problem_statement:
 
-Swift FX is a React Native (Expo) application with a FastAPI backend.
+Swift FX is a React Native (Expo) application with a FastAPI backend, using Supabase for authentication and core data (profiles, subscriptions, signals), and MongoDB for other features (e.g., AI analyses).
 
-The project evolved through these stages:
+The initial goals for this session were:
 
-Bundle identifier rename (com.swiftfx.app → com.swiftfx.signals)
+Subscription Enforcement Hardening: Make the subscriptions table the single source of truth for premium access, removing tier information from profiles.role.
 
-Full Google + Apple OAuth frontend integration using Supabase
+Fix Critical Security Issue: Remove the insecure POST /api/setup/admin endpoint which allowed for admin privilege escalation via a hardcoded key.
 
-System audit that uncovered dual authentication systems
+Secure AI Analyzer: Protect the POST /api/ai/analyze endpoint with Supabase authentication and an active subscription check.
 
-Complete authentication unification under Supabase
+Fix Signal Creation Column Mismatch: A bug was reported where signal creation failed due to a mismatch between database column names (take_profit_1) and code-level properties (tp1).
 
-Current task: Subscription Enforcement Hardening
+Fix Signal Creation Constraint Violation: Signal creation was failing due to a NOT NULL constraint on the risk_reward column.
 
-CURRENT ARCHITECTURAL STATE
-Authentication (COMPLETED & VERIFIED)
+Debug Signal Creation Flow: Ensure signal creation works correctly after schema and constraint fixes.
 
-Authentication is fully unified under Supabase.
+Change Signal Visibility Logic: Move signal visibility gating from Supabase RLS (backend) to the frontend. Free users should see locked cards for premium signals instead of signals being hidden at the database level.
 
-Completed Work
+what currently exists?
 
-Removed legacy MongoDB JWT system
+The application is a full-stack project with a React Native (Expo) frontend and a FastAPI backend.
 
-Deleted:
+Authentication: Fully managed by Supabase (JWT via JWKS).
 
-/api/auth/register
+Database (Primary): Supabase PostgreSQL for profiles, subscriptions, plans, signals.
 
-/api/auth/login
+Database (Secondary): MongoDB for AI-related and legacy features.
 
-/api/auth/me
+Key work completed includes:
 
-/api/auth/google/callback
+The insecure /api/setup/admin endpoint has been removed.
 
-Removed:
+The /api/ai/analyze endpoint is now protected by Supabase authentication.
 
-Custom JWT creation
+SQL migrations were created to establish get_my_active_tier() and clean up the user_role enum.
 
-bcrypt
+The tp1 vs take_profit_1 column name mismatch has been fixed across the frontend.
 
-db.users auth references
+risk_reward calculation was added to signal creation/update to satisfy database constraints.
 
-Created backend/supabase_auth.py
+Signal visibility has been refactored to be a frontend concern:
 
-JWKS-based Supabase JWT validation
+Supabase RLS SELECT policy for signals now returns all signals to authenticated users.
 
-Profile helpers
+The frontend applies locked overlays based on derived access level.
 
-Updated frontend api.ts
+Last working item:
 
-Sends Supabase JWT via supabase.auth.getSession()
+Last item agent was working: Fixing incorrect access resolution in frontend/src/context/SignalContext.tsx. Premium and VIP users are being incorrectly identified as 'free', causing paid signals to appear locked.
 
-All protected endpoints now use:
+Status: IN PROGRESS
 
-Depends(require_supabase_auth)
+Agent Testing Done: N
 
-Auth Flow Now
+Testing method to use: Frontend testing agent
 
-Frontend → Supabase Auth → Supabase JWT
-FastAPI → Validates Supabase JWT (JWKS)
-FastAPI → Reads user profile from Supabase profiles
+User Testing Done: Y
 
-Supabase is the sole identity authority.
+All Pending / In Progress Issues
+Issue 1: Incorrect Access Resolution (P0)
 
-MongoDB is no longer used for authentication.
+Description:
+The access resolution logic in frontend/src/context/SignalContext.tsx is faulty. All users with active Premium or VIP subscriptions are being treated as 'free'.
 
-Testing:
+Required Business Logic (Explicit Precedence Order):
 
-22/22 automated tests passed
+super_admin → vip
 
-Auth unification considered COMPLETE
+admin → vip
 
-🚨 CRITICAL SECURITY ISSUE (P0 — MUST BE FIXED NEXT)
+Active VIP subscription → vip
 
-POST /api/setup/admin
+Active Premium subscription → premium
 
-Protected only by a hardcoded secret key
+Otherwise → free
 
-Allows admin privilege escalation
+Correct resolution rules:
 
-Bypasses role integrity
+Must query subscriptions
 
-This endpoint must be:
+Join subscriptions.plan_id = plans.id
 
-EITHER:
+Filter:
 
-Completely removed
+status = 'active'
 
-OR:
+current_period_end IS NULL OR current_period_end > now()
 
-Protected with require_supabase_auth
+If multiple active subscriptions exist, choose the one with the highest tier.
 
-Restricted to super_admin role only
+Add:
 
-This must be fixed before any subscription logic changes.
+console.log(FINAL RESOLVED TIER:, derivedTier);
 
-DATA LAYER STATUS
 
-Supabase:
+Why fix this?
+This is a critical business logic bug. Paying users cannot access content they paid for.
 
-profiles
+Status: IN PROGRESS
+Should Test: Frontend
+Blocked: No
 
-subscriptions
+Issue 2: Signal Creation Flow Stability (P1)
 
-signals
+Description:
+Signal creation previously failed due to:
 
-plans
+Column mismatch
 
-MongoDB:
+risk_reward NOT NULL constraint
 
-Still used for some features (signals, posts, ai_analyses)
+These have been fixed.
 
-No longer used for identity
+Insert now succeeds at the database level. However, UI state refresh and admin flow stability should be verified to ensure consistent signal appearance after creation.
 
-Dual data store still exists, but not part of current task.
+Why fix this?
+Admins must reliably create new signals for the application to function.
 
-CURRENT BROKEN STATE
+Status: Needs verification
+Should Test: Frontend
 
-Subscription system exists but is not enforced
+Upcoming Tasks
 
-Premium access is still derived from profiles.role
+(P1) Stripe / IAP integration
 
-No expiry enforcement
+(P2) Implement server-side AI usage limit decrement logic
 
-AI analyzer not gated by subscription
+(P3) MongoDB → Supabase data consolidation
 
-/api/setup/admin is insecure
+(P4) Refactor monolithic backend/server.py
 
-IMMEDIATE NEXT TASK
-Phase 1 — Subscription Enforcement Hardening
+Key DB Schema
 
-Goal:
-Make subscriptions the only source of truth for premium access.
+profiles: { id (uuid), role (enum: 'user', 'admin', 'super_admin') }
 
-Required Changes
+subscriptions: { id, user_id, plan_id, status, current_period_end }
 
-profiles.role must only contain:
+plans: { id, tier ('free', 'premium', 'vip') }
 
-user
+signals: { id, visibility, take_profit_1, take_profit_2, take_profit_3, risk_reward }
 
-admin
+Critical Info for New Agent
 
-super_admin
+P0 Priority: Fix access resolution logic in SignalContext.tsx.
 
-Remove:
+Signal visibility is frontend-controlled.
+Do NOT modify SELECT RLS policy for signals.
 
-free
+Backend already returns all signals to authenticated users.
 
-premium
-
-vip
-
-These tiers must no longer exist in profiles.role.
-
-Premium access must derive strictly from:
-
-subscriptions.status = 'active'
-
-current_period_end > now()
-
-If expired → automatically treated as free.
-
-No manual role switching allowed.
-
-Implement PostgreSQL RPC:
-
-get_my_active_tier()
-
-Returns:
-
-free
-
-premium
-
-vip
-
-Logic:
-
-If no active subscription → return free
-
-If active subscription → return plan tier
-
-Update signals RLS
-
-Must reference get_my_active_tier()
-
-Remove any static tier checks
-
-Remove reliance on profiles.role
-
-Secure AI Analyzer (POST /api/ai/analyze)
-
-Must require Supabase auth
-
-Must check active subscription tier before execution
-
-Must enforce AI usage limits server-side
-
-Must increment ai_weekly_used atomically
-
-No client-side enforcement allowed
-
-Confirm
-
-No endpoint reads subscription tier from profiles.role
-
-Subscription enforcement is database-driven
-
-STRICT EXECUTION RULES
-
-Do NOT refactor Mongo data layer in this task
-
-Do NOT implement payments yet
-
-Do NOT touch automation
-
-Do NOT introduce new features
-
-Only:
-
-Security fix + Subscription enforcement hardening.
-
-ARCHITECTURAL PRINCIPLE GOING FORWARD
-
-Identity authority = Supabase
-Admin authority = profiles.role
-Subscription authority = subscriptions table
-Tier access = derived dynamically
-
-Never mix these concerns again.
-
-PROJECT HEALTH AFTER THIS TASK
-
-If completed correctly:
-
-Identity: stable
-
-Access control: correct
-
-Monetization logic: valid
-
-RLS aligned with business model
-
-Ready for Stripe/IAP integration next
-
-This fork should now proceed with:
-
-Fix /api/setup/admin
-
-Secure /api/ai/analyze
-
-Execute Subscription Enforcement Hardening
-
-No additional scope.
+Admin and super_admin must always resolve to VIP access.
 </analysis>
