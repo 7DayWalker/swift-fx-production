@@ -125,7 +125,9 @@ export default function SignalsScreen() {
         {item.locked ? (
           <View style={[styles.lockedContainer, { backgroundColor: `${theme.warning}05` }]}>
             <Ionicons name="lock-closed" size={24} color={theme.warning} />
-            <Text style={[styles.lockedTitle, { color: theme.warning }]}>Upgrade to Unlock</Text>
+            <Text style={[styles.lockedTitle, { color: theme.warning }]}>
+              {getUpgradeMessage(item.visibility)}
+            </Text>
             <Text style={[styles.lockedSubtitle, { color: theme.textSecondary }]}>
               This signal requires {item.visibility === 'vip' ? 'VIP' : 'Premium'} subscription
             </Text>
