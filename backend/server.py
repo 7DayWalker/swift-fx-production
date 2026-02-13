@@ -6359,7 +6359,7 @@ async def verify_apple_purchase(
     3. Server updates user subscription
     4. Returns success/failure
     """
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     
     try:
         # Validate receipt with Apple
@@ -6589,7 +6589,7 @@ async def verify_google_purchase(
     4. Server updates user subscription
     5. Returns success/failure
     """
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     
     try:
         # Validate with Google
@@ -6932,7 +6932,7 @@ async def get_iap_transactions(
     limit: int = 10
 ):
     """Get user's IAP transaction history"""
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     
     transactions = await db.iap_transactions.find(
         {"user_id": user_id}
