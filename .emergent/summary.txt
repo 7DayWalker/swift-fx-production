@@ -1,162 +1,257 @@
 <analysis>
-Perfect. You don’t need philosophy — you need a **clean, accurate fork summary** that prevents Emergent from reopening solved problems or chasing ghosts.
+original_problem_statement
 
-Below is a **concise, corrected fork continuation summary** you can paste directly into Emergent.
+Swift FX is a React Native (Expo) application with a FastAPI backend.
 
----
+The project evolved through these stages:
 
-# ✅ SWIFT FX – CORRECT FORK CONTINUATION SUMMARY
+Bundle identifier rename (com.swiftfx.app → com.swiftfx.signals)
 
-## 📌 PROJECT STATE (ACCURATE)
+Full Google + Apple OAuth frontend integration using Supabase
 
-This is a React Native (Expo) application using a hybrid backend:
+System audit that uncovered dual authentication systems
 
-* **Supabase** → Auth, Database, RLS, Signals, Community, Roles
-* **FastAPI** → AI Analyzer only (due to Python-only )
-* Supabase Edge Functions for AI are permanently abandoned.
+Complete authentication unification under Supabase
 
----
+Current task: Subscription Enforcement Hardening
 
-## ✅ COMPLETED PHASES
+CURRENT ARCHITECTURAL STATE
+Authentication (COMPLETED & VERIFIED)
 
-### Phase 1 – Community System
+Authentication is fully unified under Supabase.
 
-* Fully migrated to Supabase
-* RLS enabled
-* SQL helper functions implemented
-* Working end-to-end
+Completed Work
 
-Status: COMPLETE
+Removed legacy MongoDB JWT system
 
----
+Deleted:
 
-### Phase 2 – AI Analyzer
+/api/auth/register
 
-Architecture:
+/api/auth/login
 
-* FastAPI endpoint: 
-* Uses  (Python-only)
-* Multimodal image + prompt support
-* Strict JSON response
-* Usage limits enforced via 
-* History stored in 
+/api/auth/me
 
-Important:
+/api/auth/google/callback
 
-* Supabase Edge Function version is deprecated and must NOT be used.
-* FastAPI implementation is the final architecture.
+Removed:
 
-Status: COMPLETE & WORKING
+Custom JWT creation
 
----
+bcrypt
 
-### Academy
+db.users auth references
 
-* Crypto courses added (Beginner / Intermediate / Advanced)
-* Stored in 
-* No backend dependency
+Created backend/supabase_auth.py
 
-Status: COMPLETE
+JWKS-based Supabase JWT validation
 
----
+Profile helpers
 
-### Role System
+Updated frontend api.ts
 
-* ENUM  includes , , 
-* Super Admin user created
-* RLS aligned with role hierarchy
+Sends Supabase JWT via supabase.auth.getSession()
 
-Status: COMPLETE
+All protected endpoints now use:
 
----
+Depends(require_supabase_auth)
 
-## 🔒 GATED SCREENS (INTENTIONAL)
+Auth Flow Now
 
-Several screens are intentionally gated or disabled:
+Frontend → Supabase Auth → Supabase JWT
+FastAPI → Validates Supabase JWT (JWKS)
+FastAPI → Reads user profile from Supabase profiles
 
-* Fund System
-* Referrals
-* Support Tickets
-* Legacy Admin Management
-* Withdrawals
-* Payment confirmation screen
+Supabase is the sole identity authority.
 
-These are NOT broken.
-They are intentionally inactive pending future phases.
+MongoDB is no longer used for authentication.
 
-Do NOT attempt to revive legacy FastAPI endpoints.
+Testing:
 
----
+22/22 automated tests passed
 
-## 🔄 CURRENT ACTIVE TASK
+Auth unification considered COMPLETE
 
-### Phase 3 – Google OAuth (Frontend Only)
+🚨 CRITICAL SECURITY ISSUE (P0 — MUST BE FIXED NEXT)
 
-Google OAuth is already fully configured in Supabase:
+POST /api/setup/admin
 
-* Provider enabled
-* Client ID & Secret configured
-* Redirect URLs configured
+Protected only by a hardcoded secret key
 
-Remaining work:
+Allows admin privilege escalation
 
-* Implement  on frontend
-* Ensure Expo deep linking works
-* Ensure session persistence
-* Do NOT reintroduce manual token storage
-* Do NOT modify existing email/password flow
+Bypasses role integrity
 
-Priority: HIGH
+This endpoint must be:
 
----
+EITHER:
 
-## ⏳ UPCOMING (NOT STARTED)
+Completely removed
 
-Phase 4 – Payments
-Phase 5 – Fund Management
+OR:
 
-These are future phases and should not block current work.
+Protected with require_supabase_auth
 
----
+Restricted to super_admin role only
 
-## 🧱 KEY DATABASE TABLES
+This must be fixed before any subscription logic changes.
 
-* 
-* 
+DATA LAYER STATUS
 
-  * id
-  * role (ENUM)
-  * ai_weekly_used
-  * ai_weekly_reset
-* 
+Supabase:
 
-  * id
-  * user_id
-  * prompt
-  * response
-  * model
-  * created_at
+profiles
 
----
+subscriptions
 
-## 🚨 CRITICAL INSTRUCTION
+signals
 
-* Do NOT reintroduce Supabase Edge Functions for AI.
-* Do NOT revive deprecated FastAPI endpoints.
-* Do NOT modify Academy content.
-* Do NOT modify AI backend.
-* Focus only on completing Google OAuth frontend wiring cleanly.
+plans
 
----
+MongoDB:
 
-## 🎯 CURRENT OBJECTIVE
+Still used for some features (signals, posts, ai_analyses)
 
-Complete Phase 3 (Google OAuth frontend wiring) while maintaining:
+No longer used for identity
 
-* Session stability
-* Role-based routing
-* RLS integrity
-* Clean architecture
+Dual data store still exists, but not part of current task.
 
-Core system is stable. This is stabilization & expansion, not debugging.
+CURRENT BROKEN STATE
+
+Subscription system exists but is not enforced
+
+Premium access is still derived from profiles.role
+
+No expiry enforcement
+
+AI analyzer not gated by subscription
+
+/api/setup/admin is insecure
+
+IMMEDIATE NEXT TASK
+Phase 1 — Subscription Enforcement Hardening
+
+Goal:
+Make subscriptions the only source of truth for premium access.
+
+Required Changes
+
+profiles.role must only contain:
+
+user
+
+admin
+
+super_admin
+
+Remove:
+
+free
+
+premium
+
+vip
+
+These tiers must no longer exist in profiles.role.
+
+Premium access must derive strictly from:
+
+subscriptions.status = 'active'
+
+current_period_end > now()
+
+If expired → automatically treated as free.
+
+No manual role switching allowed.
+
+Implement PostgreSQL RPC:
+
+get_my_active_tier()
+
+Returns:
+
+free
+
+premium
+
+vip
+
+Logic:
+
+If no active subscription → return free
+
+If active subscription → return plan tier
+
+Update signals RLS
+
+Must reference get_my_active_tier()
+
+Remove any static tier checks
+
+Remove reliance on profiles.role
+
+Secure AI Analyzer (POST /api/ai/analyze)
+
+Must require Supabase auth
+
+Must check active subscription tier before execution
+
+Must enforce AI usage limits server-side
+
+Must increment ai_weekly_used atomically
+
+No client-side enforcement allowed
+
+Confirm
+
+No endpoint reads subscription tier from profiles.role
+
+Subscription enforcement is database-driven
+
+STRICT EXECUTION RULES
+
+Do NOT refactor Mongo data layer in this task
+
+Do NOT implement payments yet
+
+Do NOT touch automation
+
+Do NOT introduce new features
+
+Only:
+
+Security fix + Subscription enforcement hardening.
+
+ARCHITECTURAL PRINCIPLE GOING FORWARD
+
+Identity authority = Supabase
+Admin authority = profiles.role
+Subscription authority = subscriptions table
+Tier access = derived dynamically
+
+Never mix these concerns again.
+
+PROJECT HEALTH AFTER THIS TASK
+
+If completed correctly:
+
+Identity: stable
+
+Access control: correct
+
+Monetization logic: valid
+
+RLS aligned with business model
+
+Ready for Stripe/IAP integration next
+
+This fork should now proceed with:
+
+Fix /api/setup/admin
+
+Secure /api/ai/analyze
+
+Execute Subscription Enforcement Hardening
+
+No additional scope.
 </analysis>

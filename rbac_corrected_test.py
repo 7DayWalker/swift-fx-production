@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "https://swift-social-login.preview.emergentagent.com/api"
+BASE_URL = "https://swift-tier-enforce.preview.emergentagent.com/api"
 
 def test_complete_rbac_sequence():
     """Test the complete RBAC system following the exact review request"""
