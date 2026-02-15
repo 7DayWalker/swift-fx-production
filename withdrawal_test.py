@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://swiftfx-auth-fix.preview.emergentagent.com/api"
+BASE_URL = "https://fx-platform-preview.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_EMAIL = "admin@swiftfx.com"
