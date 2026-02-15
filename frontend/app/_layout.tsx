@@ -8,6 +8,8 @@ import { SubscriptionProvider } from '../src/context/SubscriptionContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import NotificationService from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
 
@@ -58,6 +60,15 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  // Load Ionicons font for web compatibility
+  const [fontsLoaded] = useFonts({
+    ...Ionicons.font,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>

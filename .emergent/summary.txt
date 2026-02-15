@@ -1,155 +1,225 @@
 <analysis>
-original_problem_statement:
+📌 Original Problem Statement
 
-Swift FX is a React Native (Expo) application with a FastAPI backend, using Supabase for authentication and core data (profiles, subscriptions, signals), and MongoDB for other features (e.g., AI analyses).
+Swift FX Signals is a full-stack trading signals platform built with:
 
-The initial goals for this session were:
+Frontend: React Native (Expo Router v3) + Tamagui
 
-Subscription Enforcement Hardening: Make the subscriptions table the single source of truth for premium access, removing tier information from profiles.role.
+Backend: FastAPI
 
-Fix Critical Security Issue: Remove the insecure POST /api/setup/admin endpoint which allowed for admin privilege escalation via a hardcoded key.
+Database: Supabase (PostgreSQL)
 
-Secure AI Analyzer: Protect the POST /api/ai/analyze endpoint with Supabase authentication and an active subscription check.
+Auth: Supabase JWT
 
-Fix Signal Creation Column Mismatch: A bug was reported where signal creation failed due to a mismatch between database column names (take_profit_1) and code-level properties (tp1).
+Secondary DB: MongoDB (AI features)
 
-Fix Signal Creation Constraint Violation: Signal creation was failing due to a NOT NULL constraint on the risk_reward column.
+The initial session goals included:
 
-Debug Signal Creation Flow: Ensure signal creation works correctly after schema and constraint fixes.
+Harden subscription enforcement using Supabase.
 
-Change Signal Visibility Logic: Move signal visibility gating from Supabase RLS (backend) to the frontend. Free users should see locked cards for premium signals instead of signals being hidden at the database level.
+Remove insecure admin escalation endpoint.
 
-what currently exists?
+Secure AI analyzer endpoint.
 
-The application is a full-stack project with a React Native (Expo) frontend and a FastAPI backend.
+Fix signal creation bugs (tp1 mismatch + risk_reward constraint).
 
-Authentication: Fully managed by Supabase (JWT via JWKS).
+Move signal visibility gating from backend RLS to frontend UI.
 
-Database (Primary): Supabase PostgreSQL for profiles, subscriptions, plans, signals.
+Fix tier resolution logic.
 
-Database (Secondary): MongoDB for AI-related and legacy features.
+Fix React dependency loop causing tier fluctuation.
 
-Key work completed includes:
+Fix UI rendering issue (icons + navbar not visible on web preview).
 
-The insecure /api/setup/admin endpoint has been removed.
+✅ What Is Already Working
+🔐 Security
 
-The /api/ai/analyze endpoint is now protected by Supabase authentication.
+/api/setup/admin removed permanently.
 
-SQL migrations were created to establish get_my_active_tier() and clean up the user_role enum.
+/api/ai/analyze secured with Supabase JWT.
 
-The tp1 vs take_profit_1 column name mismatch has been fixed across the frontend.
+Roles standardized to:
 
-risk_reward calculation was added to signal creation/update to satisfy database constraints.
+user
 
-Signal visibility has been refactored to be a frontend concern:
+admin
 
-Supabase RLS SELECT policy for signals now returns all signals to authenticated users.
+super_admin
 
-The frontend applies locked overlays based on derived access level.
+Tier is derived dynamically from subscriptions.
 
-Last working item:
+💳 Subscription System (Stable)
+Tables
 
-Last item agent was working: Fixing incorrect access resolution in frontend/src/context/SignalContext.tsx. Premium and VIP users are being incorrectly identified as 'free', causing paid signals to appear locked.
+profiles
 
-Status: IN PROGRESS
+subscriptions
 
-Agent Testing Done: N
+plans
 
-Testing method to use: Frontend testing agent
+signals
 
-User Testing Done: Y
+Tier Resolution Logic (Correct & Stable)
 
-All Pending / In Progress Issues
-Issue 1: Incorrect Access Resolution (P0)
+Precedence:
 
-Description:
-The access resolution logic in frontend/src/context/SignalContext.tsx is faulty. All users with active Premium or VIP subscriptions are being treated as 'free'.
+super_admin → VIP
 
-Required Business Logic (Explicit Precedence Order):
+admin → VIP
 
-super_admin → vip
+Active VIP subscription → VIP
 
-admin → vip
+Active Premium subscription → Premium
 
-Active VIP subscription → vip
+Otherwise → Free
 
-Active Premium subscription → premium
+Frontend gating works correctly:
 
-Otherwise → free
+Tier	Free	Premium	VIP
+Free	✅	🔒	🔒
+Premium	✅	✅	🔒
+VIP	✅	✅	✅
 
-Correct resolution rules:
+No more tier fluctuation loops.
 
-Must query subscriptions
+🧠 Business Logic Status
 
-Join subscriptions.plan_id = plans.id
+Signal creation bug fixed (column mismatch resolved).
 
-Filter:
+risk_reward correctly calculated.
 
-status = 'active'
+Signal creation confirmed working.
 
-current_period_end IS NULL OR current_period_end > now()
+Frontend overlay logic stable.
 
-If multiple active subscriptions exist, choose the one with the highest tier.
+No RLS filtering on signals (all signals fetched; UI handles locking).
 
-Add:
+Business logic is stable.
 
-console.log(FINAL RESOLVED TIER:, derivedTier);
+🚨 Current Critical Issue (P0)
+UI Rendering Failure — Icons + Navbar Not Visible on Web
+Symptoms:
 
+Web preview (PC) shows:
 
-Why fix this?
-This is a critical business logic bug. Paying users cannot access content they paid for.
+Uncaught Error: signal is aborted without reason
 
-Status: IN PROGRESS
-Should Test: Frontend
-Blocked: No
+Icons not visible.
 
-Issue 2: Signal Creation Flow Stability (P1)
+Bottom tab navigation icons not visible.
 
-Description:
-Signal creation previously failed due to:
+Mobile browser loads app but icons still missing.
 
-Column mismatch
+No more Ionicons font 520 error.
 
-risk_reward NOT NULL constraint
+Important Observations:
 
-These have been fixed.
+App does NOT crash on mobile browser.
 
-Insert now succeeds at the database level. However, UI state refresh and admin flow stability should be verified to ensure consistent signal appearance after creation.
+Tab bar background renders.
 
-Why fix this?
-Admins must reliably create new signals for the application to function.
+Icons inside tab bar do NOT render.
 
-Status: Needs verification
-Should Test: Frontend
+Business logic unaffected.
 
-Upcoming Tasks
+SplashScreen/font loader attempts previously caused crashes.
 
-(P1) Stripe / IAP integration
+⚠️ What Has Already Been Attempted (DO NOT REPEAT)
 
-(P2) Implement server-side AI usage limit decrement logic
+Added useFonts with expo-splash-screen → Crashed app.
 
-(P3) MongoDB → Supabase data consolidation
+Modified splash handling with .catch() → Still crashed.
 
-(P4) Refactor monolithic backend/server.py
+Removed splash logic → No crash, but icons invisible.
 
-Key DB Schema
+Multiple font-loading experiments → Unstable.
 
-profiles: { id (uuid), role (enum: 'user', 'admin', 'super_admin') }
+Do NOT reintroduce SplashScreen.
+Do NOT manually preload fonts again.
+Do NOT modify SignalContext.
+Do NOT touch business logic.
 
-subscriptions: { id, user_id, plan_id, status, current_period_end }
+🎯 Current Priority
+P0: Fix Icon Rendering Without Breaking App
 
-plans: { id, tier ('free', 'premium', 'vip') }
+Focus only on:
 
-signals: { id, visibility, take_profit_1, take_profit_2, take_profit_3, risk_reward }
+frontend/app/_layout.tsx
 
-Critical Info for New Agent
+frontend/app/(tabs)/_layout.tsx
 
-P0 Priority: Fix access resolution logic in SignalContext.tsx.
+Icon imports
 
-Signal visibility is frontend-controlled.
-Do NOT modify SELECT RLS policy for signals.
+Tamagui compatibility with Expo Web
 
-Backend already returns all signals to authenticated users.
+Business logic must remain untouched.
 
-Admin and super_admin must always resolve to VIP access.
+📂 Relevant Files
+frontend/app/_layout.tsx
+frontend/app/(tabs)/_layout.tsx
+frontend/src/context/SignalContext.tsx
+frontend/src/context/SubscriptionContext.tsx
+frontend/components/SubscriptionBadge.tsx
+frontend/tamagui.config.ts
+
+🧠 Technical Stack
+
+Frontend:
+
+Expo Router v3
+
+React Native
+
+Tamagui
+
+@expo/vector-icons
+
+Backend:
+
+FastAPI
+
+Supabase JWT verification
+
+Database:
+
+Supabase PostgreSQL
+
+RLS enabled
+
+Plans + Subscriptions model
+
+🚦 Project Health
+Business Logic
+
+🟢 Stable
+
+Subscription Enforcement
+
+🟢 Stable
+
+Signal Creation
+
+🟢 Stable
+
+Tier Resolution
+
+🟢 Stable
+
+UI Rendering (Web)
+
+🔴 Broken (Icons + Navbar)
+
+❗ Critical Instructions for New Agent
+
+Do NOT touch business logic.
+
+Do NOT modify subscription enforcement.
+
+Do NOT reintroduce SplashScreen.
+
+Do NOT change SignalContext.
+
+Only fix icon rendering + tab bar visibility.
+
+Must work on Expo Web preview.
 </analysis>
