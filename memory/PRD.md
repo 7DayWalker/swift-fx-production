@@ -1,55 +1,50 @@
-# Swift FX Signals - Product Requirements Document
+# SwiftFX Trading Signals Platform - PRD
 
 ## Original Problem Statement
-A full-stack trading signals platform with React Native (Expo/Tamagui) frontend and FastAPI backend. The app provides professional trading signals, AI chart analysis, community features, and subscription management.
+Full-stack trading signals platform (React Native/Expo + FastAPI + Supabase). Key features include real-time signals, AI chart analyzer, subscription management, and community features.
 
 ## Core Requirements
-- Trading signals display with real-time updates
-- AI-powered chart analysis (Claude Vision via emergentintegrations)
-- Community posts and interactions
-- Subscription tiers (Free, Premium, VIP)
-- Admin dashboard for signal management
+- Signal visibility gating by subscription tier (Free/Premium/VIP)
+- AI Chart Analyzer with tier-based weekly usage limits
+- Subscription management with IAP support
+- Admin/Super Admin role system
 
-## Tech Stack
-- **Frontend**: React Native, Expo Router v3, Tamagui, @expo/vector-icons
-- **Backend**: FastAPI, Supabase JWT
-- **Database**: Supabase (PostgreSQL), MongoDB
-- **Auth**: Supabase Auth (Email, Apple, Google)
+## Architecture
+- **Frontend**: React Native (Expo), Expo Router, Tamagui, React Context state management
+- **Backend**: FastAPI, async/await, Supabase REST API
+- **Auth**: Supabase JWT
+- **Database**: Supabase (PostgreSQL) for primary data, MongoDB for secondary AI features
+
+## DB Schema (Key Tables)
+- `profiles`: {id, role, ai_weekly_used, ai_weekly_reset, ...}
+- `subscriptions`: {id, user_id, plan_id, status, current_period_end, ...}
+- `plans`: {id, tier ('free'|'premium'|'vip'), ...}
+
+## Tier Resolution Logic (Source of Truth)
+Precedence: super_admin → vip, admin → vip, Active VIP subscription → vip, Active Premium subscription → premium, else → free
 
 ## What's Been Implemented
 
-### Phase 1: Core App (Pre-existing)
-- Full trading signals CRUD with subscription enforcement
-- AI chart analyzer with Claude Vision
-- Community posts with likes/comments
-- Subscription management (Free/Premium/VIP)
-- Admin dashboard
-- Dark/Light theme support
+### Completed (Feb 2026)
+- [x] Backend subscription tier resolution (server.py, supabase_auth.py) - queries subscriptions + plans tables
+- [x] AI Analyzer authentication fix (auth header in ai.tsx)
+- [x] PressableScale micro-interactions (partial - reverted on More screen)
+- [x] **Frontend tier resolution consistency fix** (ai.tsx) - uses SubscriptionContext instead of stale profiles.role
+  - Fixed `user.id` → `user.user_id` bug in profiles query
+  - Unlimited display handling for VIP users
+  - Debug console.logs added (to be removed after user verification)
 
-### Phase 2: UI Fixes & Polish (Completed)
-- Fixed critical icon rendering bug (CDN font loading via +html.tsx)
-- Complete UI polish - Apple-like design across all screens
-- Standardized borderRadius, padding, shadows, spacing
-- 13/13 frontend tests passed
+### Contexts Verified Correct
+- SubscriptionContext.tsx - queries subscriptions + plans tables
+- SignalContext.tsx - queries subscriptions + plans tables
+- SubscriptionBadge.tsx - uses SubscriptionContext
 
-### Phase 3: Micro-Interactions (Completed - Feb 16, 2026)
-- Created reusable PressableScale component (src/components/ui/PressableScale.tsx)
-- Uses React Native Animated API with useNativeDriver: true
-- Scale animation: 1 → 0.97 → 1 on press/release (120ms duration)
-- Applied to 11 interactive elements across 4 screens:
-  - Dashboard: Quick Action cards (4), Signal cards, Upgrade banner
-  - AI: Analyze button, Analyze Another button
-  - Community: FAB button
-  - More: Menu items, Logout button
-- 5/5 frontend tests passed, 0 regressions
+## Pending
+- [ ] User verification of frontend tier fix
+- [ ] Remove debug console.logs after verification confirmed
+- [ ] PressableScale: Fix for flexDirection: 'row' layouts (reverted on More screen)
 
-## Key Files
-- `frontend/src/components/ui/PressableScale.tsx` - Reusable press-scale component
-- `frontend/app/+html.tsx` - CDN font loading fix
-- `frontend/app/(tabs)/dashboard.tsx` - Dashboard with PressableScale
-- `frontend/app/(tabs)/ai.tsx` - AI analyzer with PressableScale
-- `frontend/app/(tabs)/community.tsx` - Community with PressableScale FAB
-- `frontend/app/(tabs)/more.tsx` - More menu with PressableScale items
-
-## Backlog
-No pending tasks defined by user.
+## Tier Limits
+- VIP: unlimited AI analyses/week
+- Premium: 10 AI analyses/week
+- Free: 3 AI analyses/week
