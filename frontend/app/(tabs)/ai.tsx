@@ -737,8 +737,10 @@ export default function AIScreen() {
           {/* Action Buttons */}
           <View style={styles.resultActions}>
             <PressableScale style={styles.analyzeAnotherButton} onPress={startNewAnalysis} data-testid="analyze-another-button">
-              <Ionicons name="camera" size={20} color="#0A0E17" />
-              <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="camera" size={20} color="#0A0E17" />
+                <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
+              </View>
             </PressableScale>
           </View>
         </ScrollView>
