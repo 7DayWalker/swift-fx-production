@@ -290,8 +290,8 @@ export default function AIScreen() {
       return;
     }
 
-    // Check if limit reached (frontend check - Edge Function will also verify)
-    if (usage && usage.remaining <= 0 && usage.weekly_limit !== 'unlimited') {
+    // Check if limit reached (frontend check - backend will also verify)
+    if (usage && usage.weekly_limit !== 'unlimited' && usage.remaining <= 0) {
       setErrorMessage('You have used all your weekly AI analyses.');
       setScreenState('limit_reached');
       return;
