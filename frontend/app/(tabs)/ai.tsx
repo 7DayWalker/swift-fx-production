@@ -19,6 +19,7 @@ import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 // FastAPI Backend URL for AI Analysis
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
@@ -735,10 +736,12 @@ export default function AIScreen() {
 
           {/* Action Buttons */}
           <View style={styles.resultActions}>
-            <TouchableOpacity style={styles.analyzeAnotherButton} onPress={startNewAnalysis}>
-              <Ionicons name="camera" size={20} color="#0A0E17" />
-              <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
-            </TouchableOpacity>
+            <PressableScale style={styles.analyzeAnotherButton} onPress={startNewAnalysis} data-testid="analyze-another-button">
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="camera" size={20} color="#0A0E17" />
+                <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
+              </View>
+            </PressableScale>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -894,14 +897,17 @@ export default function AIScreen() {
         )}
 
         {/* Analyze Button */}
-        <TouchableOpacity
+        <PressableScale
           style={[styles.analyzeButton, { backgroundColor: theme.primary }, !selectedImage && styles.analyzeButtonDisabled]}
           onPress={analyzeChart}
           disabled={!selectedImage}
+          data-testid="analyze-chart-button"
         >
-          <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
-          <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
-        </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
+            <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
+          </View>
+        </PressableScale>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1311,12 +1317,10 @@ const styles = StyleSheet.create({
   },
   // Usage Card Styles
   usageCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   usageHeader: {
     flexDirection: 'row',
@@ -1355,11 +1359,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   uploadOptions: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     borderWidth: 2,
-    borderColor: '#2A2F3E',
     borderStyle: 'dashed',
     alignItems: 'center',
   },
@@ -1559,7 +1561,7 @@ const styles = StyleSheet.create({
   // Analyze Button Styles
   analyzeButton: {
     backgroundColor: '#00D4AA',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1569,9 +1571,10 @@ const styles = StyleSheet.create({
   analyzeButtonDisabled: {
     opacity: 0.5,
   },
+  // Analyze Button Styles
   analyzeButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#0A0E17',
   },
 });

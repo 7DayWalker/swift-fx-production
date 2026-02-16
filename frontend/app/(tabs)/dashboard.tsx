@@ -18,6 +18,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 // Static data that doesn't need real-time updates
 const WATCHLIST = [
@@ -125,7 +126,7 @@ export default function DashboardScreen() {
 
         {/* Upgrade Banner for Free Users - Routes to canonical /subscription page */}
         {isFreeUser && (
-          <TouchableOpacity style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} onPress={() => router.push('/subscription')}>
+          <PressableScale onPress={() => router.push('/subscription')} style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} data-testid="upgrade-banner">
             <View style={styles.upgradeContent}>
               <Ionicons name="rocket-outline" size={24} color={theme.warning} />
               <View style={styles.upgradeTextContainer}>
@@ -134,7 +135,7 @@ export default function DashboardScreen() {
               </View>
             </View>
             <Ionicons name="chevron-forward" size={24} color={theme.warning} />
-          </TouchableOpacity>
+          </PressableScale>
         )}
 
         {/* Performance Stats - REACTIVE from SignalContext */}
@@ -178,57 +179,53 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/calendar')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                  <Ionicons name="calendar" size={22} color="#6366F1" />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/calendar')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                    <Ionicons name="calendar" size={22} color="#6366F1" />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
-              </View>
-            </TouchableOpacity>
+              </PressableScale>
+            </View>
             
-            <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/academy')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
-                  <Ionicons name="school" size={22} color={theme.primary} />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/academy')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="school" size={22} color={theme.primary} />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
-              </View>
-            </TouchableOpacity>
+              </PressableScale>
+            </View>
             
-            <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/(tabs)/ai')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                  <Ionicons name="analytics" size={22} color="#8B5CF6" />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/(tabs)/ai')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                    <Ionicons name="analytics" size={22} color="#8B5CF6" />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
-              </View>
-            </TouchableOpacity>
+              </PressableScale>
+            </View>
             
-            <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/signal-history')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
-                  <Ionicons name="time" size={22} color={theme.warning} />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/signal-history')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
+                    <Ionicons name="time" size={22} color={theme.warning} />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
-              </View>
-            </TouchableOpacity>
+              </PressableScale>
+            </View>
           </View>
         </View>
 
@@ -248,10 +245,11 @@ export default function DashboardScreen() {
             </View>
           ) : (
             recentSignals.slice(0, 3).map((signal, index) => (
-              <TouchableOpacity
+              <PressableScale
                 key={signal.signal_id || index}
                 style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => router.push(`/(tabs)/signals`)}
+                data-testid={`signal-card-${index}`}
               >
                 <View style={styles.signalHeader}>
                   <Text style={[styles.signalPair, { color: theme.text }]}>{signal.pair}</Text>
@@ -279,7 +277,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>SL: {signal.stop_loss}</Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </PressableScale>
             ))
           )}
         </View>
@@ -294,7 +292,6 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E17',
   },
   loadingContainer: {
     flex: 1,
@@ -312,13 +309,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greeting: {
-    fontSize: 14,
-    color: '#8A8D98',
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
   userName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    marginTop: 2,
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -338,18 +335,17 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#FFFFFF',
   },
   upgradeBanner: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    borderRadius: 20,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: 'rgba(255, 215, 0, 0.18)',
   },
   upgradeContent: {
     flexDirection: 'row',
@@ -359,14 +355,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   upgradeTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFD700',
+    fontSize: 15,
+    fontWeight: '700',
   },
   upgradeSubtitle: {
     fontSize: 12,
-    color: '#8A8D98',
     marginTop: 2,
+    opacity: 0.7,
   },
   section: {
     marginBottom: 24,
@@ -375,91 +370,95 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 14,
+    letterSpacing: 0.1,
   },
   seeAllText: {
-    fontSize: 14,
-    color: '#00D4AA',
+    fontSize: 13,
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 8,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     alignItems: 'center',
-    marginHorizontal: 4,
+    justifyContent: 'center',
+    minHeight: 90,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 6,
+    opacity: 0.7,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   watchlistScroll: {
     marginHorizontal: -4,
   },
   watchlistItem: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 4,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 5,
     alignItems: 'center',
-    minWidth: 100,
+    minWidth: 96,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     marginBottom: 8,
+    opacity: 0.9,
   },
   watchlistPair: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: '700',
   },
   watchlistCategory: {
-    fontSize: 10,
+    fontSize: 9,
     marginTop: 4,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.65,
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+    marginHorizontal: -5,
   },
   quickActionCard: {
     width: '50%',
-    paddingHorizontal: 6,
-    marginBottom: 12,
+    paddingHorizontal: 5,
+    marginBottom: 10,
   },
   quickActionCardInner: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
+    alignItems: 'center',
   },
   quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -467,40 +466,39 @@ const styles = StyleSheet.create({
   quickActionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    textAlign: 'center',
   },
   quickActionSubtitle: {
     fontSize: 11,
-    color: '#8A8D98',
-    marginTop: 2,
+    marginTop: 3,
+    opacity: 0.6,
+    textAlign: 'center',
   },
   signalCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   signalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   signalPair: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   signalTypeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 8,
   },
   signalTypeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   signalDetails: {
     flexDirection: 'row',
@@ -508,7 +506,6 @@ const styles = StyleSheet.create({
   },
   signalDetailText: {
     fontSize: 12,
-    color: '#8A8D98',
   },
   lockedContent: {
     flexDirection: 'row',
@@ -518,20 +515,16 @@ const styles = StyleSheet.create({
   },
   lockedText: {
     fontSize: 12,
-    color: '#FFD700',
     marginLeft: 8,
   },
   emptyState: {
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   emptyText: {
     fontSize: 14,
-    color: '#8A8D98',
     marginTop: 12,
   },
 });

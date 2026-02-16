@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://fx-platform-preview.preview.emergentagent.com/api"
+BASE_URL = "https://pressable-scale.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

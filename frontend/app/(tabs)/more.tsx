@@ -16,6 +16,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 export default function MoreScreen() {
   const { user, logout } = useAuth();
@@ -309,7 +310,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1A1F2E',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
@@ -371,9 +372,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#1A1F2E',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#2A2F3E',
   },
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
   },
   menuCard: {
     backgroundColor: '#1A1F2E',
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#2A2F3E',
   },
@@ -460,8 +461,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 71, 87, 0.1)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 71, 87, 0.08)',
+    borderRadius: 18,
     padding: 16,
     marginTop: 10,
     marginBottom: 20,

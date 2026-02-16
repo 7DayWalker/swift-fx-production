@@ -22,6 +22,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -385,9 +386,9 @@ export default function CommunityScreen() {
 
       {/* Create Post FAB */}
       {user && (
-        <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
+        <PressableScale style={styles.fab} onPress={() => setShowCreateModal(true)} data-testid="create-post-fab">
           <Ionicons name="add" size={28} color="#0A0E17" />
-        </TouchableOpacity>
+        </PressableScale>
       )}
 
       {/* Create Post Modal */}
@@ -600,22 +601,22 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#8A8D98',
+    fontSize: 13,
     marginTop: 4,
+    opacity: 0.7,
   },
   rulesBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    backgroundColor: 'rgba(0, 212, 170, 0.06)',
     marginHorizontal: 16,
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 14,
     marginBottom: 8,
   },
   rulesText: {
@@ -629,12 +630,10 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   postCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   postHeader: {
     flexDirection: 'row',
@@ -723,19 +722,15 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 80,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     backgroundColor: '#00D4AA',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#00D4AA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    elevation: 0,
   },
   modalContainer: {
     flex: 1,
