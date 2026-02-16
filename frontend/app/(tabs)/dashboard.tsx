@@ -126,7 +126,7 @@ export default function DashboardScreen() {
 
         {/* Upgrade Banner for Free Users - Routes to canonical /subscription page */}
         {isFreeUser && (
-          <TouchableOpacity style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} onPress={() => router.push('/subscription')}>
+          <PressableScale onPress={() => router.push('/subscription')} style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} data-testid="upgrade-banner">
             <View style={styles.upgradeContent}>
               <Ionicons name="rocket-outline" size={24} color={theme.warning} />
               <View style={styles.upgradeTextContainer}>
@@ -135,7 +135,7 @@ export default function DashboardScreen() {
               </View>
             </View>
             <Ionicons name="chevron-forward" size={24} color={theme.warning} />
-          </TouchableOpacity>
+          </PressableScale>
         )}
 
         {/* Performance Stats - REACTIVE from SignalContext */}
