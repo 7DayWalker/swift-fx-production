@@ -179,9 +179,10 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/calendar')}
+              data-testid="quick-action-calendar"
             >
               <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
@@ -190,11 +191,12 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/academy')}
+              data-testid="quick-action-academy"
             >
               <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
@@ -203,11 +205,12 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/(tabs)/ai')}
+              data-testid="quick-action-ai"
             >
               <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
@@ -216,11 +219,12 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/signal-history')}
+              data-testid="quick-action-history"
             >
               <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
@@ -229,7 +233,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </View>
 
