@@ -2444,7 +2444,7 @@ async def check_fund_management_access(current_user: User = Depends(require_auth
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
     if not has_access:
@@ -2471,7 +2471,7 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
     if not has_access:
@@ -2496,7 +2496,7 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     is_active = check_subscription_active(user_doc)
     
     # Get AI usage info
@@ -3545,7 +3545,7 @@ async def submit_fund_application(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Check subscription level
-    user_subscription = get_effective_subscription(user_doc)
+    user_subscription = await get_effective_subscription(user_doc)
     if user_subscription not in ["premium", "vip"]:
         raise HTTPException(
             status_code=403, 
@@ -7065,7 +7065,7 @@ async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depen
             raise HTTPException(status_code=404, detail="User profile not found")
         
         # Get effective subscription (accounting for expiry)
-        effective_subscription = get_effective_subscription(user_doc)
+        effective_subscription = await get_effective_subscription(user_doc)
         
         # Get weekly limit based on subscription tier
         # Free: 3, Premium: 10, VIP: unlimited (999999)
