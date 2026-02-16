@@ -193,7 +193,7 @@ export default function MoreScreen() {
                       <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
                     )}
                   </View>
-                </TouchableOpacity>
+                </PressableScale>
               ))}
             </View>
           </View>
