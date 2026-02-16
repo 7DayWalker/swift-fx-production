@@ -19,6 +19,7 @@ import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 // FastAPI Backend URL for AI Analysis
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
