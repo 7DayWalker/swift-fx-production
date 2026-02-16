@@ -789,7 +789,12 @@ export default function AIScreen() {
             <View
               style={[
                 styles.usageProgress,
-                { width: `${((usage?.current_usage || 0) / (usage?.weekly_limit || 1)) * 100}%`, backgroundColor: theme.primary }
+                {
+                  width: usage?.weekly_limit === 'unlimited'
+                    ? '0%'
+                    : `${((usage?.current_usage || 0) / (typeof usage?.weekly_limit === 'number' && usage.weekly_limit > 0 ? usage.weekly_limit : 1)) * 100}%`,
+                  backgroundColor: theme.primary,
+                }
               ]}
             />
           </View>
