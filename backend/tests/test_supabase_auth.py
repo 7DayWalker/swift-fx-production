@@ -7,7 +7,7 @@ import requests
 import os
 
 # Using preview URL for testing
-BASE_URL = "https://pressable-scale.preview.emergentagent.com"
+BASE_URL = "https://context-refactor-3.preview.emergentagent.com"
 
 # Supabase credentials
 SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"

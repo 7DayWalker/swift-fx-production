@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "https://pressable-scale.preview.emergentagent.com/api"
+BASE_URL = "https://context-refactor-3.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
 SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
 

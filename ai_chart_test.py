@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://pressable-scale.preview.emergentagent.com/api"
+BASE_URL = "https://context-refactor-3.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):
