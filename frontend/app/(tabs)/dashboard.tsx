@@ -285,7 +285,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>SL: {signal.stop_loss}</Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </PressableScale>
             ))
           )}
         </View>
