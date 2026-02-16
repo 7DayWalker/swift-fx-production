@@ -357,22 +357,42 @@ def check_subscription_active(user_doc: dict) -> bool:
     return expiry > datetime.now(timezone.utc)
 
 
-def get_effective_subscription(user_doc: dict) -> str:
-    """Get user's effective subscription, accounting for expiry"""
-    # Check subscription field first, then fall back to role for backward compatibility
-    subscription = user_doc.get("subscription")
-    if not subscription:
-        # Fallback to role field for backward compatibility
-        role = user_doc.get("role", "free")
-        if role in ["premium", "vip"]:
-            subscription = role
-        else:
-            subscription = "free"
-    
-    # Check if premium/vip subscription is still active
-    if subscription in ["premium", "vip"] and not check_subscription_active(user_doc):
-        return "free"  # Expired subscription reverts to free
-    return subscription
+async def get_effective_subscription(user_doc: dict) -> str:
+    """
+    Get user's effective subscription tier by querying subscriptions+plans.
+    Precedence: super_admin/admin → vip, Active VIP sub → vip,
+    Active Premium sub → premium, else → free.
+    Handles NULL current_period_end as lifetime (never expires).
+    """
+    user_id = user_doc.get("id") or user_doc.get("user_id", "")
+    role = user_doc.get("role", "free")
+
+    # RULE 1: super_admin or admin → VIP (highest precedence)
+    if role in ("admin", "super_admin"):
+        return "vip"
+
+    # RULE 2: Query subscriptions joined with plans
+    subscriptions = await fetch_active_subscriptions(user_id)
+    now = datetime.now(timezone.utc).isoformat()
+
+    tier_priority = {"vip": 2, "premium": 1, "free": 0}
+    best_tier = "free"
+    best_priority = 0
+
+    for sub in subscriptions:
+        # NULL current_period_end = lifetime (never expires)
+        period_end = sub.get("current_period_end")
+        if period_end and period_end < now:
+            continue  # expired
+
+        plans = sub.get("plans") or {}
+        sub_tier = (plans.get("tier") or "free").lower()
+        priority = tier_priority.get(sub_tier, 0)
+        if priority > best_priority:
+            best_priority = priority
+            best_tier = sub_tier
+
+    return best_tier
 
 class SignalCreate(BaseModel):
     pair: str
