@@ -314,11 +314,21 @@ export default function AIScreen() {
 
       console.log('Calling AI Analyze API...');
 
+      // Get auth token from Supabase session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage('Not authenticated. Please log in again.');
+        setScreenState('error');
+        return;
+      }
+
       // Call FastAPI backend endpoint
       const response = await fetch(AI_ANALYZE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(payload),
       });
