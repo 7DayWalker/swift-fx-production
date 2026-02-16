@@ -179,57 +179,53 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
-            <PressableScale 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/calendar')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                  <Ionicons name="calendar" size={22} color="#6366F1" />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/calendar')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                    <Ionicons name="calendar" size={22} color="#6366F1" />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
-              </View>
-            </PressableScale>
+              </PressableScale>
+            </View>
             
-            <PressableScale 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/academy')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
-                  <Ionicons name="school" size={22} color={theme.primary} />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/academy')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="school" size={22} color={theme.primary} />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
-              </View>
-            </PressableScale>
+              </PressableScale>
+            </View>
             
-            <PressableScale 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/(tabs)/ai')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                  <Ionicons name="analytics" size={22} color="#8B5CF6" />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/(tabs)/ai')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                    <Ionicons name="analytics" size={22} color="#8B5CF6" />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
-              </View>
-            </PressableScale>
+              </PressableScale>
+            </View>
             
-            <PressableScale 
-              style={styles.quickActionCard}
-              onPress={() => router.push('/signal-history')}
-            >
-              <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
-                  <Ionicons name="time" size={22} color={theme.warning} />
+            <View style={styles.quickActionCard}>
+              <PressableScale onPress={() => router.push('/signal-history')}>
+                <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${theme.warning}15` }]}>
+                    <Ionicons name="time" size={22} color={theme.warning} />
+                  </View>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
                 </View>
-                <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
-                <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
-              </View>
-            </PressableScale>
+              </PressableScale>
+            </View>
           </View>
         </View>
 
