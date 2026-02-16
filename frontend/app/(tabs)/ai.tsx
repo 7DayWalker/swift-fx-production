@@ -736,10 +736,10 @@ export default function AIScreen() {
 
           {/* Action Buttons */}
           <View style={styles.resultActions}>
-            <TouchableOpacity style={styles.analyzeAnotherButton} onPress={startNewAnalysis}>
+            <PressableScale style={styles.analyzeAnotherButton} onPress={startNewAnalysis} data-testid="analyze-another-button">
               <Ionicons name="camera" size={20} color="#0A0E17" />
               <Text style={styles.analyzeAnotherText}>Analyze Another Chart</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </ScrollView>
       </SafeAreaView>

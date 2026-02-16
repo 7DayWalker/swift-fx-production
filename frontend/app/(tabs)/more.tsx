@@ -159,7 +159,7 @@ export default function MoreScreen() {
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{section.section}</Text>
             <View style={[styles.menuCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {section.items.map((item, itemIndex) => (
-                <TouchableOpacity
+                <PressableScale
                   key={itemIndex}
                   style={[
                     styles.menuItem,
@@ -167,6 +167,7 @@ export default function MoreScreen() {
                   ]}
                   onPress={item.action}
                   disabled={item.locked}
+                  data-testid={`menu-item-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
                   <View style={styles.menuItemLeft}>
                     <View style={[styles.menuIconContainer, { backgroundColor: `${theme.primary}15` }, item.locked && { backgroundColor: `${theme.textSecondary}15` }]}>
