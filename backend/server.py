@@ -1595,7 +1595,7 @@ async def analyze_chart_legacy(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get effective subscription (accounting for expiry)
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     
     # Get weekly limit based on subscription
     # Free: 3, Premium: 10, VIP: unlimited
@@ -1762,7 +1762,7 @@ async def get_ai_usage(current_user: User = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get effective subscription
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     weekly_limit = get_ai_weekly_limit(effective_subscription)
     
     # Check both new and legacy fields
@@ -1972,7 +1972,7 @@ async def create_payment_session(
     
     # Check if user already has this or higher plan
     user_doc = await fetch_profile(current_user.user_id)
-    current_subscription = get_effective_subscription(user_doc)
+    current_subscription = await get_effective_subscription(user_doc)
     
     plan_hierarchy = {"free": 0, "premium": 1, "vip": 2}
     if plan_hierarchy.get(current_subscription, 0) >= plan_hierarchy.get(session_data.plan, 0):
@@ -2423,7 +2423,7 @@ async def admin_get_user_details(user_id: str, admin: User = Depends(require_adm
         raise HTTPException(status_code=404, detail="User not found")
     
     # Calculate effective subscription
-    effective_subscription = get_effective_subscription(user)
+    effective_subscription = await get_effective_subscription(user)
     
     return {
         **user,
