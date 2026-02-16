@@ -43,7 +43,7 @@ export default function PressableScale({
       style={style}
       {...rest}
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={{ transform: [{ scale }], flex: 1 }}>
         {children}
       </Animated.View>
     </Pressable>
