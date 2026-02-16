@@ -1311,12 +1311,10 @@ const styles = StyleSheet.create({
   },
   // Usage Card Styles
   usageCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2A2F3E',
   },
   usageHeader: {
     flexDirection: 'row',
@@ -1355,11 +1353,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   uploadOptions: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     borderWidth: 2,
-    borderColor: '#2A2F3E',
     borderStyle: 'dashed',
     alignItems: 'center',
   },
@@ -1559,7 +1555,7 @@ const styles = StyleSheet.create({
   // Analyze Button Styles
   analyzeButton: {
     backgroundColor: '#00D4AA',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1569,9 +1565,10 @@ const styles = StyleSheet.create({
   analyzeButtonDisabled: {
     opacity: 0.5,
   },
+  // Analyze Button Styles
   analyzeButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#0A0E17',
   },
 });
