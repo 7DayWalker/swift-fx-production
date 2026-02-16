@@ -253,10 +253,11 @@ export default function DashboardScreen() {
             </View>
           ) : (
             recentSignals.slice(0, 3).map((signal, index) => (
-              <TouchableOpacity
+              <PressableScale
                 key={signal.signal_id || index}
                 style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => router.push(`/(tabs)/signals`)}
+                data-testid={`signal-card-${index}`}
               >
                 <View style={styles.signalHeader}>
                   <Text style={[styles.signalPair, { color: theme.text }]}>{signal.pair}</Text>
