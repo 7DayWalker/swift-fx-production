@@ -364,7 +364,7 @@ export default function AIScreen() {
         resistance_levels: data.resistance_levels || [],
         trade_insight: data.trade_insight || '',
         confidence: data.confidence || 'Low',
-        remaining_analyses: usage?.remaining ? usage.remaining - 1 : 0,
+        remaining_analyses: usage?.weekly_limit === 'unlimited' ? undefined : (usage?.remaining ? usage.remaining - 1 : 0),
         weekly_limit: usage?.weekly_limit || 3,
         disclaimer: 'AI-generated analysis for educational purposes only. Always do your own research.',
       };
