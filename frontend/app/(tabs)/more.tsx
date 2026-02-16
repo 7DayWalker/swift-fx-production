@@ -159,7 +159,7 @@ export default function MoreScreen() {
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{section.section}</Text>
             <View style={[styles.menuCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {section.items.map((item, itemIndex) => (
-                <PressableScale
+                <TouchableOpacity
                   key={itemIndex}
                   style={[
                     styles.menuItem,
@@ -167,7 +167,6 @@ export default function MoreScreen() {
                   ]}
                   onPress={item.action}
                   disabled={item.locked}
-                  data-testid={`menu-item-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                 >
                   <View style={styles.menuItemLeft}>
                     <View style={[styles.menuIconContainer, { backgroundColor: `${theme.primary}15` }, item.locked && { backgroundColor: `${theme.textSecondary}15` }]}>
@@ -193,17 +192,17 @@ export default function MoreScreen() {
                       <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
                     )}
                   </View>
-                </PressableScale>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
         ))}
 
         {/* Logout Button */}
-        <PressableScale style={[styles.logoutButton, { backgroundColor: `${theme.error}10` }]} onPress={handleLogout} data-testid="logout-button">
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: `${theme.error}10` }]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color={theme.error} />
           <Text style={[styles.logoutText, { color: theme.error }]}>Logout</Text>
-        </PressableScale>
+        </TouchableOpacity>
 
         <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.0</Text>
       </ScrollView>
