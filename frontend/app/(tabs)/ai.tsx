@@ -901,8 +901,10 @@ export default function AIScreen() {
           disabled={!selectedImage}
           data-testid="analyze-chart-button"
         >
-          <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
-          <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
+            <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
+          </View>
         </PressableScale>
       </ScrollView>
     </SafeAreaView>
