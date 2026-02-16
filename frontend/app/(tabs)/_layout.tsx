@@ -6,20 +6,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
 
 // Base tab bar height (the visible content area, excluding safe area)
-const BASE_TAB_BAR_HEIGHT = 56;
+const BASE_TAB_BAR_HEIGHT = 52;
 
 // Export for screens that need to know total tab bar height
 export const TAB_BAR_HEIGHT = BASE_TAB_BAR_HEIGHT;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   
   // Total height = visible content area + bottom safe area inset
   const totalTabBarHeight = BASE_TAB_BAR_HEIGHT + insets.bottom;
   
-  // Calculate label offset to push it above the safe area
-  const labelBottomOffset = insets.bottom > 0 ? insets.bottom + 4 : 4;
+  // Tab bar bg slightly darker than page bg for integration
+  const tabBg = isDark ? '#080B13' : theme.tabBarBackground;
+  const tabBorder = isDark ? '#151A27' : theme.tabBarBorder;
 
   return (
     <View style={[layoutStyles.container, { backgroundColor: theme.background }]}>
@@ -27,37 +28,29 @@ export default function TabsLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: theme.tabBarBackground,
-            borderTopWidth: 1,
-            borderTopColor: theme.tabBarBorder,
+            backgroundColor: tabBg,
+            borderTopWidth: 0.5,
+            borderTopColor: tabBorder,
             height: totalTabBarHeight,
             paddingTop: 0,
             paddingBottom: 0,
-            elevation: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
+            elevation: 0,
           },
-          // Item container - position content at top of tab bar
           tabBarItemStyle: {
             height: BASE_TAB_BAR_HEIGHT,
-            paddingTop: 8,
-            paddingBottom: 4,
+            paddingTop: 6,
+            paddingBottom: 2,
           },
-          // Icon styling
           tabBarIconStyle: {
             marginBottom: 0,
           },
-          // Label styling - push up with bottom margin
           tabBarLabelStyle: {
             fontSize: 10,
-            fontWeight: '600',
+            fontWeight: '500',
             marginTop: 2,
-            marginBottom: labelBottomOffset,
           },
           tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: theme.textSecondary,
+          tabBarInactiveTintColor: isDark ? 'rgba(138,141,152,0.55)' : theme.textSecondary,
           tabBarHideOnKeyboard: true,
         }}
       >
@@ -65,8 +58,8 @@ export default function TabsLayout() {
           name="dashboard"
           options={{
             title: 'Dashboard',
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="grid-outline" size={22} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'grid' : 'grid-outline'} size={21} color={color} />
             ),
           }}
         />
@@ -74,8 +67,8 @@ export default function TabsLayout() {
           name="signals"
           options={{
             title: 'Signals',
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="trending-up-outline" size={22} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'trending-up' : 'trending-up-outline'} size={21} color={color} />
             ),
           }}
         />
@@ -83,9 +76,9 @@ export default function TabsLayout() {
           name="ai"
           options={{
             title: 'AI',
-            tabBarIcon: ({ color }) => (
-              <View style={layoutStyles.aiIconContainer}>
-                <Ionicons name="sparkles" size={22} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[layoutStyles.aiIconContainer, focused && { backgroundColor: `${theme.primary}18` }]}>
+                <Ionicons name="sparkles" size={20} color={color} />
               </View>
             ),
           }}
@@ -94,8 +87,8 @@ export default function TabsLayout() {
           name="community"
           options={{
             title: 'Community',
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="people-outline" size={22} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'people' : 'people-outline'} size={21} color={color} />
             ),
           }}
         />
@@ -103,8 +96,8 @@ export default function TabsLayout() {
           name="more"
           options={{
             title: 'More',
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="menu-outline" size={22} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'menu' : 'menu-outline'} size={21} color={color} />
             ),
           }}
         />
@@ -119,8 +112,8 @@ const layoutStyles = StyleSheet.create({
     backgroundColor: '#0A0E17',
   },
   aiIconContainer: {
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    backgroundColor: 'transparent',
     padding: 4,
-    borderRadius: 8,
+    borderRadius: 10,
   },
 });
