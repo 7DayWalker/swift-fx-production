@@ -1,93 +1,55 @@
 # Swift FX Signals - Product Requirements Document
 
 ## Original Problem Statement
-Swift FX Signals is a full-stack trading signals platform built with:
-- **Frontend**: React Native (Expo Router v3) + Tamagui
-- **Backend**: FastAPI + Supabase (PostgreSQL) + MongoDB (AI features)
-- **Auth**: Supabase JWT
+A full-stack trading signals platform with React Native (Expo/Tamagui) frontend and FastAPI backend. The app provides professional trading signals, AI chart analysis, community features, and subscription management.
+
+## Core Requirements
+- Trading signals display with real-time updates
+- AI-powered chart analysis (Claude Vision via emergentintegrations)
+- Community posts and interactions
+- Subscription tiers (Free, Premium, VIP)
+- Admin dashboard for signal management
+
+## Tech Stack
+- **Frontend**: React Native, Expo Router v3, Tamagui, @expo/vector-icons
+- **Backend**: FastAPI, Supabase JWT
+- **Database**: Supabase (PostgreSQL), MongoDB
+- **Auth**: Supabase Auth (Email, Apple, Google)
 
 ## What's Been Implemented
 
-### Security (Complete)
-- `/api/setup/admin` removed permanently
-- `/api/ai/analyze` secured with Supabase JWT
-- Roles: `user`, `admin`, `super_admin`
-- Tier derived dynamically from subscriptions
+### Phase 1: Core App (Pre-existing)
+- Full trading signals CRUD with subscription enforcement
+- AI chart analyzer with Claude Vision
+- Community posts with likes/comments
+- Subscription management (Free/Premium/VIP)
+- Admin dashboard
+- Dark/Light theme support
 
-### Subscription System (Stable)
-- Tables: profiles, subscriptions, plans, signals
-- Tier Resolution: super_admin→VIP, admin→VIP, Active VIP sub→VIP, Active Premium sub→Premium, else→Free
-- Frontend gating: Free sees Free signals, Premium sees Free+Premium, VIP sees all
+### Phase 2: UI Fixes & Polish (Completed)
+- Fixed critical icon rendering bug (CDN font loading via +html.tsx)
+- Complete UI polish - Apple-like design across all screens
+- Standardized borderRadius, padding, shadows, spacing
+- 13/13 frontend tests passed
 
-### Signal Creation (Stable)
-- Column mismatch bug fixed
-- risk_reward correctly calculated
+### Phase 3: Micro-Interactions (Completed - Feb 16, 2026)
+- Created reusable PressableScale component (src/components/ui/PressableScale.tsx)
+- Uses React Native Animated API with useNativeDriver: true
+- Scale animation: 1 → 0.97 → 1 on press/release (120ms duration)
+- Applied to 11 interactive elements across 4 screens:
+  - Dashboard: Quick Action cards (4), Signal cards, Upgrade banner
+  - AI: Analyze button, Analyze Another button
+  - Community: FAB button
+  - More: Menu items, Logout button
+- 5/5 frontend tests passed, 0 regressions
 
-### UI Rendering Fix (Feb 15, 2026) ✅
-- **Fix**: Created `app/+html.tsx` with CSS `@font-face` loading Ionicons from unpkg CDN
-- **Result**: All icons render across login and all 5 tab screens
-
-### App Store Polish — UI Refinement (Feb 16, 2026) ✅
-Applied Apple-like minimal/clean design across all screens:
-
-**Global Standards:**
-- Card borderRadius → 20
-- Card padding → 18-20
-- Section vertical spacing → 24
-- Removed all heavy shadows
-- Thinner divider lines (0.5px)
-
-**Tab Bar (iOS Native Feel):**
-- Background darker than page (#080B13 vs #0A0E17)
-- Active icon: filled variant + full accent teal
-- Inactive icon: outline variant + opacity 0.55
-- Tab bar height 52px, no shadow/elevation
-- Thin 0.5px border-top
-
-**Dashboard Performance Cards:**
-- Equal height, center content
-- Number font 26px weight 800
-- Label font 11px opacity 0.7, uppercase with letter-spacing
-
-**Watchlist Cards:**
-- Pair name strong white, weight 700
-- Category: 9px uppercase, opacity 0.65
-- Tighter padding, status dot 7px
-
-**Quick Actions:**
-- Icon container centered (42x42, borderRadius 14)
-- Title centered, subtitle opacity 0.6
-
-**Signals Cards:**
-- borderRadius 20, tighter spacing
-- Smaller BUY/SELL badges (fontSize 11-12, padding reduced)
-- Softer badge backgrounds
-- Lighter divider lines
-
-**Login Page:**
-- Rounded inputs (borderRadius 16)
-- Rounded buttons (borderRadius 16)
-- Thinner divider, cleaner spacing
-
-**Files Modified:**
-- `app/(tabs)/_layout.tsx` — Tab bar refinement
-- `app/(tabs)/dashboard.tsx` — Dashboard styles
-- `app/(tabs)/signals.tsx` — Signal card styles
-- `app/(tabs)/ai.tsx` — AI screen styles
-- `app/(tabs)/community.tsx` — Community styles
-- `app/(tabs)/more.tsx` — More screen styles
-- `app/(auth)/login.tsx` — Login page styles
-
-**Testing:** 13/13 frontend tests passed (100%)
-
-## Architecture
-- Frontend: `/app/frontend/` - Expo Router v3, React Native, Tamagui
-- Backend: `/app/backend/` - FastAPI, Supabase JWT verification
-- Database: Supabase PostgreSQL (RLS enabled), MongoDB (AI features)
-
-## Known Issues
-- `useFonts` hook still attempts font load from broken asset path (harmless, CDN takes over)
-- `shadow*` style prop deprecation warning from library (not from app code)
+## Key Files
+- `frontend/src/components/ui/PressableScale.tsx` - Reusable press-scale component
+- `frontend/app/+html.tsx` - CDN font loading fix
+- `frontend/app/(tabs)/dashboard.tsx` - Dashboard with PressableScale
+- `frontend/app/(tabs)/ai.tsx` - AI analyzer with PressableScale
+- `frontend/app/(tabs)/community.tsx` - Community with PressableScale FAB
+- `frontend/app/(tabs)/more.tsx` - More menu with PressableScale items
 
 ## Backlog
-- Micro interactions (press scale 0.97 on buttons, soft fade-in for signal lists) — deferred for native testing
+No pending tasks defined by user.
