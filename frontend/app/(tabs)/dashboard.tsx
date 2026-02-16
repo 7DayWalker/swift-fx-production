@@ -179,7 +179,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/calendar')}
             >
@@ -190,9 +190,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/academy')}
             >
@@ -203,9 +203,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>Academy</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Learn Trading</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/(tabs)/ai')}
             >
@@ -216,9 +216,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>AI Analyzer</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Chart Analysis</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
             
-            <TouchableOpacity 
+            <PressableScale 
               style={styles.quickActionCard}
               onPress={() => router.push('/signal-history')}
             >
@@ -229,7 +229,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.quickActionTitle, { color: theme.text }]}>History</Text>
                 <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Past Signals</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </View>
 
