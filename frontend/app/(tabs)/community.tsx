@@ -386,9 +386,9 @@ export default function CommunityScreen() {
 
       {/* Create Post FAB */}
       {user && (
-        <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
+        <PressableScale style={styles.fab} onPress={() => setShowCreateModal(true)} data-testid="create-post-fab">
           <Ionicons name="add" size={28} color="#0A0E17" />
-        </TouchableOpacity>
+        </PressableScale>
       )}
 
       {/* Create Post Modal */}

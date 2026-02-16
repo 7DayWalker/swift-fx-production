@@ -895,14 +895,15 @@ export default function AIScreen() {
         )}
 
         {/* Analyze Button */}
-        <TouchableOpacity
+        <PressableScale
           style={[styles.analyzeButton, { backgroundColor: theme.primary }, !selectedImage && styles.analyzeButtonDisabled]}
           onPress={analyzeChart}
           disabled={!selectedImage}
+          data-testid="analyze-chart-button"
         >
           <Ionicons name="sparkles" size={20} color="#0A0E17" style={{ marginRight: 8 }} />
           <Text style={styles.analyzeButtonText}>Analyze Chart</Text>
-        </TouchableOpacity>
+        </PressableScale>
       </ScrollView>
     </SafeAreaView>
   );

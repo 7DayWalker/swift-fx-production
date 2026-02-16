@@ -199,10 +199,10 @@ export default function MoreScreen() {
         ))}
 
         {/* Logout Button */}
-        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: `${theme.error}10` }]} onPress={handleLogout}>
+        <PressableScale style={[styles.logoutButton, { backgroundColor: `${theme.error}10` }]} onPress={handleLogout} data-testid="logout-button">
           <Ionicons name="log-out-outline" size={20} color={theme.error} />
           <Text style={[styles.logoutText, { color: theme.error }]}>Logout</Text>
-        </TouchableOpacity>
+        </PressableScale>
 
         <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.0</Text>
       </ScrollView>
