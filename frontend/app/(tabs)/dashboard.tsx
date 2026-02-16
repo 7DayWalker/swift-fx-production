@@ -18,6 +18,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
 import MockAdBanner from '../../src/components/MockAdBanner';
 import { TAB_BAR_HEIGHT } from './_layout';
+import PressableScale from '../../src/components/ui/PressableScale';
 
 // Static data that doesn't need real-time updates
 const WATCHLIST = [
