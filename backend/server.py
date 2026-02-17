@@ -708,24 +708,20 @@ def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) 
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
     signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
-    # Get user's effective subscription from Supabase profile
+    # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
-        user_role = current_user.role
-        is_admin = user_role == UserRole.ADMIN.value
-        user_subscription = user_role if user_role in ("premium", "vip") else "free"
+        user_subscription = await get_effective_subscription({
+            "user_id": current_user.user_id,
+            "role": current_user.role,
+        })
     else:
         user_subscription = "free"
-        is_admin = False
     
     result = []
     for signal in signals:
         signal_visibility = signal.get("visibility", "free")
         
-        # Admin sees all signals
-        if is_admin:
-            result.append(signal)
-        # Check if user subscription can access this signal
-        elif can_access_visibility(user_subscription, signal_visibility):
+        if can_access_visibility(user_subscription, signal_visibility):
             result.append(signal)
         else:
             result.append({
@@ -747,19 +743,18 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     
-    # Get user's effective subscription from Supabase profile
+    # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
-        user_role = current_user.role
-        is_admin = user_role == UserRole.ADMIN.value
-        user_subscription = user_role if user_role in ("premium", "vip") else "free"
+        user_subscription = await get_effective_subscription({
+            "user_id": current_user.user_id,
+            "role": current_user.role,
+        })
     else:
         user_subscription = "free"
-        is_admin = False
     
     signal_visibility = signal.get("visibility", "free")
     
-    # Admin sees all signals
-    if is_admin or can_access_visibility(user_subscription, signal_visibility):
+    if can_access_visibility(user_subscription, signal_visibility):
         return signal
     
     return {
