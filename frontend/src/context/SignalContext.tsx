@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import { canAccessSignal, SubscriptionTier } from '../utils/signalAccess';
 import api from '../services/api';
