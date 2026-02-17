@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import { canAccessSignal, SubscriptionTier } from '../utils/signalAccess';
+import api from '../services/api';
 
 // Signal interface — kept identical to what screens expect
 interface Signal {
@@ -75,22 +75,23 @@ const SignalContext = createContext<SignalContextType | undefined>(undefined);
 const POLLING_INTERVAL = 5000;
 const BACKGROUND_POLLING_INTERVAL = 30000;
 
-/** Map a Supabase row → app Signal */
-const mapRow = (row: any): Signal => ({
-  signal_id: row.id,
+/** Map a backend API response row → app Signal.
+ *  Backend already handles tier gating: locked signals have sensitive fields stripped. */
+const mapBackendSignal = (row: any): Signal => ({
+  signal_id: row.signal_id,
   pair: row.pair,
   signal_type: row.signal_type,
-  entry: row.entry_price != null ? Number(row.entry_price) : undefined,
+  entry: row.entry != null ? Number(row.entry) : undefined,
   stop_loss: row.stop_loss != null ? Number(row.stop_loss) : undefined,
-  tp1: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-  tp2: row.take_profit_2 != null ? Number(row.take_profit_2) : undefined,
-  tp3: row.take_profit_3 != null ? Number(row.take_profit_3) : undefined,
-  take_profit: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-  risk_reward: row.risk_reward != null ? Number(row.risk_reward) : undefined,
-  // Map DB state → old 'status' names (tp1/tp2/tp3 → 'active', closed → 'closed')
-  status: ['pending'].includes(row.state)
+  tp1: row.tp1 != null ? Number(row.tp1) : undefined,
+  tp2: row.tp2 != null ? Number(row.tp2) : undefined,
+  tp3: row.tp3 != null ? Number(row.tp3) : undefined,
+  take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
+  tp_hit: row.tp_hit != null ? Number(row.tp_hit) : undefined,
+  risk_reward: row.risk_reward != null ? parseFloat(String(row.risk_reward)) : undefined,
+  status: ['pending'].includes(row.state || row.status)
     ? 'pending'
-    : row.state === 'closed'
+    : (row.state || row.status) === 'closed'
     ? 'closed'
     : 'active',
   visibility: row.visibility,
@@ -100,15 +101,8 @@ const mapRow = (row: any): Signal => ({
   created_at: row.created_at,
   activated_at: row.activated_at,
   closed_at: row.closed_at,
-  locked: false, // Will be set based on user tier in provider
+  locked: row.locked || false,
 });
-
-/** Map with access check - sets locked based on user tier */
-const mapRowWithAccess = (row: any, userTier: SubscriptionTier): Signal => {
-  const signal = mapRow(row);
-  signal.locked = !canAccessSignal(userTier, signal.visibility);
-  return signal;
-};
 
 export function SignalProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
