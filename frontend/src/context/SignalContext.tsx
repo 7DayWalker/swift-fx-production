@@ -240,24 +240,16 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     try {
-      const { data, error } = await supabase
-        .from('signals')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await api.get('/signals');
+      const data = response.data;
 
-      if (error) {
-        console.error('[Signals] fetch error:', error.message);
-        return;
-      }
-
-      // Map signals with access check using ref to avoid recreating callback
-      const currentTier = userTierRef.current;
-      setSignals((data || []).map((row) => mapRowWithAccess(row, currentTier)));
+      // Backend handles tier-based gating: locked signals have sensitive fields stripped
+      setSignals((data || []).map(mapBackendSignal));
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[Signals] refreshSignals failed:', err);
     }
-  }, [token]); // Only depends on token - userTier accessed via ref
+  }, [token]); // Only depends on token - backend resolves tier from JWT
 
   const refreshStats = useCallback(async () => {
     if (!token) return;
@@ -402,18 +394,15 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     return () => stopPolling();
   }, [userId, token]); // ONLY primitive dependencies - no functions
 
-  // Re-apply access checks when userTier changes - but DON'T trigger fetches
+  // Re-fetch signals when userTier changes — backend returns different locked state per tier
   useEffect(() => {
     console.log('[SignalContext] useEffect[userTier] triggered - userTier:', userTier, 'signals.length:', signals.length);
     
-    if (signals.length > 0) {
-      // Re-map signals with new user tier - use functional update to avoid stale closure
-      setSignals((prev) => prev.map((s) => ({
-        ...s,
-        locked: !canAccessSignal(userTier, s.visibility)
-      })));
+    if (signals.length > 0 && token) {
+      // Re-fetch from backend so locked/unlocked state and field visibility are correct
+      refreshSignals();
     }
-  }, [userTier]); // Only depends on userTier - signals.length check is inside
+  }, [userTier]); // Only depends on userTier - refreshSignals is stable via token
 
   // Recompute stats whenever signals change - use refs to avoid dependency on callbacks
   const signalsRef = useRef(signals);
