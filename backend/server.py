@@ -1508,15 +1508,9 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     }
 
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
-    """Send push notification to users about new signal based on visibility rules"""
+    """Send push notification to ALL users about new signal (no tier filtering)"""
     try:
-        # Get signal info
-        signal = await db.signals.find_one({"signal_id": signal_id})
-        if not signal:
-            logger.error(f"Signal {signal_id} not found for notification")
-            return
-        
-        # Get all active device tokens with user info
+        # Get all active device tokens
         device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
         if not device_tokens:
             logger.info("No active device tokens found")
@@ -1540,33 +1534,16 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             if not user_id:
                 continue
             
-            # Get user info to check role and notification preferences
+            # Check if user has notifications enabled
             user = await fetch_profile(user_id)
             if not user:
                 continue
             
-            # Check if user has notifications enabled
             notification_prefs = user.get("notification_preferences", {})
             if not notification_prefs.get("signals", True):
                 continue
             
-            # Use get_effective_subscription for accurate tier resolution
-            user_tier = await get_effective_subscription({"id": user_id, "role": user.get("role", "free")})
-            
-            # Apply visibility rules:
-            # - FREE signal -> notify ALL users
-            # - VIP signal -> notify VIP users ONLY
-            # - PREMIUM signal -> notify Premium and VIP users
-            if visibility == SignalVisibility.VIP:
-                # Only VIP users get VIP signal notifications
-                if user_tier != "vip":
-                    continue
-            elif visibility == SignalVisibility.PREMIUM:
-                # Premium and VIP users get premium signal notifications
-                if user_tier not in ["premium", "vip"]:
-                    continue
-            # FREE signals go to everyone
-            
+            # No tier filtering - all users receive all signal notifications
             messages.append({
                 "to": token,
                 "title": title,
@@ -1596,7 +1573,7 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
                 )
                 logger.info(f"Expo push response: {response.status_code}")
         
-        logger.info(f"Sent notification for signal {signal_id} ({visibility.value}) to {notified_users} users")
+        logger.info(f"Sent notification for signal {signal_id} to {notified_users} users")
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
 
