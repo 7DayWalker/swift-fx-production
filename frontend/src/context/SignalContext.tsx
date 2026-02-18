@@ -254,7 +254,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     try {
-      const closed = signals.filter((s) => s.status === 'closed');
+      const closed = signals.filter((s) => s.state === 'closed');
       const winning = closed.filter((s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
         return pips > 0;
@@ -291,7 +291,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     // History is now derived from local signals state (same source)
     if (!token || signals.length === 0) return;
 
-    const closed = signals.filter((s) => s.status === 'closed');
+    const closed = signals.filter((s) => s.state === 'closed');
     const winning = closed.filter((s) => (s.final_pips ?? 0) > 0);
     const totalPips = closed.reduce((sum, s) => sum + (s.final_pips ?? 0), 0);
 
@@ -410,7 +410,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (signals.length > 0 && token) {
       // Compute stats inline instead of calling callbacks
-      const closed = signals.filter((s) => s.status === 'closed');
+      const closed = signals.filter((s) => s.state === 'closed');
       const winning = closed.filter((s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
         return pips > 0;
