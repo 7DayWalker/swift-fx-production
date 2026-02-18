@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { useSignals } from '../../src/context/SignalContext';
+import api from '../../src/services/api';
 
 interface Signal {
   signal_id: string;
