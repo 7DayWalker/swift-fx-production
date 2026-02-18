@@ -134,35 +134,32 @@ export default function SignalManagement() {
     fetchSignals();
   }, []);
 
-  /** Map a Supabase row to the local Signal interface */
+  /** Map a backend API row to the local Signal interface */
   const mapRow = (row: any): Signal => ({
-    signal_id: row.id,
+    signal_id: row.signal_id,
     pair: row.pair,
     signal_type: row.signal_type,
-    entry: row.entry_price != null ? Number(row.entry_price) : undefined,
+    entry: row.entry != null ? Number(row.entry) : undefined,
     stop_loss: row.stop_loss != null ? Number(row.stop_loss) : undefined,
-    tp1: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-    tp2: row.take_profit_2 != null ? Number(row.take_profit_2) : undefined,
-    tp3: row.take_profit_3 != null ? Number(row.take_profit_3) : undefined,
-    take_profit: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
+    tp1: row.tp1 != null ? Number(row.tp1) : undefined,
+    tp2: row.tp2 != null ? Number(row.tp2) : undefined,
+    tp3: row.tp3 != null ? Number(row.tp3) : undefined,
+    take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
     tp_hit: ['tp1','tp2','tp3'].indexOf(row.state) >= 0 ? ['tp1','tp2','tp3'].indexOf(row.state) + 1 : 0,
-    risk_reward: row.risk_reward != null ? Number(row.risk_reward) : undefined,
+    risk_reward: row.risk_reward != null ? parseFloat(String(row.risk_reward)) : undefined,
     status: row.state === 'pending' ? 'pending' : row.state === 'closed' ? 'closed' : 'active',
     visibility: row.visibility,
     analysis: row.analysis,
     final_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
     result_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
     created_at: row.created_at,
+    activated_at: row.activated_at,
   });
 
   const fetchSignals = async () => {
     try {
-      const { data, error } = await supabase
-        .from('signals')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setSignals((data || []).map(mapRow));
+      const response = await api.get('/signals');
+      setSignals((response.data || []).map(mapRow));
     } catch (error) {
       console.error('Failed to fetch signals:', error);
       setSignals([]);
