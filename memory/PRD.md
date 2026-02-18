@@ -59,9 +59,11 @@ Backend `get_effective_subscription()`:
 - Push notification handlers (server.py lines 1459, 1541) still use `UserRole(profile.role)` instead of `get_effective_subscription()`
 - `canAccessSignal()` in frontend still exists but is now only used by `fetchUserTier` (not signals gating)
 - Debug console.logs in ai.tsx to be removed after user confirms AI tier fix
+- **Admin panel CRUD uses Supabase directly** - Edit, Activate, Mark TP, Close, Delete operations need to migrate to backend API
 
 ## Backlog
-- P1: Fix push notification tier resolution
+- **P1: Migrate Admin Panel CRUD to Backend API** - Edit/Activate/Close/Delete operations currently use Supabase, should use backend endpoints
+- P2: Fix push notification tier resolution
 - P2: PressableScale fix for flexDirection: 'row' layouts
 - P2: Remove debug console.logs
 - P3: CSV export for admin
