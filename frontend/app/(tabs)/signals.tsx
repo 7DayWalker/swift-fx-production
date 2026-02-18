@@ -188,7 +188,7 @@ export default function SignalsScreen() {
               </View>
             )}
             
-            {item.status === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
+            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
               <View style={[styles.resultContainer, { borderTopColor: theme.border }]}>
                 <Text style={[styles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
                 <Text style={[
