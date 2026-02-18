@@ -25,6 +25,15 @@ Backend `get_effective_subscription()`:
 
 ## What's Been Implemented
 
+### Session 4 — Feb 18, 2026
+- [x] **Status→State Refactor COMPLETE**: Backend API no longer returns `status` field
+- [x] Backend `GET /api/signals` and `GET /api/signals/{id}` return only `state` field (pending|active|tp1|tp2|tp3|closed)
+- [x] Backend correctly removes `status` via `signal.pop("status", None)` 
+- [x] Frontend signals.tsx fixed: Line 191 uses `state === 'closed'` instead of `status`
+- [x] All filter tabs use `state` field for filtering
+- [x] Testing agent verified: 11/11 backend tests passed, 8/8 UI tests passed
+- [x] VIP tier access verified: Can see all signal fields (entry, stop_loss, tp1, tp2, tp3)
+
 ### Session 3 — Feb 17, 2026
 - [x] Backend signal endpoints (`GET /api/signals`, `GET /api/signals/{id}`) fixed to use `get_effective_subscription()` instead of stale `current_user.role`
 - [x] Frontend `SignalContext.refreshSignals()` migrated from Supabase direct query to FastAPI backend
