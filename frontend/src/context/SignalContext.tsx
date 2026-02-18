@@ -18,7 +18,8 @@ interface Signal {
   take_profit?: number;
   tp_hit?: number;
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: 'pending' | 'active' | 'tp1' | 'tp2' | 'tp3' | 'closed';
+  is_active: boolean;
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
   final_pips?: number;
