@@ -91,11 +91,8 @@ const mapBackendSignal = (row: any): Signal => ({
   take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
   tp_hit: row.tp_hit != null ? Number(row.tp_hit) : undefined,
   risk_reward: row.risk_reward != null ? parseFloat(String(row.risk_reward)) : undefined,
-  status: ['pending'].includes(row.state || row.status)
-    ? 'pending'
-    : (row.state || row.status) === 'closed'
-    ? 'closed'
-    : 'active',
+  state: row.state || 'pending',
+  is_active: row.is_active ?? true,
   visibility: row.visibility,
   analysis: row.analysis,
   final_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
