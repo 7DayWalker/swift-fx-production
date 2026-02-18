@@ -30,7 +30,8 @@ interface Signal {
   tp_hit?: number;
   take_profit?: number; // Legacy support
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: string;
+  is_active?: boolean;
   visibility: 'free' | 'premium' | 'vip';
   created_at: string;
   locked?: boolean;
@@ -64,7 +65,7 @@ export default function SignalsScreen() {
 
   const filteredSignals = signals.filter(signal => {
     if (filter === 'all') return true;
-    return signal.status === filter;
+    return signal.state === filter;
   });
 
   const getStatusColor = (status: string) => {
