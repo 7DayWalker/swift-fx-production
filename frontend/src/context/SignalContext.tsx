@@ -129,9 +129,9 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   console.log('[SignalContext] RENDER - userId:', userId, 'userTier:', userTier);
 
   // Derived lists
-  const activeSignals = signals.filter((s) => s.status === 'active');
-  const pendingSignals = signals.filter((s) => s.status === 'pending');
-  const closedSignals = signals.filter((s) => s.status === 'closed');
+  const activeSignals = signals.filter((s) => s.is_active && s.state !== 'pending');
+  const pendingSignals = signals.filter((s) => s.state === 'pending');
+  const closedSignals = signals.filter((s) => s.state === 'closed');
 
   // Fetch user's subscription tier - ONLY depends on userId (primitive)
   // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
