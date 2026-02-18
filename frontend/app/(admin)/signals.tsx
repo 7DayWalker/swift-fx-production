@@ -28,15 +28,17 @@ interface Signal {
   tp1?: number;
   tp2?: number;
   tp3?: number;
-  take_profit?: number; // Legacy field
+  take_profit?: number;
   tp_hit?: number;
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: string;
+  is_active?: boolean;
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
   final_pips?: number;
   result_pips?: number;
   created_at: string;
+  activated_at?: string;
 }
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
