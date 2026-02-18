@@ -223,66 +223,28 @@ export default function SignalManagement() {
     setIsSubmitting(true);
     
     try {
-      console.log("=== FETCHING AUTH USER ===");
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      
-      console.log("=== SIGNAL CREATE DEBUG ===", authUser);
-      console.log("Auth Error:", authError);
-
-      if (!authUser) {
-        console.error("NO AUTH USER - Cannot create signal");
-        showAlert('Error', 'Not authenticated. Please log in again.');
-        setIsSubmitting(false);
-        return;
-      }
-
       const entry = parseFloat(formData.entry);
       const stopLoss = parseFloat(formData.stop_loss);
       const tp1 = parseFloat(formData.tp1);
-      const riskReward = calculateRiskReward(entry, stopLoss, tp1, formData.signal_type);
 
+      // Map to backend SignalCreate schema (FastAPI → MongoDB)
       const payload = {
         pair: formData.pair,
         signal_type: formData.signal_type,
-        entry_price: entry,
+        entry: entry,
         stop_loss: stopLoss,
-        take_profit_1: tp1,
-        take_profit_2: formData.tp2 ? parseFloat(formData.tp2) : null,
-        take_profit_3: formData.tp3 ? parseFloat(formData.tp3) : null,
-        risk_reward: riskReward,
-        state: formData.status,
+        tp1: tp1,
+        tp2: formData.tp2 ? parseFloat(formData.tp2) : null,
+        tp3: formData.tp3 ? parseFloat(formData.tp3) : null,
+        state: formData.status, // "pending" or "active"
         visibility: formData.visibility,
         analysis: formData.analysis || null,
-        created_by: authUser.id,
-        activated_at: formData.status === 'active' ? new Date().toISOString() : null,
       };
 
-      console.log("=== INSERT PAYLOAD ===", payload);
-
-      const { data, error } = await supabase
-        .from("signals")
-        .insert(payload)
-        .select();
-      
-      console.log("=== SUPABASE RESPONSE ===", { data, error });
-      
-      console.log('=== SUPABASE RESPONSE ===');
-      console.log('Data:', data);
-      console.log('Error:', error);
-      if (error) {
-        console.error('Error Code:', error.code);
-        console.error('Error Message:', error.message);
-        console.error('Error Details:', error.details);
-        console.error('Error Hint:', error.hint);
-        console.error('Full Error Object:', JSON.stringify(error, null, 2));
-      }
-
-      if (error) {
-        throw error;
-      }
+      const response = await api.post('/admin/signals', payload);
       
       console.log('=== SIGNAL CREATED SUCCESSFULLY ===');
-      console.log('Created Signal:', data);
+      console.log('Response:', response.data);
       
       setShowCreateModal(false);
       resetCreateForm();
@@ -294,15 +256,9 @@ export default function SignalManagement() {
       showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
       console.error('=== SIGNAL CREATE ERROR ===');
-      console.error('Error Type:', error?.constructor?.name);
-      console.error('Error Message:', error?.message);
-      console.error('Error Code:', error?.code);
-      console.error('Error Details:', error?.details);
-      console.error('Error Hint:', error?.hint);
-      console.error('Full Error:', error);
-      console.error('Error JSON:', JSON.stringify(error, null, 2));
+      console.error('Error:', error?.response?.data || error?.message);
       
-      const errorMsg = error?.message || error?.details || 'Failed to create signal';
+      const errorMsg = error?.response?.data?.detail || error?.message || 'Failed to create signal';
       showAlert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
