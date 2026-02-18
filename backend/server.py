@@ -1634,14 +1634,15 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not notification_prefs.get("signals", True):
                 continue
             
-            user_role = UserRole(user.get("role", "free"))
+            # Use get_effective_subscription for accurate tier resolution
+            user_tier = await get_effective_subscription({"id": user_id, "role": user.get("role", "free")})
             
             # Apply same visibility rules as new signals
             if visibility == SignalVisibility.VIP:
-                if user_role != UserRole.VIP:
+                if user_tier != "vip":
                     continue
             elif visibility == SignalVisibility.PREMIUM:
-                if user_role not in [UserRole.PREMIUM, UserRole.VIP]:
+                if user_tier not in ["premium", "vip"]:
                     continue
             
             messages.append({
