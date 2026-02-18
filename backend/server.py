@@ -720,15 +720,21 @@ async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
     result = []
     for signal in signals:
         signal_visibility = signal.get("visibility", "free")
+        state = signal.get("state", signal.get("status", "pending"))
+        is_active = state in ("pending", "active", "tp1", "tp2", "tp3")
         
         if can_access_visibility(user_subscription, signal_visibility):
+            signal["state"] = state
+            signal["is_active"] = is_active
+            signal.pop("status", None)
             result.append(signal)
         else:
             result.append({
                 "signal_id": signal["signal_id"],
                 "pair": signal["pair"],
                 "signal_type": signal["signal_type"],
-                "status": signal["status"],
+                "state": state,
+                "is_active": is_active,
                 "visibility": signal["visibility"],
                 "created_at": signal["created_at"],
                 "locked": True,
@@ -755,13 +761,19 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
     signal_visibility = signal.get("visibility", "free")
     
     if can_access_visibility(user_subscription, signal_visibility):
+        state = signal.get("state", signal.get("status", "pending"))
+        signal["state"] = state
+        signal["is_active"] = state in ("pending", "active", "tp1", "tp2", "tp3")
+        signal.pop("status", None)
         return signal
     
+    state = signal.get("state", signal.get("status", "pending"))
     return {
         "signal_id": signal["signal_id"],
         "pair": signal["pair"],
         "signal_type": signal["signal_type"],
-        "status": signal["status"],
+        "state": state,
+        "is_active": state in ("pending", "active", "tp1", "tp2", "tp3"),
         "visibility": signal["visibility"],
         "created_at": signal["created_at"],
         "locked": True,
