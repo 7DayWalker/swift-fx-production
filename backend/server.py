@@ -1579,9 +1579,9 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
 
 
 async def send_signal_close_notification(signal_id: str, pair: str, signal_type: str, final_pips: float, visibility: SignalVisibility):
-    """Send push notification when a signal is closed"""
+    """Send push notification to ALL users when a signal is closed (no tier filtering)"""
     try:
-        # Get all active device tokens with user info
+        # Get all active device tokens
         device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
         if not device_tokens:
             logger.info("No active device tokens found for close notification")
@@ -1603,6 +1603,7 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not token.startswith("ExponentPushToken") or not user_id:
                 continue
             
+            # Check if user has notifications enabled
             user = await fetch_profile(user_id)
             if not user:
                 continue
@@ -1611,17 +1612,7 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not notification_prefs.get("signals", True):
                 continue
             
-            # Use get_effective_subscription for accurate tier resolution
-            user_tier = await get_effective_subscription({"id": user_id, "role": user.get("role", "free")})
-            
-            # Apply same visibility rules as new signals
-            if visibility == SignalVisibility.VIP:
-                if user_tier != "vip":
-                    continue
-            elif visibility == SignalVisibility.PREMIUM:
-                if user_tier not in ["premium", "vip"]:
-                    continue
-            
+            # No tier filtering - all users receive all signal close notifications
             messages.append({
                 "to": token,
                 "title": title,
