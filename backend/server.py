@@ -1425,10 +1425,17 @@ async def update_signal_state(
 
 @api_router.delete("/admin/signals/{signal_id}")
 async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
+    """Admin endpoint to delete a signal from MongoDB"""
+    # Check permission
+    if not has_permission(admin, "signals", "delete"):
+        raise HTTPException(status_code=403, detail="You don't have permission to delete signals")
+    
     result = await db.signals.delete_one({"signal_id": signal_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Signal not found")
-    return {"message": "Signal deleted successfully"}
+    
+    logger.info(f"[Admin] {admin.user_id} deleted signal {signal_id}")
+    return {"message": "Signal deleted successfully", "signal_id": signal_id}
 
 # ===================== SIGNAL HISTORY & ANALYTICS =====================
 def get_pips_value(signal: dict) -> float:
