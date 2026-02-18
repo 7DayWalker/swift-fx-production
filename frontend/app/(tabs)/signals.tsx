@@ -65,6 +65,7 @@ export default function SignalsScreen() {
 
   const filteredSignals = signals.filter(signal => {
     if (filter === 'all') return true;
+    if (filter === 'active') return signal.state !== 'closed' && signal.state !== 'pending';
     return signal.state === filter;
   });
 

@@ -128,8 +128,8 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   // DEBUG: Track renders
   console.log('[SignalContext] RENDER - userId:', userId, 'userTier:', userTier);
 
-  // Derived lists
-  const activeSignals = signals.filter((s) => s.is_active && s.state !== 'pending');
+  // Derived lists - "active" = all non-closed signals (pending, active, tp1, tp2, tp3)
+  const activeSignals = signals.filter((s) => s.state !== 'closed');
   const pendingSignals = signals.filter((s) => s.state === 'pending');
   const closedSignals = signals.filter((s) => s.state === 'closed');
 
