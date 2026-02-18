@@ -68,12 +68,24 @@ export default function SignalsScreen() {
     return signal.state === filter;
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (state: string) => {
+    switch (state) {
       case 'pending': return '#FFD700';
-      case 'active': return '#00D4AA';
+      case 'active': case 'tp1': case 'tp2': case 'tp3': return '#00D4AA';
       case 'closed': return '#8A8D98';
       default: return '#8A8D98';
+    }
+  };
+
+  const getStateLabel = (state: string) => {
+    switch (state) {
+      case 'pending': return 'PENDING';
+      case 'active': return 'ACTIVE';
+      case 'tp1': return 'TP1 HIT';
+      case 'tp2': return 'TP2 HIT';
+      case 'tp3': return 'TP3 HIT';
+      case 'closed': return 'CLOSED';
+      default: return state?.toUpperCase() || 'UNKNOWN';
     }
   };
 
