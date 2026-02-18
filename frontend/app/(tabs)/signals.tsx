@@ -105,10 +105,10 @@ export default function SignalsScreen() {
         <View style={styles.signalHeader}>
           <View style={styles.signalLeft}>
             <Text style={[styles.signalPair, { color: theme.text }]}>{item.pair}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}20` }]}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {item.status?.toUpperCase()}
+            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.state)}20` }]}>
+              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.state) }]} />
+              <Text style={[styles.statusText, { color: getStatusColor(item.state) }]}>
+                {getStateLabel(item.state)}
               </Text>
             </View>
           </View>
