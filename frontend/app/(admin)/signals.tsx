@@ -557,9 +557,9 @@ export default function SignalManagement() {
                 <View>
                   <Text style={styles.signalPair}>{signal.pair}</Text>
                   <View style={styles.badges}>
-                    <View style={[styles.badge, { backgroundColor: `${getStatusColor(signal.status)}20` }]}>
-                      <Text style={[styles.badgeText, { color: getStatusColor(signal.status) }]}>
-                        {(signal.status || 'unknown').toUpperCase()}
+                    <View style={[styles.badge, { backgroundColor: `${getStatusColor(signal.state)}20` }]}>
+                      <Text style={[styles.badgeText, { color: getStatusColor(signal.state) }]}>
+                        {(signal.state || 'unknown').toUpperCase()}
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: `${getVisibilityColor(signal.visibility)}20` }]}>
