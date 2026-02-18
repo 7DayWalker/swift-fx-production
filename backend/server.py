@@ -1699,6 +1699,105 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
     except Exception as e:
         logger.error(f"Failed to send close notification: {e}")
 
+
+
+# ===================== TEMPORARY AUDIT ENDPOINT =====================
+@api_router.post("/admin/audit-notifications")
+async def audit_notifications(admin: User = Depends(require_admin)):
+    """
+    TEMPORARY: Audit notification targeting logic without sending real notifications.
+    Tests: A) signals_toggle_off, B) no_device_tokens, C) profile_not_found
+    """
+    audit_results = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "test_scenarios": []
+    }
+    
+    # Get all device tokens
+    device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
+    audit_results["total_active_tokens"] = len(device_tokens)
+    
+    if not device_tokens:
+        audit_results["test_scenarios"].append({
+            "scenario": "NO_DEVICE_TOKENS",
+            "result": "No active device tokens found - all users would be SKIPPED"
+        })
+        return audit_results
+    
+    # Analyze each token
+    user_analysis = []
+    for token_doc in device_tokens:
+        token = token_doc.get("token", "")
+        user_id = token_doc.get("user_id")
+        
+        analysis = {
+            "user_id": user_id,
+            "has_expo_token": token.startswith("ExponentPushToken") if token else False,
+        }
+        
+        if not token.startswith("ExponentPushToken"):
+            analysis["status"] = "SKIPPED"
+            analysis["reason"] = "non_expo_token"
+            user_analysis.append(analysis)
+            continue
+            
+        if not user_id:
+            analysis["status"] = "SKIPPED"
+            analysis["reason"] = "missing_user_id"
+            user_analysis.append(analysis)
+            continue
+        
+        # Fetch user profile
+        user = await fetch_profile(user_id)
+        if not user:
+            analysis["status"] = "SKIPPED"
+            analysis["reason"] = "profile_not_found"
+            user_analysis.append(analysis)
+            continue
+        
+        # Check notification preferences
+        notification_prefs = user.get("notification_preferences", {})
+        signals_enabled = notification_prefs.get("signals", True)
+        
+        analysis["email"] = user.get("email", "unknown")
+        analysis["notification_prefs"] = notification_prefs
+        analysis["signals_toggle"] = signals_enabled
+        
+        if not signals_enabled:
+            analysis["status"] = "SKIPPED"
+            analysis["reason"] = "signals_toggle_off"
+        else:
+            analysis["status"] = "INCLUDED"
+            analysis["reason"] = "all_checks_passed"
+        
+        user_analysis.append(analysis)
+    
+    # Summary
+    included = [u for u in user_analysis if u["status"] == "INCLUDED"]
+    skipped = [u for u in user_analysis if u["status"] == "SKIPPED"]
+    
+    audit_results["summary"] = {
+        "total_tokens": len(device_tokens),
+        "included_count": len(included),
+        "skipped_count": len(skipped),
+        "skip_reasons": {}
+    }
+    
+    # Count skip reasons
+    for u in skipped:
+        reason = u.get("reason", "unknown")
+        audit_results["summary"]["skip_reasons"][reason] = audit_results["summary"]["skip_reasons"].get(reason, 0) + 1
+    
+    audit_results["user_analysis"] = user_analysis
+    
+    # Log audit results
+    logger.info(f"[AUDIT] Notification targeting audit complete: {len(included)} INCLUDED, {len(skipped)} SKIPPED")
+    for u in user_analysis:
+        logger.info(f"[AUDIT] user_id={u.get('user_id')} | {u['status']} | reason={u.get('reason')}")
+    
+    return audit_results
+
+
 # ===================== AI CHART ANALYZER (LEGACY - File Upload) =====================
 @api_router.post("/ai/analyze-legacy")
 async def analyze_chart_legacy(
