@@ -1272,7 +1272,7 @@ class SignalFullUpdate(BaseModel):
     tp2: Optional[float] = None
     tp3: Optional[float] = None
     tp_hit: Optional[int] = None
-    status: Optional[SignalStatus] = None
+    state: Optional[SignalState] = None  # Use state, not status
     visibility: Optional[SignalVisibility] = None
     final_pips: Optional[float] = None
 
@@ -1283,6 +1283,10 @@ async def full_update_signal(
     admin: User = Depends(require_admin)
 ):
     """Admin endpoint to fully edit any signal field - ADMIN HAS FULL AUTHORITY"""
+    # Check permission
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
+    
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -1293,7 +1297,7 @@ async def full_update_signal(
     if update_data.pair is not None:
         update_doc["pair"] = update_data.pair
     if update_data.signal_type is not None:
-        update_doc["signal_type"] = update_data.signal_type
+        update_doc["signal_type"] = update_data.signal_type.value if hasattr(update_data.signal_type, 'value') else update_data.signal_type
     if update_data.entry is not None:
         update_doc["entry"] = update_data.entry
     if update_data.stop_loss is not None:
@@ -1307,23 +1311,29 @@ async def full_update_signal(
     if update_data.tp_hit is not None:
         update_doc["tp_hit"] = update_data.tp_hit
     if update_data.visibility is not None:
-        update_doc["visibility"] = update_data.visibility
+        update_doc["visibility"] = update_data.visibility.value if hasattr(update_data.visibility, 'value') else update_data.visibility
     if update_data.final_pips is not None:
         update_doc["final_pips"] = update_data.final_pips
     
-    # Handle status changes
-    if update_data.status is not None:
-        update_doc["status"] = update_data.status
-        if update_data.status == SignalStatus.ACTIVE and signal.get("status") == "pending":
+    # Handle state changes (use state, not status)
+    if update_data.state is not None:
+        new_state = update_data.state.value if hasattr(update_data.state, 'value') else update_data.state
+        current_state = signal.get("state", signal.get("status", "pending"))
+        
+        update_doc["state"] = new_state
+        
+        # Set timestamps based on state transitions
+        if new_state == "active" and current_state == "pending":
             update_doc["activated_at"] = datetime.now(timezone.utc)
-        if update_data.status == SignalStatus.CLOSED and signal.get("status") != "closed":
+            update_doc["entry_price_actual"] = signal.get("entry")
+        if new_state == "closed" and current_state != "closed":
             update_doc["closed_at"] = datetime.now(timezone.utc)
     
     # Recalculate risk/reward if entry, SL, or TP1 changed
     entry = update_data.entry if update_data.entry else signal.get("entry")
     sl = update_data.stop_loss if update_data.stop_loss else signal.get("stop_loss")
     tp1 = update_data.tp1 if update_data.tp1 else signal.get("tp1")
-    sig_type = update_data.signal_type if update_data.signal_type else signal.get("signal_type")
+    sig_type = update_data.signal_type.value if update_data.signal_type and hasattr(update_data.signal_type, 'value') else (update_data.signal_type or signal.get("signal_type"))
     
     if entry and sl and tp1:
         update_doc["risk_reward"] = calculate_risk_reward(entry, sl, tp1, sig_type)
@@ -1336,7 +1346,77 @@ async def full_update_signal(
         {"$set": update_doc}
     )
     
-    return {"message": "Signal updated successfully", "updates": list(update_doc.keys())}
+    if result.modified_count == 0 and result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    logger.info(f"[Admin] {admin.user_id} updated signal {signal_id}: {list(update_doc.keys())}")
+    return {"message": "Signal updated successfully", "signal_id": signal_id, "updates": list(update_doc.keys())}
+
+
+class SignalStateUpdate(BaseModel):
+    """Model for state-only updates"""
+    state: SignalState
+    close_price: Optional[float] = None  # For calculating final_pips when closing
+
+
+@api_router.patch("/admin/signals/{signal_id}/state")
+async def update_signal_state(
+    signal_id: str,
+    update_data: SignalStateUpdate,
+    admin: User = Depends(require_admin)
+):
+    """Admin endpoint to update only the state field of a signal"""
+    # Check permission
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
+    
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    current_state = signal.get("state", signal.get("status", "pending"))
+    new_state = update_data.state.value if hasattr(update_data.state, 'value') else update_data.state
+    
+    update_doc = {"state": new_state}
+    
+    # Set timestamps and derived fields based on state transitions
+    if new_state == "active" and current_state == "pending":
+        update_doc["activated_at"] = datetime.now(timezone.utc)
+        update_doc["entry_price_actual"] = signal.get("entry")
+    
+    if new_state in ["tp1", "tp2", "tp3"]:
+        tp_level = int(new_state[-1])
+        update_doc["tp_hit"] = tp_level
+    
+    if new_state == "closed":
+        update_doc["closed_at"] = datetime.now(timezone.utc)
+        
+        # Calculate final_pips if close_price provided
+        if update_data.close_price is not None:
+            update_doc["exit_price"] = update_data.close_price
+            update_doc["final_pips"] = calculate_pips(
+                signal["entry"],
+                update_data.close_price,
+                signal["signal_type"],
+                signal["pair"]
+            )
+    
+    result = await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": update_doc}
+    )
+    
+    if result.modified_count == 0 and result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    logger.info(f"[Admin] {admin.user_id} changed signal {signal_id} state: {current_state} → {new_state}")
+    return {
+        "message": f"Signal state updated: {current_state} → {new_state}",
+        "signal_id": signal_id,
+        "old_state": current_state,
+        "new_state": new_state,
+        "final_pips": update_doc.get("final_pips")
+    }
 
 # NOTE: The following legacy endpoints have been replaced by state-based endpoints:
 # - POST /admin/signals/{signal_id}/activate -> see line 804 (new state-based activate)
