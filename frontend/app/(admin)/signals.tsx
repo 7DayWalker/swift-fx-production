@@ -625,7 +625,7 @@ export default function SignalManagement() {
               )}
 
               {/* Result for closed signals */}
-              {signal.status === 'closed' && getPipsValue(signal) !== null && (
+              {signal.state === 'closed' && getPipsValue(signal) !== null && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Final Result:</Text>
                   <Text style={[styles.resultValue, { color: (getPipsValue(signal) || 0) >= 0 ? '#00D4AA' : '#FF4757' }]}>
@@ -635,7 +635,7 @@ export default function SignalManagement() {
               )}
 
               {/* Quick TP Actions for Active Signals */}
-              {signal.status === 'active' && (signal.tp1 || signal.tp2 || signal.tp3) && (
+              {signal.state === 'active' && (signal.tp1 || signal.tp2 || signal.tp3) && (
                 <View style={styles.tpActions}>
                   <Text style={styles.tpActionsLabel}>Mark TP Hit:</Text>
                   <View style={styles.tpButtonsRow}>
@@ -661,7 +661,7 @@ export default function SignalManagement() {
               {/* ACTION BUTTONS - ALL VISIBLE */}
               <View style={styles.actionButtons}>
                 {/* Activate - only for pending */}
-                {signal.status === 'pending' && (
+                {signal.state === 'pending' && (
                   <TouchableOpacity style={styles.activateButton} onPress={() => handleActivateSignal(signal.signal_id)}>
                     <Ionicons name="play" size={16} color="#00D4AA" />
                     <Text style={styles.activateButtonText}>Activate</Text>
@@ -675,7 +675,7 @@ export default function SignalManagement() {
                 </TouchableOpacity>
                 
                 {/* Close - only for non-closed */}
-                {signal.status !== 'closed' && (
+                {signal.state !== 'closed' && (
                   <TouchableOpacity style={styles.closeButton} onPress={() => openCloseModal(signal)}>
                     <Ionicons name="close-circle-outline" size={16} color="#FFD700" />
                     <Text style={styles.closeButtonText}>Close</Text>
