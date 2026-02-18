@@ -305,46 +305,30 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      // Map UI status back to DB state
-      const stateMap: Record<string, string> = {
-        pending: 'pending',
-        active: 'active',
-        closed: 'closed',
-      };
-      const dbState = stateMap[editData.status] || editData.status;
-
       const entry = parseFloat(editData.entry);
       const stopLoss = parseFloat(editData.stop_loss);
       const tp1 = parseFloat(editData.tp1);
-      const riskReward = calculateRiskReward(entry, stopLoss, tp1, editData.signal_type as 'buy' | 'sell');
 
+      // Use backend API endpoint for full update
       const updatePayload: any = {
         pair: editData.pair,
         signal_type: editData.signal_type,
-        entry_price: entry,
+        entry: entry,
         stop_loss: stopLoss,
-        take_profit_1: tp1,
-        take_profit_2: editData.tp2 ? parseFloat(editData.tp2) : null,
-        take_profit_3: editData.tp3 ? parseFloat(editData.tp3) : null,
-        risk_reward: riskReward,
-        state: dbState,
+        tp1: tp1,
+        tp2: editData.tp2 ? parseFloat(editData.tp2) : null,
+        tp3: editData.tp3 ? parseFloat(editData.tp3) : null,
+        tp_hit: editData.tp_hit,
+        state: editData.status, // Backend uses 'state' field
         visibility: editData.visibility,
       };
       
       // Include final_pips if provided and status is closed
       if (editData.status === 'closed' && editData.final_pips) {
         updatePayload.final_pips = parseFloat(editData.final_pips);
-        updatePayload.closed_at = new Date().toISOString();
-      }
-      if (editData.status === 'active' && !selectedSignal.activated_at) {
-        updatePayload.activated_at = new Date().toISOString();
       }
       
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', selectedSignal.signal_id);
-      if (error) throw error;
+      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, updatePayload);
       
       setShowEditModal(false);
       setSelectedSignal(null);
@@ -356,7 +340,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal updated successfully!');
     } catch (error: any) {
       console.error('Edit error:', error);
-      showAlert('Error', error.message || 'Failed to update signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to update signal');
     } finally {
       setIsSubmitting(false);
     }
@@ -365,11 +349,8 @@ export default function SignalManagement() {
   // ========== ACTIVATE SIGNAL ==========
   const handleActivateSignal = async (signalId: string) => {
     try {
-      const { error } = await supabase
-        .from('signals')
-        .update({ state: 'active', activated_at: new Date().toISOString() })
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for state change
+      await api.patch(`/admin/signals/${signalId}/state`, { state: 'active' });
       await fetchSignals();
       
       // Trigger real-time update for all users
@@ -377,25 +358,17 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal activated!');
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to activate signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to activate signal');
     }
   };
 
   // ========== MARK TP HIT ==========
   const handleMarkTP = async (signalId: string, tpLevel: number) => {
     try {
-      const stateValue = `tp${tpLevel}`;
-      const updatePayload: any = { state: stateValue };
-      // If TP3, also close the signal
-      if (tpLevel === 3) {
-        updatePayload.state = 'closed';
-        updatePayload.closed_at = new Date().toISOString();
-      }
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for state change
+      // TP1 -> state: 'tp1', TP2 -> state: 'tp2', TP3 -> state: 'closed' (auto-closes)
+      const newState = tpLevel === 3 ? 'closed' : `tp${tpLevel}`;
+      await api.patch(`/admin/signals/${signalId}/state`, { state: newState });
       await fetchSignals();
       
       // Trigger real-time update for all users (TP hit is like an update or close)
@@ -407,7 +380,7 @@ export default function SignalManagement() {
       
       showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to mark TP');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to mark TP');
     }
   };
 
@@ -425,18 +398,20 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      const updatePayload: any = {
-        state: 'closed',
-        closed_at: new Date().toISOString(),
-      };
-      if (closePrice) updatePayload.exit_price = parseFloat(closePrice);
-      if (finalPips) updatePayload.final_pips = parseFloat(finalPips);
-
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', selectedSignal.signal_id);
-      if (error) throw error;
+      // Use backend API endpoint for state change with close_price
+      const payload: any = { state: 'closed' };
+      if (closePrice) {
+        payload.close_price = parseFloat(closePrice);
+      }
+      
+      await api.patch(`/admin/signals/${selectedSignal.signal_id}/state`, payload);
+      
+      // If finalPips was provided directly (not calculated from close_price), update it separately
+      if (finalPips && !closePrice) {
+        await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, {
+          final_pips: parseFloat(finalPips)
+        });
+      }
       
       setShowCloseModal(false);
       setSelectedSignal(null);
@@ -447,13 +422,13 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to close signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to close signal');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ========== DELETE SIGNAL (FIXED - WORKS INDEPENDENTLY) ==========
+  // ========== DELETE SIGNAL ==========
   const handleDeleteSignal = async (signalId: string) => {
     if (!signalId) {
       showAlert('Error', 'Invalid signal ID');
@@ -469,11 +444,8 @@ export default function SignalManagement() {
 
     setIsDeleting(signalId);
     try {
-      const { error } = await supabase
-        .from('signals')
-        .delete()
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for delete
+      await api.delete(`/admin/signals/${signalId}`);
       
       // Remove from local state immediately for instant feedback
       setSignals(prev => prev.filter(s => s.signal_id !== signalId));
@@ -484,7 +456,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
       console.error('Delete error:', error);
-      const errorMsg = error.message || 'Failed to delete signal';
+      const errorMsg = error?.response?.data?.detail || error.message || 'Failed to delete signal';
       showAlert('Error', errorMsg);
       // Refresh to sync state
       await fetchSignals();
