@@ -5,27 +5,27 @@
   },
   "build": {
     "base": {
-      "channel": null,
       "distribution": "store"
     },
     "development": {
       "extends": "base",
       "developmentClient": true,
-      "distribution": "internal",
-      "channel": null
+      "distribution": "internal"
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
-      "channel": null
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "extends": "base",
-      "autoIncrement": true,
-      "channel": null
+      "autoIncrement": true
     }
   },
   "submit": {
     "production": {}
   }
 }
+
