@@ -1515,20 +1515,11 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
 
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
     """Send push notification to ALL users about new signal (no tier filtering)"""
-    # === AUDIT LOGGING START ===
-    audit_log = []
-    audit_log.append(f"[AUDIT] send_signal_notification called: signal_id={signal_id}, pair={pair}, type={signal_type.value}, visibility={visibility.value}")
-    # === AUDIT LOGGING END ===
-    
     try:
         # Get all active device tokens
         device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
         if not device_tokens:
             logger.info("No active device tokens found")
-            # === AUDIT LOGGING ===
-            audit_log.append("[AUDIT] RESULT: No active device tokens found")
-            for line in audit_log:
-                logger.info(line)
             return
         
         # Notification content per spec: title="New Signal Alert", body="{PAIR} • {BUY/SELL}"
@@ -1544,32 +1535,21 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             
             # Skip non-Expo tokens
             if not token.startswith("ExponentPushToken"):
-                # === AUDIT LOGGING ===
-                audit_log.append(f"[AUDIT] user_id={user_id} | SKIPPED | reason=non_expo_token")
                 continue
             
             if not user_id:
-                # === AUDIT LOGGING ===
-                audit_log.append(f"[AUDIT] user_id=None | SKIPPED | reason=missing_user_id")
                 continue
             
             # Check if user has notifications enabled
             user = await fetch_profile(user_id)
             if not user:
-                # === AUDIT LOGGING ===
-                audit_log.append(f"[AUDIT] user_id={user_id} | SKIPPED | reason=profile_not_found")
                 continue
             
             notification_prefs = user.get("notification_preferences", {})
             if not notification_prefs.get("signals", True):
-                # === AUDIT LOGGING ===
-                audit_log.append(f"[AUDIT] user_id={user_id} | SKIPPED | reason=signals_toggle_off")
                 continue
             
             # No tier filtering - all users receive all signal notifications
-            # === AUDIT LOGGING ===
-            audit_log.append(f"[AUDIT] user_id={user_id} | INCLUDED | notification_type=new_signal")
-            
             messages.append({
                 "to": token,
                 "title": title,
@@ -1578,11 +1558,6 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
                 "sound": "default"
             })
             notified_users += 1
-        
-        # === AUDIT LOGGING ===
-        audit_log.append(f"[AUDIT] RESULT: {notified_users} users INCLUDED, {len(device_tokens) - notified_users} SKIPPED")
-        for line in audit_log:
-            logger.info(line)
         
         if not messages:
             logger.info(f"No eligible users for signal {signal_id} notification")
