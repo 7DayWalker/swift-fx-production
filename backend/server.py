@@ -6647,20 +6647,15 @@ async def apple_server_notification(request: dict):
     """
     Apple App Store Server Notifications (v2)
     
-    Handle subscription lifecycle events:
-    - INITIAL_BUY: New subscription
-    - DID_RENEW: Subscription renewed
-    - DID_CHANGE_RENEWAL_STATUS: Auto-renew toggled
-    - DID_FAIL_TO_RENEW: Billing retry
-    - EXPIRED: Subscription expired
-    - REFUND: Refund processed
-    - REVOKE: Family sharing revoked
-    
-    Setup in App Store Connect:
-    1. Go to App Information > App Store Server Notifications
-    2. Enter your webhook URL: https://your-domain.com/api/webhooks/apple
-    3. Select Version 2 Notifications
+    DISABLED IN V1: Webhooks are disabled for security.
+    Subscription updates only through verify/restore endpoints.
     """
+    # V1 SECURITY: Webhooks disabled
+    if not IAP_WEBHOOKS_ENABLED:
+        logger.warning("[Apple Webhook] BLOCKED - IAP webhooks disabled in v1")
+        raise HTTPException(status_code=403, detail="IAP webhooks disabled in v1")
+    
+    # --- Original webhook code below (kept for future use) ---
     try:
         # Get the signed payload
         signed_payload = request.get('signedPayload')
