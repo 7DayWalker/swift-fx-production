@@ -6724,26 +6724,15 @@ async def google_rtdn_notification(request: dict):
     """
     Google Real-Time Developer Notifications (RTDN)
     
-    Handle subscription lifecycle events:
-    - SUBSCRIPTION_RECOVERED: Recovered from account hold
-    - SUBSCRIPTION_RENEWED: Subscription renewed
-    - SUBSCRIPTION_CANCELED: Subscription canceled
-    - SUBSCRIPTION_PURCHASED: New subscription
-    - SUBSCRIPTION_ON_HOLD: Payment pending
-    - SUBSCRIPTION_IN_GRACE_PERIOD: Grace period started
-    - SUBSCRIPTION_RESTARTED: Resubscribed
-    - SUBSCRIPTION_PRICE_CHANGE_CONFIRMED: Price change accepted
-    - SUBSCRIPTION_DEFERRED: Renewal deferred
-    - SUBSCRIPTION_PAUSED: Subscription paused
-    - SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED: Pause schedule changed
-    - SUBSCRIPTION_REVOKED: Access revoked
-    - SUBSCRIPTION_EXPIRED: Subscription expired
-    
-    Setup in Google Play Console:
-    1. Go to Monetization setup > Real-time developer notifications
-    2. Enter Cloud Pub/Sub topic
-    3. Create Cloud Function or use webhook endpoint
+    DISABLED IN V1: Webhooks are disabled for security.
+    Subscription updates only through verify/restore endpoints.
     """
+    # V1 SECURITY: Webhooks disabled
+    if not IAP_WEBHOOKS_ENABLED:
+        logger.warning("[Google Webhook] BLOCKED - IAP webhooks disabled in v1")
+        raise HTTPException(status_code=403, detail="IAP webhooks disabled in v1")
+    
+    # --- Original webhook code below (kept for future use) ---
     try:
         # Google sends Pub/Sub message
         message = request.get('message', {})
