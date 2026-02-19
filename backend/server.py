@@ -51,6 +51,12 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 GOOGLE_PUBSUB_TOPIC = os.environ.get('GOOGLE_PUBSUB_TOPIC', '')
 GOOGLE_WEBHOOK_TOKEN = os.environ.get('GOOGLE_WEBHOOK_TOKEN', '')
 
+# ===================== V1 PRODUCTION MODE =====================
+# IAP webhooks are disabled in v1. Only verify/restore endpoints are active.
+# Set to True to enable webhooks (requires signature verification implementation)
+IAP_WEBHOOKS_ENABLED = os.environ.get('IAP_WEBHOOKS_ENABLED', 'false').lower() == 'true'
+# ==============================================================
+
 # IAP Product IDs (configurable)
 IAP_PRODUCTS = {
     'ios': {
