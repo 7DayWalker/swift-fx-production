@@ -59,7 +59,7 @@ export function isIAPAvailable(): boolean {
  */
 export async function fetchProductIds(): Promise<IAPProducts> {
   try {
-    const response = await api.get('/api/iap/products');
+    const response = await api.get('/iap/products');
     return response.data;
   } catch (error) {
     console.warn('[IAP-Web] Failed to fetch product IDs, using defaults:', error);
@@ -121,7 +121,7 @@ export async function restorePurchases(): Promise<PurchaseResult> {
  */
 export async function getIAPStatus(): Promise<any> {
   try {
-    const response = await api.get('/api/iap/status');
+    const response = await api.get('/iap/status');
     return response.data;
   } catch (error) {
     console.error('[IAP-Web] Error fetching status:', error);
