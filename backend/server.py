@@ -6302,14 +6302,8 @@ async def validate_google_purchase(purchase_token: str, product_id: str, package
         }
         
     except ImportError:
-        logger.warning("[Google IAP] Google API client not installed, using mock validation")
-        return {
-            "valid": True,
-            "mock": True,
-            "product_id": product_id,
-            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
-            "auto_renewing": True,
-        }
+        logger.error("[Google IAP] SECURITY: Google API client not installed - rejecting validation")
+        return {"valid": False, "error": "Google IAP not configured. Contact support."}
     except Exception as e:
         logger.error(f"[Google IAP] Validation error: {e}")
         return {"valid": False, "error": str(e)}
