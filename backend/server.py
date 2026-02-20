@@ -6950,12 +6950,30 @@ Do not include any text outside the JSON object. Be concise but accurate."""
 # Include router
 app.include_router(api_router)
 
+# ===================== CORS CONFIGURATION =====================
+# Production: Restrict to specific origins
+# Development: Add localhost origins as needed
+CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else [
+    # Production frontend URLs
+    "https://data-flow-fix-3.preview.emergentagent.com",
+    # Expo web development
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://localhost:19006",
+    # Expo tunnel URLs (dynamic subdomain)
+    "https://*.exp.direct",
+]
+
+# Filter empty strings
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",  # Allow all Emergent preview URLs
 )
 
 @app.on_event("shutdown")
