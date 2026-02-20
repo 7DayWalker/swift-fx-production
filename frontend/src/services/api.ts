@@ -9,9 +9,8 @@ if (!BACKEND_URL) {
   console.error('[API] CRITICAL: EXPO_PUBLIC_BACKEND_URL is not set. API calls will fail.');
 }
 
-// baseURL is the backend URL without /api suffix
-// All API routes should use paths like '/api/signals', '/api/iap/products', etc.
-const baseURL = BACKEND_URL || '';
+// baseURL includes /api prefix - all routes should use paths like '/signals', '/iap/products', etc.
+const baseURL = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
 export const api = axios.create({
   baseURL,
