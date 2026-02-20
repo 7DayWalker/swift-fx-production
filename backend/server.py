@@ -6263,19 +6263,10 @@ async def validate_google_purchase(purchase_token: str, product_id: str, package
     """
     package = package_name or GOOGLE_PACKAGE_NAME
     
-    # Check if credentials are configured
+    # SECURITY: Credentials MUST be configured in production
     if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        logger.warning("[Google IAP] Service account not configured, using mock validation")
-        # Return mock response for development
-        return {
-            "valid": True,
-            "mock": True,
-            "product_id": product_id,
-            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
-            "auto_renewing": True,
-            "payment_state": 1,
-            "acknowledgement_state": 1,
-        }
+        logger.error("[Google IAP] SECURITY: Service account not configured - rejecting validation")
+        return {"valid": False, "error": "Google IAP not configured. Contact support."}
     
     try:
         # Import Google API client
