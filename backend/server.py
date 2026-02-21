@@ -28,7 +28,7 @@ db = client[os.environ.get('DB_NAME', 'swiftfx')]
 from supabase_auth import (
     get_supabase_user,
     fetch_profile, fetch_profile_by_email, update_profile, list_profiles, count_profiles,
-    delete_profile, list_auth_users, get_auth_user, get_auth_user_email,
+    delete_profile, fetch_active_subscriptions, list_auth_users, get_auth_user, get_auth_user_email,
     create_auth_user, delete_auth_user, update_auth_user,
 )
 
@@ -50,6 +50,12 @@ GOOGLE_PACKAGE_NAME = os.environ.get('GOOGLE_PACKAGE_NAME', 'com.swiftfx.signals
 GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 GOOGLE_PUBSUB_TOPIC = os.environ.get('GOOGLE_PUBSUB_TOPIC', '')
 GOOGLE_WEBHOOK_TOKEN = os.environ.get('GOOGLE_WEBHOOK_TOKEN', '')
+
+# ===================== V1 PRODUCTION MODE =====================
+# IAP webhooks are disabled in v1. Only verify/restore endpoints are active.
+# Set to True to enable webhooks (requires signature verification implementation)
+IAP_WEBHOOKS_ENABLED = os.environ.get('IAP_WEBHOOKS_ENABLED', 'false').lower() == 'true'
+# ==============================================================
 
 # IAP Product IDs (configurable)
 IAP_PRODUCTS = {
@@ -357,22 +363,42 @@ def check_subscription_active(user_doc: dict) -> bool:
     return expiry > datetime.now(timezone.utc)
 
 
-def get_effective_subscription(user_doc: dict) -> str:
-    """Get user's effective subscription, accounting for expiry"""
-    # Check subscription field first, then fall back to role for backward compatibility
-    subscription = user_doc.get("subscription")
-    if not subscription:
-        # Fallback to role field for backward compatibility
-        role = user_doc.get("role", "free")
-        if role in ["premium", "vip"]:
-            subscription = role
-        else:
-            subscription = "free"
-    
-    # Check if premium/vip subscription is still active
-    if subscription in ["premium", "vip"] and not check_subscription_active(user_doc):
-        return "free"  # Expired subscription reverts to free
-    return subscription
+async def get_effective_subscription(user_doc: dict) -> str:
+    """
+    Get user's effective subscription tier by querying subscriptions+plans.
+    Precedence: super_admin/admin → vip, Active VIP sub → vip,
+    Active Premium sub → premium, else → free.
+    Handles NULL current_period_end as lifetime (never expires).
+    """
+    user_id = user_doc.get("id") or user_doc.get("user_id", "")
+    role = user_doc.get("role", "free")
+
+    # RULE 1: super_admin or admin → VIP (highest precedence)
+    if role in ("admin", "super_admin"):
+        return "vip"
+
+    # RULE 2: Query subscriptions joined with plans
+    subscriptions = await fetch_active_subscriptions(user_id)
+    now = datetime.now(timezone.utc).isoformat()
+
+    tier_priority = {"vip": 2, "premium": 1, "free": 0}
+    best_tier = "free"
+    best_priority = 0
+
+    for sub in subscriptions:
+        # NULL current_period_end = lifetime (never expires)
+        period_end = sub.get("current_period_end")
+        if period_end and period_end < now:
+            continue  # expired
+
+        plans = sub.get("plans") or {}
+        sub_tier = (plans.get("tier") or "free").lower()
+        priority = tier_priority.get(sub_tier, 0)
+        if priority > best_priority:
+            best_priority = priority
+            best_tier = sub_tier
+
+    return best_tier
 
 class SignalCreate(BaseModel):
     pair: str
@@ -688,31 +714,33 @@ def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) 
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
     signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
-    # Get user's effective subscription from Supabase profile
+    # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
-        user_role = current_user.role
-        is_admin = user_role == UserRole.ADMIN.value
-        user_subscription = user_role if user_role in ("premium", "vip") else "free"
+        user_subscription = await get_effective_subscription({
+            "user_id": current_user.user_id,
+            "role": current_user.role,
+        })
     else:
         user_subscription = "free"
-        is_admin = False
     
     result = []
     for signal in signals:
         signal_visibility = signal.get("visibility", "free")
+        state = signal.get("state", signal.get("status", "pending"))
+        is_active = state in ("pending", "active", "tp1", "tp2", "tp3")
         
-        # Admin sees all signals
-        if is_admin:
-            result.append(signal)
-        # Check if user subscription can access this signal
-        elif can_access_visibility(user_subscription, signal_visibility):
+        if can_access_visibility(user_subscription, signal_visibility):
+            signal["state"] = state
+            signal["is_active"] = is_active
+            signal.pop("status", None)
             result.append(signal)
         else:
             result.append({
                 "signal_id": signal["signal_id"],
                 "pair": signal["pair"],
                 "signal_type": signal["signal_type"],
-                "status": signal["status"],
+                "state": state,
+                "is_active": is_active,
                 "visibility": signal["visibility"],
                 "created_at": signal["created_at"],
                 "locked": True,
@@ -727,26 +755,31 @@ async def get_signal(signal_id: str, current_user: Optional[User] = Depends(get_
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     
-    # Get user's effective subscription from Supabase profile
+    # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
-        user_role = current_user.role
-        is_admin = user_role == UserRole.ADMIN.value
-        user_subscription = user_role if user_role in ("premium", "vip") else "free"
+        user_subscription = await get_effective_subscription({
+            "user_id": current_user.user_id,
+            "role": current_user.role,
+        })
     else:
         user_subscription = "free"
-        is_admin = False
     
     signal_visibility = signal.get("visibility", "free")
     
-    # Admin sees all signals
-    if is_admin or can_access_visibility(user_subscription, signal_visibility):
+    if can_access_visibility(user_subscription, signal_visibility):
+        state = signal.get("state", signal.get("status", "pending"))
+        signal["state"] = state
+        signal["is_active"] = state in ("pending", "active", "tp1", "tp2", "tp3")
+        signal.pop("status", None)
         return signal
     
+    state = signal.get("state", signal.get("status", "pending"))
     return {
         "signal_id": signal["signal_id"],
         "pair": signal["pair"],
         "signal_type": signal["signal_type"],
-        "status": signal["status"],
+        "state": state,
+        "is_active": state in ("pending", "active", "tp1", "tp2", "tp3"),
         "visibility": signal["visibility"],
         "created_at": signal["created_at"],
         "locked": True,
@@ -1245,7 +1278,7 @@ class SignalFullUpdate(BaseModel):
     tp2: Optional[float] = None
     tp3: Optional[float] = None
     tp_hit: Optional[int] = None
-    status: Optional[SignalStatus] = None
+    state: Optional[SignalState] = None  # Use state, not status
     visibility: Optional[SignalVisibility] = None
     final_pips: Optional[float] = None
 
@@ -1256,6 +1289,10 @@ async def full_update_signal(
     admin: User = Depends(require_admin)
 ):
     """Admin endpoint to fully edit any signal field - ADMIN HAS FULL AUTHORITY"""
+    # Check permission
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
+    
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -1266,7 +1303,7 @@ async def full_update_signal(
     if update_data.pair is not None:
         update_doc["pair"] = update_data.pair
     if update_data.signal_type is not None:
-        update_doc["signal_type"] = update_data.signal_type
+        update_doc["signal_type"] = update_data.signal_type.value if hasattr(update_data.signal_type, 'value') else update_data.signal_type
     if update_data.entry is not None:
         update_doc["entry"] = update_data.entry
     if update_data.stop_loss is not None:
@@ -1280,23 +1317,29 @@ async def full_update_signal(
     if update_data.tp_hit is not None:
         update_doc["tp_hit"] = update_data.tp_hit
     if update_data.visibility is not None:
-        update_doc["visibility"] = update_data.visibility
+        update_doc["visibility"] = update_data.visibility.value if hasattr(update_data.visibility, 'value') else update_data.visibility
     if update_data.final_pips is not None:
         update_doc["final_pips"] = update_data.final_pips
     
-    # Handle status changes
-    if update_data.status is not None:
-        update_doc["status"] = update_data.status
-        if update_data.status == SignalStatus.ACTIVE and signal.get("status") == "pending":
+    # Handle state changes (use state, not status)
+    if update_data.state is not None:
+        new_state = update_data.state.value if hasattr(update_data.state, 'value') else update_data.state
+        current_state = signal.get("state", signal.get("status", "pending"))
+        
+        update_doc["state"] = new_state
+        
+        # Set timestamps based on state transitions
+        if new_state == "active" and current_state == "pending":
             update_doc["activated_at"] = datetime.now(timezone.utc)
-        if update_data.status == SignalStatus.CLOSED and signal.get("status") != "closed":
+            update_doc["entry_price_actual"] = signal.get("entry")
+        if new_state == "closed" and current_state != "closed":
             update_doc["closed_at"] = datetime.now(timezone.utc)
     
     # Recalculate risk/reward if entry, SL, or TP1 changed
     entry = update_data.entry if update_data.entry else signal.get("entry")
     sl = update_data.stop_loss if update_data.stop_loss else signal.get("stop_loss")
     tp1 = update_data.tp1 if update_data.tp1 else signal.get("tp1")
-    sig_type = update_data.signal_type if update_data.signal_type else signal.get("signal_type")
+    sig_type = update_data.signal_type.value if update_data.signal_type and hasattr(update_data.signal_type, 'value') else (update_data.signal_type or signal.get("signal_type"))
     
     if entry and sl and tp1:
         update_doc["risk_reward"] = calculate_risk_reward(entry, sl, tp1, sig_type)
@@ -1309,7 +1352,77 @@ async def full_update_signal(
         {"$set": update_doc}
     )
     
-    return {"message": "Signal updated successfully", "updates": list(update_doc.keys())}
+    if result.modified_count == 0 and result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    logger.info(f"[Admin] {admin.user_id} updated signal {signal_id}: {list(update_doc.keys())}")
+    return {"message": "Signal updated successfully", "signal_id": signal_id, "updates": list(update_doc.keys())}
+
+
+class SignalStateUpdate(BaseModel):
+    """Model for state-only updates"""
+    state: SignalState
+    close_price: Optional[float] = None  # For calculating final_pips when closing
+
+
+@api_router.patch("/admin/signals/{signal_id}/state")
+async def update_signal_state(
+    signal_id: str,
+    update_data: SignalStateUpdate,
+    admin: User = Depends(require_admin)
+):
+    """Admin endpoint to update only the state field of a signal"""
+    # Check permission
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
+    
+    signal = await db.signals.find_one({"signal_id": signal_id})
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    current_state = signal.get("state", signal.get("status", "pending"))
+    new_state = update_data.state.value if hasattr(update_data.state, 'value') else update_data.state
+    
+    update_doc = {"state": new_state}
+    
+    # Set timestamps and derived fields based on state transitions
+    if new_state == "active" and current_state == "pending":
+        update_doc["activated_at"] = datetime.now(timezone.utc)
+        update_doc["entry_price_actual"] = signal.get("entry")
+    
+    if new_state in ["tp1", "tp2", "tp3"]:
+        tp_level = int(new_state[-1])
+        update_doc["tp_hit"] = tp_level
+    
+    if new_state == "closed":
+        update_doc["closed_at"] = datetime.now(timezone.utc)
+        
+        # Calculate final_pips if close_price provided
+        if update_data.close_price is not None:
+            update_doc["exit_price"] = update_data.close_price
+            update_doc["final_pips"] = calculate_pips(
+                signal["entry"],
+                update_data.close_price,
+                signal["signal_type"],
+                signal["pair"]
+            )
+    
+    result = await db.signals.update_one(
+        {"signal_id": signal_id},
+        {"$set": update_doc}
+    )
+    
+    if result.modified_count == 0 and result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    logger.info(f"[Admin] {admin.user_id} changed signal {signal_id} state: {current_state} → {new_state}")
+    return {
+        "message": f"Signal state updated: {current_state} → {new_state}",
+        "signal_id": signal_id,
+        "old_state": current_state,
+        "new_state": new_state,
+        "final_pips": update_doc.get("final_pips")
+    }
 
 # NOTE: The following legacy endpoints have been replaced by state-based endpoints:
 # - POST /admin/signals/{signal_id}/activate -> see line 804 (new state-based activate)
@@ -1318,10 +1431,17 @@ async def full_update_signal(
 
 @api_router.delete("/admin/signals/{signal_id}")
 async def delete_signal(signal_id: str, admin: User = Depends(require_admin)):
+    """Admin endpoint to delete a signal from MongoDB"""
+    # Check permission
+    if not has_permission(admin, "signals", "delete"):
+        raise HTTPException(status_code=403, detail="You don't have permission to delete signals")
+    
     result = await db.signals.delete_one({"signal_id": signal_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Signal not found")
-    return {"message": "Signal deleted successfully"}
+    
+    logger.info(f"[Admin] {admin.user_id} deleted signal {signal_id}")
+    return {"message": "Signal deleted successfully", "signal_id": signal_id}
 
 # ===================== SIGNAL HISTORY & ANALYTICS =====================
 def get_pips_value(signal: dict) -> float:
@@ -1394,15 +1514,9 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     }
 
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
-    """Send push notification to users about new signal based on visibility rules"""
+    """Send push notification to ALL users about new signal (no tier filtering)"""
     try:
-        # Get signal info
-        signal = await db.signals.find_one({"signal_id": signal_id})
-        if not signal:
-            logger.error(f"Signal {signal_id} not found for notification")
-            return
-        
-        # Get all active device tokens with user info
+        # Get all active device tokens
         device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
         if not device_tokens:
             logger.info("No active device tokens found")
@@ -1426,31 +1540,16 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             if not user_id:
                 continue
             
-            # Get user info to check role and notification preferences
+            # Check if user has notifications enabled
             user = await fetch_profile(user_id)
             if not user:
                 continue
             
-            # Check if user has notifications enabled
             notification_prefs = user.get("notification_preferences", {})
             if not notification_prefs.get("signals", True):
                 continue
             
-            user_role = UserRole(user.get("role", "free"))
-            
-            # Apply visibility rules:
-            # - FREE signal -> notify ALL users
-            # - VIP signal -> notify VIP users ONLY
-            if visibility == SignalVisibility.VIP:
-                # Only VIP users get VIP signal notifications
-                if user_role != UserRole.VIP:
-                    continue
-            elif visibility == SignalVisibility.PREMIUM:
-                # Premium and VIP users get premium signal notifications
-                if user_role not in [UserRole.PREMIUM, UserRole.VIP]:
-                    continue
-            # FREE signals go to everyone
-            
+            # No tier filtering - all users receive all signal notifications
             messages.append({
                 "to": token,
                 "title": title,
@@ -1480,15 +1579,15 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
                 )
                 logger.info(f"Expo push response: {response.status_code}")
         
-        logger.info(f"Sent notification for signal {signal_id} ({visibility.value}) to {notified_users} users")
+        logger.info(f"Sent notification for signal {signal_id} to {notified_users} users")
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
 
 
 async def send_signal_close_notification(signal_id: str, pair: str, signal_type: str, final_pips: float, visibility: SignalVisibility):
-    """Send push notification when a signal is closed"""
+    """Send push notification to ALL users when a signal is closed (no tier filtering)"""
     try:
-        # Get all active device tokens with user info
+        # Get all active device tokens
         device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
         if not device_tokens:
             logger.info("No active device tokens found for close notification")
@@ -1510,6 +1609,7 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not token.startswith("ExponentPushToken") or not user_id:
                 continue
             
+            # Check if user has notifications enabled
             user = await fetch_profile(user_id)
             if not user:
                 continue
@@ -1518,16 +1618,7 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not notification_prefs.get("signals", True):
                 continue
             
-            user_role = UserRole(user.get("role", "free"))
-            
-            # Apply same visibility rules as new signals
-            if visibility == SignalVisibility.VIP:
-                if user_role != UserRole.VIP:
-                    continue
-            elif visibility == SignalVisibility.PREMIUM:
-                if user_role not in [UserRole.PREMIUM, UserRole.VIP]:
-                    continue
-            
+            # No tier filtering - all users receive all signal close notifications
             messages.append({
                 "to": token,
                 "title": title,
@@ -1561,6 +1652,8 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
     except Exception as e:
         logger.error(f"Failed to send close notification: {e}")
 
+
+
 # ===================== AI CHART ANALYZER (LEGACY - File Upload) =====================
 @api_router.post("/ai/analyze-legacy")
 async def analyze_chart_legacy(
@@ -1575,7 +1668,7 @@ async def analyze_chart_legacy(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get effective subscription (accounting for expiry)
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     
     # Get weekly limit based on subscription
     # Free: 3, Premium: 10, VIP: unlimited
@@ -1742,7 +1835,7 @@ async def get_ai_usage(current_user: User = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get effective subscription
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     weekly_limit = get_ai_weekly_limit(effective_subscription)
     
     # Check both new and legacy fields
@@ -1902,301 +1995,11 @@ async def get_plans():
     }
 
 
-# ===================== PAYMENT SESSION FLOW =====================
-# This is a Stripe-ready payment flow. Currently uses manual confirmation.
-# When Stripe is integrated, the webhook will be called by Stripe instead of admin.
-
-class PaymentSessionCreate(BaseModel):
-    """Request to create a payment session"""
-    plan: str  # "premium" | "vip"
-    billing_cycle: str = "monthly"  # "weekly" | "monthly" | "yearly"
-
-
-class PaymentSessionStatus(str, Enum):
-    PENDING = "pending"
-    PAID = "paid"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"
-
-
-class PaymentWebhook(BaseModel):
-    """Webhook payload to confirm payment (Stripe-ready)"""
-    session_id: str
-    status: str  # "paid" | "cancelled"
-
-
-# Pricing lookup
-PLAN_PRICING = {
-    "premium": {"weekly": 10, "monthly": 29, "yearly": 279},
-    "vip": {"weekly": 19, "monthly": 69, "yearly": 749}
-}
-
-
-@api_router.post("/payments/create-session")
-async def create_payment_session(
-    session_data: PaymentSessionCreate,
-    current_user: User = Depends(require_auth)
-):
-    """
-    Create a payment session for subscription upgrade.
-    This is the ONLY way to initiate an upgrade - returns a checkout URL.
-    User must complete payment through the checkout page.
-    """
-    # Validate plan
-    if session_data.plan not in ["premium", "vip"]:
-        raise HTTPException(status_code=400, detail="Invalid plan. Must be 'premium' or 'vip'")
-    
-    # Validate billing cycle
-    if session_data.billing_cycle not in ["weekly", "monthly", "yearly"]:
-        raise HTTPException(status_code=400, detail="Invalid billing cycle")
-    
-    # Check if user already has this or higher plan
-    user_doc = await fetch_profile(current_user.user_id)
-    current_subscription = get_effective_subscription(user_doc)
-    
-    plan_hierarchy = {"free": 0, "premium": 1, "vip": 2}
-    if plan_hierarchy.get(current_subscription, 0) >= plan_hierarchy.get(session_data.plan, 0):
-        raise HTTPException(
-            status_code=400, 
-            detail=f"You already have {current_subscription.upper()} subscription or higher"
-        )
-    
-    # Get pricing
-    price = PLAN_PRICING.get(session_data.plan, {}).get(session_data.billing_cycle, 0)
-    
-    # Create session
-    session_id = f"ps_{uuid.uuid4().hex[:16]}"
-    session_doc = {
-        "session_id": session_id,
-        "user_id": current_user.user_id,
-        "user_email": user_doc.get("email"),
-        "user_name": user_doc.get("name"),
-        "plan": session_data.plan,
-        "billing_cycle": session_data.billing_cycle,
-        "amount": price,
-        "currency": "USD",
-        "status": PaymentSessionStatus.PENDING.value,
-        "created_at": datetime.now(timezone.utc),
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=24),
-        "paid_at": None,
-        "cancelled_at": None
-    }
-    
-    await db.payment_sessions.insert_one(session_doc)
-    
-    logger.info(f"[Payment] Session created: {session_id} for user {current_user.user_id}, plan: {session_data.plan}")
-    
-    return {
-        "session_id": session_id,
-        "checkout_url": f"/pay?session_id={session_id}",
-        "plan": session_data.plan,
-        "billing_cycle": session_data.billing_cycle,
-        "amount": price,
-        "currency": "USD",
-        "expires_at": session_doc["expires_at"].isoformat()
-    }
-
-
-@api_router.get("/payments/session/{session_id}")
-async def get_payment_session(session_id: str, current_user: User = Depends(require_auth)):
-    """
-    Get payment session details.
-    Users can only view their own sessions.
-    """
-    session = await db.payment_sessions.find_one(
-        {"session_id": session_id},
-        {"_id": 0}
-    )
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Payment session not found")
-    
-    # Users can only view their own sessions (admins can view all)
-    if session["user_id"] != current_user.user_id and current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    # Check if expired
-    if session["status"] == "pending":
-        expires_at = session.get("expires_at")
-        if expires_at:
-            if isinstance(expires_at, str):
-                expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at < datetime.now(timezone.utc):
-                # Mark as expired
-                await db.payment_sessions.update_one(
-                    {"session_id": session_id},
-                    {"$set": {"status": "expired"}}
-                )
-                session["status"] = "expired"
-    
-    return session
-
-
-@api_router.get("/payments/my-sessions")
-async def get_my_payment_sessions(current_user: User = Depends(require_auth)):
-    """Get all payment sessions for the current user"""
-    sessions = await db.payment_sessions.find(
-        {"user_id": current_user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(20)
-    
-    return sessions
-
-
-@api_router.post("/payments/webhook")
-async def payment_webhook(webhook_data: PaymentWebhook):
-    """
-    WEBHOOK ENDPOINT - The ONLY way to upgrade a user's subscription.
-    
-    In production, this will be called by Stripe with a signature verification.
-    Currently, it's called by admin to manually confirm payments.
-    
-    This endpoint does NOT require authentication because:
-    1. In production, Stripe calls it with a webhook signature
-    2. Currently, admin uses the admin panel to trigger this
-    """
-    session = await db.payment_sessions.find_one({"session_id": webhook_data.session_id})
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Payment session not found")
-    
-    if session["status"] != "pending":
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Session already processed with status: {session['status']}"
-        )
-    
-    # Check if expired
-    expires_at = session.get("expires_at")
-    if expires_at:
-        if isinstance(expires_at, str):
-            expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if expires_at < datetime.now(timezone.utc):
-            await db.payment_sessions.update_one(
-                {"session_id": webhook_data.session_id},
-                {"$set": {"status": "expired"}}
-            )
-            raise HTTPException(status_code=400, detail="Payment session has expired")
-    
-    if webhook_data.status == "paid":
-        # Calculate subscription expiry based on billing cycle
-        billing_cycle = session.get("billing_cycle", "monthly")
-        if billing_cycle == "weekly":
-            expiry = datetime.now(timezone.utc) + timedelta(days=7)
-        elif billing_cycle == "monthly":
-            expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        else:  # yearly
-            expiry = datetime.now(timezone.utc) + timedelta(days=365)
-        
-        # UPGRADE USER SUBSCRIPTION - The ONLY place this happens
-        await update_profile(session["user_id"], {
-                "subscription": session["plan"],
-                "role": session["plan"],
-                "subscription_status": "active",
-                "subscription_expiry": expiry,
-                "billing_cycle": billing_cycle
-            })
-        
-        # Mark session as paid
-        await db.payment_sessions.update_one(
-            {"session_id": webhook_data.session_id},
-            {"$set": {
-                "status": "paid",
-                "paid_at": datetime.now(timezone.utc)
-            }}
-        )
-        
-        logger.info(f"[Payment] SUCCESS: User {session['user_id']} upgraded to {session['plan']}")
-        
-        return {
-            "success": True,
-            "message": f"User upgraded to {session['plan'].upper()} successfully",
-            "user_id": session["user_id"],
-            "plan": session["plan"],
-            "expiry": expiry.isoformat()
-        }
-    
-    elif webhook_data.status == "cancelled":
-        await db.payment_sessions.update_one(
-            {"session_id": webhook_data.session_id},
-            {"$set": {
-                "status": "cancelled",
-                "cancelled_at": datetime.now(timezone.utc)
-            }}
-        )
-        
-        return {
-            "success": True,
-            "message": "Payment session cancelled",
-            "session_id": webhook_data.session_id
-        }
-    
-    else:
-        raise HTTPException(status_code=400, detail="Invalid status. Must be 'paid' or 'cancelled'")
-
-
-# ===================== ADMIN PAYMENT MANAGEMENT =====================
-@api_router.get("/admin/payments/sessions")
-async def admin_get_payment_sessions(
-    status: Optional[str] = None,
-    admin: User = Depends(require_admin)
-):
-    """Admin: Get all payment sessions with optional status filter"""
-    query = {}
-    if status:
-        query["status"] = status
-    
-    sessions = await db.payment_sessions.find(
-        query,
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
-    
-    return sessions
-
-
-@api_router.post("/admin/payments/confirm/{session_id}")
-async def admin_confirm_payment(session_id: str, admin: User = Depends(require_admin)):
-    """
-    Admin: Manually confirm a payment (e.g., for bank transfer users).
-    This calls the webhook internally with status="paid".
-    """
-    # Call the webhook endpoint logic
-    webhook_data = PaymentWebhook(session_id=session_id, status="paid")
-    
-    try:
-        result = await payment_webhook(webhook_data)
-        logger.info(f"[Admin] Payment confirmed by {admin.user_id} for session {session_id}")
-        return result
-    except HTTPException as e:
-        raise e
-
-
-@api_router.post("/admin/payments/cancel/{session_id}")
-async def admin_cancel_payment(session_id: str, admin: User = Depends(require_admin)):
-    """Admin: Cancel a pending payment session"""
-    session = await db.payment_sessions.find_one({"session_id": session_id})
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Payment session not found")
-    
-    if session["status"] != "pending":
-        raise HTTPException(status_code=400, detail=f"Cannot cancel session with status: {session['status']}")
-    
-    await db.payment_sessions.update_one(
-        {"session_id": session_id},
-        {"$set": {
-            "status": "cancelled",
-            "cancelled_at": datetime.now(timezone.utc)
-        }}
-    )
-    
-    logger.info(f"[Admin] Payment cancelled by {admin.user_id} for session {session_id}")
-    
-    return {"success": True, "message": "Payment session cancelled"}
+# ===================== WEB PAYMENTS DISABLED =====================
+# Stripe/web payments removed in v1.
+# Only Apple IAP and Google IAP are active for subscription upgrades.
+# See /api/iap/apple/verify and /api/iap/google/verify for active payment flows.
+# ================================================================
 
 
 # ===================== NOTIFICATIONS ENDPOINTS =====================
@@ -2403,7 +2206,7 @@ async def admin_get_user_details(user_id: str, admin: User = Depends(require_adm
         raise HTTPException(status_code=404, detail="User not found")
     
     # Calculate effective subscription
-    effective_subscription = get_effective_subscription(user)
+    effective_subscription = await get_effective_subscription(user)
     
     return {
         **user,
@@ -2424,7 +2227,7 @@ async def check_fund_management_access(current_user: User = Depends(require_auth
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
     if not has_access:
@@ -2451,7 +2254,7 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     has_access = effective_subscription == "vip"
     
     if not has_access:
@@ -2476,7 +2279,7 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    effective_subscription = get_effective_subscription(user_doc)
+    effective_subscription = await get_effective_subscription(user_doc)
     is_active = check_subscription_active(user_doc)
     
     # Get AI usage info
@@ -3525,7 +3328,7 @@ async def submit_fund_application(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Check subscription level
-    user_subscription = get_effective_subscription(user_doc)
+    user_subscription = await get_effective_subscription(user_doc)
     if user_subscription not in ["premium", "vip"]:
         raise HTTPException(
             status_code=403, 
@@ -6460,19 +6263,10 @@ async def validate_google_purchase(purchase_token: str, product_id: str, package
     """
     package = package_name or GOOGLE_PACKAGE_NAME
     
-    # Check if credentials are configured
+    # SECURITY: Credentials MUST be configured in production
     if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        logger.warning("[Google IAP] Service account not configured, using mock validation")
-        # Return mock response for development
-        return {
-            "valid": True,
-            "mock": True,
-            "product_id": product_id,
-            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
-            "auto_renewing": True,
-            "payment_state": 1,
-            "acknowledgement_state": 1,
-        }
+        logger.error("[Google IAP] SECURITY: Service account not configured - rejecting validation")
+        return {"valid": False, "error": "Google IAP not configured. Contact support."}
     
     try:
         # Import Google API client
@@ -6508,14 +6302,8 @@ async def validate_google_purchase(purchase_token: str, product_id: str, package
         }
         
     except ImportError:
-        logger.warning("[Google IAP] Google API client not installed, using mock validation")
-        return {
-            "valid": True,
-            "mock": True,
-            "product_id": product_id,
-            "expiry_time_millis": str(int((datetime.now(timezone.utc) + timedelta(days=30)).timestamp() * 1000)),
-            "auto_renewing": True,
-        }
+        logger.error("[Google IAP] SECURITY: Google API client not installed - rejecting validation")
+        return {"valid": False, "error": "Google IAP not configured. Contact support."}
     except Exception as e:
         logger.error(f"[Google IAP] Validation error: {e}")
         return {"valid": False, "error": str(e)}
@@ -6694,20 +6482,15 @@ async def apple_server_notification(request: dict):
     """
     Apple App Store Server Notifications (v2)
     
-    Handle subscription lifecycle events:
-    - INITIAL_BUY: New subscription
-    - DID_RENEW: Subscription renewed
-    - DID_CHANGE_RENEWAL_STATUS: Auto-renew toggled
-    - DID_FAIL_TO_RENEW: Billing retry
-    - EXPIRED: Subscription expired
-    - REFUND: Refund processed
-    - REVOKE: Family sharing revoked
-    
-    Setup in App Store Connect:
-    1. Go to App Information > App Store Server Notifications
-    2. Enter your webhook URL: https://your-domain.com/api/webhooks/apple
-    3. Select Version 2 Notifications
+    DISABLED IN V1: Webhooks are disabled for security.
+    Subscription updates only through verify/restore endpoints.
     """
+    # V1 SECURITY: Webhooks disabled
+    if not IAP_WEBHOOKS_ENABLED:
+        logger.warning("[Apple Webhook] BLOCKED - IAP webhooks disabled in v1")
+        raise HTTPException(status_code=403, detail="IAP webhooks disabled in v1")
+    
+    # --- Original webhook code below (kept for future use) ---
     try:
         # Get the signed payload
         signed_payload = request.get('signedPayload')
@@ -6776,26 +6559,15 @@ async def google_rtdn_notification(request: dict):
     """
     Google Real-Time Developer Notifications (RTDN)
     
-    Handle subscription lifecycle events:
-    - SUBSCRIPTION_RECOVERED: Recovered from account hold
-    - SUBSCRIPTION_RENEWED: Subscription renewed
-    - SUBSCRIPTION_CANCELED: Subscription canceled
-    - SUBSCRIPTION_PURCHASED: New subscription
-    - SUBSCRIPTION_ON_HOLD: Payment pending
-    - SUBSCRIPTION_IN_GRACE_PERIOD: Grace period started
-    - SUBSCRIPTION_RESTARTED: Resubscribed
-    - SUBSCRIPTION_PRICE_CHANGE_CONFIRMED: Price change accepted
-    - SUBSCRIPTION_DEFERRED: Renewal deferred
-    - SUBSCRIPTION_PAUSED: Subscription paused
-    - SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED: Pause schedule changed
-    - SUBSCRIPTION_REVOKED: Access revoked
-    - SUBSCRIPTION_EXPIRED: Subscription expired
-    
-    Setup in Google Play Console:
-    1. Go to Monetization setup > Real-time developer notifications
-    2. Enter Cloud Pub/Sub topic
-    3. Create Cloud Function or use webhook endpoint
+    DISABLED IN V1: Webhooks are disabled for security.
+    Subscription updates only through verify/restore endpoints.
     """
+    # V1 SECURITY: Webhooks disabled
+    if not IAP_WEBHOOKS_ENABLED:
+        logger.warning("[Google Webhook] BLOCKED - IAP webhooks disabled in v1")
+        raise HTTPException(status_code=403, detail="IAP webhooks disabled in v1")
+    
+    # --- Original webhook code below (kept for future use) ---
     try:
         # Google sends Pub/Sub message
         message = request.get('message', {})
@@ -7045,7 +6817,7 @@ async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depen
             raise HTTPException(status_code=404, detail="User profile not found")
         
         # Get effective subscription (accounting for expiry)
-        effective_subscription = get_effective_subscription(user_doc)
+        effective_subscription = await get_effective_subscription(user_doc)
         
         # Get weekly limit based on subscription tier
         # Free: 3, Premium: 10, VIP: unlimited (999999)
@@ -7178,12 +6950,30 @@ Do not include any text outside the JSON object. Be concise but accurate."""
 # Include router
 app.include_router(api_router)
 
+# ===================== CORS CONFIGURATION =====================
+# Production: Restrict to specific origins
+# Development: Add localhost origins as needed
+CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else [
+    # Production frontend URLs
+    "https://data-flow-fix-3.preview.emergentagent.com",
+    # Expo web development
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://localhost:19006",
+    # Expo tunnel URLs (dynamic subdomain)
+    "https://*.exp.direct",
+]
+
+# Filter empty strings
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",  # Allow all Emergent preview URLs
 )
 
 @app.on_event("shutdown")

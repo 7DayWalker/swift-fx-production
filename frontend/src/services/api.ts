@@ -1,25 +1,16 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import supabase from './supabase';
 
-// Use relative URL for web preview, direct URL for local dev, full URL for native
-const getBaseUrl = () => {
-  if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8001/api';
-      }
-    }
-    return '/api';
-  }
-  const backendUrl = Constants.expoConfig?.extra?.backendUrl || process.env.EXPO_PUBLIC_BACKEND_URL || '';
-  return `${backendUrl}/api`;
-};
+// Single source of truth: All API calls use EXPO_PUBLIC_BACKEND_URL
+// No platform branching, no relative paths, no localhost fallbacks
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-const baseURL = getBaseUrl();
-console.log(baseURL, 'API_BASE_URL');
+if (!BACKEND_URL) {
+  console.error('[API] CRITICAL: EXPO_PUBLIC_BACKEND_URL is not set. API calls will fail.');
+}
+
+// baseURL includes /api prefix - all routes should use paths like '/signals', '/iap/products', etc.
+const baseURL = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
 export const api = axios.create({
   baseURL,

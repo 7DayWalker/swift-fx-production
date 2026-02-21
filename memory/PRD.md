@@ -1,55 +1,73 @@
-# Swift FX Signals - Product Requirements Document
+# SwiftFX Trading Signals Platform - PRD
 
 ## Original Problem Statement
-A full-stack trading signals platform with React Native (Expo/Tamagui) frontend and FastAPI backend. The app provides professional trading signals, AI chart analysis, community features, and subscription management.
+Full-stack trading signals platform (React Native/Expo + FastAPI + Supabase). Key features include real-time signals, AI chart analyzer, subscription management, and community features.
 
-## Core Requirements
-- Trading signals display with real-time updates
-- AI-powered chart analysis (Claude Vision via emergentintegrations)
-- Community posts and interactions
-- Subscription tiers (Free, Premium, VIP)
-- Admin dashboard for signal management
+## Architecture
+- **Frontend**: React Native (Expo), Expo Router, React Context state management
+- **Backend**: FastAPI, async/await, Supabase REST API
+- **Auth**: Supabase JWT
+- **Database**: Supabase (PostgreSQL) for user/subscription data, MongoDB for signals/AI/community
 
-## Tech Stack
-- **Frontend**: React Native, Expo Router v3, Tamagui, @expo/vector-icons
-- **Backend**: FastAPI, Supabase JWT
-- **Database**: Supabase (PostgreSQL), MongoDB
-- **Auth**: Supabase Auth (Email, Apple, Google)
+## Signal Data Flow (Unified — Feb 17, 2026)
+- Frontend `SignalContext.refreshSignals()` → `api.get('/signals')` → FastAPI backend
+- Backend resolves tier via `get_effective_subscription()` (queries subscriptions + plans)
+- Backend strips sensitive fields (entry, sl, tp, analysis) for unauthorized tiers
+- Supabase direct query for signals **removed** from frontend
+- Supabase `signals` table still exists but is no longer the data source for the mobile app
+
+## Tier Resolution Logic (Single Source of Truth)
+Backend `get_effective_subscription()`:
+- super_admin/admin → vip
+- Active VIP subscription (subscriptions + plans tables) → vip
+- Active Premium subscription → premium
+- else → free
 
 ## What's Been Implemented
 
-### Phase 1: Core App (Pre-existing)
-- Full trading signals CRUD with subscription enforcement
-- AI chart analyzer with Claude Vision
-- Community posts with likes/comments
-- Subscription management (Free/Premium/VIP)
-- Admin dashboard
-- Dark/Light theme support
+### Session 4 — Feb 18, 2026
+- [x] **Status→State Refactor COMPLETE**: Backend API no longer returns `status` field
+- [x] Backend `GET /api/signals` and `GET /api/signals/{id}` return only `state` field (pending|active|tp1|tp2|tp3|closed)
+- [x] Backend correctly removes `status` via `signal.pop("status", None)` 
+- [x] Frontend signals.tsx fixed: Line 191 uses `state === 'closed'` instead of `status`
+- [x] All filter tabs use `state` field for filtering
+- [x] Testing agent verified: 11/11 backend tests passed, 8/8 UI tests passed
+- [x] VIP tier access verified: Can see all signal fields (entry, stop_loss, tp1, tp2, tp3)
 
-### Phase 2: UI Fixes & Polish (Completed)
-- Fixed critical icon rendering bug (CDN font loading via +html.tsx)
-- Complete UI polish - Apple-like design across all screens
-- Standardized borderRadius, padding, shadows, spacing
-- 13/13 frontend tests passed
+### Session 3 — Feb 17, 2026
+- [x] Backend signal endpoints (`GET /api/signals`, `GET /api/signals/{id}`) fixed to use `get_effective_subscription()` instead of stale `current_user.role`
+- [x] Frontend `SignalContext.refreshSignals()` migrated from Supabase direct query to FastAPI backend
+- [x] Added `mapBackendSignal` mapper for backend field names
+- [x] `userTier` change effect now re-fetches from backend instead of re-mapping locally
+- [x] Full system audit completed (RLS, endpoints, gating, DB integrity)
+- [x] Supabase RLS audit completed — confirmed authenticated users could read all signal fields
 
-### Phase 3: Micro-Interactions (Completed - Feb 16, 2026)
-- Created reusable PressableScale component (src/components/ui/PressableScale.tsx)
-- Uses React Native Animated API with useNativeDriver: true
-- Scale animation: 1 → 0.97 → 1 on press/release (120ms duration)
-- Applied to 11 interactive elements across 4 screens:
-  - Dashboard: Quick Action cards (4), Signal cards, Upgrade banner
-  - AI: Analyze button, Analyze Another button
-  - Community: FAB button
-  - More: Menu items, Logout button
-- 5/5 frontend tests passed, 0 regressions
+### Session 2 — Feb 16, 2026
+- [x] Backend subscription tier resolution (server.py, supabase_auth.py)
+- [x] Frontend tier resolution consistency fix (ai.tsx uses SubscriptionContext)
+- [x] AI Analyzer authentication fix (auth header)
+- [x] PressableScale micro-interactions (partial)
 
-## Key Files
-- `frontend/src/components/ui/PressableScale.tsx` - Reusable press-scale component
-- `frontend/app/+html.tsx` - CDN font loading fix
-- `frontend/app/(tabs)/dashboard.tsx` - Dashboard with PressableScale
-- `frontend/app/(tabs)/ai.tsx` - AI analyzer with PressableScale
-- `frontend/app/(tabs)/community.tsx` - Community with PressableScale FAB
-- `frontend/app/(tabs)/more.tsx` - More menu with PressableScale items
+## Supabase RLS Status (signals table)
+- RLS enabled: Yes
+- Anonymous: SELECT free signals only
+- Authenticated: SELECT all rows, all fields (no tier restriction)
+- INSERT/UPDATE/DELETE: Blocked for all non-service roles
+- **Note**: The Supabase signals table is no longer queried by the mobile app
+
+## Known Issues
+- Push notification handlers (server.py lines 1459, 1541) still use `UserRole(profile.role)` instead of `get_effective_subscription()`
+- `canAccessSignal()` in frontend still exists but is now only used by `fetchUserTier` (not signals gating)
+- Debug console.logs in ai.tsx to be removed after user confirms AI tier fix
+- **Admin panel CRUD uses Supabase directly** - Edit, Activate, Mark TP, Close, Delete operations need to migrate to backend API
 
 ## Backlog
-No pending tasks defined by user.
+- **P1: Migrate Admin Panel CRUD to Backend API** - Edit/Activate/Close/Delete operations currently use Supabase, should use backend endpoints
+- P2: Fix push notification tier resolution
+- P2: PressableScale fix for flexDirection: 'row' layouts
+- P2: Remove debug console.logs
+- P3: CSV export for admin
+- P3: IAP webhook implementation (Apple/Google TODOs)
+- P3: Stripe integration
+- P4: CORS lockdown for production
+- P4: Webhook signature verification

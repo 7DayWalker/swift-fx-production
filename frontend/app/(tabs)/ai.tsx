@@ -83,54 +83,62 @@ export default function AIScreen() {
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
   const [screenState, setScreenState] = useState<ScreenState>('upload');
 
+  // Re-fetch usage when user logs in OR when subscriptionStatus resolves (correct tier)
   useEffect(() => {
     fetchUsage();
-  }, [user]);
+  }, [user, subscriptionStatus]);
 
   const fetchUsage = async () => {
     try {
-      // Get user's role and usage from Supabase profile
       if (!user) {
         setUsage({ current_usage: 0, weekly_limit: 0, remaining: 0, has_access: false });
         setIsLoadingUsage(false);
         return;
       }
 
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role, ai_weekly_used, ai_weekly_reset')
-        .eq('id', user.id)
-        .single();
-
-      if (error || !profile) {
-        console.error('Failed to fetch profile for AI usage:', error);
-        setUsage({ current_usage: 0, weekly_limit: 3, remaining: 3, has_access: true });
-        setIsLoadingUsage(false);
-        return;
+      // Wait for SubscriptionContext to resolve before computing limits
+      if (!subscriptionStatus) {
+        return; // Will re-run when subscriptionStatus becomes available
       }
 
-      const role = profile.role || 'free';
-      const limit = TIER_LIMITS[role] ?? TIER_LIMITS.free;
+      // Use the CORRECT tier from SubscriptionContext (queries subscriptions + plans tables)
+      const effectiveTier = subscriptionStatus.subscription || 'free';
+
+      // Debug logs requested by user
+      console.log('[Frontend Tier] role:', subscriptionStatus.role);
+      console.log('[Frontend Tier] activeSubscriptions:', subscriptionStatus.subscription);
+      console.log('[Frontend Tier] resolvedTier:', effectiveTier);
+
+      const limit = TIER_LIMITS[effectiveTier] ?? TIER_LIMITS.free;
       const isUnlimited = limit === -1;
-      
-      // Check if we need to reset the weekly counter
-      let currentUsage = profile.ai_weekly_used || 0;
-      const resetDate = profile.ai_weekly_reset ? new Date(profile.ai_weekly_reset) : null;
+
+      // Fetch ONLY usage counters from profiles (NOT the role)
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('ai_weekly_used, ai_weekly_reset')
+        .eq('id', user.user_id)
+        .single();
+
+      if (error) {
+        console.warn('Failed to fetch AI usage counters:', error.message);
+      }
+
+      let currentUsage = profile?.ai_weekly_used || 0;
+      const resetDate = profile?.ai_weekly_reset ? new Date(profile.ai_weekly_reset) : null;
       const now = new Date();
       const weekMs = 7 * 24 * 60 * 60 * 1000;
-      
+
       if (!resetDate || (now.getTime() - resetDate.getTime()) >= weekMs) {
-        // Counter should be reset (Edge Function will handle this on next call)
         currentUsage = 0;
       }
 
       const remaining = isUnlimited ? 999 : Math.max(0, limit - currentUsage);
-      
+
       setUsage({
         current_usage: currentUsage,
         weekly_limit: isUnlimited ? 'unlimited' : limit,
         remaining,
-        has_access: true, // All authenticated users have access
+        has_access: true,
       });
     } catch (error) {
       console.error('Failed to fetch AI usage:', error);
@@ -282,8 +290,8 @@ export default function AIScreen() {
       return;
     }
 
-    // Check if limit reached (frontend check - Edge Function will also verify)
-    if (usage && usage.remaining <= 0 && usage.weekly_limit !== 'unlimited') {
+    // Check if limit reached (frontend check - backend will also verify)
+    if (usage && usage.weekly_limit !== 'unlimited' && usage.remaining <= 0) {
       setErrorMessage('You have used all your weekly AI analyses.');
       setScreenState('limit_reached');
       return;
@@ -314,11 +322,21 @@ export default function AIScreen() {
 
       console.log('Calling AI Analyze API...');
 
+      // Get auth token from Supabase session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage('Not authenticated. Please log in again.');
+        setScreenState('error');
+        return;
+      }
+
       // Call FastAPI backend endpoint
       const response = await fetch(AI_ANALYZE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -346,7 +364,7 @@ export default function AIScreen() {
         resistance_levels: data.resistance_levels || [],
         trade_insight: data.trade_insight || '',
         confidence: data.confidence || 'Low',
-        remaining_analyses: usage?.remaining ? usage.remaining - 1 : 0,
+        remaining_analyses: usage?.weekly_limit === 'unlimited' ? undefined : (usage?.remaining ? usage.remaining - 1 : 0),
         weekly_limit: usage?.weekly_limit || 3,
         disclaimer: 'AI-generated analysis for educational purposes only. Always do your own research.',
       };
@@ -771,14 +789,21 @@ export default function AIScreen() {
             <View
               style={[
                 styles.usageProgress,
-                { width: `${((usage?.current_usage || 0) / (usage?.weekly_limit || 1)) * 100}%`, backgroundColor: theme.primary }
+                {
+                  width: usage?.weekly_limit === 'unlimited'
+                    ? '0%'
+                    : `${((usage?.current_usage || 0) / (typeof usage?.weekly_limit === 'number' && usage.weekly_limit > 0 ? usage.weekly_limit : 1)) * 100}%`,
+                  backgroundColor: theme.primary,
+                }
               ]}
             />
           </View>
           <Text style={[styles.usageText, { color: theme.textSecondary }]}>
-            {usage?.remaining || 0} of {usage?.weekly_limit || 0} analyses remaining
+            {usage?.weekly_limit === 'unlimited'
+              ? 'Unlimited analyses available'
+              : `${usage?.remaining ?? 0} of ${usage?.weekly_limit ?? 0} analyses remaining`}
           </Text>
-          {user?.role === 'premium' && (
+          {subscriptionStatus?.subscription === 'premium' && (
             <Text style={[styles.usageNote, { color: theme.textMuted }]}>
               * Includes limited AI chart analysis. Usage caps apply.
             </Text>

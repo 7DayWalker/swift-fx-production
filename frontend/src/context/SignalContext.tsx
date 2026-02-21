@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
-import { canAccessSignal, SubscriptionTier } from '../utils/signalAccess';
+import { SubscriptionTier } from '../utils/signalAccess';
+import api from '../services/api';
 
 // Signal interface — kept identical to what screens expect
 interface Signal {
@@ -17,7 +18,8 @@ interface Signal {
   take_profit?: number;
   tp_hit?: number;
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: 'pending' | 'active' | 'tp1' | 'tp2' | 'tp3' | 'closed';
+  is_active: boolean;
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
   final_pips?: number;
@@ -75,24 +77,22 @@ const SignalContext = createContext<SignalContextType | undefined>(undefined);
 const POLLING_INTERVAL = 5000;
 const BACKGROUND_POLLING_INTERVAL = 30000;
 
-/** Map a Supabase row → app Signal */
-const mapRow = (row: any): Signal => ({
-  signal_id: row.id,
+/** Map a backend API response row → app Signal.
+ *  Backend already handles tier gating: locked signals have sensitive fields stripped. */
+const mapBackendSignal = (row: any): Signal => ({
+  signal_id: row.signal_id,
   pair: row.pair,
   signal_type: row.signal_type,
-  entry: row.entry_price != null ? Number(row.entry_price) : undefined,
+  entry: row.entry != null ? Number(row.entry) : undefined,
   stop_loss: row.stop_loss != null ? Number(row.stop_loss) : undefined,
-  tp1: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-  tp2: row.take_profit_2 != null ? Number(row.take_profit_2) : undefined,
-  tp3: row.take_profit_3 != null ? Number(row.take_profit_3) : undefined,
-  take_profit: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-  risk_reward: row.risk_reward != null ? Number(row.risk_reward) : undefined,
-  // Map DB state → old 'status' names (tp1/tp2/tp3 → 'active', closed → 'closed')
-  status: ['pending'].includes(row.state)
-    ? 'pending'
-    : row.state === 'closed'
-    ? 'closed'
-    : 'active',
+  tp1: row.tp1 != null ? Number(row.tp1) : undefined,
+  tp2: row.tp2 != null ? Number(row.tp2) : undefined,
+  tp3: row.tp3 != null ? Number(row.tp3) : undefined,
+  take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
+  tp_hit: row.tp_hit != null ? Number(row.tp_hit) : undefined,
+  risk_reward: row.risk_reward != null ? parseFloat(String(row.risk_reward)) : undefined,
+  state: row.state || 'pending',
+  is_active: row.is_active ?? true,
   visibility: row.visibility,
   analysis: row.analysis,
   final_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
@@ -100,15 +100,8 @@ const mapRow = (row: any): Signal => ({
   created_at: row.created_at,
   activated_at: row.activated_at,
   closed_at: row.closed_at,
-  locked: false, // Will be set based on user tier in provider
+  locked: row.locked || false,
 });
-
-/** Map with access check - sets locked based on user tier */
-const mapRowWithAccess = (row: any, userTier: SubscriptionTier): Signal => {
-  const signal = mapRow(row);
-  signal.locked = !canAccessSignal(userTier, signal.visibility);
-  return signal;
-};
 
 export function SignalProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
@@ -135,10 +128,10 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   // DEBUG: Track renders
   console.log('[SignalContext] RENDER - userId:', userId, 'userTier:', userTier);
 
-  // Derived lists
-  const activeSignals = signals.filter((s) => s.status === 'active');
-  const pendingSignals = signals.filter((s) => s.status === 'pending');
-  const closedSignals = signals.filter((s) => s.status === 'closed');
+  // Derived lists - "active" = all non-closed signals (pending, active, tp1, tp2, tp3)
+  const activeSignals = signals.filter((s) => s.state !== 'closed');
+  const pendingSignals = signals.filter((s) => s.state === 'pending');
+  const closedSignals = signals.filter((s) => s.state === 'closed');
 
   // Fetch user's subscription tier - ONLY depends on userId (primitive)
   // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
@@ -246,30 +239,22 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     try {
-      const { data, error } = await supabase
-        .from('signals')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await api.get('/signals');
+      const data = response.data;
 
-      if (error) {
-        console.error('[Signals] fetch error:', error.message);
-        return;
-      }
-
-      // Map signals with access check using ref to avoid recreating callback
-      const currentTier = userTierRef.current;
-      setSignals((data || []).map((row) => mapRowWithAccess(row, currentTier)));
+      // Backend handles tier-based gating: locked signals have sensitive fields stripped
+      setSignals((data || []).map(mapBackendSignal));
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[Signals] refreshSignals failed:', err);
     }
-  }, [token]); // Only depends on token - userTier accessed via ref
+  }, [token]); // Only depends on token - backend resolves tier from JWT
 
   const refreshStats = useCallback(async () => {
     if (!token) return;
 
     try {
-      const closed = signals.filter((s) => s.status === 'closed');
+      const closed = signals.filter((s) => s.state === 'closed');
       const winning = closed.filter((s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
         return pips > 0;
@@ -306,7 +291,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     // History is now derived from local signals state (same source)
     if (!token || signals.length === 0) return;
 
-    const closed = signals.filter((s) => s.status === 'closed');
+    const closed = signals.filter((s) => s.state === 'closed');
     const winning = closed.filter((s) => (s.final_pips ?? 0) > 0);
     const totalPips = closed.reduce((sum, s) => sum + (s.final_pips ?? 0), 0);
 
@@ -408,18 +393,15 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     return () => stopPolling();
   }, [userId, token]); // ONLY primitive dependencies - no functions
 
-  // Re-apply access checks when userTier changes - but DON'T trigger fetches
+  // Re-fetch signals when userTier changes — backend returns different locked state per tier
   useEffect(() => {
     console.log('[SignalContext] useEffect[userTier] triggered - userTier:', userTier, 'signals.length:', signals.length);
     
-    if (signals.length > 0) {
-      // Re-map signals with new user tier - use functional update to avoid stale closure
-      setSignals((prev) => prev.map((s) => ({
-        ...s,
-        locked: !canAccessSignal(userTier, s.visibility)
-      })));
+    if (signals.length > 0 && token) {
+      // Re-fetch from backend so locked/unlocked state and field visibility are correct
+      refreshSignals();
     }
-  }, [userTier]); // Only depends on userTier - signals.length check is inside
+  }, [userTier]); // Only depends on userTier - refreshSignals is stable via token
 
   // Recompute stats whenever signals change - use refs to avoid dependency on callbacks
   const signalsRef = useRef(signals);
@@ -428,7 +410,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (signals.length > 0 && token) {
       // Compute stats inline instead of calling callbacks
-      const closed = signals.filter((s) => s.status === 'closed');
+      const closed = signals.filter((s) => s.state === 'closed');
       const winning = closed.filter((s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
         return pips > 0;

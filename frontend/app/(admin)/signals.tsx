@@ -15,8 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../src/services/supabase';
 import { useSignals } from '../../src/context/SignalContext';
+import api from '../../src/services/api';
 
 interface Signal {
   signal_id: string;
@@ -27,15 +27,17 @@ interface Signal {
   tp1?: number;
   tp2?: number;
   tp3?: number;
-  take_profit?: number; // Legacy field
+  take_profit?: number;
   tp_hit?: number;
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: string;
+  is_active?: boolean;
   visibility: 'free' | 'premium' | 'vip';
   analysis?: string;
   final_pips?: number;
   result_pips?: number;
   created_at: string;
+  activated_at?: string;
 }
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
@@ -133,35 +135,33 @@ export default function SignalManagement() {
     fetchSignals();
   }, []);
 
-  /** Map a Supabase row to the local Signal interface */
+  /** Map a backend API row to the local Signal interface */
   const mapRow = (row: any): Signal => ({
-    signal_id: row.id,
+    signal_id: row.signal_id,
     pair: row.pair,
     signal_type: row.signal_type,
-    entry: row.entry_price != null ? Number(row.entry_price) : undefined,
+    entry: row.entry != null ? Number(row.entry) : undefined,
     stop_loss: row.stop_loss != null ? Number(row.stop_loss) : undefined,
-    tp1: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
-    tp2: row.take_profit_2 != null ? Number(row.take_profit_2) : undefined,
-    tp3: row.take_profit_3 != null ? Number(row.take_profit_3) : undefined,
-    take_profit: row.take_profit_1 != null ? Number(row.take_profit_1) : undefined,
+    tp1: row.tp1 != null ? Number(row.tp1) : undefined,
+    tp2: row.tp2 != null ? Number(row.tp2) : undefined,
+    tp3: row.tp3 != null ? Number(row.tp3) : undefined,
+    take_profit: row.tp1 != null ? Number(row.tp1) : undefined,
     tp_hit: ['tp1','tp2','tp3'].indexOf(row.state) >= 0 ? ['tp1','tp2','tp3'].indexOf(row.state) + 1 : 0,
-    risk_reward: row.risk_reward != null ? Number(row.risk_reward) : undefined,
-    status: row.state === 'pending' ? 'pending' : row.state === 'closed' ? 'closed' : 'active',
+    risk_reward: row.risk_reward != null ? parseFloat(String(row.risk_reward)) : undefined,
+    state: row.state || 'pending',
+    is_active: row.is_active ?? true,
     visibility: row.visibility,
     analysis: row.analysis,
     final_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
     result_pips: row.final_pips != null ? Number(row.final_pips) : undefined,
     created_at: row.created_at,
+    activated_at: row.activated_at,
   });
 
   const fetchSignals = async () => {
     try {
-      const { data, error } = await supabase
-        .from('signals')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setSignals((data || []).map(mapRow));
+      const response = await api.get('/signals');
+      setSignals((response.data || []).map(mapRow));
     } catch (error) {
       console.error('Failed to fetch signals:', error);
       setSignals([]);
@@ -225,66 +225,28 @@ export default function SignalManagement() {
     setIsSubmitting(true);
     
     try {
-      console.log("=== FETCHING AUTH USER ===");
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      
-      console.log("=== SIGNAL CREATE DEBUG ===", authUser);
-      console.log("Auth Error:", authError);
-
-      if (!authUser) {
-        console.error("NO AUTH USER - Cannot create signal");
-        showAlert('Error', 'Not authenticated. Please log in again.');
-        setIsSubmitting(false);
-        return;
-      }
-
       const entry = parseFloat(formData.entry);
       const stopLoss = parseFloat(formData.stop_loss);
       const tp1 = parseFloat(formData.tp1);
-      const riskReward = calculateRiskReward(entry, stopLoss, tp1, formData.signal_type);
 
+      // Map to backend SignalCreate schema (FastAPI → MongoDB)
       const payload = {
         pair: formData.pair,
         signal_type: formData.signal_type,
-        entry_price: entry,
+        entry: entry,
         stop_loss: stopLoss,
-        take_profit_1: tp1,
-        take_profit_2: formData.tp2 ? parseFloat(formData.tp2) : null,
-        take_profit_3: formData.tp3 ? parseFloat(formData.tp3) : null,
-        risk_reward: riskReward,
-        state: formData.status,
+        tp1: tp1,
+        tp2: formData.tp2 ? parseFloat(formData.tp2) : null,
+        tp3: formData.tp3 ? parseFloat(formData.tp3) : null,
+        state: formData.status, // "pending" or "active"
         visibility: formData.visibility,
         analysis: formData.analysis || null,
-        created_by: authUser.id,
-        activated_at: formData.status === 'active' ? new Date().toISOString() : null,
       };
 
-      console.log("=== INSERT PAYLOAD ===", payload);
-
-      const { data, error } = await supabase
-        .from("signals")
-        .insert(payload)
-        .select();
-      
-      console.log("=== SUPABASE RESPONSE ===", { data, error });
-      
-      console.log('=== SUPABASE RESPONSE ===');
-      console.log('Data:', data);
-      console.log('Error:', error);
-      if (error) {
-        console.error('Error Code:', error.code);
-        console.error('Error Message:', error.message);
-        console.error('Error Details:', error.details);
-        console.error('Error Hint:', error.hint);
-        console.error('Full Error Object:', JSON.stringify(error, null, 2));
-      }
-
-      if (error) {
-        throw error;
-      }
+      const response = await api.post('/admin/signals', payload);
       
       console.log('=== SIGNAL CREATED SUCCESSFULLY ===');
-      console.log('Created Signal:', data);
+      console.log('Response:', response.data);
       
       setShowCreateModal(false);
       resetCreateForm();
@@ -296,15 +258,9 @@ export default function SignalManagement() {
       showAlert('Success', `Signal created as ${formData.status.toUpperCase()}!`);
     } catch (error: any) {
       console.error('=== SIGNAL CREATE ERROR ===');
-      console.error('Error Type:', error?.constructor?.name);
-      console.error('Error Message:', error?.message);
-      console.error('Error Code:', error?.code);
-      console.error('Error Details:', error?.details);
-      console.error('Error Hint:', error?.hint);
-      console.error('Full Error:', error);
-      console.error('Error JSON:', JSON.stringify(error, null, 2));
+      console.error('Error:', error?.response?.data || error?.message);
       
-      const errorMsg = error?.message || error?.details || 'Failed to create signal';
+      const errorMsg = error?.response?.data?.detail || error?.message || 'Failed to create signal';
       showAlert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -327,7 +283,7 @@ export default function SignalManagement() {
       tp2: safeStr(signal.tp2),
       tp3: safeStr(signal.tp3),
       tp_hit: safeNum(signal.tp_hit, 0),
-      status: signal.status || 'pending',
+      status: signal.state || 'pending',
       visibility: signal.visibility || 'free',
       final_pips: safeStr(signal.final_pips || signal.result_pips),
     });
@@ -348,46 +304,30 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      // Map UI status back to DB state
-      const stateMap: Record<string, string> = {
-        pending: 'pending',
-        active: 'active',
-        closed: 'closed',
-      };
-      const dbState = stateMap[editData.status] || editData.status;
-
       const entry = parseFloat(editData.entry);
       const stopLoss = parseFloat(editData.stop_loss);
       const tp1 = parseFloat(editData.tp1);
-      const riskReward = calculateRiskReward(entry, stopLoss, tp1, editData.signal_type as 'buy' | 'sell');
 
+      // Use backend API endpoint for full update
       const updatePayload: any = {
         pair: editData.pair,
         signal_type: editData.signal_type,
-        entry_price: entry,
+        entry: entry,
         stop_loss: stopLoss,
-        take_profit_1: tp1,
-        take_profit_2: editData.tp2 ? parseFloat(editData.tp2) : null,
-        take_profit_3: editData.tp3 ? parseFloat(editData.tp3) : null,
-        risk_reward: riskReward,
-        state: dbState,
+        tp1: tp1,
+        tp2: editData.tp2 ? parseFloat(editData.tp2) : null,
+        tp3: editData.tp3 ? parseFloat(editData.tp3) : null,
+        tp_hit: editData.tp_hit,
+        state: editData.status, // Backend uses 'state' field
         visibility: editData.visibility,
       };
       
       // Include final_pips if provided and status is closed
       if (editData.status === 'closed' && editData.final_pips) {
         updatePayload.final_pips = parseFloat(editData.final_pips);
-        updatePayload.closed_at = new Date().toISOString();
-      }
-      if (editData.status === 'active' && !selectedSignal.activated_at) {
-        updatePayload.activated_at = new Date().toISOString();
       }
       
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', selectedSignal.signal_id);
-      if (error) throw error;
+      await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, updatePayload);
       
       setShowEditModal(false);
       setSelectedSignal(null);
@@ -399,7 +339,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal updated successfully!');
     } catch (error: any) {
       console.error('Edit error:', error);
-      showAlert('Error', error.message || 'Failed to update signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to update signal');
     } finally {
       setIsSubmitting(false);
     }
@@ -408,11 +348,8 @@ export default function SignalManagement() {
   // ========== ACTIVATE SIGNAL ==========
   const handleActivateSignal = async (signalId: string) => {
     try {
-      const { error } = await supabase
-        .from('signals')
-        .update({ state: 'active', activated_at: new Date().toISOString() })
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for state change
+      await api.patch(`/admin/signals/${signalId}/state`, { state: 'active' });
       await fetchSignals();
       
       // Trigger real-time update for all users
@@ -420,25 +357,17 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal activated!');
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to activate signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to activate signal');
     }
   };
 
   // ========== MARK TP HIT ==========
   const handleMarkTP = async (signalId: string, tpLevel: number) => {
     try {
-      const stateValue = `tp${tpLevel}`;
-      const updatePayload: any = { state: stateValue };
-      // If TP3, also close the signal
-      if (tpLevel === 3) {
-        updatePayload.state = 'closed';
-        updatePayload.closed_at = new Date().toISOString();
-      }
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for state change
+      // TP1 -> state: 'tp1', TP2 -> state: 'tp2', TP3 -> state: 'closed' (auto-closes)
+      const newState = tpLevel === 3 ? 'closed' : `tp${tpLevel}`;
+      await api.patch(`/admin/signals/${signalId}/state`, { state: newState });
       await fetchSignals();
       
       // Trigger real-time update for all users (TP hit is like an update or close)
@@ -450,7 +379,7 @@ export default function SignalManagement() {
       
       showAlert('Success', tpLevel === 3 ? 'TP3 hit - Signal closed!' : `TP${tpLevel} marked as hit!`);
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to mark TP');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to mark TP');
     }
   };
 
@@ -468,18 +397,20 @@ export default function SignalManagement() {
 
     setIsSubmitting(true);
     try {
-      const updatePayload: any = {
-        state: 'closed',
-        closed_at: new Date().toISOString(),
-      };
-      if (closePrice) updatePayload.exit_price = parseFloat(closePrice);
-      if (finalPips) updatePayload.final_pips = parseFloat(finalPips);
-
-      const { error } = await supabase
-        .from('signals')
-        .update(updatePayload)
-        .eq('id', selectedSignal.signal_id);
-      if (error) throw error;
+      // Use backend API endpoint for state change with close_price
+      const payload: any = { state: 'closed' };
+      if (closePrice) {
+        payload.close_price = parseFloat(closePrice);
+      }
+      
+      await api.patch(`/admin/signals/${selectedSignal.signal_id}/state`, payload);
+      
+      // If finalPips was provided directly (not calculated from close_price), update it separately
+      if (finalPips && !closePrice) {
+        await api.put(`/admin/signals/${selectedSignal.signal_id}/full`, {
+          final_pips: parseFloat(finalPips)
+        });
+      }
       
       setShowCloseModal(false);
       setSelectedSignal(null);
@@ -490,13 +421,13 @@ export default function SignalManagement() {
       
       showAlert('Success', 'Signal closed successfully!');
     } catch (error: any) {
-      showAlert('Error', error.message || 'Failed to close signal');
+      showAlert('Error', error?.response?.data?.detail || error.message || 'Failed to close signal');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ========== DELETE SIGNAL (FIXED - WORKS INDEPENDENTLY) ==========
+  // ========== DELETE SIGNAL ==========
   const handleDeleteSignal = async (signalId: string) => {
     if (!signalId) {
       showAlert('Error', 'Invalid signal ID');
@@ -512,11 +443,8 @@ export default function SignalManagement() {
 
     setIsDeleting(signalId);
     try {
-      const { error } = await supabase
-        .from('signals')
-        .delete()
-        .eq('id', signalId);
-      if (error) throw error;
+      // Use backend API endpoint for delete
+      await api.delete(`/admin/signals/${signalId}`);
       
       // Remove from local state immediately for instant feedback
       setSignals(prev => prev.filter(s => s.signal_id !== signalId));
@@ -527,7 +455,7 @@ export default function SignalManagement() {
       showAlert('Success', 'Signal deleted permanently!');
     } catch (error: any) {
       console.error('Delete error:', error);
-      const errorMsg = error.message || 'Failed to delete signal';
+      const errorMsg = error?.response?.data?.detail || error.message || 'Failed to delete signal';
       showAlert('Error', errorMsg);
       // Refresh to sync state
       await fetchSignals();
@@ -600,9 +528,9 @@ export default function SignalManagement() {
                 <View>
                   <Text style={styles.signalPair}>{signal.pair}</Text>
                   <View style={styles.badges}>
-                    <View style={[styles.badge, { backgroundColor: `${getStatusColor(signal.status)}20` }]}>
-                      <Text style={[styles.badgeText, { color: getStatusColor(signal.status) }]}>
-                        {(signal.status || 'unknown').toUpperCase()}
+                    <View style={[styles.badge, { backgroundColor: `${getStatusColor(signal.state)}20` }]}>
+                      <Text style={[styles.badgeText, { color: getStatusColor(signal.state) }]}>
+                        {(signal.state || 'unknown').toUpperCase()}
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: `${getVisibilityColor(signal.visibility)}20` }]}>
@@ -668,7 +596,7 @@ export default function SignalManagement() {
               )}
 
               {/* Result for closed signals */}
-              {signal.status === 'closed' && getPipsValue(signal) !== null && (
+              {signal.state === 'closed' && getPipsValue(signal) !== null && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Final Result:</Text>
                   <Text style={[styles.resultValue, { color: (getPipsValue(signal) || 0) >= 0 ? '#00D4AA' : '#FF4757' }]}>
@@ -678,7 +606,7 @@ export default function SignalManagement() {
               )}
 
               {/* Quick TP Actions for Active Signals */}
-              {signal.status === 'active' && (signal.tp1 || signal.tp2 || signal.tp3) && (
+              {signal.state === 'active' && (signal.tp1 || signal.tp2 || signal.tp3) && (
                 <View style={styles.tpActions}>
                   <Text style={styles.tpActionsLabel}>Mark TP Hit:</Text>
                   <View style={styles.tpButtonsRow}>
@@ -704,7 +632,7 @@ export default function SignalManagement() {
               {/* ACTION BUTTONS - ALL VISIBLE */}
               <View style={styles.actionButtons}>
                 {/* Activate - only for pending */}
-                {signal.status === 'pending' && (
+                {signal.state === 'pending' && (
                   <TouchableOpacity style={styles.activateButton} onPress={() => handleActivateSignal(signal.signal_id)}>
                     <Ionicons name="play" size={16} color="#00D4AA" />
                     <Text style={styles.activateButtonText}>Activate</Text>
@@ -718,7 +646,7 @@ export default function SignalManagement() {
                 </TouchableOpacity>
                 
                 {/* Close - only for non-closed */}
-                {signal.status !== 'closed' && (
+                {signal.state !== 'closed' && (
                   <TouchableOpacity style={styles.closeButton} onPress={() => openCloseModal(signal)}>
                     <Ionicons name="close-circle-outline" size={16} color="#FFD700" />
                     <Text style={styles.closeButtonText}>Close</Text>

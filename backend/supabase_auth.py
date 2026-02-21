@@ -177,6 +177,20 @@ async def delete_profile(user_id: str) -> bool:
         return r.status_code in (200, 204)
 
 
+async def fetch_active_subscriptions(user_id: str) -> list:
+    """Fetch active subscriptions joined with plans for a user."""
+    url = (
+        f'{SUPABASE_URL}/rest/v1/subscriptions'
+        f'?user_id=eq.{user_id}&status=eq.active'
+        f'&select=id,status,current_period_end,plans(tier)'
+    )
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers=_service_headers)
+        if r.status_code == 200:
+            return r.json()
+    return []
+
+
 # ── Auth Admin API helpers ──────────────────────────────────────────
 
 async def list_auth_users() -> list:

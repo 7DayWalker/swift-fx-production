@@ -96,7 +96,7 @@ async function tryLoadIAPModule(): Promise<boolean> {
  */
 export async function fetchProductIds(): Promise<IAPProducts> {
   try {
-    const response = await api.get('/api/iap/products');
+    const response = await api.get('/iap/products');
     productIds = response.data;
     return response.data;
   } catch (error) {
@@ -213,8 +213,8 @@ export async function purchaseSubscription(plan: SubscriptionPlan): Promise<Purc
 
     // Send receipt to backend for validation
     const verifyEndpoint = Platform.OS === 'ios' 
-      ? '/api/iap/apple/verify' 
-      : '/api/iap/google/verify';
+      ? '/iap/apple/verify' 
+      : '/iap/google/verify';
     
     const receipt = Platform.OS === 'ios' 
       ? purchase.transactionReceipt 
@@ -314,8 +314,8 @@ export async function restorePurchases(): Promise<PurchaseResult> {
     if (latestPurchase) {
       // Send to backend for validation
       const verifyEndpoint = Platform.OS === 'ios' 
-        ? '/api/iap/apple/verify' 
-        : '/api/iap/google/verify';
+        ? '/iap/apple/verify' 
+        : '/iap/google/verify';
       
       const receipt = Platform.OS === 'ios' 
         ? latestPurchase.transactionReceipt 
@@ -358,7 +358,7 @@ export async function restorePurchases(): Promise<PurchaseResult> {
  */
 export async function getIAPStatus(): Promise<any> {
   try {
-    const response = await api.get('/api/iap/status');
+    const response = await api.get('/iap/status');
     return response.data;
   } catch (error) {
     console.error('[IAP-Native] Error fetching status:', error);

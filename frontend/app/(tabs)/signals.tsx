@@ -30,7 +30,8 @@ interface Signal {
   tp_hit?: number;
   take_profit?: number; // Legacy support
   risk_reward?: number;
-  status: 'pending' | 'active' | 'closed';
+  state: string;
+  is_active?: boolean;
   visibility: 'free' | 'premium' | 'vip';
   created_at: string;
   locked?: boolean;
@@ -64,15 +65,28 @@ export default function SignalsScreen() {
 
   const filteredSignals = signals.filter(signal => {
     if (filter === 'all') return true;
-    return signal.status === filter;
+    if (filter === 'active') return signal.state !== 'closed' && signal.state !== 'pending';
+    return signal.state === filter;
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (state: string) => {
+    switch (state) {
       case 'pending': return '#FFD700';
-      case 'active': return '#00D4AA';
+      case 'active': case 'tp1': case 'tp2': case 'tp3': return '#00D4AA';
       case 'closed': return '#8A8D98';
       default: return '#8A8D98';
+    }
+  };
+
+  const getStateLabel = (state: string) => {
+    switch (state) {
+      case 'pending': return 'PENDING';
+      case 'active': return 'ACTIVE';
+      case 'tp1': return 'TP1 HIT';
+      case 'tp2': return 'TP2 HIT';
+      case 'tp3': return 'TP3 HIT';
+      case 'closed': return 'CLOSED';
+      default: return state?.toUpperCase() || 'UNKNOWN';
     }
   };
 
@@ -92,10 +106,10 @@ export default function SignalsScreen() {
         <View style={styles.signalHeader}>
           <View style={styles.signalLeft}>
             <Text style={[styles.signalPair, { color: theme.text }]}>{item.pair}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}20` }]}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {item.status?.toUpperCase()}
+            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.state)}20` }]}>
+              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.state) }]} />
+              <Text style={[styles.statusText, { color: getStatusColor(item.state) }]}>
+                {getStateLabel(item.state)}
               </Text>
             </View>
           </View>
@@ -175,7 +189,7 @@ export default function SignalsScreen() {
               </View>
             )}
             
-            {item.status === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
+            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
               <View style={[styles.resultContainer, { borderTopColor: theme.border }]}>
                 <Text style={[styles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
                 <Text style={[
