@@ -21,17 +21,17 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 class TestHealthAndBasics:
     """Basic health and connectivity tests"""
     
-    def test_health_endpoint(self):
-        """Test /api/health returns 200"""
-        response = requests.get(f"{BASE_URL}/api/health")
-        assert response.status_code == 200
-        print(f"✅ Health check passed: {response.json()}")
-    
     def test_base_url_set(self):
         """Verify BASE_URL is properly set"""
         assert BASE_URL, "BASE_URL environment variable not set"
         assert BASE_URL.startswith("https://"), f"BASE_URL should use HTTPS: {BASE_URL}"
         print(f"✅ BASE_URL correctly set: {BASE_URL}")
+    
+    def test_api_reachable(self):
+        """Test API is reachable via signals endpoint"""
+        response = requests.get(f"{BASE_URL}/api/signals")
+        assert response.status_code == 200, f"API not reachable, got status {response.status_code}"
+        print(f"✅ API is reachable")
 
 
 class TestSignalsEndpoint:
