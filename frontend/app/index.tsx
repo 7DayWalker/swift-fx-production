@@ -12,27 +12,15 @@ export default function SplashScreen() {
 
   useEffect(() => {
     console.log('[Splash] useEffect fired — isLoading:', isLoading, 'user:', !!user, 'isAdmin:', isAdmin);
-    if (!isLoading) {
-      console.log('[Splash] isLoading is FALSE — will navigate in 1.5s');
-      const timer = setTimeout(() => {
-        const target = user
-          ? (isAdmin ? '/(admin)/dashboard' : '/(tabs)/dashboard')
-          : '/(auth)/login';
-        console.log('[Splash] Navigating to:', target);
-        if (user) {
-          if (isAdmin) {
-            router.replace('/(admin)/dashboard');
-          } else {
-            router.replace('/(tabs)/dashboard');
-          }
-        } else {
-          router.replace('/(auth)/login');
-        }
-      }, 1500);
-      return () => clearTimeout(timer);
-    } else {
-      console.log('[Splash] isLoading is TRUE — stuck on spinner');
-    }
+
+    // === DIAGNOSTIC: BYPASS auth guard — navigate immediately ===
+    console.log('[Splash] AUTH BYPASS ACTIVE — skipping isLoading gate, navigating to login in 500ms');
+    const timer = setTimeout(() => {
+      console.log('[Splash] AUTH BYPASS — navigating to /(auth)/login now');
+      router.replace('/(auth)/login');
+    }, 500);
+    return () => clearTimeout(timer);
+    // === END DIAGNOSTIC ===
   }, [isLoading, user, isAdmin]);
 
   return (
