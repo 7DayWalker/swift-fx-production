@@ -1,73 +1,72 @@
-# SwiftFX Trading Signals Platform - PRD
+# Swift FX Signals - Product Requirements Document
 
 ## Original Problem Statement
-Full-stack trading signals platform (React Native/Expo + FastAPI + Supabase). Key features include real-time signals, AI chart analyzer, subscription management, and community features.
+Professional trading signals mobile app (Expo SDK 54 + React Native) with FastAPI backend, MongoDB data store, and Supabase authentication. The project underwent a structured audit and hardening process to stabilize architecture.
 
 ## Architecture
-- **Frontend**: React Native (Expo), Expo Router, React Context state management
-- **Backend**: FastAPI, async/await, Supabase REST API
-- **Auth**: Supabase JWT
-- **Database**: Supabase (PostgreSQL) for user/subscription data, MongoDB for signals/AI/community
-
-## Signal Data Flow (Unified — Feb 17, 2026)
-- Frontend `SignalContext.refreshSignals()` → `api.get('/signals')` → FastAPI backend
-- Backend resolves tier via `get_effective_subscription()` (queries subscriptions + plans)
-- Backend strips sensitive fields (entry, sl, tp, analysis) for unauthorized tiers
-- Supabase direct query for signals **removed** from frontend
-- Supabase `signals` table still exists but is no longer the data source for the mobile app
-
-## Tier Resolution Logic (Single Source of Truth)
-Backend `get_effective_subscription()`:
-- super_admin/admin → vip
-- Active VIP subscription (subscriptions + plans tables) → vip
-- Active Premium subscription → premium
-- else → free
+- **Frontend**: Expo SDK 54, Expo Router v6, React 19.1.0, Reanimated v4.1.1
+- **Backend**: FastAPI + MongoDB (signals, posts, calendar) + Supabase (auth, profiles, subscriptions)
+- **Auth**: Supabase auth with RBAC (Super Admin, Admin, User roles)
+- **Payments**: In-App Purchase only (Stripe removed). iOS + Android IAP configured.
+- **Config**: Supabase credentials in frontend/.env as EXPO_PUBLIC_* variables
 
 ## What's Been Implemented
+- status -> state refactor (full stack)
+- Admin panel migrated to backend API
+- Stripe completely removed
+- IAP validation hardened
+- CORS secured
+- Secrets cleaned
+- API base URL unified
+- Canonical Expo environment adopted (SDK 54, Router v6, Reanimated v4)
+- Supabase credentials configured in app.json extra and frontend/.env
+- Configuration drift eliminated
 
-### Session 4 — Feb 18, 2026
-- [x] **Status→State Refactor COMPLETE**: Backend API no longer returns `status` field
-- [x] Backend `GET /api/signals` and `GET /api/signals/{id}` return only `state` field (pending|active|tp1|tp2|tp3|closed)
-- [x] Backend correctly removes `status` via `signal.pop("status", None)` 
-- [x] Frontend signals.tsx fixed: Line 191 uses `state === 'closed'` instead of `status`
-- [x] All filter tabs use `state` field for filtering
-- [x] Testing agent verified: 11/11 backend tests passed, 8/8 UI tests passed
-- [x] VIP tier access verified: Can see all signal fields (entry, stop_loss, tp1, tp2, tp3)
+## P0 Verification (Completed Feb 22, 2026)
+- [x] Dependencies installed (yarn install successful)
+- [x] Supabase credentials verified (real values in app.json + .env)
+- [x] Metro bundler compilation successful (all routes compile)
+- [x] Supabase initializes without runtime error (INITIAL_SESSION fires)
+- [x] Backend APIs confirmed working (signals, iap/products, community/posts, calendar/events, dashboard, subscription/plans)
+- [x] Frontend renders correctly (login page with full auth UI)
+- [x] Testing: 23/23 backend tests passed, 7/7 frontend tests passed
 
-### Session 3 — Feb 17, 2026
-- [x] Backend signal endpoints (`GET /api/signals`, `GET /api/signals/{id}`) fixed to use `get_effective_subscription()` instead of stale `current_user.role`
-- [x] Frontend `SignalContext.refreshSignals()` migrated from Supabase direct query to FastAPI backend
-- [x] Added `mapBackendSignal` mapper for backend field names
-- [x] `userTier` change effect now re-fetches from backend instead of re-mapping locally
-- [x] Full system audit completed (RLS, endpoints, gating, DB integrity)
-- [x] Supabase RLS audit completed — confirmed authenticated users could read all signal fields
+## Endpoints NOT Implemented
+- /api/news (404)
+- /api/academy/categories (404)
+- /api/health (404)
 
-### Session 2 — Feb 16, 2026
-- [x] Backend subscription tier resolution (server.py, supabase_auth.py)
-- [x] Frontend tier resolution consistency fix (ai.tsx uses SubscriptionContext)
-- [x] AI Analyzer authentication fix (auth header)
-- [x] PressableScale micro-interactions (partial)
+## Prioritized Backlog
 
-## Supabase RLS Status (signals table)
-- RLS enabled: Yes
-- Anonymous: SELECT free signals only
-- Authenticated: SELECT all rows, all fields (no tier restriction)
-- INSERT/UPDATE/DELETE: Blocked for all non-service roles
-- **Note**: The Supabase signals table is no longer queried by the mobile app
+### P1 - Full IAP End-to-End Test
+- Validate Google & Apple IAP flows
+- Server-side receipt validation
+- Subscription tier resolution
+- Restore purchases flow
 
-## Known Issues
-- Push notification handlers (server.py lines 1459, 1541) still use `UserRole(profile.role)` instead of `get_effective_subscription()`
-- `canAccessSignal()` in frontend still exists but is now only used by `fetchUserTier` (not signals gating)
-- Debug console.logs in ai.tsx to be removed after user confirms AI tier fix
-- **Admin panel CRUD uses Supabase directly** - Edit, Activate, Mark TP, Close, Delete operations need to migrate to backend API
+### P2 - Production Infrastructure
+- Persistent backend domain
+- FCM/APNs production push notification credentials
+- OAuth production redirect URLs
+- News endpoint implementation
+- Academy categories endpoint implementation
 
-## Backlog
-- **P1: Migrate Admin Panel CRUD to Backend API** - Edit/Activate/Close/Delete operations currently use Supabase, should use backend endpoints
-- P2: Fix push notification tier resolution
-- P2: PressableScale fix for flexDirection: 'row' layouts
-- P2: Remove debug console.logs
-- P3: CSV export for admin
-- P3: IAP webhook implementation (Apple/Google TODOs)
-- P3: Stripe integration
-- P4: CORS lockdown for production
-- P4: Webhook signature verification
+### P3 - Investment Tier Features
+- Fund management features
+- Investor dashboard enhancements
+- Fund performance tracking
+
+### P4 - Admin Operational Enhancements
+- Admin management improvements
+- Support ticket system
+- Referral tracking enhancements
+
+## Key Technical Decisions
+- Backend is authoritative for signals (no direct frontend Supabase signal writes)
+- No Stripe (IAP only)
+- No insecure IAP webhooks (v1 production mode)
+- Expo configuration unified (single canonical environment)
+- Super Admin emails: ellapauledache@gmail.com, ellaniswell@gmail.com
+
+## Test Credentials
+- VIP user: paradoxella@gmail.com / Grace1992@
