@@ -87,14 +87,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const bootstrap = async () => {
+      console.log('[Auth] bootstrap START — isLoading: true');
       try {
+        console.log('[Auth] calling supabase.auth.getSession()...');
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('[Auth] getSession returned — session:', !!session);
         if (session && mounted) {
+          console.log('[Auth] fetching profile for user:', session.user.id);
           await fetchProfile(session.user, session.access_token);
         }
       } catch (err) {
         console.error('[Auth] bootstrap error:', err);
       } finally {
+        console.log('[Auth] bootstrap FINALLY — setting isLoading=false, mounted:', mounted);
         if (mounted) setIsLoading(false);
       }
     };
