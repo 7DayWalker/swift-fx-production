@@ -8,9 +8,17 @@ export default function SplashScreen() {
   const { user, isLoading, isAdmin } = useAuth();
   const router = useRouter();
 
+  console.log('[Splash] RENDER — isLoading:', isLoading, 'user:', !!user, 'isAdmin:', isAdmin);
+
   useEffect(() => {
+    console.log('[Splash] useEffect fired — isLoading:', isLoading, 'user:', !!user, 'isAdmin:', isAdmin);
     if (!isLoading) {
+      console.log('[Splash] isLoading is FALSE — will navigate in 1.5s');
       const timer = setTimeout(() => {
+        const target = user
+          ? (isAdmin ? '/(admin)/dashboard' : '/(tabs)/dashboard')
+          : '/(auth)/login';
+        console.log('[Splash] Navigating to:', target);
         if (user) {
           if (isAdmin) {
             router.replace('/(admin)/dashboard');
@@ -22,6 +30,8 @@ export default function SplashScreen() {
         }
       }, 1500);
       return () => clearTimeout(timer);
+    } else {
+      console.log('[Splash] isLoading is TRUE — stuck on spinner');
     }
   }, [isLoading, user, isAdmin]);
 
