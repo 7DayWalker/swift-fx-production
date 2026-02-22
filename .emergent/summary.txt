@@ -1,0 +1,273 @@
+<analysis>
+Original Problem Statement
+
+The project went through a structured audit and hardening process to stabilize architecture and eliminate drift. The key objectives were:
+
+Backend Unification & Refactor
+
+Migrate signal logic from legacy status to a consistent state field.
+
+Ensure backend (FastAPI + MongoDB) is the single source of truth.
+
+Remove direct frontend Supabase usage for signals and move all CRUD through backend APIs.
+
+Security Hardening
+
+Remove Stripe/web payment surface entirely.
+
+Disable insecure IAP webhook endpoints.
+
+Fix critical Google IAP validation vulnerability (mock acceptance issue).
+
+Tighten CORS configuration.
+
+Remove hardcoded secrets.
+
+Standardize backend API access.
+
+Environment Drift Elimination
+
+A working Expo environment existed separately (validated via EAS build).
+
+The Expo configuration in frontend/ was outdated.
+
+The working Expo environment (SDK 54, Router v6, Reanimated v4) was promoted upward.
+
+frontend/app.json, frontend/eas.json, and frontend/package.json were replaced with the validated canonical configuration.
+
+Supabase initialization was refactored to use app.json → extra instead of process.env.
+
+The goal is now single-source configuration stability.
+
+What Currently Exists
+Backend
+
+FastAPI backend is hardened.
+
+MongoDB is the signal data store.
+
+Admin CRUD routes use backend APIs only.
+
+Stripe removed.
+
+IAP endpoints hardened.
+
+CORS tightened.
+
+Backend considered stable.
+
+Status: 🟢 Healthy
+
+Frontend
+
+Expo SDK 54
+
+Expo Router v6
+
+React 19.1.0
+
+Reanimated v4.1.1
+
+Canonical app.json, eas.json, package.json now exist in frontend/
+
+Supabase client now reads credentials from app.json → extra
+
+google-services.json present in frontend
+
+yarn.lock present for deterministic installs
+
+However:
+
+Dependencies have not yet been freshly installed after config replacement.
+
+Supabase keys in app.json must contain real values (not placeholders).
+
+Full regression testing has not yet been executed under the new environment.
+
+Status: 🟡 Requires dependency install + verification
+
+Not broken — just pending setup.
+
+Last Working Item
+
+The final completed task was:
+
+“Canonical Expo Environment Unification”
+
+This included:
+
+Replacing:
+
+frontend/app.json
+
+frontend/eas.json
+
+frontend/package.json
+
+Updating:
+
+frontend/src/services/supabase.ts to remove process.env usage
+
+Supabase now reads from expo-constants
+
+Status: USER VERIFICATION PENDING
+
+No runtime verification has yet been completed after this change.
+
+Immediate Required Steps (P0)
+Task 1: Install Updated Dependencies
+
+Run:
+
+cd frontend
+yarn install
+
+This synchronizes node_modules with the new package.json.
+
+Status: NOT STARTED
+
+Task 2: Ensure Supabase Credentials Are Real
+
+In:
+
+frontend/app.json
+
+Confirm:
+
+supabaseUrl: https://YOUR_PROJECT_ID.supabase.co,
+supabaseAnonKey: YOUR_PUBLIC_ANON_KEY
+
+Are replaced with real project values.
+
+If placeholders exist, replace them with actual Supabase URL + anon key.
+
+Status: Verify
+
+Task 3: Full Frontend Regression Test
+
+After installing dependencies and confirming Supabase credentials:
+
+Start development server
+
+Or build preview APK
+
+Test:
+
+Splash screen load
+
+Auth
+
+Signals fetch
+
+AI analyzer
+
+Push registration
+
+Admin CRUD
+
+Status: NOT STARTED
+
+All Pending Issues
+Issue 1 – Supabase Credential Verification (P0)
+
+If placeholders exist in app.json, Supabase will fail initialization.
+
+Fix:
+Insert real project credentials.
+
+Test:
+Launch app and confirm Supabase initializes without crash.
+
+Upcoming Tasks
+P1 – Full IAP End-to-End Test
+
+Validate Google & Apple flows
+
+Ensure server validation is correct
+
+Confirm subscription tier resolution
+
+P2 – Production Infrastructure
+
+Persistent backend domain
+
+Configure FCM/APNs production credentials
+
+Configure OAuth production redirect URLs
+
+P3 – Investment Tier Features
+P4 – Admin Operational Enhancements
+Completed Work Summary
+
+status → state refactor (full stack)
+
+Admin panel migrated to backend API
+
+Stripe completely removed
+
+IAP validation hardened
+
+CORS secured
+
+Secrets cleaned
+
+API base URL unified
+
+Canonical Expo environment adopted
+
+Supabase moved to app.json → extra
+
+Configuration drift eliminated
+
+Code Architecture Snapshot
+/app
+├── backend/
+│   ├── server.py
+│   └── .env.example
+└── frontend/
+    ├── app.json
+    ├── eas.json
+    ├── package.json
+    ├── yarn.lock
+    ├── google-services.json
+    ├── src/
+    │   ├── services/
+    │   │   ├── api.ts
+    │   │   └── supabase.ts
+    │   └── app/
+    └── .env.example
+Key Technical Decisions
+
+Backend is authoritative for signals.
+
+No direct frontend Supabase signal writes.
+
+No Stripe.
+
+No insecure IAP webhooks.
+
+No process.env in client for Supabase.
+
+Expo configuration unified.
+
+One canonical environment only.
+
+Critical Info for Next Agent
+
+Dependencies must be installed (yarn install).
+
+Supabase credentials must be real values in app.json.
+
+Full regression testing is required after environment change.
+
+Do not reintroduce environment drift.
+
+Do not reintroduce process.env for Supabase in frontend.
+
+Project Health
+
+Backend: 🟢 Stable
+Frontend: 🟡 Setup + test required
+Architecture: 🟢 Clean and unified
+Security posture: 🟢 Hardened
+</analysis>

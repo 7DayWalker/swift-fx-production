@@ -6955,7 +6955,7 @@ app.include_router(api_router)
 # Development: Add localhost origins as needed
 CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else [
     # Production frontend URLs
-    "https://data-flow-fix-3.preview.emergentagent.com",
+    "https://secure-refactor-2.preview.emergentagent.com",
     # Expo web development
     "http://localhost:3000",
     "http://localhost:8081",
