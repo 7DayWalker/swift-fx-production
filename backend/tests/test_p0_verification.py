@@ -243,12 +243,16 @@ class TestSubscriptionPlansEndpoint:
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         print(f"✅ GET /api/subscription/plans returned 200")
     
-    def test_subscription_plans_returns_list(self):
-        """Test /api/subscription/plans returns list"""
+    def test_subscription_plans_returns_plans(self):
+        """Test /api/subscription/plans returns plans in dict structure"""
         response = requests.get(f"{BASE_URL}/api/subscription/plans")
         data = response.json()
-        assert isinstance(data, list), f"Expected list, got {type(data)}"
-        print(f"✅ Subscription plans returned {len(data)} plans")
+        
+        # Response is a dict with 'plans' key
+        assert isinstance(data, dict), f"Expected dict, got {type(data)}"
+        assert "plans" in data, "Missing 'plans' key in response"
+        assert isinstance(data["plans"], list), f"Expected plans to be list, got {type(data['plans'])}"
+        print(f"✅ Subscription plans returned {len(data['plans'])} plans")
 
 
 class TestEndpointNotFound:
