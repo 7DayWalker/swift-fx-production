@@ -221,11 +221,15 @@ class TestDashboardEndpoint:
         response = requests.get(f"{BASE_URL}/api/dashboard")
         data = response.json()
         
-        # Basic fields expected in dashboard response
-        expected_fields = ["active_signals_count", "total_pips_today"]
+        # Actual fields in dashboard response
+        expected_fields = ["performance", "recent_signals", "watchlist"]
         
         for field in expected_fields:
             assert field in data, f"Missing expected field: {field}"
+        
+        # Verify performance subfields
+        assert "total_pips" in data["performance"], "Missing performance.total_pips"
+        assert "total_signals" in data["performance"], "Missing performance.total_signals"
         
         print(f"✅ Dashboard has expected fields: {list(data.keys())}")
 
