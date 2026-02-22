@@ -1,19 +1,13 @@
 {
   "expo": {
     "name": "Swift FX Signals",
-    "slug": "swiftfx",
+    "slug": "swiftfx-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "owner": "swiftfx",
-    "extra": {
-      "eas": {
-        "projectId": "00000000-0000-0000-0000-000000000000"
-      }
-    },
+    "owner": "7daywalker",
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
@@ -30,13 +24,16 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["swiftfx"]
+            "CFBundleURLSchemes": [
+              "swiftfx"
+            ]
           }
         ]
       }
     },
     "android": {
       "package": "com.swiftfx.signals",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
@@ -57,7 +54,10 @@
               "host": "*"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -76,10 +76,19 @@
           "resizeMode": "contain",
           "backgroundColor": "#0A0E17"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "supabaseUrl": "https://hrzghlqcfccnmgcipxxo.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTc5NzIsImV4cCI6MjA4NTg3Mzk3Mn0.yImldZ1cCW4yEat4b6X1lAFufVs6ym_Hudm4lsRXwkQ",
+      "eas": {
+        "projectId": "056e4b17-a0b2-46ff-a7ed-f3ad1efce01b"
+      }
     }
   }
 }
