@@ -35,15 +35,6 @@ interface Plan {
   };
 }
 
-interface PaymentSession {
-  session_id: string;
-  plan: string;
-  billing_cycle: string;
-  amount: number;
-  status: string;
-  created_at: string;
-}
-
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
