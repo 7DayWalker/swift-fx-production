@@ -2289,37 +2289,88 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
 # ===================== USER SUBSCRIPTION INFO ENDPOINT =====================
 @api_router.get("/subscription/status")
 async def get_subscription_status(current_user: User = Depends(require_auth)):
-    """Get current user's subscription status - used for real-time UI sync"""
-    user_doc = await fetch_profile(current_user.user_id)
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    effective_subscription = await get_effective_subscription(user_doc)
-    is_active = check_subscription_active(user_doc)
-    
-    # Get AI usage info
-    ai_weekly_used = user_doc.get("ai_weekly_used", 0) or user_doc.get("ai_usage_count", 0)
-    ai_limit = get_ai_weekly_limit(effective_subscription)
-    
+    """
+    Backend-authoritative subscription status.
+    Entitlement is derived STRICTLY from verified IAP transactions in MongoDB.
+    No Supabase profile.role fallback for subscription tier.
+    Admin flag is separate from subscription entitlement.
+    """
+    user_id = current_user.user_id
+    now = datetime.now(timezone.utc)
+
+    # ── 1. Resolve admin status from Supabase profile (admin panel access only) ──
+    profile = await fetch_profile(user_id)
+    profile_role = (profile or {}).get("role", "user")
+    is_admin = profile_role in ("admin", "super_admin")
+
+    # ── 2. Resolve subscription tier from verified IAP transactions (MongoDB) ──
+    # Only transactions created by /iap/apple/verify or /iap/google/verify are stored here.
+    tier_priority = {"vip": 2, "premium": 1}
+    best_tier = "free"
+    best_priority = 0
+    subscription_expiry = None
+    subscription_active = False
+    subscription_platform = None
+    subscription_product_id = None
+    auto_renew = False
+
+    active_txns = await db.iap_transactions.find({
+        "user_id": user_id,
+        "status": "active",
+    }).sort("expiry_date", -1).to_list(20)
+
+    for txn in active_txns:
+        expiry = txn.get("expiry_date")
+        if expiry:
+            if isinstance(expiry, str):
+                try:
+                    expiry_dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+            else:
+                expiry_dt = expiry
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            if expiry_dt <= now:
+                continue  # expired
+        # else: NULL expiry = lifetime (never expires)
+
+        txn_plan = txn.get("plan", "").lower()
+        priority = tier_priority.get(txn_plan, 0)
+        if priority > best_priority:
+            best_priority = priority
+            best_tier = txn_plan
+            subscription_expiry = txn.get("expiry_date")
+            subscription_active = True
+            subscription_platform = txn.get("platform")
+            subscription_product_id = txn.get("product_id")
+            auto_renew = txn.get("auto_renew", False)
+
+    # ── 3. Build feature flags from verified tier ──
+    effective = best_tier
+    ai_weekly_used = (profile or {}).get("ai_weekly_used", 0) or (profile or {}).get("ai_usage_count", 0)
+    ai_limit = get_ai_weekly_limit(effective)
+
     return {
-        "user_id": user_doc.get("id"),
-        "subscription": effective_subscription,
-        "subscription_raw": user_doc.get("role", "free"),
-        "subscription_expiry": None,
-        "subscription_active": is_active,
-        "role": user_doc.get("role", "free"),
-        "is_admin": user_doc.get("role") == "admin",
+        "user_id": user_id,
+        "entitlement": effective,              # FREE / PREMIUM / VIP
+        "subscription_active": subscription_active,
+        "subscription_expiry": subscription_expiry,
+        "subscription_platform": subscription_platform,
+        "subscription_product_id": subscription_product_id,
+        "auto_renew": auto_renew,
+        "is_admin": is_admin,
         "features": {
-            "signals_access": effective_subscription,  # "free", "premium", or "vip"
-            "ai_analyzer": True,  # All users have access, just different limits
+            "signals_access": effective,
+            "ai_analyzer": True,
             "ai_limit": ai_limit if ai_limit < 100000 else "unlimited",
             "ai_used": ai_weekly_used,
             "ai_remaining": max(0, ai_limit - ai_weekly_used) if ai_limit < 100000 else "unlimited",
             "ai_limit_reached": ai_weekly_used >= ai_limit if ai_limit < 100000 else False,
-            "fund_management": effective_subscription == "vip",
-            "academy": effective_subscription == "vip",
-            "image_uploads": effective_subscription != "free"
-        }
+            "fund_management": effective == "vip" or is_admin,
+            "academy": effective == "vip" or is_admin,
+            "image_uploads": effective != "free" or is_admin,
+        },
     }
 
 # ===================== SETUP ADMIN =====================
