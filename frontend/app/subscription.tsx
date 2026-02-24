@@ -397,12 +397,12 @@ export default function SubscriptionScreen() {
                     style={[
                       styles.upgradeButton,
                       plan.id === 'vip' && styles.upgradeButtonVip,
-                      isCreatingSession && styles.upgradeButtonDisabled
+                      isPurchasing && styles.upgradeButtonDisabled
                     ]}
                     onPress={() => handleUpgrade(plan.id)}
-                    disabled={isCreatingSession}
+                    disabled={isPurchasing}
                   >
-                    {isCreatingSession ? (
+                    {isPurchasing ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <>
