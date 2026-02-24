@@ -57,25 +57,40 @@ GOOGLE_WEBHOOK_TOKEN = os.environ.get('GOOGLE_WEBHOOK_TOKEN', '')
 IAP_WEBHOOKS_ENABLED = os.environ.get('IAP_WEBHOOKS_ENABLED', 'false').lower() == 'true'
 # ==============================================================
 
-# IAP Product IDs (configurable)
-IAP_PRODUCTS = {
-    'ios': {
-        'premium_monthly': os.environ.get('IOS_PREMIUM_MONTHLY_ID', 'swiftfx_premium_monthly'),
-        'vip_monthly': os.environ.get('IOS_VIP_MONTHLY_ID', 'swiftfx_vip_monthly'),
+# ===================== OFFICIAL IAP PRODUCT IDS =====================
+# These are permanent and configured in both App Store Connect and Google Play Console.
+# Any premium.* SKU → PREMIUM tier.  Any vip.* SKU → VIP tier.
+# Billing cycle does NOT affect entitlement level.
+IAP_PRODUCT_IDS = [
+    'com.swiftfx.signals.premium.weekly',
+    'com.swiftfx.signals.premium.monthly',
+    'com.swiftfx.signals.premium.yearly',
+    'com.swiftfx.signals.vip.weekly',
+    'com.swiftfx.signals.vip.monthly',
+    'com.swiftfx.signals.vip.yearly',
+]
+
+IAP_PRODUCTS_BY_TIER = {
+    'premium': {
+        'weekly': 'com.swiftfx.signals.premium.weekly',
+        'monthly': 'com.swiftfx.signals.premium.monthly',
+        'yearly': 'com.swiftfx.signals.premium.yearly',
     },
-    'android': {
-        'premium_monthly': os.environ.get('ANDROID_PREMIUM_MONTHLY_ID', 'swiftfx_premium_monthly'),
-        'vip_monthly': os.environ.get('ANDROID_VIP_MONTHLY_ID', 'swiftfx_vip_monthly'),
-    }
+    'vip': {
+        'weekly': 'com.swiftfx.signals.vip.weekly',
+        'monthly': 'com.swiftfx.signals.vip.monthly',
+        'yearly': 'com.swiftfx.signals.vip.yearly',
+    },
 }
 
-# Map product IDs to subscription plans
+
 def get_plan_from_product_id(product_id: str) -> Optional[str]:
-    """Map IAP product ID to subscription plan"""
-    product_id_lower = product_id.lower()
-    if 'vip' in product_id_lower:
+    """Map IAP product ID to subscription plan (PREMIUM or VIP).
+    Works for both old-style and new official product IDs."""
+    pid = product_id.lower()
+    if '.vip.' in pid or 'vip' in pid:
         return 'vip'
-    elif 'premium' in product_id_lower:
+    if '.premium.' in pid or 'premium' in pid:
         return 'premium'
     return None
 
