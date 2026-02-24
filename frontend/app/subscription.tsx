@@ -110,7 +110,7 @@ export default function SubscriptionScreen() {
 
   // Handle upgrade with native IAP (iOS/Android) or web checkout
   const handleUpgrade = async (planId: string) => {
-    if (isCreatingSession || isPurchasing) return;
+    if (isPurchasing) return;
     
     // Check if user already has this or higher plan
     const planHierarchy: Record<string, number> = { free: 0, premium: 1, vip: 2 };
@@ -127,19 +127,21 @@ export default function SubscriptionScreen() {
       setIsPurchasing(true);
       try {
         const plan = planId as 'premium' | 'vip';
-        const result = await IAPService.purchaseSubscription(plan);
+        const result = await IAPService.purchaseSubscription(plan, selectedCycle);
         
         if (result.success) {
+          // Wait for backend verification via purchaseUpdatedListener,
+          // then refresh status from the authoritative backend.
+          setTimeout(async () => {
+            await refreshStatus();
+          }, 2000);
           Alert.alert(
-            'Subscription Activated! 🎉',
-            result.message,
-            [{ text: 'OK', onPress: () => {
-              refreshStatus();
-              router.back();
-            }}]
+            'Purchase Initiated',
+            'Verifying your subscription with the server...',
+            [{ text: 'OK', onPress: () => refreshStatus() }]
           );
         } else {
-          if (result.message !== 'Purchase cancelled') {
+          if (result.message !== 'Purchase cancelled.' && result.message !== 'Purchase cancelled') {
             Alert.alert('Purchase Failed', result.message);
           }
         }
@@ -150,12 +152,11 @@ export default function SubscriptionScreen() {
         setIsPurchasing(false);
       }
     } else {
-      // Web checkout – payment integration coming soon
+      // Web — no IAP available
       Alert.alert(
         'Contact Support',
-        'To upgrade your plan, please contact support@swiftfx.app or use the mobile app for in-app purchase.',
+        'To upgrade your plan, please use the mobile app for in-app purchase, or contact support@swiftfx.app.',
       );
-      setIsCreatingSession(false);
     }
   };
 
