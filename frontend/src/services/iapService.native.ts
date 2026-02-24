@@ -168,14 +168,14 @@ export async function purchaseSubscription(
     if (Platform.OS === 'ios') {
       await RNIap.requestSubscription({ sku });
     } else {
-      // Android: find the product and get the first offer token.
+      // Android: find the product and select the best offer token.
       const product = storeProducts.find((p: any) => p.productId === sku);
       if (!product) {
         return { success: false, message: `Product ${sku} not found in store.` };
       }
-      const offerToken = product.subscriptionOfferDetails?.[0]?.offerToken;
+      const offerToken = selectAndroidOfferToken(product);
       if (!offerToken) {
-        return { success: false, message: 'No subscription offer available.' };
+        return { success: false, message: 'No subscription offer available for this product.' };
       }
       await RNIap.requestSubscription({
         sku,
