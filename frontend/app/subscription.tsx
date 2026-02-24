@@ -76,7 +76,8 @@ export default function SubscriptionScreen() {
   const fetchData = useCallback(async () => {
     try {
       const response = await api.get('/subscription/plans');
-      const backendPlans = response.data;
+      const data = response.data;
+      const backendPlans = data.plans || data;
 
       if (Array.isArray(backendPlans) && backendPlans.length > 0) {
         const mapped: Plan[] = backendPlans
