@@ -316,6 +316,45 @@ export async function fetchProductIds(): Promise<any> {
 // ── Internal helpers ──
 
 /**
+ * Extract tier from a product ID string.
+ * "com.swiftfx.signals.vip.monthly" → "vip"
+ * "com.swiftfx.signals.premium.weekly" → "premium"
+ */
+function getTierFromProductId(productId: string | undefined): string {
+  if (!productId) return '';
+  const pid = productId.toLowerCase();
+  if (pid.includes('.vip.') || pid.includes('vip')) return 'vip';
+  if (pid.includes('.premium.') || pid.includes('premium')) return 'premium';
+  return '';
+}
+
+/**
+ * Select the best offer token from Android subscriptionOfferDetails.
+ * Prefers the base plan (no freeTrialPeriod / introductoryPrice) if multiple offers exist.
+ * Falls back to the first available offer.
+ */
+function selectAndroidOfferToken(product: any): string | null {
+  const offers = product?.subscriptionOfferDetails;
+  if (!offers || offers.length === 0) return null;
+
+  // If only one offer, use it.
+  if (offers.length === 1) return offers[0].offerToken || null;
+
+  // Prefer the base plan offer (no free trial, no introductory pricing).
+  const basePlan = offers.find(
+    (o: any) =>
+      !o.pricingPhases?.pricingPhaseList?.some(
+        (p: any) => p.priceAmountMicros === '0' || p.recurrenceMode === 2,
+      ),
+  );
+  if (basePlan?.offerToken) return basePlan.offerToken;
+
+  // Fallback: first offer with a valid token.
+  const withToken = offers.find((o: any) => !!o.offerToken);
+  return withToken?.offerToken || null;
+}
+
+/**
  * Verify a purchase with the backend.
  * Builds the correct payload for iOS (receipt_data) vs Android (purchase_token + product_id).
  */
