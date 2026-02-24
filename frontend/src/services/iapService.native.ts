@@ -231,10 +231,17 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
     console.log('[IAP] Found purchases to restore:', purchases.length);
 
-    // Verify the most recent purchase with the backend.
-    const sorted = [...purchases].sort(
-      (a: any, b: any) => (b.transactionDate || 0) - (a.transactionDate || 0),
-    );
+    // Sort by tier priority (VIP > Premium) FIRST, then by date descending.
+    // This ensures VIP is restored over Premium when both exist.
+    const tierPriority: Record<string, number> = { vip: 2, premium: 1 };
+    const sorted = [...purchases].sort((a: any, b: any) => {
+      const aTier = getTierFromProductId(a.productId);
+      const bTier = getTierFromProductId(b.productId);
+      const aPriority = tierPriority[aTier] || 0;
+      const bPriority = tierPriority[bTier] || 0;
+      if (bPriority !== aPriority) return bPriority - aPriority; // VIP first
+      return (b.transactionDate || 0) - (a.transactionDate || 0); // then most recent
+    });
 
     for (const purchase of sorted) {
       const result = await verifyWithBackend(purchase);
