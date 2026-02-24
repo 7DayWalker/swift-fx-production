@@ -304,32 +304,6 @@ export default function SubscriptionScreen() {
           </View>
         </View>
 
-        {/* Pending Payment Sessions */}
-        {pendingSessions.length > 0 && (
-          <View style={styles.pendingSection}>
-            <Text style={[styles.pendingTitle, { color: theme.text }]}>Pending Payments</Text>
-            {pendingSessions.map((session) => (
-              <TouchableOpacity 
-                key={session.session_id}
-                style={[styles.pendingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={() => router.push(`/pay?session_id=${session.session_id}`)}
-              >
-                <View style={styles.pendingInfo}>
-                  <View style={[styles.pendingBadge, { backgroundColor: getPlanColor(session.plan) }]}>
-                    <Text style={styles.pendingBadgeText}>{session.plan.toUpperCase()}</Text>
-                  </View>
-                  <Text style={[styles.pendingAmount, { color: theme.text }]}>${session.amount}/{session.billing_cycle}</Text>
-                </View>
-                <View style={styles.pendingStatus}>
-                  <View style={[styles.statusDot, { backgroundColor: theme.warning }]} />
-                  <Text style={[styles.statusText, { color: theme.warning }]}>Awaiting Payment</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         {/* Billing Cycle Selector */}
         <View style={styles.cycleSection}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Choose Billing Cycle</Text>
