@@ -6682,18 +6682,13 @@ async def get_iap_status(current_user: User = Depends(require_auth)):
 @api_router.get("/iap/products")
 async def get_iap_products():
     """
-    Get IAP product IDs for the client to use
-    Client uses these to request products from Apple/Google
+    Get official IAP product IDs for the client.
+    Product IDs are identical across iOS and Android.
+    Client uses these to request products from Apple/Google store.
     """
     return {
-        "ios": {
-            "premium_monthly": IAP_PRODUCTS['ios']['premium_monthly'],
-            "vip_monthly": IAP_PRODUCTS['ios']['vip_monthly'],
-        },
-        "android": {
-            "premium_monthly": IAP_PRODUCTS['android']['premium_monthly'],
-            "vip_monthly": IAP_PRODUCTS['android']['vip_monthly'],
-        }
+        "products": IAP_PRODUCT_IDS,
+        "by_tier": IAP_PRODUCTS_BY_TIER,
     }
 
 
