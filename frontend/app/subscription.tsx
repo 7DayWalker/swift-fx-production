@@ -54,8 +54,6 @@ export default function SubscriptionScreen() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
   const [isLoading, setIsLoading] = useState(true);
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [pendingSessions, setPendingSessions] = useState<PaymentSession[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -83,44 +81,26 @@ export default function SubscriptionScreen() {
     };
   }, []);
 
-  // Fetch plans from Supabase
+  // Fetch plans from backend API (single source of truth)
   const fetchData = useCallback(async () => {
     try {
-      const { data: supaPlans, error } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('is_active', true)
-        .order('price_cents', { ascending: true });
+      const response = await api.get('/subscription/plans');
+      const backendPlans = response.data;
 
-      if (error) {
-        console.error('[Sub] Plans fetch error:', error.message);
+      if (Array.isArray(backendPlans) && backendPlans.length > 0) {
+        const mapped: Plan[] = backendPlans
+          .filter((p: any) => p.id !== 'free')
+          .map((p: any) => ({
+            id: p.id || p.tier,
+            name: p.name || (p.tier === 'vip' ? 'VIP' : 'Premium'),
+            description: p.description || '',
+            features: Array.isArray(p.features) ? p.features : [],
+            pricing: p.pricing || { weekly: 0, monthly: 0, yearly: 0 },
+          }));
+        setPlans(mapped);
       }
-
-      if (supaPlans && supaPlans.length > 0) {
-        // Group rows by tier → build the Plan objects
-        const grouped: Record<string, Plan> = {};
-        supaPlans.forEach((row: any) => {
-          const tier = row.tier;
-          if (!grouped[tier]) {
-            grouped[tier] = {
-              id: tier,
-              name: row.name?.replace(/ \(.*\)/, '') || tier,
-              description: '',
-              features: Array.isArray(row.features) ? row.features : [],
-              pricing: { weekly: 0, monthly: 0, yearly: 0 },
-            };
-          }
-          const cycle = row.billing_cycle === 'quarterly' ? 'monthly' : row.billing_cycle;
-          if (cycle === 'monthly' || cycle === 'yearly' || cycle === 'weekly') {
-            grouped[tier].pricing[cycle] = (row.price_cents || 0) / 100;
-          }
-        });
-        setPlans(Object.values(grouped).filter(p => p.id !== 'free'));
-      }
-      // Payment sessions are no longer fetched from old backend
-      setPendingSessions([]);
     } catch (error) {
-      console.error('Failed to fetch subscription data:', error);
+      console.error('[Subscription] Failed to fetch plans:', error);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
