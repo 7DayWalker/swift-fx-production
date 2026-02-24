@@ -569,60 +569,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Pending Sessions
-  pendingSection: {
+  // Legal Compliance
+  legalSection: {
     marginBottom: 24,
+    paddingHorizontal: 8,
   },
-  pendingTitle: {
-    color: '#F59E0B',
-    fontSize: 16,
-    fontWeight: '600',
+  legalAutoRenew: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
     marginBottom: 12,
   },
-  pendingCard: {
+  legalLinks: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
-  pendingInfo: {
-    flex: 1,
-  },
-  pendingBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  pendingBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  pendingAmount: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  legalLink: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  pendingStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginRight: 8,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F59E0B',
-  },
-  statusText: {
-    color: '#F59E0B',
-    fontSize: 12,
+  legalSeparator: {
+    fontSize: 13,
   },
 
   // Billing Cycle
