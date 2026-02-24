@@ -461,6 +461,22 @@ export default function SubscriptionScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Legal Compliance (Apple/Google required) */}
+        <View style={styles.legalSection}>
+          <Text style={[styles.legalAutoRenew, { color: theme.textSecondary }]}>
+            Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. Your {Platform.OS === 'ios' ? 'Apple ID' : 'Google'} account will be charged for renewal. You can manage and cancel subscriptions in your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} settings.
+          </Text>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://swiftfx.app/terms')}>
+              <Text style={[styles.legalLink, { color: theme.primary }]}>Terms of Use</Text>
+            </TouchableOpacity>
+            <Text style={[styles.legalSeparator, { color: theme.textSecondary }]}> | </Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://swiftfx.app/privacy')}>
+              <Text style={[styles.legalLink, { color: theme.primary }]}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Contact Support */}
         <View style={[styles.supportSection, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.supportTitle, { color: theme.text }]}>Need Help?</Text>
