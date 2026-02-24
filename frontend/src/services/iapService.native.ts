@@ -1,51 +1,35 @@
 /**
  * Swift FX In-App Purchase Service - NATIVE (iOS/Android)
- * 
- * Handles Apple App Store and Google Play subscriptions
- * 
- * IMPORTANT: 
- * - Never unlock features client-side
- * - Always validate purchases through backend
- * - Backend is the source of truth for subscription status
- * - This file is only loaded on native iOS/Android builds
- * 
- * NOTE: react-native-iap is NOT bundled with the app.
- * IAP functionality requires a native build with the IAP module installed.
- * This service provides stub implementations that will work in Expo Go
- * and full implementations when built with EAS Build including the IAP module.
+ *
+ * Production IAP implementation using react-native-iap.
+ *
+ * RULES:
+ * - Backend is the ONLY authority for subscription status.
+ * - Content is NEVER unlocked based on local purchase state.
+ * - Every purchase/restore goes through backend verification.
+ * - Listeners are registered once and cleaned up on endIAP().
+ *
+ * This file is only resolved on native iOS/Android builds.
+ * react-native-iap must be installed via EAS Build (not available in Expo Go).
  */
 
 import { Platform } from 'react-native';
 import { api } from './api';
 
-// Product IDs - fetched from backend or use defaults
-export interface IAPProducts {
-  ios: {
-    premium_monthly: string;
-    vip_monthly: string;
-  };
-  android: {
-    premium_monthly: string;
-    vip_monthly: string;
-  };
-}
+// ── Official product IDs (locked – match App Store Connect / Google Play Console) ──
+const SUBSCRIPTION_SKUS = [
+  'com.swiftfx.signals.premium.weekly',
+  'com.swiftfx.signals.premium.monthly',
+  'com.swiftfx.signals.premium.yearly',
+  'com.swiftfx.signals.vip.weekly',
+  'com.swiftfx.signals.vip.monthly',
+  'com.swiftfx.signals.vip.yearly',
+] as const;
 
-// Default product IDs (will be fetched from backend)
-const DEFAULT_PRODUCTS: IAPProducts = {
-  ios: {
-    premium_monthly: 'swiftfx_premium_monthly',
-    vip_monthly: 'swiftfx_vip_monthly',
-  },
-  android: {
-    premium_monthly: 'swiftfx_premium_monthly',
-    vip_monthly: 'swiftfx_vip_monthly',
-  },
-};
-
-// Subscription plans
+// ── Public types ──
 export type SubscriptionPlan = 'premium' | 'vip';
+export type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
-// Purchase result
 export interface PurchaseResult {
   success: boolean;
   plan?: string;
@@ -56,348 +40,378 @@ export interface PurchaseResult {
   error?: string;
 }
 
-// IAP state
-let iapProducts: any[] = [];
-let productIds: IAPProducts = DEFAULT_PRODUCTS;
-let isConnected = false;
+// ── Internal state ──
 let RNIap: any = null;
+let isConnected = false;
+let storeProducts: any[] = [];
+let purchaseListener: any = null;
+let errorListener: any = null;
 
-/**
- * Check if IAP is available on current platform
- * Available on native iOS/Android only when react-native-iap is installed
- */
+// ── Module loader ──
+
+function tryLoadIAPModule(): boolean {
+  if (RNIap !== null) return true;
+  try {
+    RNIap = require('react-native-iap');
+    return true;
+  } catch {
+    console.log('[IAP] react-native-iap not available (Expo Go or dev build without native module)');
+    return false;
+  }
+}
+
+// ── Public API ──
+
 export function isIAPAvailable(): boolean {
   return (Platform.OS === 'ios' || Platform.OS === 'android') && RNIap !== null;
 }
 
 /**
- * Try to load react-native-iap module
- * Returns true if loaded successfully, false otherwise
- */
-async function tryLoadIAPModule(): Promise<boolean> {
-  if (RNIap !== null) {
-    return true;
-  }
-  
-  try {
-    // Dynamic require to avoid bundling issues
-    // This will only work in production builds that include the native module
-    RNIap = require('react-native-iap');
-    return true;
-  } catch (error) {
-    console.log('[IAP-Native] react-native-iap not available in this build');
-    console.log('[IAP-Native] IAP will be available in production EAS builds');
-    return false;
-  }
-}
-
-/**
- * Fetch product IDs from backend
- */
-export async function fetchProductIds(): Promise<IAPProducts> {
-  try {
-    const response = await api.get('/iap/products');
-    productIds = response.data;
-    return response.data;
-  } catch (error) {
-    console.warn('[IAP-Native] Failed to fetch product IDs, using defaults:', error);
-    return DEFAULT_PRODUCTS;
-  }
-}
-
-/**
- * Initialize IAP connection
+ * Initialize IAP: connect to store, fetch products, register listeners.
+ * Safe to call multiple times — subsequent calls are no-ops.
  */
 export async function initIAP(): Promise<boolean> {
-  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-    console.log('[IAP-Native] Skipping initialization - not on native platform');
-    return false;
-  }
-
-  // Try to load the IAP module
-  const moduleLoaded = await tryLoadIAPModule();
-  if (!moduleLoaded || !RNIap) {
-    console.log('[IAP-Native] IAP module not available - using stub implementation');
-    return false;
-  }
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return false;
+  if (!tryLoadIAPModule() || !RNIap) return false;
+  if (isConnected) return true;
 
   try {
-    console.log('[IAP-Native] Initializing IAP connection...');
-    
-    // Initialize connection
+    console.log('[IAP] Connecting to store...');
     await RNIap.initConnection();
     isConnected = true;
-    
-    // Fetch product IDs from backend
-    await fetchProductIds();
-    
-    // Get products for current platform
-    const platformProductIds = Platform.OS === 'ios' 
-      ? [productIds.ios.premium_monthly, productIds.ios.vip_monthly]
-      : [productIds.android.premium_monthly, productIds.android.vip_monthly];
-    
-    // Fetch products from store
-    iapProducts = await RNIap.getSubscriptions({ skus: platformProductIds });
-    
-    console.log('[IAP-Native] IAP initialized successfully. Products:', iapProducts.length);
+
+    // Android: flush any stale pending purchases so the store dialog isn't blocked.
+    if (Platform.OS === 'android') {
+      try { await RNIap.flushFailedPurchasesCachedAsPendingAndroid(); } catch { /* ignore */ }
+    }
+
+    // Fetch products from store using official SKUs.
+    storeProducts = await RNIap.getSubscriptions({ skus: [...SUBSCRIPTION_SKUS] });
+    console.log('[IAP] Products loaded:', storeProducts.length);
+
+    // Register listeners ONCE.
+    registerListeners();
+
     return true;
-  } catch (error: any) {
-    console.error('[IAP-Native] IAP initialization error:', error);
+  } catch (err: any) {
+    console.error('[IAP] initConnection error:', err.message);
+    isConnected = false;
     return false;
   }
 }
 
 /**
- * End IAP connection
+ * Tear down IAP: remove listeners, end connection.
  */
 export async function endIAP(): Promise<void> {
+  removeListeners();
   if (!isConnected || !RNIap) return;
-  
   try {
     await RNIap.endConnection();
-    isConnected = false;
-    iapProducts = [];
-    console.log('[IAP-Native] IAP connection ended');
-  } catch (error) {
-    console.warn('[IAP-Native] Error ending IAP connection:', error);
-  }
+  } catch { /* ignore */ }
+  isConnected = false;
+  storeProducts = [];
+  console.log('[IAP] Connection ended');
 }
 
 /**
- * Get available subscription products
+ * Return all store products fetched during initIAP().
  */
 export function getProducts(): any[] {
-  return iapProducts;
+  return storeProducts;
 }
 
 /**
- * Get product by plan type
+ * Get a single product by tier + cycle.
+ * Returns undefined if product not found in store response.
  */
-export function getProductByPlan(plan: SubscriptionPlan): any | undefined {
-  const productId = Platform.OS === 'ios'
-    ? productIds.ios[`${plan}_monthly` as keyof typeof productIds.ios]
-    : productIds.android[`${plan}_monthly` as keyof typeof productIds.android];
-  
-  return iapProducts.find(p => p.productId === productId);
+export function getProductByPlan(plan: SubscriptionPlan, cycle: BillingCycle = 'monthly'): any | undefined {
+  const sku = `com.swiftfx.signals.${plan}.${cycle}`;
+  return storeProducts.find((p: any) => p.productId === sku);
 }
 
 /**
- * Request subscription purchase
+ * Get the SKU string for a given tier + cycle.
  */
-export async function purchaseSubscription(plan: SubscriptionPlan): Promise<PurchaseResult> {
+export function getSkuForPlan(plan: SubscriptionPlan, cycle: BillingCycle): string {
+  return `com.swiftfx.signals.${plan}.${cycle}`;
+}
+
+/**
+ * Request a subscription purchase.
+ *
+ * Flow:
+ * 1. Call store requestSubscription()
+ * 2. On receipt, send to backend /iap/{platform}/verify
+ * 3. Backend verifies with Apple/Google
+ * 4. Backend updates subscription record
+ * 5. Return result — caller refreshes /api/subscription/status
+ *
+ * Content must NOT be unlocked until backend confirms.
+ */
+export async function purchaseSubscription(
+  plan: SubscriptionPlan,
+  cycle: BillingCycle = 'monthly',
+): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
-    return {
-      success: false,
-      message: 'In-App Purchases require a production build. Please use the App Store or Play Store version.',
-    };
+    return { success: false, message: 'In-App Purchases require a production build.' };
+  }
+  if (!isConnected || !RNIap) {
+    return { success: false, message: 'Store connection not established. Restart the app.' };
   }
 
-  if (!isConnected || !RNIap) {
-    return {
-      success: false,
-      message: 'IAP connection not established. Please restart the app and try again.',
-    };
-  }
+  const sku = getSkuForPlan(plan, cycle);
+  console.log('[IAP] Requesting purchase:', sku);
 
   try {
-    const productId = Platform.OS === 'ios'
-      ? productIds.ios[`${plan}_monthly` as keyof typeof productIds.ios]
-      : productIds.android[`${plan}_monthly` as keyof typeof productIds.android];
-
-    console.log('[IAP-Native] Requesting purchase for:', productId);
-
-    // Request subscription
-    const purchase = await RNIap.requestSubscription({ sku: productId });
-    
-    console.log('[IAP-Native] Purchase completed:', purchase);
-
-    // Send receipt to backend for validation
-    const verifyEndpoint = Platform.OS === 'ios' 
-      ? '/iap/apple/verify' 
-      : '/iap/google/verify';
-    
-    const receipt = Platform.OS === 'ios' 
-      ? purchase.transactionReceipt 
-      : purchase.purchaseToken;
-
-    const response = await api.post(verifyEndpoint, {
-      receipt,
-      productId,
-      transactionId: purchase.transactionId,
-    });
-
-    if (response.data.success) {
-      // Finish the transaction after backend validation
-      await RNIap.finishTransaction({ purchase, isConsumable: false });
-      
-      return {
-        success: true,
-        plan: response.data.plan,
-        expiryDate: response.data.expires_date,
-        isTrial: response.data.is_trial,
-        autoRenew: response.data.auto_renew,
-        message: `Your ${plan.toUpperCase()} subscription is now active!`,
-      };
+    // iOS uses requestSubscription with sku; Android uses offerToken from subscriptionOfferDetails.
+    if (Platform.OS === 'ios') {
+      await RNIap.requestSubscription({ sku });
     } else {
-      return {
-        success: false,
-        message: response.data.message || 'Purchase verification failed.',
-        error: response.data.error,
-      };
+      // Android: find the product and get the first offer token.
+      const product = storeProducts.find((p: any) => p.productId === sku);
+      if (!product) {
+        return { success: false, message: `Product ${sku} not found in store.` };
+      }
+      const offerToken = product.subscriptionOfferDetails?.[0]?.offerToken;
+      if (!offerToken) {
+        return { success: false, message: 'No subscription offer available.' };
+      }
+      await RNIap.requestSubscription({
+        sku,
+        subscriptionOffers: [{ sku, offerToken }],
+      });
     }
-  } catch (error: any) {
-    console.error('[IAP-Native] Purchase error:', error);
-    
-    // Handle specific error codes
-    if (error.code === 'E_USER_CANCELLED') {
-      return {
-        success: false,
-        message: 'Purchase cancelled',
-      };
-    }
-    
-    if (error.code === 'E_ALREADY_OWNED') {
-      return {
-        success: false,
-        message: 'You already own this subscription. Try restoring your purchases.',
-      };
-    }
-    
+
+    // NOTE: The actual purchase completion is handled by the purchaseUpdatedListener.
+    // We return a "pending" result here. The listener will call verifyWithBackend().
+    // The caller should poll /api/subscription/status after a short delay.
     return {
-      success: false,
-      message: error.message || 'Purchase failed. Please try again.',
-      error: error.code,
+      success: true,
+      message: 'Purchase initiated. Verifying with server...',
     };
+  } catch (err: any) {
+    console.error('[IAP] Purchase error:', err.code, err.message);
+
+    if (err.code === 'E_USER_CANCELLED') {
+      return { success: false, message: 'Purchase cancelled.' };
+    }
+    if (err.code === 'E_ALREADY_OWNED') {
+      return { success: false, message: 'You already own this subscription. Try restoring purchases.' };
+    }
+    if (err.code === 'E_DEFERRED_PAYMENT') {
+      return { success: false, message: 'Purchase is pending approval (e.g. Ask to Buy).' };
+    }
+
+    return { success: false, message: err.message || 'Purchase failed.', error: err.code };
   }
 }
 
 /**
- * Restore previous purchases
+ * Restore purchases (Apple compliance — REQUIRED).
+ *
+ * Calls getAvailablePurchases(), sends each receipt to backend for re-verification,
+ * and returns the highest-tier result.
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
-    return {
-      success: false,
-      message: 'Restore purchases requires a production build. Please use the App Store or Play Store version.',
-    };
+    return { success: false, message: 'Restore requires a production build.' };
   }
-
   if (!RNIap) {
-    return {
-      success: false,
-      message: 'IAP module not available in this build.',
-    };
+    return { success: false, message: 'IAP module not available.' };
   }
 
   try {
-    console.log('[IAP-Native] Restoring purchases...');
-    
+    console.log('[IAP] Restoring purchases...');
     const purchases = await RNIap.getAvailablePurchases();
-    
+
     if (!purchases || purchases.length === 0) {
-      return {
-        success: false,
-        message: 'No previous purchases found to restore.',
-      };
+      return { success: false, message: 'No previous purchases found.' };
     }
 
-    console.log('[IAP-Native] Found purchases to restore:', purchases.length);
+    console.log('[IAP] Found purchases to restore:', purchases.length);
 
-    // Find the most recent valid subscription
-    let latestPurchase = null;
-    for (const purchase of purchases) {
-      if (!latestPurchase || purchase.transactionDate > latestPurchase.transactionDate) {
-        latestPurchase = purchase;
+    // Verify the most recent purchase with the backend.
+    const sorted = [...purchases].sort(
+      (a: any, b: any) => (b.transactionDate || 0) - (a.transactionDate || 0),
+    );
+
+    for (const purchase of sorted) {
+      const result = await verifyWithBackend(purchase);
+      if (result.success) {
+        // Finish the restored transaction.
+        try { await RNIap.finishTransaction({ purchase, isConsumable: false }); } catch { /* ok */ }
+        return result;
       }
     }
 
-    if (latestPurchase) {
-      // Send to backend for validation
-      const verifyEndpoint = Platform.OS === 'ios' 
-        ? '/iap/apple/verify' 
-        : '/iap/google/verify';
-      
-      const receipt = Platform.OS === 'ios' 
-        ? latestPurchase.transactionReceipt 
-        : latestPurchase.purchaseToken;
-
-      const response = await api.post(verifyEndpoint, {
-        receipt,
-        productId: latestPurchase.productId,
-        transactionId: latestPurchase.transactionId,
-        isRestore: true,
-      });
-
-      if (response.data.success) {
-        return {
-          success: true,
-          plan: response.data.plan,
-          expiryDate: response.data.expires_date,
-          message: `Your ${response.data.plan?.toUpperCase()} subscription has been restored!`,
-        };
-      }
-    }
-
-    return {
-      success: false,
-      message: 'Could not restore a valid subscription. Please contact support.',
-    };
-  } catch (error: any) {
-    console.error('[IAP-Native] Restore error:', error);
-    
-    return {
-      success: false,
-      message: error.message || 'Failed to restore purchases. Please try again.',
-      error: error.code,
-    };
+    return { success: false, message: 'No active subscription found to restore.' };
+  } catch (err: any) {
+    console.error('[IAP] Restore error:', err.message);
+    return { success: false, message: err.message || 'Restore failed.', error: err.code };
   }
 }
 
 /**
- * Get IAP status from backend
+ * Fetch subscription status from backend (authoritative).
  */
-export async function getIAPStatus(): Promise<any> {
+export async function getSubscriptionStatus(): Promise<any> {
   try {
-    const response = await api.get('/iap/status');
+    const response = await api.get('/subscription/status');
     return response.data;
-  } catch (error) {
-    console.error('[IAP-Native] Error fetching status:', error);
+  } catch (err) {
+    console.error('[IAP] Error fetching subscription status:', err);
     return null;
   }
 }
 
 /**
- * Open subscription management
+ * Kept for backward compatibility with existing consumers.
+ */
+export async function getIAPStatus(): Promise<any> {
+  return getSubscriptionStatus();
+}
+
+/**
+ * Open the platform's subscription management page.
  */
 export async function openSubscriptionManagement(): Promise<void> {
-  try {
-    const { Linking } = require('react-native');
-    
-    if (Platform.OS === 'ios') {
-      await Linking.openURL('https://apps.apple.com/account/subscriptions');
-    } else {
-      await Linking.openURL('https://play.google.com/store/account/subscriptions');
-    }
-  } catch (error) {
-    console.error('[IAP-Native] Error opening subscription management:', error);
-    throw error;
+  const { Linking } = require('react-native');
+  if (Platform.OS === 'ios') {
+    await Linking.openURL('https://apps.apple.com/account/subscriptions');
+  } else {
+    await Linking.openURL('https://play.google.com/store/account/subscriptions');
   }
 }
 
 /**
- * Format price for display
+ * Format a store product price for display.
+ * Returns the store's localized price string (e.g. "$9.99").
  */
 export function formatProductPrice(product: any): string {
-  return product?.localizedPrice || `$${product?.price || '0.00'}`;
+  if (!product) return '';
+  return product.localizedPrice || `$${product.price || '0.00'}`;
 }
 
+/**
+ * Fetch product IDs from backend.
+ * Returns the official product list. Kept for API compatibility.
+ */
+export async function fetchProductIds(): Promise<any> {
+  try {
+    const response = await api.get('/iap/products');
+    return response.data;
+  } catch {
+    return { products: [...SUBSCRIPTION_SKUS] };
+  }
+}
+
+// ── Internal helpers ──
+
+/**
+ * Verify a purchase with the backend.
+ * Builds the correct payload for iOS (receipt_data) vs Android (purchase_token + product_id).
+ */
+async function verifyWithBackend(purchase: any): Promise<PurchaseResult> {
+  try {
+    const isIOS = Platform.OS === 'ios';
+    const endpoint = isIOS ? '/iap/apple/verify' : '/iap/google/verify';
+
+    const payload = isIOS
+      ? {
+          receipt_data: purchase.transactionReceipt,
+          exclude_old_transactions: true,
+        }
+      : {
+          purchase_token: purchase.purchaseToken,
+          product_id: purchase.productId,
+        };
+
+    console.log('[IAP] Verifying with backend:', endpoint, 'product:', purchase.productId);
+    const response = await api.post(endpoint, payload);
+    const data = response.data;
+
+    if (data.success) {
+      console.log('[IAP] Backend verified:', data.plan, 'expires:', data.expiry_date);
+      return {
+        success: true,
+        plan: data.plan,
+        expiryDate: data.expiry_date,
+        isTrial: data.is_trial,
+        autoRenew: data.auto_renew,
+        message: data.message || `Subscribed to ${(data.plan || '').toUpperCase()}!`,
+      };
+    }
+
+    return { success: false, message: data.message || 'Verification failed.' };
+  } catch (err: any) {
+    console.error('[IAP] Backend verification error:', err.message);
+    return { success: false, message: 'Server verification failed. Please try again.', error: err.message };
+  }
+}
+
+/**
+ * Register purchase listeners ONCE.
+ * purchaseUpdatedListener: fires on successful purchase → verify with backend → finish transaction.
+ * purchaseErrorListener: fires on purchase error → log.
+ */
+function registerListeners(): void {
+  if (purchaseListener || !RNIap) return;
+
+  purchaseListener = RNIap.purchaseUpdatedListener(async (purchase: any) => {
+    console.log('[IAP] purchaseUpdatedListener fired:', purchase.productId);
+
+    if (!purchase.transactionReceipt && !purchase.purchaseToken) {
+      console.warn('[IAP] Purchase has no receipt/token — skipping verification.');
+      return;
+    }
+
+    const result = await verifyWithBackend(purchase);
+
+    if (result.success) {
+      try {
+        await RNIap.finishTransaction({ purchase, isConsumable: false });
+        console.log('[IAP] Transaction finished:', purchase.productId);
+      } catch (finishErr: any) {
+        console.error('[IAP] finishTransaction error:', finishErr.message);
+      }
+    } else {
+      console.warn('[IAP] Backend rejected purchase:', result.message);
+      // Do NOT finish the transaction if backend rejects — store will retry.
+    }
+  });
+
+  errorListener = RNIap.purchaseErrorListener((error: any) => {
+    console.warn('[IAP] purchaseErrorListener:', error.code, error.message);
+  });
+
+  console.log('[IAP] Listeners registered');
+}
+
+/**
+ * Remove listeners to prevent duplicate events.
+ */
+function removeListeners(): void {
+  if (purchaseListener) {
+    purchaseListener.remove();
+    purchaseListener = null;
+  }
+  if (errorListener) {
+    errorListener.remove();
+    errorListener = null;
+  }
+}
+
+// ── Default export (backward compatible) ──
 export default {
   initIAP,
   endIAP,
   getProducts,
   getProductByPlan,
+  getSkuForPlan,
   purchaseSubscription,
   restorePurchases,
+  getSubscriptionStatus,
   getIAPStatus,
   openSubscriptionManagement,
   isIAPAvailable,
