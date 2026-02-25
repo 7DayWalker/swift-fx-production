@@ -6096,6 +6096,11 @@ async def validate_apple_receipt(receipt_data: str, exclude_old: bool = True) ->
     
     Returns validation result with subscription info
     """
+    if not APPLE_ENVIRONMENT:
+        raise HTTPException(status_code=503, detail="Apple IAP not configured: APPLE_ENVIRONMENT not set")
+    if not APPLE_SHARED_SECRET:
+        raise HTTPException(status_code=503, detail="Apple IAP not configured: APPLE_SHARED_SECRET not set")
+    
     # Determine endpoint based on environment
     if APPLE_ENVIRONMENT == 'production':
         url = "https://buy.itunes.apple.com/verifyReceipt"
