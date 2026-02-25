@@ -33,13 +33,17 @@ from supabase_auth import (
 )
 
 # Emergent LLM Key for Claude Vision
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+if not EMERGENT_LLM_KEY:
+    logging.warning("[Config] EMERGENT_LLM_KEY not set — AI analyzer will be unavailable")
 
 # ===================== IAP CONFIGURATION =====================
 # Apple App Store
-APPLE_SHARED_SECRET = os.environ.get('APPLE_SHARED_SECRET', '')
+APPLE_SHARED_SECRET = os.environ.get('APPLE_SHARED_SECRET')
 APPLE_BUNDLE_ID = os.environ.get('APPLE_BUNDLE_ID', 'com.swiftfx.signals')
-APPLE_ENVIRONMENT = os.environ.get('APPLE_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
+APPLE_ENVIRONMENT = os.environ.get('APPLE_ENVIRONMENT')  # MUST be 'sandbox' or 'production'
+if APPLE_ENVIRONMENT not in ('sandbox', 'production', None):
+    raise ValueError(f"APPLE_ENVIRONMENT must be 'sandbox' or 'production', got '{APPLE_ENVIRONMENT}'")
 APPLE_KEY_ID = os.environ.get('APPLE_KEY_ID', '')
 APPLE_ISSUER_ID = os.environ.get('APPLE_ISSUER_ID', '')
 APPLE_PRIVATE_KEY = os.environ.get('APPLE_PRIVATE_KEY', '')
