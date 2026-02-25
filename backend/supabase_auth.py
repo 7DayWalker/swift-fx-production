@@ -9,8 +9,10 @@ from jwt import PyJWKClient
 from typing import Optional
 from functools import lru_cache
 
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
-SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
 SUPABASE_JWKS_URL = f'{SUPABASE_URL}/auth/v1/.well-known/jwks.json'
 SUPABASE_ISSUER = f'{SUPABASE_URL}/auth/v1'
 
