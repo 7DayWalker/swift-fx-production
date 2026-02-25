@@ -201,16 +201,23 @@ export default function SubscriptionScreen() {
     }
   };
 
-  const getCyclePrice = (plan: Plan, cycle: BillingCycle) => {
-    return plan.pricing[cycle] || 0;
-  };
+  /**
+   * Get the localized price string from the store for a given plan + cycle.
+   * Returns null if store product is not available (triggers loading state in UI).
+   */
+  const getStorePrice = useCallback((planId: string, cycle: BillingCycle): string | null => {
+    if (!iapInitialized) return null;
+    const product = IAPService.getProductByPlan(planId as 'premium' | 'vip', cycle);
+    if (!product) return null;
+    return IAPService.formatProductPrice(product) || null;
+  }, [iapInitialized]);
 
-  const getCycleSavings = (plan: Plan, cycle: BillingCycle) => {
-    if (cycle !== 'yearly') return 0;
-    const monthlyTotal = plan.pricing.monthly * 12;
-    const yearlyPrice = plan.pricing.yearly;
-    return Math.round((1 - yearlyPrice / monthlyTotal) * 100);
-  };
+  /**
+   * Check if store products have been loaded for a plan.
+   */
+  const hasStorePrice = useCallback((planId: string, cycle: BillingCycle): boolean => {
+    return getStorePrice(planId, cycle) !== null;
+  }, [getStorePrice]);
 
   const getPlanIcon = (planId: string) => {
     if (planId === 'vip') return 'diamond';
