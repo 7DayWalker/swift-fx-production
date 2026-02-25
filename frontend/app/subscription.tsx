@@ -731,6 +731,15 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     marginBottom: 16,
   },
+  priceLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  priceLoadingText: {
+    color: '#8A8D98',
+    fontSize: 14,
+  },
   priceAmount: {
     color: '#00D4AA',
     fontSize: 32,
@@ -740,18 +749,6 @@ const styles = StyleSheet.create({
     color: '#8A8D98',
     fontSize: 16,
     marginLeft: 4,
-  },
-  savingsBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  savingsText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
   },
   featuresList: {
     marginBottom: 16,
