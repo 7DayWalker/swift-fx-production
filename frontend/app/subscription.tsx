@@ -28,11 +28,6 @@ interface Plan {
   name: string;
   description: string;
   features: string[];
-  pricing: {
-    weekly: number;
-    monthly: number;
-    yearly: number;
-  };
 }
 
 export default function SubscriptionScreen() {
