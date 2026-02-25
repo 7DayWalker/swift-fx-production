@@ -82,7 +82,6 @@ export default function SubscriptionScreen() {
             name: p.name || (p.tier === 'vip' ? 'VIP' : 'Premium'),
             description: p.description || '',
             features: Array.isArray(p.features) ? p.features : [],
-            pricing: p.pricing || { weekly: 0, monthly: 0, yearly: 0 },
           }));
         setPlans(mapped);
       }
