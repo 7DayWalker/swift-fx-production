@@ -1,0 +1,71 @@
+{
+  "summary": "Production-readiness testing complete for Swift FX Signals backend. All 7 mandatory fixes verified: (1) Google mock expiry removed, (2) APPLE_ENVIRONMENT no default, (3) MongoDB-based entitlement resolution, (4) MongoDB indexes on startup, (5) Clean CORS config, (6) No empty-string env fallbacks, (7) /api/health endpoint. 17/17 backend tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_production_readiness.py",
+    "/app/test_reports/pytest/pytest_production_readiness.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "✅ Fix #1: Google verify endpoint correctly rejects if no expiryTimeMillis (line 6487-6491)",
+    "✅ Fix #2: APPLE_ENVIRONMENT has no default value, uses os.environ.get('APPLE_ENVIRONMENT') only (line 44)",
+    "✅ Fix #2: APPLE_ENVIRONMENT validation present - must be 'sandbox', 'production', or None (lines 45-46)",
+    "✅ Fix #3: get_effective_subscription() uses MongoDB iap_transactions as single source of truth (lines 385-432)",
+    "✅ Fix #4: MongoDB indexes created on startup for iap_transactions, signals, device_tokens, ai_analyses, posts, support_tickets (lines 3169-3178)",
+    "✅ Fix #5: CORS uses CORS_ORIGINS env var - no hardcoded localhost or preview URLs (lines 7051-7055)",
+    "✅ Fix #6: supabase_auth.py raises ValueError if SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set (lines 14-15)",
+    "✅ Fix #7: /api/health endpoint returns {status: 'healthy', mongo: 'connected'} (lines 7066-7077)",
+    "✅ /api/signals regression test passed",
+    "✅ /api/iap/products returns all 6 official SKUs",
+    "✅ /api/subscription/status returns entitlement from MongoDB iap_transactions",
+    "✅ Admin user correctly has is_admin=true with VIP-level signal access"
+  ],
+  "updated_files": ["/app/backend/tests/test_production_readiness.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "Not tested (backend-only)"},
+  "test_credentials": {
+    "test_user": "paradoxella@gmail.com / Grace1992@",
+    "admin_user": "ellapauledache@gmail.com / Grace1992@"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 7 production-readiness fixes verified. Backend is ready for deployment. Key code locations: CORS config at lines 7048-7063, health endpoint at lines 7066-7077, MongoDB indexes in startup_event at lines 3169-3178, Google verify expiry check at lines 6477-6491, APPLE_ENVIRONMENT config at lines 44-46, supabase_auth.py env validation at lines 12-15.",
+  "verified_fixes": {
+    "fix_1_no_google_mock_expiry": {
+      "status": "PASS",
+      "verification": "Code audit confirms no mock_expiry fallback, rejection at line 6487-6491"
+    },
+    "fix_2_apple_environment_no_default": {
+      "status": "PASS",
+      "verification": "Code audit confirms APPLE_ENVIRONMENT = os.environ.get('APPLE_ENVIRONMENT') without default"
+    },
+    "fix_3_mongodb_entitlement_resolution": {
+      "status": "PASS",
+      "verification": "API test confirms /api/subscription/status returns entitlement from iap_transactions"
+    },
+    "fix_4_mongodb_indexes": {
+      "status": "PASS",
+      "verification": "Code audit confirms indexes created on startup for 6+ collections"
+    },
+    "fix_5_clean_cors": {
+      "status": "PASS",
+      "verification": "Code audit confirms CORS uses env var, no localhost/preview URLs"
+    },
+    "fix_6_no_empty_string_fallbacks": {
+      "status": "PASS",
+      "verification": "Code audit confirms supabase_auth.py raises error if SUPABASE_URL/KEY not set"
+    },
+    "fix_7_health_endpoint": {
+      "status": "PASS",
+      "verification": "API test confirms /api/health returns {status: 'healthy', mongo: 'connected'}"
+    }
+  }
+}
