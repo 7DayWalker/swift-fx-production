@@ -384,38 +384,50 @@ def check_subscription_active(user_doc: dict) -> bool:
 
 async def get_effective_subscription(user_doc: dict) -> str:
     """
-    Get user's effective subscription tier by querying subscriptions+plans.
-    Precedence: super_admin/admin → vip, Active VIP sub → vip,
-    Active Premium sub → premium, else → free.
-    Handles NULL current_period_end as lifetime (never expires).
+    Get user's effective subscription tier from MongoDB iap_transactions.
+    Single-source entitlement resolution — matches /api/subscription/status logic.
+    Admin access is separate (checked via is_admin flag, not tier inflation).
     """
     user_id = user_doc.get("id") or user_doc.get("user_id", "")
     role = user_doc.get("role", "free")
 
-    # RULE 1: super_admin or admin → VIP (highest precedence)
+    # Admin / Super Admin get VIP-level access for feature gating.
+    # This is an access grant, not a subscription tier —
+    # but returning "vip" here keeps backward compat with can_access_visibility().
     if role in ("admin", "super_admin"):
         return "vip"
 
-    # RULE 2: Query subscriptions joined with plans
-    subscriptions = await fetch_active_subscriptions(user_id)
-    now = datetime.now(timezone.utc).isoformat()
-
-    tier_priority = {"vip": 2, "premium": 1, "free": 0}
+    # Resolve from verified IAP transactions in MongoDB (authoritative).
+    now = datetime.now(timezone.utc)
+    tier_priority = {"vip": 2, "premium": 1}
     best_tier = "free"
     best_priority = 0
 
-    for sub in subscriptions:
-        # NULL current_period_end = lifetime (never expires)
-        period_end = sub.get("current_period_end")
-        if period_end and period_end < now:
-            continue  # expired
+    active_txns = await db.iap_transactions.find({
+        "user_id": user_id,
+        "status": "active",
+    }).sort("expiry_date", -1).to_list(20)
 
-        plans = sub.get("plans") or {}
-        sub_tier = (plans.get("tier") or "free").lower()
-        priority = tier_priority.get(sub_tier, 0)
+    for txn in active_txns:
+        expiry = txn.get("expiry_date")
+        if expiry:
+            if isinstance(expiry, str):
+                try:
+                    expiry_dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+            else:
+                expiry_dt = expiry
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            if expiry_dt <= now:
+                continue
+
+        txn_plan = txn.get("plan", "").lower()
+        priority = tier_priority.get(txn_plan, 0)
         if priority > best_priority:
             best_priority = priority
-            best_tier = sub_tier
+            best_tier = txn_plan
 
     return best_tier
 
