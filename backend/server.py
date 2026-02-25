@@ -28,7 +28,7 @@ db = client[os.environ.get('DB_NAME', 'swiftfx')]
 from supabase_auth import (
     get_supabase_user,
     fetch_profile, fetch_profile_by_email, update_profile, list_profiles, count_profiles,
-    delete_profile, fetch_active_subscriptions, list_auth_users, get_auth_user, get_auth_user_email,
+    delete_profile, list_auth_users, get_auth_user, get_auth_user_email,
     create_auth_user, delete_auth_user, update_auth_user,
 )
 
