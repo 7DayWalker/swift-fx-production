@@ -7046,21 +7046,13 @@ Do not include any text outside the JSON object. Be concise but accurate."""
 app.include_router(api_router)
 
 # ===================== CORS CONFIGURATION =====================
-# Production: Restrict to specific origins
-# Development: Add localhost origins as needed
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '').split(',') if os.environ.get('CORS_ORIGINS') else [
-    # Production frontend URLs
-    "https://secure-refactor-2.preview.emergentagent.com",
-    # Expo web development
-    "http://localhost:3000",
-    "http://localhost:8081",
-    "http://localhost:19006",
-    # Expo tunnel URLs (dynamic subdomain)
-    "https://*.exp.direct",
+# Production: Set CORS_ORIGINS env var with comma-separated allowed origins.
+# If not set, only mobile app requests (no Origin header) will work.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CORS_ORIGINS', '').split(',')
+    if origin.strip()
 ]
-
-# Filter empty strings
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -7068,8 +7060,21 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
-    allow_origin_regex=r"https://.*\.preview\.emergentagent\.com",  # Allow all Emergent preview URLs
 )
+
+# ===================== HEALTH CHECK =====================
+@app.get("/api/health")
+async def health_check():
+    """Health check for load balancer / deployment verification."""
+    try:
+        await db.command("ping")
+        mongo_ok = True
+    except Exception:
+        mongo_ok = False
+    return {
+        "status": "healthy" if mongo_ok else "degraded",
+        "mongo": "connected" if mongo_ok else "disconnected",
+    }
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
