@@ -6449,7 +6449,11 @@ async def verify_google_purchase(
                     message="Subscription has expired"
                 )
         else:
-            expiry_date = datetime.now(timezone.utc) + timedelta(days=30)  # Default for mock
+            logger.error(f"[Google IAP] REJECTED: No expiryTimeMillis in validation response for user {user_id}")
+            return IAPValidationResponse(
+                success=False,
+                message="Invalid subscription: missing expiry data"
+            )
         
         # Get plan from product ID
         plan = get_plan_from_product_id(request.product_id)
