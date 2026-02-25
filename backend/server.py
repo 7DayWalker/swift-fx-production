@@ -3156,13 +3156,27 @@ async def run_price_automation():
 async def startup_event():
     """
     Application startup handler.
-    Initializes the signal engine, super admin accounts, and default data.
+    Initializes indexes, signal engine, super admin accounts, and default data.
     """
     global price_automation_running, engine_task
     
     logger.info("=" * 60)
     logger.info("[Startup] Swift FX Backend Starting...")
     logger.info("=" * 60)
+    
+    # Create MongoDB indexes for production performance
+    logger.info("[Startup] Ensuring MongoDB indexes...")
+    await db.iap_transactions.create_index([("user_id", 1), ("status", 1)])
+    await db.iap_transactions.create_index("expiry_date")
+    await db.iap_transactions.create_index("transaction_id", unique=True)
+    await db.signals.create_index([("created_at", -1)])
+    await db.signals.create_index("state")
+    await db.device_tokens.create_index("user_id")
+    await db.device_tokens.create_index("is_active")
+    await db.ai_analyses.create_index([("user_id", 1), ("created_at", -1)])
+    await db.posts.create_index("created_at")
+    await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+    logger.info("[Startup] MongoDB indexes ensured")
     
     # Auto-create protected Super Admin accounts
     await initialize_super_admins()
