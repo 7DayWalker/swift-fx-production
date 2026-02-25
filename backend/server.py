@@ -1970,6 +1970,11 @@ async def create_comment(post_id: str, comment_data: CommentCreate, current_user
 
 @api_router.get("/subscription/plans")
 async def get_plans():
+    """
+    Returns plan metadata (features, descriptions) only.
+    Pricing is NOT served by backend — the store (Apple/Google) is the pricing authority.
+    Client must fetch pricing via react-native-iap getSubscriptions().
+    """
     return {
         "plans": [
             {
@@ -1982,11 +1987,6 @@ async def get_plans():
                     "10 AI Chart Analyses per week",
                     "Ads removed"
                 ],
-                "pricing": {
-                    "weekly": 10,
-                    "monthly": 29,
-                    "yearly": 279
-                },
                 "ai_limit_note": "Includes 10 AI chart analyses per week."
             },
             {
@@ -1999,12 +1999,7 @@ async def get_plans():
                     "Academy access",
                     "Fund Management access",
                     "Priority support"
-                ],
-                "pricing": {
-                    "weekly": 19,
-                    "monthly": 69,
-                    "yearly": 749
-                }
+                ]
             }
         ]
     }
