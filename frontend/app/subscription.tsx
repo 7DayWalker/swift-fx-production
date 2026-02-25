@@ -336,8 +336,8 @@ export default function SubscriptionScreen() {
           {plans.map((plan) => {
             const isCurrent = isCurrentPlan(plan.id);
             const isHighlighted = highlight === plan.id;
-            const price = getCyclePrice(plan, selectedCycle);
-            const savings = getCycleSavings(plan, selectedCycle);
+            const storePrice = getStorePrice(plan.id, selectedCycle);
+            const priceAvailable = storePrice !== null;
             
             return (
               <View 
@@ -374,13 +374,17 @@ export default function SubscriptionScreen() {
                 </View>
 
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceAmount}>${price}</Text>
-                  <Text style={styles.pricePeriod}>
-                    /{selectedCycle === 'yearly' ? 'year' : selectedCycle === 'monthly' ? 'month' : 'week'}
-                  </Text>
-                  {savings > 0 && (
-                    <View style={styles.savingsBadge}>
-                      <Text style={styles.savingsText}>Save {savings}%</Text>
+                  {priceAvailable ? (
+                    <>
+                      <Text style={styles.priceAmount}>{storePrice}</Text>
+                      <Text style={styles.pricePeriod}>
+                        /{selectedCycle === 'yearly' ? 'year' : selectedCycle === 'monthly' ? 'month' : 'week'}
+                      </Text>
+                    </>
+                  ) : (
+                    <View style={styles.priceLoading}>
+                      <ActivityIndicator size="small" color="#00D4AA" />
+                      <Text style={styles.priceLoadingText}>Loading price...</Text>
                     </View>
                   )}
                 </View>
