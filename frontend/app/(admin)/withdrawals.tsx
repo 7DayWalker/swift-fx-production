@@ -64,16 +64,6 @@ interface Withdrawal {
 }
 
 export default function AdminWithdrawalsScreen() {
-  // GATED: Needs withdrawals table in Supabase
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0E17' }}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>{'🚧'}</Text>
-        <Text style={{ fontSize: 22, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 12 }}>Withdrawals</Text>
-        <Text style={{ fontSize: 15, color: '#8899AA', textAlign: 'center', lineHeight: 22 }}>This feature is under development and will be available in a future update.</Text>
-      </View>
-    </SafeAreaView>
-  );
   const { theme } = useTheme();
   const router = useRouter();
 
