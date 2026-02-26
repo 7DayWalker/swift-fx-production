@@ -7,7 +7,7 @@ import requests
 import os
 
 # Using preview URL for testing
-BASE_URL = "https://secure-refactor-2.preview.emergentagent.com"
+BASE_URL = "https://restore-and-test.preview.emergentagent.com"
 
 # Supabase credentials
 SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"

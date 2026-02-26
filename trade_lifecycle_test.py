@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://secure-refactor-2.preview.emergentagent.com/api"
+BASE_URL = "https://restore-and-test.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

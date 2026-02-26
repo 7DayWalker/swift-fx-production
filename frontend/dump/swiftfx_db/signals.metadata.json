@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"created_at":{"$numberInt":"-1"}},"name":"created_at_-1"},{"v":{"$numberInt":"2"},"key":{"state":{"$numberInt":"1"}},"name":"state_1"}],"uuid":"baa3a76fb5b44ef3b7501a99cada2f00","collectionName":"signals","type":"collection"}
