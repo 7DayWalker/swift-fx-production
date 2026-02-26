@@ -14,7 +14,7 @@ import httpx
 import os
 import json
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://restore-and-test.preview.emergentagent.com')
+BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://preview-ready-8.preview.emergentagent.com')
 SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTc5NzIsImV4cCI6MjA4NTg3Mzk3Mn0.yImldZ1cCW4yEat4b6X1lAFufVs6ym_Hudm4lsRXwkQ"
 

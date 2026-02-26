@@ -18,7 +18,7 @@ import os
 import re
 
 # Backend URL for API testing
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://restore-and-test.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://preview-ready-8.preview.emergentagent.com')
 if BASE_URL.endswith('/'):
     BASE_URL = BASE_URL.rstrip('/')
 

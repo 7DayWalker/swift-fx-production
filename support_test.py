@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Backend URL from frontend .env
-BASE_URL = "https://restore-and-test.preview.emergentagent.com/api"
+BASE_URL = "https://preview-ready-8.preview.emergentagent.com/api"
 
 # Test credentials from review request
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"

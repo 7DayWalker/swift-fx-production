@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://restore-and-test.preview.emergentagent.com/api"
+BASE_URL = "https://preview-ready-8.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):
