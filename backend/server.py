@@ -6876,13 +6876,23 @@ Do not include any text outside the JSON object. Be concise but accurate."""
 app.include_router(api_router)
 
 # ===================== CORS CONFIGURATION =====================
-# Production: Set CORS_ORIGINS env var with comma-separated allowed origins.
-# If not set, only mobile app requests (no Origin header) will work.
+# Production: CORS_ORIGINS env var MUST be set with comma-separated allowed origins.
+# Mobile apps bypass CORS (no Origin header), so this only affects web/admin clients.
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.environ.get('CORS_ORIGINS', '').split(',')
     if origin.strip()
 ]
+
+# Production validation: warn if CORS_ORIGINS is empty (will only allow mobile clients)
+if not CORS_ORIGINS:
+    logger.warning("[CORS] CORS_ORIGINS not configured - web/admin access will be blocked")
+else:
+    # Validate origins format (must be proper URLs)
+    for origin in CORS_ORIGINS:
+        if not origin.startswith(('http://', 'https://')):
+            raise ValueError(f"[CORS] Invalid origin format: {origin}. Must start with http:// or https://")
+    logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
