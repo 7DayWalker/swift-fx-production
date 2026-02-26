@@ -84,6 +84,23 @@ CORS_ORIGINS=<production_frontend_url>
 ### P4 — Admin Enhancements
 - Support ticket system, referral tracking
 
+## Production Hardening (Completed Feb 26, 2026)
+
+### Security & Performance Fixes Applied
+- [x] Removed legacy `/api/iap/status` endpoint (use `/api/subscription/status`)
+- [x] Removed disabled webhook endpoints (`/webhooks/apple`, `/webhooks/google`)
+- [x] Fixed unbounded MongoDB queries: `to_list(None)` → `to_list(10000)` for device_tokens
+- [x] Optimized dashboard stats: Replaced in-memory loop with MongoDB aggregation pipeline
+- [x] CORS validation: Origins must be valid URLs (http:// or https://), logged at startup
+- [x] Fixed `/api/support/info` endpoint crash for unauthenticated users
+
+### Admin & User Features Verified
+All 11 screens are functional with no ComingSoonGate blocks:
+- Admin Fund Applications (`/admin/fund-applications.tsx`)
+- Admin Referrals (`/admin/referrals.tsx`)
+- Fund Management (`/fund-management.tsx`)
+- Help & Support (`/help-support.tsx`)
+
 ## Test Credentials
 - VIP user: paradoxella@gmail.com / Grace1992@
 - Admin: ellapauledache@gmail.com / Grace1992@
