@@ -2094,11 +2094,7 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user)
         winning_signals = 0
         total_pips = 0
     
-    total_signals = len(closed_signals)
-    # Use final_pips if available, otherwise fall back to result_pips
-    winning_signals = len([s for s in closed_signals if (s.get("final_pips") or s.get("result_pips", 0)) > 0])
     win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
-    total_pips = sum([(s.get("final_pips") or s.get("result_pips", 0)) for s in closed_signals])
     
     user_role = current_user.role if current_user else UserRole.FREE
     
