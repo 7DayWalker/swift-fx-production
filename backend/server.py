@@ -1547,8 +1547,8 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
     """Send push notification to ALL users about new signal (no tier filtering)"""
     try:
-        # Get all active device tokens
-        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
+        # Get all active device tokens (limit to 10000 to prevent OOM)
+        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(10000)
         if not device_tokens:
             logger.info("No active device tokens found")
             return
@@ -1618,8 +1618,8 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
 async def send_signal_close_notification(signal_id: str, pair: str, signal_type: str, final_pips: float, visibility: SignalVisibility):
     """Send push notification to ALL users when a signal is closed (no tier filtering)"""
     try:
-        # Get all active device tokens
-        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(None)
+        # Get all active device tokens (limit to 10000 to prevent OOM)
+        device_tokens = await db.device_tokens.find({"is_active": True}, {"_id": 0}).to_list(10000)
         if not device_tokens:
             logger.info("No active device tokens found for close notification")
             return
@@ -2073,8 +2073,26 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user)
     # Get recent signals
     signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
     
-    # Calculate performance stats
-    closed_signals = await db.signals.find({"status": "closed"}, {"_id": 0}).to_list(1000)
+    # Calculate performance stats using aggregation for efficiency
+    pipeline = [
+        {"$match": {"status": "closed"}},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "total_pips": {"$sum": {"$ifNull": ["$final_pips", {"$ifNull": ["$result_pips", 0]}]}},
+            "wins": {"$sum": {"$cond": [{"$gt": [{"$ifNull": ["$final_pips", {"$ifNull": ["$result_pips", 0]}]}, 0]}, 1, 0]}}
+        }}
+    ]
+    stats_result = await db.signals.aggregate(pipeline).to_list(1)
+    
+    if stats_result:
+        total_signals = stats_result[0]["total"]
+        winning_signals = stats_result[0]["wins"]
+        total_pips = stats_result[0]["total_pips"]
+    else:
+        total_signals = 0
+        winning_signals = 0
+        total_pips = 0
     
     total_signals = len(closed_signals)
     # Use final_pips if available, otherwise fall back to result_pips
