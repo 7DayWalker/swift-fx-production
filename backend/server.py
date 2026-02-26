@@ -5242,16 +5242,17 @@ async def get_ticket_details(
     return {"ticket": ticket}
 
 @api_router.get("/support/info")
-async def get_support_info(current_user: User = Depends(get_current_user)):
+async def get_support_info(current_user: Optional[User] = Depends(get_current_user)):
     """Get support contact information"""
-    whatsapp_message = f"Hello Swift FX Support, I need help with an issue. My email is {current_user.email}."
+    user_email = current_user.email if current_user else "user"
+    whatsapp_message = f"Hello Swift FX Support, I need help with an issue. My email is {user_email}."
     whatsapp_url = f"https://wa.me/{SUPPORT_WHATSAPP.replace('+', '')}?text={quote(whatsapp_message)}"
     
     return {
         "whatsapp_number": SUPPORT_WHATSAPP,
         "whatsapp_url": whatsapp_url,
         "email": SUPPORT_EMAIL,
-        "email_subject": f"Support Request - {current_user.email}"
+        "email_subject": f"Support Request - {user_email}"
     }
 
 # ==================== ADMIN SUPPORT ENDPOINTS ====================
