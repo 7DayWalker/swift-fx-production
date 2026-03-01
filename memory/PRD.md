@@ -9,6 +9,46 @@ Professional trading signals mobile app (Expo SDK 54 + React Native) with FastAP
 - **Auth**: Supabase auth with RBAC (Super Admin, Admin, User roles)
 - **Payments**: In-App Purchase only (Stripe removed). iOS + Android IAP configured.
 
+## Signal Lifecycle Engine v3.0 (Feb 26, 2026)
+
+### Major Redesign - Deterministic Auditable Mode
+
+**Architecture:**
+- SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine
+- NOT tick-level real-time execution, NOT broker execution
+- Deterministic: Same inputs always produce same outputs
+- Gap-protected: Price gaps use defined SL/TP/Entry, not jumped prices
+- Auditable: Every closure stores full price trace and source
+
+**Configuration:**
+- Poll interval: 5 seconds (configurable via `SIGNAL_POLL_INTERVAL` env var)
+- Min poll interval: 3 seconds
+- Max poll interval: 300 seconds
+- Single instance enforcement via distributed lock
+
+**Price Sources (NO HARDCODED FALLBACKS):**
+- Forex: frankfurter.app (free API, mid-rate)
+- Gold: goldapi.io → CoinGecko PAX Gold fallback
+- Crypto: CoinGecko
+- If ALL APIs fail for a symbol → symbol is SKIPPED (no fake prices)
+
+**Gap Protection Rules:**
+- Pending activation: Uses DEFINED entry price, not gapped market price
+- SL closure: Uses DEFINED SL price, not gapped market price
+- TP closure: Uses DEFINED TP price, not gapped market price
+- Example: If BUY SL=4111 and price gaps 4200→4100, closes at 4111 (not 4100)
+
+**Audit Trail Fields Stored at Closure:**
+- exit_price, exit_reason
+- pip_size, pip_multiplier, pip_math_trace
+- price_source, poll_timestamp
+- closure_last_price, closure_current_price
+- For activations: activation_price_source, activation_poll_timestamp
+
+**Test Simulation Endpoint:**
+- POST /api/admin/automation/test-simulation
+- Simulates gap scenarios to verify deterministic behavior
+
 ## Monetization Model (LOCKED)
 - **PREMIUM**: Premium Forex Signals, Advanced insights, 10 AI analyses/week
 - **VIP**: VIP Signals + Premium included, Unlimited AI, Academy, Fund Management
