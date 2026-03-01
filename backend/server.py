@@ -2630,53 +2630,90 @@ class ExitReason(str, Enum):
 
 
 # ==============================================================================
-# CORE CALCULATION: PIP CALCULATOR (CALCULATE ONCE ONLY)
+# CORE CALCULATION: PIP CALCULATOR v3.0 - WITH FULL AUDIT TRACE
 # ==============================================================================
 
-def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: str, pair: str) -> float:
+def calculate_signal_pips_with_trace(
+    entry_price: float,
+    exit_price: float,
+    signal_type: str,
+    pair: str
+) -> dict:
     """
-    Calculate pips EXACTLY ONCE at closure.
+    Calculate pips EXACTLY ONCE at closure with full audit trace.
     
     FORMULA:
-    - SELL: pips = entry_price - exit_price (profit when price goes DOWN)
-    - BUY: pips = exit_price - entry_price (profit when price goes UP)
+    - SELL: pips = (entry_price - exit_price) * pip_multiplier (profit when price goes DOWN)
+    - BUY: pips = (exit_price - entry_price) * pip_multiplier (profit when price goes UP)
     
-    This result is stored and NEVER recalculated.
+    Returns dict with:
+    - calculated_pips: The final pip value
+    - pip_multiplier: Multiplier used
+    - pip_size: Size of one pip
+    - math_trace: Full calculation string for audit
     """
     if not entry_price or not exit_price:
-        return 0.0
+        return {
+            "calculated_pips": 0.0,
+            "pip_multiplier": 0,
+            "pip_size": 0,
+            "math_trace": "INVALID: missing entry or exit price"
+        }
     
-    # Determine pip multiplier based on pair
-    pair_upper = pair.upper().replace("/", "")
-    
-    if "JPY" in pair_upper:
-        pip_multiplier = 100  # JPY pairs: 2 decimal places
-    elif "XAU" in pair_upper or "GOLD" in pair_upper:
-        pip_multiplier = 10  # Gold: measured in $0.10
-    elif "BTC" in pair_upper or "ETH" in pair_upper:
-        pip_multiplier = 1  # Crypto: whole units
-    else:
-        pip_multiplier = 10000  # Standard forex: 4 decimal places
+    # Get instrument info
+    info = get_instrument_info(pair)
+    pip_multiplier = info["pip_multiplier"]
+    pip_size = info["pip_size"]
     
     # Calculate based on signal type
-    if signal_type.lower() == "sell":
+    sig_type = signal_type.lower()
+    
+    if sig_type == "sell":
         # SELL profits when price goes DOWN
-        pips = (entry_price - exit_price) * pip_multiplier
+        raw_diff = entry_price - exit_price
+        pips = raw_diff * pip_multiplier
+        math_trace = f"SELL: ({entry_price} - {exit_price}) * {pip_multiplier} = {pips}"
     else:
         # BUY profits when price goes UP
-        pips = (exit_price - entry_price) * pip_multiplier
+        raw_diff = exit_price - entry_price
+        pips = raw_diff * pip_multiplier
+        math_trace = f"BUY: ({exit_price} - {entry_price}) * {pip_multiplier} = {pips}"
     
-    return round(pips, 1)
+    final_pips = round(pips, 1)
+    
+    logger.info(f"[PipCalc] {pair} {sig_type.upper()}: {math_trace} → {final_pips} pips")
+    
+    return {
+        "calculated_pips": final_pips,
+        "pip_multiplier": pip_multiplier,
+        "pip_size": pip_size,
+        "math_trace": math_trace
+    }
+
+
+def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: str, pair: str) -> float:
+    """Legacy wrapper - returns just the pip value"""
+    result = calculate_signal_pips_with_trace(entry_price, exit_price, signal_type, pair)
+    return result["calculated_pips"]
 
 
 # ==============================================================================
-# PRICE TRIGGER ENGINE (AUTHORITATIVE)
+# DETERMINISTIC PRICE TRIGGER ENGINE v3.0 - WITH GAP PROTECTION
 # ==============================================================================
 
-class PriceTrigger:
+class DeterministicPriceTrigger:
     """
-    Authoritative price trigger checker.
-    Uses tick-level price with crossing detection.
+    Deterministic price trigger checker with gap protection.
+    
+    KEY RULES:
+    1. Uses crossing detection when last_price is available
+    2. Falls back to threshold comparison when last_price unavailable
+    3. Returns the DEFINED level price, not the gapped market price
+    
+    GAP PROTECTION:
+    - If price gaps through SL/TP/Entry between polls, we still trigger
+    - But we use the DEFINED level price for execution, not the gapped price
+    - This ensures deterministic, auditable results
     """
     
     @staticmethod
@@ -2685,33 +2722,42 @@ class PriceTrigger:
         stop_loss: float,
         signal_type: str,
         last_price: Optional[float] = None
-    ) -> bool:
+    ) -> tuple:
         """
         Check if Stop Loss is triggered.
         
-        RULES:
-        - SELL: SL triggers when price >= SL (price rises against us)
-        - BUY: SL triggers when price <= SL (price falls against us)
+        Returns (triggered: bool, execution_price: float)
+        - execution_price is ALWAYS the defined SL, not the gapped price
         
-        Uses crossing detection when last_price available.
+        RULES:
+        - SELL: SL triggers when price rises TO or THROUGH SL
+        - BUY: SL triggers when price falls TO or THROUGH SL
         """
         if not stop_loss or not current_price:
-            return False
+            return (False, None)
         
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
             # SELL SL: triggered when price RISES to or above SL
             if last_price is not None:
-                # Crossing: was below SL, now at or above
-                return last_price < stop_loss and current_price >= stop_loss
-            return current_price >= stop_loss
+                # Crossing detection: was below SL, now at or above (or gapped through)
+                triggered = last_price < stop_loss and current_price >= stop_loss
+            else:
+                triggered = current_price >= stop_loss
+            
+            # GAP PROTECTION: Always use defined SL, not gapped price
+            return (triggered, stop_loss if triggered else None)
         else:
             # BUY SL: triggered when price FALLS to or below SL
             if last_price is not None:
-                # Crossing: was above SL, now at or below
-                return last_price > stop_loss and current_price <= stop_loss
-            return current_price <= stop_loss
+                # Crossing detection: was above SL, now at or below (or gapped through)
+                triggered = last_price > stop_loss and current_price <= stop_loss
+            else:
+                triggered = current_price <= stop_loss
+            
+            # GAP PROTECTION: Always use defined SL, not gapped price
+            return (triggered, stop_loss if triggered else None)
     
     @staticmethod
     def check_tp_triggered(
@@ -2719,33 +2765,42 @@ class PriceTrigger:
         take_profit: float,
         signal_type: str,
         last_price: Optional[float] = None
-    ) -> bool:
+    ) -> tuple:
         """
         Check if Take Profit is triggered.
         
-        RULES:
-        - SELL: TP triggers when price <= TP (price falls in our favor)
-        - BUY: TP triggers when price >= TP (price rises in our favor)
+        Returns (triggered: bool, execution_price: float)
+        - execution_price is ALWAYS the defined TP, not the gapped price
         
-        Uses crossing detection when last_price available.
+        RULES:
+        - SELL: TP triggers when price falls TO or THROUGH TP
+        - BUY: TP triggers when price rises TO or THROUGH TP
         """
         if not take_profit or not current_price:
-            return False
+            return (False, None)
         
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
             # SELL TP: triggered when price FALLS to or below TP
             if last_price is not None:
-                # Crossing: was above TP, now at or below
-                return last_price > take_profit and current_price <= take_profit
-            return current_price <= take_profit
+                # Crossing detection: was above TP, now at or below (or gapped through)
+                triggered = last_price > take_profit and current_price <= take_profit
+            else:
+                triggered = current_price <= take_profit
+            
+            # GAP PROTECTION: Always use defined TP, not gapped price
+            return (triggered, take_profit if triggered else None)
         else:
             # BUY TP: triggered when price RISES to or above TP
             if last_price is not None:
-                # Crossing: was below TP, now at or above
-                return last_price < take_profit and current_price >= take_profit
-            return current_price >= take_profit
+                # Crossing detection: was below TP, now at or above (or gapped through)
+                triggered = last_price < take_profit and current_price >= take_profit
+            else:
+                triggered = current_price >= take_profit
+            
+            # GAP PROTECTION: Always use defined TP, not gapped price
+            return (triggered, take_profit if triggered else None)
     
     @staticmethod
     def check_entry_triggered(
@@ -2753,11 +2808,51 @@ class PriceTrigger:
         entry_price: float,
         signal_type: str,
         last_price: Optional[float] = None
-    ) -> bool:
+    ) -> tuple:
         """
         Check if Entry price is reached for pending signals.
         
+        Returns (triggered: bool, activation_price: float)
+        - activation_price is ALWAYS the defined entry, not the gapped price
+        
         RULES:
+        - SELL Pending: Entry triggers when price rises TO or THROUGH entry (sell high)
+        - BUY Pending: Entry triggers when price falls TO or THROUGH entry (buy low)
+        
+        GAP PROTECTION:
+        - If price gaps across entry (e.g., 4220 → 4200 for entry 4211)
+        - We activate at 4211, NOT at 4200
+        - This keeps signal math clean and deterministic
+        """
+        if not entry_price or not current_price:
+            return (False, None)
+        
+        sig_type = signal_type.lower()
+        
+        if sig_type == "sell":
+            # SELL entry: we want to sell high - price must rise TO entry
+            if last_price is not None:
+                # Crossing: was below entry, now at or above (or gapped through)
+                triggered = last_price < entry_price and current_price >= entry_price
+            else:
+                triggered = current_price >= entry_price
+            
+            # GAP PROTECTION: Always use defined entry, not gapped price
+            return (triggered, entry_price if triggered else None)
+        else:
+            # BUY entry: we want to buy low - price must fall TO entry
+            if last_price is not None:
+                # Crossing: was above entry, now at or below (or gapped through)
+                triggered = last_price > entry_price and current_price <= entry_price
+            else:
+                triggered = current_price <= entry_price
+            
+            # GAP PROTECTION: Always use defined entry, not gapped price
+            return (triggered, entry_price if triggered else None)
+
+
+# Legacy alias for backward compatibility
+PriceTrigger = DeterministicPriceTrigger
         - SELL: Entry triggers when price rises TO entry (we sell at high)
         - BUY: Entry triggers when price falls TO entry (we buy at low)
         
