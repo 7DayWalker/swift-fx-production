@@ -2914,24 +2914,26 @@ class SignalLifecycleController:
         current_state: str,
         exit_price: float,
         exit_reason: str,
-        signal: dict
+        signal: dict,
+        price_context: Optional[dict] = None
     ) -> bool:
         """
-        CLOSE a signal. This is FINAL - no further processing.
+        CLOSE a signal with full audit trail. This is FINAL - no further processing.
         
         Actions:
         1. Set state = closed
-        2. Set exit_price
+        2. Set exit_price (GAP-PROTECTED: defined SL/TP level, not gapped market price)
         3. Set exit_reason
-        4. Calculate pips ONCE
-        5. Set closed_at timestamp
+        4. Calculate pips with full math trace
+        5. Store price_source, poll_timestamp, last_price, current_price
+        6. Set closed_at timestamp
         """
         entry_price = signal.get("entry_price_actual") or signal.get("entry")
         signal_type = signal.get("signal_type", "buy")
         pair = signal.get("pair", "")
         
-        # Calculate pips EXACTLY ONCE
-        final_pips = calculate_signal_pips(entry_price, exit_price, signal_type, pair)
+        # Calculate pips with FULL AUDIT TRACE
+        pip_result = calculate_signal_pips_with_trace(entry_price, exit_price, signal_type, pair)
         
         # Determine tp_hit from exit_reason
         tp_hit_map = {
@@ -2949,24 +2951,40 @@ class SignalLifecycleController:
             if existing_tp > tp_hit:
                 tp_hit = existing_tp
         
+        # Build audit record
+        update_doc = {
+            "state": "closed",
+            "status": "closed",
+            "exit_price": exit_price,
+            "exit_reason": exit_reason if isinstance(exit_reason, str) else exit_reason.value,
+            "final_pips": pip_result["calculated_pips"],
+            "tp_hit": tp_hit,
+            "closed_at": datetime.now(timezone.utc),
+            # AUDIT TRAIL FIELDS
+            "pip_size": pip_result["pip_size"],
+            "pip_multiplier": pip_result["pip_multiplier"],
+            "pip_math_trace": pip_result["math_trace"],
+        }
+        
+        # Add price context if provided
+        if price_context:
+            update_doc["price_source"] = price_context.get("price_source")
+            update_doc["poll_timestamp"] = price_context.get("poll_timestamp")
+            update_doc["closure_last_price"] = price_context.get("last_price")
+            update_doc["closure_current_price"] = price_context.get("current_price")
+        
         # Update signal - ATOMIC operation
         result = await self.db.signals.update_one(
             {"signal_id": signal_id, "state": current_state},
-            {"$set": {
-                "state": "closed",
-                "status": "closed",
-                "exit_price": exit_price,
-                "exit_reason": exit_reason if isinstance(exit_reason, str) else exit_reason.value,
-                "final_pips": final_pips,
-                "tp_hit": tp_hit,
-                "closed_at": datetime.now(timezone.utc)
-            }}
+            {"$set": update_doc}
         )
         
         if result.modified_count > 0:
             logger.info(
                 f"[Engine] CLOSED signal {signal_id}: "
-                f"exit_reason={exit_reason}, exit_price={exit_price}, pips={final_pips}"
+                f"exit_reason={exit_reason}, exit_price={exit_price}, "
+                f"pips={pip_result['calculated_pips']}, "
+                f"math={pip_result['math_trace']}"
             )
             return True
         
