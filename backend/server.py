@@ -3245,8 +3245,8 @@ class SignalLifecycleController:
 ENGINE_CONFIG_DEFAULTS = {
     "enabled": True,              # Master switch
     "paused": False,              # Temporary pause (maintenance mode)
-    "poll_interval": 30,          # Seconds between price checks
-    "min_poll_interval": 10,      # Minimum allowed poll interval
+    "poll_interval": PRICE_POLL_INTERVAL,  # Seconds between price checks (default 5s from env)
+    "min_poll_interval": 3,       # Minimum allowed poll interval
     "max_poll_interval": 300,     # Maximum allowed poll interval
     "auto_activate_pending": True,  # Auto-activate pending signals
     "auto_close_on_sl": True,     # Auto-close on stop loss
@@ -3262,6 +3262,7 @@ ENGINE_CONFIG_DEFAULTS = {
 price_automation_running = False
 engine_task = None
 lifecycle_controller = None
+engine_lock_id = None  # For single instance enforcement
 
 
 async def get_engine_config() -> dict:
