@@ -38,6 +38,12 @@ export default function AdminLayout() {
       <Stack.Screen name="signals" />
       <Stack.Screen name="users" />
       <Stack.Screen name="analytics" />
+      <Stack.Screen name="support-tickets" />
+      <Stack.Screen name="fund-applications" />
+      <Stack.Screen name="fund-performance" />
+      <Stack.Screen name="referrals" />
+      <Stack.Screen name="withdrawals" />
+      <Stack.Screen name="admin-management" />
     </Stack>
   );
 }
