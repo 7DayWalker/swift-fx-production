@@ -2403,42 +2403,114 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
 # Admin creation is now handled through Supabase dashboard only
 
 
-# ===================== PRICE-BASED SIGNAL AUTOMATION =====================
+# ==============================================================================
+# SIGNAL LIFECYCLE ENGINE v3.0 - DETERMINISTIC AUDITABLE MODE
+# ==============================================================================
+#
+# ARCHITECTURE OVERVIEW:
+# ----------------------
+# This is a SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine.
+# It is NOT tick-level real-time execution. It is NOT broker execution.
+#
+# KEY CHARACTERISTICS:
+# 1. POLLING-BASED: Prices fetched every N seconds (default 5s, configurable)
+# 2. SNAPSHOT PRICES: Each poll gets a single price point per instrument
+# 3. DETERMINISTIC: Same inputs always produce same outputs
+# 4. GAP-PROTECTED: Price gaps use defined SL/TP/Entry, not jumped prices
+# 5. AUDITABLE: Every closure stores full price trace and source
+#
+# CROSSING DETECTION RULES:
+# - Activation/closure requires price to CROSS through target level
+# - If last_price unavailable, uses simple threshold comparison
+# - Gap protection ensures execution at defined levels, not market gaps
+#
+# PRICE SOURCES:
+# - Forex: frankfurter.app (free API, mid-rate)
+# - Gold: goldapi.io → CoinGecko PAX Gold fallback
+# - Crypto: CoinGecko
+# - NO SIMULATED/HARDCODED PRICES - if API fails, symbol is skipped
+#
+# SINGLE INSTANCE ENFORCEMENT:
+# - DB-based distributed lock prevents duplicate engine execution
+# - Lock auto-expires after 2x poll interval for crash recovery
+#
+# DATA STORED AT CLOSURE:
+# - exit_price, exit_reason, price_source, poll_timestamp
+# - last_price, current_price, activation_price
+# - pip_size, pip_multiplier, calculated_pips with full math trace
+#
+# ==============================================================================
+
 import asyncio
 from contextlib import asynccontextmanager
 
-# Price feed configuration
-PRICE_POLL_INTERVAL = 30  # seconds
+# Price feed configuration - CONFIGURABLE VIA ENVIRONMENT
+PRICE_POLL_INTERVAL = int(os.environ.get('SIGNAL_POLL_INTERVAL', '5'))  # Default 5 seconds
 price_automation_running = False
 
 # Symbol mapping for different price APIs
 SYMBOL_MAP = {
     # Forex pairs
-    "EUR/USD": {"type": "forex", "symbol": "EURUSD"},
-    "EURUSD": {"type": "forex", "symbol": "EURUSD"},
-    "GBP/USD": {"type": "forex", "symbol": "GBPUSD"},
-    "GBPUSD": {"type": "forex", "symbol": "GBPUSD"},
-    "USD/JPY": {"type": "forex", "symbol": "USDJPY"},
-    "USDJPY": {"type": "forex", "symbol": "USDJPY"},
-    "AUD/USD": {"type": "forex", "symbol": "AUDUSD"},
-    "AUDUSD": {"type": "forex", "symbol": "AUDUSD"},
-    "USD/CAD": {"type": "forex", "symbol": "USDCAD"},
-    "USDCAD": {"type": "forex", "symbol": "USDCAD"},
-    "USD/CHF": {"type": "forex", "symbol": "USDCHF"},
-    "USDCHF": {"type": "forex", "symbol": "USDCHF"},
-    # Gold
-    "XAU/USD": {"type": "gold", "symbol": "XAUUSD"},
-    "XAUUSD": {"type": "gold", "symbol": "XAUUSD"},
-    # Crypto
-    "BTC/USD": {"type": "crypto", "symbol": "bitcoin"},
-    "BTCUSD": {"type": "crypto", "symbol": "bitcoin"},
-    "ETH/USD": {"type": "crypto", "symbol": "ethereum"},
-    "ETHUSD": {"type": "crypto", "symbol": "ethereum"},
+    "EUR/USD": {"type": "forex", "symbol": "EURUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "EURUSD": {"type": "forex", "symbol": "EURUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "GBP/USD": {"type": "forex", "symbol": "GBPUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "GBPUSD": {"type": "forex", "symbol": "GBPUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "USD/JPY": {"type": "forex", "symbol": "USDJPY", "pip_multiplier": 100, "pip_size": 0.01},
+    "USDJPY": {"type": "forex", "symbol": "USDJPY", "pip_multiplier": 100, "pip_size": 0.01},
+    "GBP/JPY": {"type": "forex", "symbol": "GBPJPY", "pip_multiplier": 100, "pip_size": 0.01},
+    "GBPJPY": {"type": "forex", "symbol": "GBPJPY", "pip_multiplier": 100, "pip_size": 0.01},
+    "AUD/USD": {"type": "forex", "symbol": "AUDUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "AUDUSD": {"type": "forex", "symbol": "AUDUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "USD/CAD": {"type": "forex", "symbol": "USDCAD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "USDCAD": {"type": "forex", "symbol": "USDCAD", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "USD/CHF": {"type": "forex", "symbol": "USDCHF", "pip_multiplier": 10000, "pip_size": 0.0001},
+    "USDCHF": {"type": "forex", "symbol": "USDCHF", "pip_multiplier": 10000, "pip_size": 0.0001},
+    # Gold - pip = $0.10
+    "XAU/USD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
+    "XAUUSD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
+    # Crypto - pip = $1.00
+    "BTC/USD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
+    "BTCUSD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
+    "ETH/USD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
+    "ETHUSD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
 }
 
 
-async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
-    """Fetch live prices from multiple free APIs"""
+def get_instrument_info(pair: str) -> dict:
+    """Get pip multiplier and pip size for an instrument"""
+    pair_upper = pair.upper().replace("/", "")
+    mapping = SYMBOL_MAP.get(pair) or SYMBOL_MAP.get(pair_upper)
+    
+    if mapping:
+        return {
+            "pip_multiplier": mapping["pip_multiplier"],
+            "pip_size": mapping["pip_size"]
+        }
+    
+    # Fallback based on pair characteristics
+    if "JPY" in pair_upper:
+        return {"pip_multiplier": 100, "pip_size": 0.01}
+    elif "XAU" in pair_upper or "GOLD" in pair_upper:
+        return {"pip_multiplier": 10, "pip_size": 0.1}
+    elif "BTC" in pair_upper or "ETH" in pair_upper:
+        return {"pip_multiplier": 1, "pip_size": 1.0}
+    else:
+        return {"pip_multiplier": 10000, "pip_size": 0.0001}
+
+
+async def fetch_live_prices(symbols: List[str]) -> Dict[str, dict]:
+    """
+    Fetch live prices from multiple free APIs.
+    
+    Returns dict with price AND source for each symbol:
+    {
+        "XAUUSD": {"price": 2650.50, "source": "goldapi.io"},
+        "EURUSD": {"price": 1.0850, "source": "frankfurter.app"}
+    }
+    
+    CRITICAL: NO HARDCODED FALLBACK PRICES.
+    If API fails, symbol is omitted from results.
+    """
     prices = {}
     
     # Group symbols by type
@@ -2462,24 +2534,29 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
         if forex_symbols:
             for orig_symbol, api_symbol in forex_symbols:
                 base = api_symbol[:3]
-                quote = api_symbol[3:]
+                quote_ccy = api_symbol[3:]
                 try:
                     resp = await client.get(
-                        f"https://api.frankfurter.app/latest?from={base}&to={quote}"
+                        f"https://api.frankfurter.app/latest?from={base}&to={quote_ccy}"
                     )
                     if resp.status_code == 200:
                         data = resp.json()
-                        rate = data.get("rates", {}).get(quote)
+                        rate = data.get("rates", {}).get(quote_ccy)
                         if rate:
-                            prices[orig_symbol] = float(rate)
+                            prices[orig_symbol] = {
+                                "price": float(rate),
+                                "source": "frankfurter.app"
+                            }
                 except Exception as e:
-                    logger.warning(f"Forex price fetch for {orig_symbol} failed: {e}")
+                    logger.warning(f"[PriceFetch] Forex {orig_symbol} FAILED: {e}")
         
-        # Fetch gold from gold-api.io or fallback
+        # Fetch gold - NO HARDCODED FALLBACK
         if gold_symbols:
             for orig_symbol, api_symbol in gold_symbols:
+                price_fetched = False
+                
+                # Primary: goldapi.io
                 try:
-                    # Try goldapi.io free endpoint
                     resp = await client.get(
                         "https://www.goldapi.io/api/XAU/USD",
                         headers={"x-access-token": "goldapi-free"}
@@ -2488,28 +2565,34 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                         data = resp.json()
                         price = data.get("price")
                         if price:
-                            prices[orig_symbol] = float(price)
-                            continue
-                except:
-                    pass
+                            prices[orig_symbol] = {
+                                "price": float(price),
+                                "source": "goldapi.io"
+                            }
+                            price_fetched = True
+                except Exception as e:
+                    logger.warning(f"[PriceFetch] Gold primary API failed: {e}")
                 
-                # Fallback: Use CoinGecko's gold price via PAX Gold token
-                try:
-                    resp = await client.get(
-                        "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd"
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if "pax-gold" in data:
-                            prices[orig_symbol] = float(data["pax-gold"]["usd"])
-                            continue
-                except:
-                    pass
+                # Fallback: CoinGecko PAX Gold
+                if not price_fetched:
+                    try:
+                        resp = await client.get(
+                            "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd"
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            if "pax-gold" in data and "usd" in data["pax-gold"]:
+                                prices[orig_symbol] = {
+                                    "price": float(data["pax-gold"]["usd"]),
+                                    "source": "coingecko-paxgold"
+                                }
+                                price_fetched = True
+                    except Exception as e:
+                        logger.warning(f"[PriceFetch] Gold fallback API failed: {e}")
                 
-                # Last fallback: approximate current market price
-                # This should be updated periodically or replaced with a real API key
-                logger.warning(f"Using fallback price for {orig_symbol}")
-                prices[orig_symbol] = 2650.0  # Approximate gold price
+                # CRITICAL: NO HARDCODED FALLBACK - skip symbol if all APIs fail
+                if not price_fetched:
+                    logger.error(f"[PriceFetch] {orig_symbol} SKIPPED - all price sources failed")
         
         # Fetch crypto from CoinGecko (free, no API key)
         if crypto_symbols:
@@ -2522,23 +2605,18 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, float]:
                     data = resp.json()
                     for orig_symbol, api_id in crypto_symbols:
                         if api_id in data and "usd" in data[api_id]:
-                            prices[orig_symbol] = float(data[api_id]["usd"])
+                            prices[orig_symbol] = {
+                                "price": float(data[api_id]["usd"]),
+                                "source": "coingecko"
+                            }
             except Exception as e:
-                logger.error(f"Crypto price fetch failed: {e}")
+                logger.error(f"[PriceFetch] Crypto FAILED: {e}")
     
     return prices
 
 
 # ==============================================================================
-# SIGNAL LIFECYCLE ENGINE v2.0 - COMPLETE REBUILD
-# ==============================================================================
-# SINGLE SOURCE OF TRUTH for all signal state management
-# 
-# AUTHORITATIVE RULES:
-# 1. Admin-defined state on creation is PRESERVED
-# 2. Closed signals are IMMUTABLE - removed from all processing
-# 3. Pips calculated ONCE at closure - NEVER recalculated
-# 4. Exit handled ONCE - no further processing after closure
+# SIGNAL LIFECYCLE ENGINE v3.0 - DETERMINISTIC AUDITABLE MODE
 # ==============================================================================
 
 
