@@ -2853,30 +2853,10 @@ class DeterministicPriceTrigger:
 
 # Legacy alias for backward compatibility
 PriceTrigger = DeterministicPriceTrigger
-        - SELL: Entry triggers when price rises TO entry (we sell at high)
-        - BUY: Entry triggers when price falls TO entry (we buy at low)
-        
-        Note: In reality, limit orders fill when price reaches entry.
-        """
-        if not entry_price or not current_price:
-            return False
-        
-        sig_type = signal_type.lower()
-        
-        if sig_type == "sell":
-            # SELL entry: we want to sell high
-            if last_price is not None:
-                return last_price < entry_price and current_price >= entry_price
-            return current_price >= entry_price
-        else:
-            # BUY entry: we want to buy low
-            if last_price is not None:
-                return last_price > entry_price and current_price <= entry_price
-            return current_price <= entry_price
 
 
 # ==============================================================================
-# SIGNAL LIFECYCLE CONTROLLER (SINGLE SOURCE OF TRUTH)
+# SIGNAL LIFECYCLE CONTROLLER v3.0 - DETERMINISTIC AUDITABLE
 # ==============================================================================
 
 class SignalLifecycleController:
