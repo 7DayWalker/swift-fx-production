@@ -101,6 +101,14 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Fund Management (`/fund-management.tsx`)
 - Help & Support (`/help-support.tsx`)
 
+## Web Preview Fix (Feb 26, 2026)
+- Fixed expo-router/internal module resolution issues for web preview
+- Created shims in `node_modules/expo-router/internal/` for:
+  - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
+  - `testing.js` → redirects to testing-library/context-stubs
+  - `utils.js` → redirects to utils/url
+- Web preview now working at https://preview-ready-8.preview.emergentagent.com
+
 ## Test Credentials
 - VIP user: paradoxella@gmail.com / Grace1992@
 - Admin: ellapauledache@gmail.com / Grace1992@
