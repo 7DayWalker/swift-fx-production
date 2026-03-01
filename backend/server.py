@@ -3016,22 +3016,40 @@ class SignalLifecycleController:
     async def activate_signal(
         self,
         signal_id: str,
-        entry_price_actual: float
+        activation_price: float,
+        price_context: Optional[dict] = None
     ) -> bool:
-        """Activate a pending signal"""
+        """
+        Activate a pending signal with GAP PROTECTION.
+        
+        IMPORTANT: activation_price is the DEFINED entry level, not the gapped market price.
+        This keeps signal math clean and deterministic.
+        """
+        update_doc = {
+            "state": "active",
+            "status": "active",
+            "tp_hit": 0,
+            "entry_price_actual": activation_price,  # GAP-PROTECTED: defined entry
+            "activated_at": datetime.now(timezone.utc)
+        }
+        
+        # Add price context if provided
+        if price_context:
+            update_doc["activation_price_source"] = price_context.get("price_source")
+            update_doc["activation_poll_timestamp"] = price_context.get("poll_timestamp")
+            update_doc["activation_last_price"] = price_context.get("last_price")
+            update_doc["activation_current_price"] = price_context.get("current_price")
+        
         result = await self.db.signals.update_one(
             {"signal_id": signal_id, "state": "pending"},
-            {"$set": {
-                "state": "active",
-                "status": "active",
-                "tp_hit": 0,
-                "entry_price_actual": entry_price_actual,
-                "activated_at": datetime.now(timezone.utc)
-            }}
+            {"$set": update_doc}
         )
         
         if result.modified_count > 0:
-            logger.info(f"[Engine] Signal {signal_id} ACTIVATED at {entry_price_actual}")
+            logger.info(
+                f"[Engine] Signal {signal_id} ACTIVATED at {activation_price} "
+                f"(gap-protected entry level)"
+            )
             return True
         
         return False
