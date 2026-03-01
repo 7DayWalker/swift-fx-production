@@ -3288,34 +3288,113 @@ async def save_engine_config(config: dict):
     )
 
 
+async def acquire_engine_lock() -> Optional[str]:
+    """
+    Acquire a distributed lock to ensure single engine instance.
+    Returns lock_id if acquired, None if already locked.
+    """
+    lock_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    # Try to acquire lock with upsert
+    result = await db.settings.find_one_and_update(
+        {
+            "setting_id": "signal_engine_lock",
+            "$or": [
+                {"locked_until": {"$lt": now}},  # Lock expired
+                {"locked_until": {"$exists": False}}  # No lock exists
+            ]
+        },
+        {
+            "$set": {
+                "setting_id": "signal_engine_lock",
+                "lock_id": lock_id,
+                "locked_at": now,
+                "locked_until": now + timedelta(seconds=PRICE_POLL_INTERVAL * 3),  # 3x poll interval
+                "locked_by": os.environ.get("HOSTNAME", "unknown")
+            }
+        },
+        upsert=True,
+        return_document=True
+    )
+    
+    if result and result.get("lock_id") == lock_id:
+        logger.info(f"[Engine] Acquired engine lock: {lock_id}")
+        return lock_id
+    
+    logger.warning(f"[Engine] Failed to acquire lock - another instance is running")
+    return None
+
+
+async def renew_engine_lock(lock_id: str) -> bool:
+    """Renew the engine lock to prevent expiry during long operations."""
+    now = datetime.now(timezone.utc)
+    result = await db.settings.update_one(
+        {"setting_id": "signal_engine_lock", "lock_id": lock_id},
+        {"$set": {"locked_until": now + timedelta(seconds=PRICE_POLL_INTERVAL * 3)}}
+    )
+    return result.modified_count > 0
+
+
+async def release_engine_lock(lock_id: str):
+    """Release the engine lock on shutdown."""
+    await db.settings.delete_one({"setting_id": "signal_engine_lock", "lock_id": lock_id})
+    logger.info(f"[Engine] Released engine lock: {lock_id}")
+
+
 async def run_price_automation():
     """
-    AUTOMATIC SIGNAL ENGINE - Main Processing Loop
+    AUTOMATIC SIGNAL ENGINE v3.0 - Main Processing Loop
+    
+    DETERMINISTIC, AUDITABLE MODE:
+    - Single instance enforcement via distributed lock
+    - Poll timestamp logged for each cycle
+    - Price source tracked for each price
+    - Gap-protected activation and closure
+    - No hardcoded fallback prices
     
     This function:
-    1. Checks engine config (enabled/paused)
-    2. Fetches live prices for all active signals
-    3. Processes each signal through the lifecycle controller
-    4. Sends notifications based on visibility rules
+    1. Acquires distributed lock (single instance)
+    2. Checks engine config (enabled/paused)
+    3. Fetches live prices for all active signals
+    4. Processes each signal through the lifecycle controller with price context
     5. Handles errors gracefully with auto-recovery
     """
-    global price_automation_running, lifecycle_controller
+    global price_automation_running, lifecycle_controller, engine_lock_id
+    
+    # Acquire distributed lock
+    engine_lock_id = await acquire_engine_lock()
+    if not engine_lock_id:
+        logger.error("[Engine] Cannot start - another instance is already running")
+        return
     
     price_automation_running = True
     lifecycle_controller = SignalLifecycleController(db)
     
     logger.info("=" * 60)
-    logger.info("[Engine] Signal Auto-Engine STARTED")
+    logger.info("[Engine] Signal Auto-Engine v3.0 STARTED")
+    logger.info(f"[Engine] Poll interval: {PRICE_POLL_INTERVAL}s (configurable via SIGNAL_POLL_INTERVAL env)")
+    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, AUDITABLE")
     logger.info("[Engine] Visibility rules ACTIVE: Free/Premium/VIP")
     logger.info("=" * 60)
     
     consecutive_errors = 0
     
     while price_automation_running:
+        poll_timestamp = datetime.now(timezone.utc)
+        
         try:
+            # Renew lock
+            if not await renew_engine_lock(engine_lock_id):
+                logger.error("[Engine] Lost engine lock - stopping")
+                break
+            
             # Load current config
             config = await get_engine_config()
-            poll_interval = config.get("poll_interval", 30)
+            poll_interval = config.get("poll_interval", PRICE_POLL_INTERVAL)
+            
+            # Log poll cycle
+            logger.debug(f"[Engine] Poll cycle started at {poll_timestamp.isoformat()}")
             
             # Check if engine is enabled
             if not config.get("enabled", True):
@@ -3357,12 +3436,12 @@ async def run_price_automation():
                 await asyncio.sleep(poll_interval)
                 continue
             
-            # Fetch live prices
-            prices = await fetch_live_prices(symbols)
+            # Fetch live prices (returns dict with price AND source)
+            price_data = await fetch_live_prices(symbols)
             
-            if not prices:
+            if not price_data:
                 consecutive_errors += 1
-                logger.warning(f"[Engine] No prices fetched (error {consecutive_errors})")
+                logger.warning(f"[Engine] No prices fetched - SKIPPING this cycle (error {consecutive_errors})")
                 await asyncio.sleep(poll_interval)
                 continue
             
@@ -3370,33 +3449,45 @@ async def run_price_automation():
             consecutive_errors = 0
             
             # Update health check timestamp
-            config["last_health_check"] = datetime.now(timezone.utc).isoformat()
+            config["last_health_check"] = poll_timestamp.isoformat()
             config["error_count"] = 0
             await save_engine_config(config)
             
             # Process each signal
             processed = 0
             actions = 0
+            skipped = 0
             
             for signal in active_signals:
                 pair = signal.get("pair", "").upper()
                 # Try both formats
-                current_price = prices.get(pair) or prices.get(pair.replace("/", ""))
+                price_info = price_data.get(pair) or price_data.get(pair.replace("/", ""))
                 
-                if not current_price:
+                if not price_info:
+                    skipped += 1
                     continue
+                
+                current_price = price_info["price"]
+                price_source = price_info["source"]
                 
                 processed += 1
                 
-                # Process signal through lifecycle controller
-                result = await lifecycle_controller.process_signal(signal, current_price)
+                # Process signal through lifecycle controller WITH PRICE CONTEXT
+                result = await lifecycle_controller.process_signal(
+                    signal,
+                    current_price,
+                    price_source,
+                    poll_timestamp
+                )
                 
                 if result:
                     actions += 1
                     logger.info(f"[Engine] Action: {result}")
             
-            if processed > 0:
-                logger.debug(f"[Engine] Processed {processed} signals, {actions} actions taken")
+            if processed > 0 or skipped > 0:
+                logger.debug(
+                    f"[Engine] Poll complete: processed={processed}, actions={actions}, skipped={skipped}"
+                )
             
             await asyncio.sleep(poll_interval)
             
@@ -3406,7 +3497,13 @@ async def run_price_automation():
         except Exception as e:
             consecutive_errors += 1
             logger.error(f"[Engine] Error in main loop: {e} (error {consecutive_errors})")
-            await asyncio.sleep(30)  # Wait before retry
+            import traceback
+            traceback.print_exc()
+            await asyncio.sleep(poll_interval)  # Use poll interval for retry
+    
+    # Release lock on shutdown
+    if engine_lock_id:
+        await release_engine_lock(engine_lock_id)
     
     price_automation_running = False
     logger.info("[Engine] Signal Auto-Engine STOPPED")
