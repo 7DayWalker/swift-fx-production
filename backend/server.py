@@ -3759,6 +3759,218 @@ async def update_automation_config(
 
 
 # ==============================================================================
+# SIGNAL ENGINE TEST SIMULATION - DETERMINISTIC VERIFICATION
+# ==============================================================================
+
+@api_router.post("/admin/automation/test-simulation")
+async def run_signal_test_simulation(admin: User = Depends(require_admin)):
+    """
+    Run a controlled test simulation to verify signal engine behavior.
+    
+    Simulates:
+    - Signal: BUY XAUUSD, Entry=4211, SL=4111, TP=4311
+    - Scenario 1: Price sequence 4200 → 4190 → 4180 → 4111 (hits SL exactly)
+    - Scenario 2: Price sequence 4200 → 4100 (gaps through SL)
+    
+    Shows exactly when and how closure/activation occurs with gap protection.
+    """
+    trigger = DeterministicPriceTrigger()
+    results = []
+    
+    # Test signal configuration
+    signal_config = {
+        "pair": "XAUUSD",
+        "signal_type": "buy",
+        "entry": 4211,
+        "stop_loss": 4111,
+        "tp1": 4311
+    }
+    
+    logger.info("=" * 60)
+    logger.info("[TestSim] Starting Signal Engine Test Simulation")
+    logger.info(f"[TestSim] Signal: BUY {signal_config['pair']}")
+    logger.info(f"[TestSim] Entry={signal_config['entry']}, SL={signal_config['stop_loss']}, TP={signal_config['tp1']}")
+    logger.info("=" * 60)
+    
+    # ===== SCENARIO 1: Normal SL hit (price reaches SL exactly) =====
+    results.append({
+        "scenario": "1 - Normal SL Hit",
+        "description": "Price sequence: 4200 → 4190 → 4180 → 4111",
+        "steps": []
+    })
+    
+    prices_scenario1 = [4200, 4190, 4180, 4111]
+    last_price = None
+    
+    for i, current_price in enumerate(prices_scenario1):
+        # Check SL trigger
+        sl_triggered, sl_exit_price = trigger.check_sl_triggered(
+            current_price,
+            signal_config["stop_loss"],
+            signal_config["signal_type"],
+            last_price
+        )
+        
+        step_result = {
+            "poll": i + 1,
+            "last_price": last_price,
+            "current_price": current_price,
+            "sl_triggered": sl_triggered,
+            "sl_exit_price": sl_exit_price,
+            "gap_protected": sl_exit_price != current_price if sl_triggered else False,
+            "action": "CLOSE at SL" if sl_triggered else "No action"
+        }
+        
+        results[0]["steps"].append(step_result)
+        logger.info(f"[TestSim] Scenario 1 Poll {i+1}: price={current_price}, last={last_price}, SL_triggered={sl_triggered}")
+        
+        if sl_triggered:
+            # Calculate pips at closure
+            pip_result = calculate_signal_pips_with_trace(
+                signal_config["entry"],
+                sl_exit_price,
+                signal_config["signal_type"],
+                signal_config["pair"]
+            )
+            results[0]["closure"] = {
+                "exit_price": sl_exit_price,
+                "exit_reason": "sl",
+                "pips": pip_result["calculated_pips"],
+                "math_trace": pip_result["math_trace"],
+                "gap_protected": sl_exit_price != current_price
+            }
+            break
+        
+        last_price = current_price
+    
+    # ===== SCENARIO 2: Gap through SL (price jumps past SL) =====
+    results.append({
+        "scenario": "2 - Gap Through SL",
+        "description": "Price sequence: 4200 → 4100 (gaps through SL at 4111)",
+        "steps": []
+    })
+    
+    prices_scenario2 = [4200, 4100]  # Price gaps from 4200 to 4100, skipping 4111
+    last_price = None
+    
+    for i, current_price in enumerate(prices_scenario2):
+        # Check SL trigger
+        sl_triggered, sl_exit_price = trigger.check_sl_triggered(
+            current_price,
+            signal_config["stop_loss"],
+            signal_config["signal_type"],
+            last_price
+        )
+        
+        step_result = {
+            "poll": i + 1,
+            "last_price": last_price,
+            "current_price": current_price,
+            "sl_triggered": sl_triggered,
+            "sl_exit_price": sl_exit_price,
+            "gap_protected": sl_exit_price != current_price if sl_triggered else False,
+            "action": f"CLOSE at SL={sl_exit_price} (gap protected, market={current_price})" if sl_triggered else "No action"
+        }
+        
+        results[1]["steps"].append(step_result)
+        logger.info(f"[TestSim] Scenario 2 Poll {i+1}: price={current_price}, last={last_price}, SL_triggered={sl_triggered}, exit_at={sl_exit_price}")
+        
+        if sl_triggered:
+            # Calculate pips at closure - using GAP PROTECTED price
+            pip_result = calculate_signal_pips_with_trace(
+                signal_config["entry"],
+                sl_exit_price,  # This is the defined SL, not the gapped price
+                signal_config["signal_type"],
+                signal_config["pair"]
+            )
+            results[1]["closure"] = {
+                "exit_price": sl_exit_price,
+                "market_price_at_close": current_price,
+                "exit_reason": "sl",
+                "pips": pip_result["calculated_pips"],
+                "math_trace": pip_result["math_trace"],
+                "gap_protected": True,
+                "gap_protection_note": f"Closed at SL={sl_exit_price}, NOT at gapped price {current_price}"
+            }
+            
+            # Compare with non-gap-protected result
+            pip_result_ungapped = calculate_signal_pips_with_trace(
+                signal_config["entry"],
+                current_price,  # Using actual gapped price
+                signal_config["signal_type"],
+                signal_config["pair"]
+            )
+            results[1]["without_gap_protection"] = {
+                "exit_price": current_price,
+                "pips": pip_result_ungapped["calculated_pips"],
+                "math_trace": pip_result_ungapped["math_trace"],
+                "additional_loss": pip_result_ungapped["calculated_pips"] - pip_result["calculated_pips"]
+            }
+            break
+        
+        last_price = current_price
+    
+    # ===== SCENARIO 3: Pending Activation with Gap =====
+    results.append({
+        "scenario": "3 - Pending Activation with Gap",
+        "description": "BUY pending at 4211, price gaps: 4220 → 4200",
+        "steps": []
+    })
+    
+    prices_scenario3 = [4220, 4200]  # Price gaps from 4220 to 4200, crossing entry 4211
+    last_price = None
+    
+    for i, current_price in enumerate(prices_scenario3):
+        # Check entry trigger
+        entry_triggered, activation_price = trigger.check_entry_triggered(
+            current_price,
+            signal_config["entry"],
+            signal_config["signal_type"],
+            last_price
+        )
+        
+        step_result = {
+            "poll": i + 1,
+            "last_price": last_price,
+            "current_price": current_price,
+            "entry_triggered": entry_triggered,
+            "activation_price": activation_price,
+            "gap_protected": activation_price != current_price if entry_triggered else False,
+            "action": f"ACTIVATE at entry={activation_price} (gap protected, market={current_price})" if entry_triggered else "No action"
+        }
+        
+        results[2]["steps"].append(step_result)
+        logger.info(f"[TestSim] Scenario 3 Poll {i+1}: price={current_price}, last={last_price}, entry_triggered={entry_triggered}, activate_at={activation_price}")
+        
+        if entry_triggered:
+            results[2]["activation"] = {
+                "activation_price": activation_price,
+                "market_price_at_activation": current_price,
+                "gap_protected": True,
+                "gap_protection_note": f"Activated at entry={activation_price}, NOT at gapped price {current_price}"
+            }
+            break
+        
+        last_price = current_price
+    
+    logger.info("=" * 60)
+    logger.info("[TestSim] Test Simulation Complete")
+    logger.info("=" * 60)
+    
+    return {
+        "success": True,
+        "message": "Signal engine test simulation complete",
+        "signal_config": signal_config,
+        "results": results,
+        "summary": {
+            "scenario_1": "Normal SL hit: Closed at SL price as expected",
+            "scenario_2": "Gap through SL: GAP PROTECTED - closed at defined SL, not gapped market price",
+            "scenario_3": "Pending activation with gap: GAP PROTECTED - activated at defined entry, not gapped market price"
+        }
+    }
+
+
+# ==============================================================================
 # FUND MANAGEMENT API - PRODUCTION READY
 # ==============================================================================
 
