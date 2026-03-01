@@ -3198,18 +3198,25 @@ class SignalLifecycleController:
                         success = await self.close_signal(
                             signal_id, current_state, tp_exit_price, exit_reason, signal, price_context
                         )
-                    if success:
-                        pips = calculate_signal_pips(entry, tp_target, signal_type, pair)
-                        visibility = SignalVisibility(signal.get("visibility", "free"))
-                        asyncio.create_task(send_signal_close_notification(
-                            signal_id, pair, signal_type, pips, visibility
-                        ))
-                        return {"action": "closed", "reason": str(exit_reason), "pips": pips, "signal_id": signal_id}
-                else:
-                    # Advance to next TP state
-                    success = await self.advance_tp_state(signal_id, current_state, new_state, tp_level)
-                    if success:
-                        return {"action": "tp_hit", "level": tp_level, "signal_id": signal_id}
+                        if success:
+                            pips = calculate_signal_pips(entry, tp_exit_price, signal_type, pair)
+                            visibility = SignalVisibility(signal.get("visibility", "free"))
+                            asyncio.create_task(send_signal_close_notification(
+                                signal_id, pair, signal_type, pips, visibility
+                            ))
+                            return {
+                                "action": "closed",
+                                "reason": str(exit_reason),
+                                "pips": pips,
+                                "signal_id": signal_id,
+                                "exit_price": tp_exit_price,
+                                "gap_protected": tp_exit_price != current_price
+                            }
+                    else:
+                        # Advance to next TP state
+                        success = await self.advance_tp_state(signal_id, current_state, new_state, tp_level)
+                        if success:
+                            return {"action": "tp_hit", "level": tp_level, "signal_id": signal_id}
         
         return None
 
