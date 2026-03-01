@@ -3057,10 +3057,17 @@ class SignalLifecycleController:
     async def process_signal(
         self,
         signal: dict,
-        current_price: float
+        current_price: float,
+        price_source: str,
+        poll_timestamp: datetime
     ) -> Optional[dict]:
         """
         MAIN ENTRY POINT: Process a single signal with current price.
+        
+        DETERMINISTIC GAP-PROTECTED LOGIC:
+        - Activation uses DEFINED entry price, not gapped market price
+        - SL closure uses DEFINED SL price, not gapped market price
+        - TP closure uses DEFINED TP price, not gapped market price
         
         Returns dict with action taken, or None if no action.
         """
@@ -3069,6 +3076,14 @@ class SignalLifecycleController:
         signal_type = signal.get("signal_type", "buy")
         pair = signal.get("pair", "")
         last_price = signal.get("last_price")
+        
+        # Build price context for audit trail
+        price_context = {
+            "price_source": price_source,
+            "poll_timestamp": poll_timestamp,
+            "last_price": last_price,
+            "current_price": current_price
+        }
         
         # RULE 1: NEVER process closed signals
         if self.is_closed(signal):
@@ -3084,16 +3099,26 @@ class SignalLifecycleController:
         if current_state == "pending":
             entry = signal.get("entry")
             
-            # Check if entry price hit
-            if self.trigger.check_entry_triggered(current_price, entry, signal_type, last_price):
-                success = await self.activate_signal(signal_id, current_price)
+            # Check if entry price hit (returns tuple with gap-protected price)
+            triggered, activation_price = self.trigger.check_entry_triggered(
+                current_price, entry, signal_type, last_price
+            )
+            
+            if triggered:
+                # GAP PROTECTION: activate at DEFINED entry, not gapped price
+                success = await self.activate_signal(signal_id, activation_price, price_context)
                 if success:
                     # Send notification
                     visibility = SignalVisibility(signal.get("visibility", "free"))
                     asyncio.create_task(send_signal_notification(
                         signal_id, pair, SignalType(signal_type), visibility
                     ))
-                    return {"action": "activated", "signal_id": signal_id}
+                    return {
+                        "action": "activated",
+                        "signal_id": signal_id,
+                        "activation_price": activation_price,
+                        "gap_protected": activation_price != current_price
+                    }
             return None
         
         # === ACTIVE/TP1/TP2/TP3 SIGNALS ===
@@ -3105,7 +3130,7 @@ class SignalLifecycleController:
             if current_state == "tp3":
                 tp3_price = signal.get("tp3") or signal.get("tp2") or signal.get("tp1")
                 success = await self.close_signal(
-                    signal_id, current_state, tp3_price, ExitReason.TP3, signal
+                    signal_id, current_state, tp3_price, ExitReason.TP3, signal, price_context
                 )
                 if success:
                     pips = calculate_signal_pips(entry, tp3_price, signal_type, pair)
@@ -3117,37 +3142,62 @@ class SignalLifecycleController:
                 return None
             
             # CHECK STOP LOSS FIRST (priority over TP)
-            if stop_loss and self.trigger.check_sl_triggered(current_price, stop_loss, signal_type, last_price):
-                logger.info(f"[Engine] SL TRIGGERED for {signal_id} at {current_price} (SL={stop_loss})")
-                
-                success = await self.close_signal(
-                    signal_id, current_state, current_price, ExitReason.SL, signal
+            if stop_loss:
+                sl_triggered, sl_exit_price = self.trigger.check_sl_triggered(
+                    current_price, stop_loss, signal_type, last_price
                 )
                 
-                if success:
-                    pips = calculate_signal_pips(entry, current_price, signal_type, pair)
-                    visibility = SignalVisibility(signal.get("visibility", "free"))
-                    asyncio.create_task(send_signal_close_notification(
-                        signal_id, pair, signal_type, pips, visibility
-                    ))
-                    return {"action": "closed", "reason": "sl", "pips": pips, "signal_id": signal_id}
-                return None
+                if sl_triggered:
+                    # GAP PROTECTION: close at DEFINED SL, not gapped price
+                    logger.info(
+                        f"[Engine] SL TRIGGERED for {signal_id}: "
+                        f"market={current_price}, exit_at={sl_exit_price} (gap_protected={sl_exit_price != current_price})"
+                    )
+                    
+                    success = await self.close_signal(
+                        signal_id, current_state, sl_exit_price, ExitReason.SL, signal, price_context
+                    )
+                    
+                    if success:
+                        pips = calculate_signal_pips(entry, sl_exit_price, signal_type, pair)
+                        visibility = SignalVisibility(signal.get("visibility", "free"))
+                        asyncio.create_task(send_signal_close_notification(
+                            signal_id, pair, signal_type, pips, visibility
+                        ))
+                        return {
+                            "action": "closed",
+                            "reason": "sl",
+                            "pips": pips,
+                            "signal_id": signal_id,
+                            "exit_price": sl_exit_price,
+                            "gap_protected": sl_exit_price != current_price
+                        }
+                    return None
             
             # CHECK TP LEVELS
             tp_target, exit_reason, new_state = self.get_next_tp_target(signal)
             
-            if tp_target and self.trigger.check_tp_triggered(current_price, tp_target, signal_type, last_price):
-                logger.info(f"[Engine] TP TRIGGERED for {signal_id} at {current_price} (TP={tp_target})")
+            if tp_target:
+                tp_triggered, tp_exit_price = self.trigger.check_tp_triggered(
+                    current_price, tp_target, signal_type, last_price
+                )
                 
-                # Determine TP level
-                tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(new_state, 1)
-                
-                # If TP3 or no more TPs, close the signal
-                if new_state == "closed" or new_state == "tp3":
-                    # Close at TP
-                    success = await self.close_signal(
-                        signal_id, current_state, tp_target, exit_reason, signal
+                if tp_triggered:
+                    # GAP PROTECTION: close/advance at DEFINED TP, not gapped price
+                    logger.info(
+                        f"[Engine] TP TRIGGERED for {signal_id}: "
+                        f"market={current_price}, target={tp_exit_price} (gap_protected={tp_exit_price != current_price})"
                     )
+                    
+                    # Determine TP level
+                    tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(new_state, 1)
+                    
+                    # If TP3 or no more TPs, close the signal
+                    if new_state == "closed" or new_state == "tp3":
+                        # Close at TP
+                        success = await self.close_signal(
+                            signal_id, current_state, tp_exit_price, exit_reason, signal, price_context
+                        )
                     if success:
                         pips = calculate_signal_pips(entry, tp_target, signal_type, pair)
                         visibility = SignalVisibility(signal.get("visibility", "free"))
