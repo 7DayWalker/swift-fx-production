@@ -138,7 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = async (provider: OAuthProvider): Promise<void> => {
     if (Platform.OS === 'web') {
       // Web: standard redirect flow — Supabase handles the callback via detectSessionInUrl
-      const redirectTo = typeof window !== 'undefined' ? window.location.origin : '/';
+      if (typeof window === 'undefined') {
+        throw new Error('OAuth sign-in not available during SSR');
+      }
+      const redirectTo = window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },
