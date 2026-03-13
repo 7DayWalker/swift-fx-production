@@ -29,7 +29,7 @@ next-env.d.ts
 /build
 dist/
 
-# Sensitive files (but NOT .env which is needed for deployment)
+# Sensitive local files (NOT .env - needed for deployment)
 *token.json*
 *credentials.json*
 .env.local
@@ -74,11 +74,3 @@ chainlit.md
 
 # Mobile development
 android-sdk/
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
