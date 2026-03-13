@@ -22,7 +22,7 @@ load_dotenv(ROOT_DIR / '.env', override=False)
 # MongoDB connection (retained for non-user collections: signals, posts, etc.)
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'swiftfx')]
+db = client[os.environ['DB_NAME']]
 
 # Supabase auth integration
 from supabase_auth import (
