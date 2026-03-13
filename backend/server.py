@@ -17,7 +17,7 @@ from enum import Enum
 from urllib.parse import quote
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env', override=True)
+load_dotenv(ROOT_DIR / '.env', override=False)
 
 # MongoDB connection (retained for non-user collections: signals, posts, etc.)
 mongo_url = os.environ['MONGO_URL']
