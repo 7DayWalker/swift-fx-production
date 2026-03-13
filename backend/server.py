@@ -1553,6 +1553,20 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             logger.info("No active device tokens found")
             return
         
+        # OPTIMIZED: Batch fetch all user profiles in one query
+        user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
+        if not user_ids:
+            logger.info("No user IDs found in device tokens")
+            return
+        
+        # Batch fetch profiles from Supabase
+        try:
+            profiles_response = await supabase.from_("profiles").select("id, notification_preferences").in_("id", user_ids).execute()
+            profiles_map = {p["id"]: p for p in (profiles_response.data or [])}
+        except Exception as e:
+            logger.warning(f"Failed to batch fetch profiles: {e}, falling back to no filtering")
+            profiles_map = {}
+        
         # Notification content per spec: title="New Signal Alert", body="{PAIR} • {BUY/SELL}"
         title = "New Signal Alert"
         body = f"{pair} • {signal_type.value.upper()}"
@@ -1571,11 +1585,8 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             if not user_id:
                 continue
             
-            # Check if user has notifications enabled
-            user = await fetch_profile(user_id)
-            if not user:
-                continue
-            
+            # Check if user has notifications enabled (use batch-fetched profile)
+            user = profiles_map.get(user_id, {})
             notification_prefs = user.get("notification_preferences", {})
             if not notification_prefs.get("signals", True):
                 continue
@@ -1624,6 +1635,20 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             logger.info("No active device tokens found for close notification")
             return
         
+        # OPTIMIZED: Batch fetch all user profiles in one query
+        user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
+        if not user_ids:
+            logger.info("No user IDs found in device tokens for close notification")
+            return
+        
+        # Batch fetch profiles from Supabase
+        try:
+            profiles_response = await supabase.from_("profiles").select("id, notification_preferences").in_("id", user_ids).execute()
+            profiles_map = {p["id"]: p for p in (profiles_response.data or [])}
+        except Exception as e:
+            logger.warning(f"Failed to batch fetch profiles for close notification: {e}, falling back to no filtering")
+            profiles_map = {}
+        
         # Notification content for closed signal
         result = "WIN" if final_pips > 0 else "LOSS"
         pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
@@ -1640,11 +1665,8 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             if not token.startswith("ExponentPushToken") or not user_id:
                 continue
             
-            # Check if user has notifications enabled
-            user = await fetch_profile(user_id)
-            if not user:
-                continue
-            
+            # Check if user has notifications enabled (use batch-fetched profile)
+            user = profiles_map.get(user_id, {})
             notification_prefs = user.get("notification_preferences", {})
             if not notification_prefs.get("signals", True):
                 continue
@@ -7434,22 +7456,30 @@ app.include_router(api_router)
 
 # ===================== CORS CONFIGURATION =====================
 # Production: CORS_ORIGINS env var MUST be set with comma-separated allowed origins.
+# Use "*" to allow all origins (for deployment platforms with dynamic URLs)
 # Mobile apps bypass CORS (no Origin header), so this only affects web/admin clients.
-CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('CORS_ORIGINS', '').split(',')
-    if origin.strip()
-]
+raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
 
-# Production validation: warn if CORS_ORIGINS is empty (will only allow mobile clients)
-if not CORS_ORIGINS:
-    logger.warning("[CORS] CORS_ORIGINS not configured - web/admin access will be blocked")
+if raw_cors == '*':
+    # Allow all origins (useful for Emergent deployment with dynamic preview URLs)
+    CORS_ORIGINS = ["*"]
+    logger.info("[CORS] Configured to allow ALL origins (*)")
 else:
-    # Validate origins format (must be proper URLs)
-    for origin in CORS_ORIGINS:
-        if not origin.startswith(('http://', 'https://')):
-            raise ValueError(f"[CORS] Invalid origin format: {origin}. Must start with http:// or https://")
-    logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in raw_cors.split(',')
+        if origin.strip()
+    ]
+    
+    # Production validation: warn if CORS_ORIGINS is empty (will only allow mobile clients)
+    if not CORS_ORIGINS:
+        logger.warning("[CORS] CORS_ORIGINS not configured - web/admin access will be blocked")
+    else:
+        # Validate origins format (must be proper URLs)
+        for origin in CORS_ORIGINS:
+            if not origin.startswith(('http://', 'https://')):
+                raise ValueError(f"[CORS] Invalid origin format: {origin}. Must start with http:// or https://")
+        logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
