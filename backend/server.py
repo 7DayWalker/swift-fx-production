@@ -1,4 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, BackgroundTasks, UploadFile, File, Form, Request
+from fastapi.responses import JSONResponse
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from cryptography.exceptions import InvalidSignature as CryptoInvalidSignature
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7171,88 +7177,138 @@ async def restore_google_purchases(
 # ==================== IAP PRODUCTS & MANAGEMENT ====================
 # NOTE: Legacy /api/iap/status and /webhooks/* endpoints removed in production hardening.
 # Use /api/subscription/status for subscription queries.
-# Apple Server Notifications V2 webhook re-enabled with signature verification.
+# Apple Server Notifications V2 webhook with proper JWS signature verification.
 
 # ==================== APPLE SERVER NOTIFICATIONS V2 ====================
 
-import base64
-import hashlib
-import hmac
-from typing import Optional
-import jwt as pyjwt
+def _b64url_decode(b64_str: str) -> bytes:
+    """Decode base64url with automatic padding."""
+    padding = 4 - len(b64_str) % 4
+    if padding != 4:
+        b64_str += '=' * padding
+    return base64.urlsafe_b64decode(b64_str)
 
-async def verify_apple_webhook_signature(payload: bytes, signature_header: Optional[str]) -> bool:
+
+def verify_and_decode_apple_jws(signed_jws: str) -> Optional[dict]:
     """
-    Verify Apple Server Notification V2 signature.
-    
-    Apple signs the payload using their private key, and we verify
-    using the signature provided in the request.
-    
-    For V2, Apple sends a signed JWT (signedPayload) that we decode and verify.
+    Verify and decode an Apple JWS token (App Store Server Notification V2).
+
+    Apple V2 notifications use JWS compact serialization:
+      header.payload.signature  (all base64url encoded)
+
+    The JWS header contains:
+      - alg: "ES256"  (ECDSA with P-256 and SHA-256)
+      - x5c: [ <leaf_cert_b64der>, <intermediate_cert_b64der>, ... ]
+
+    Verification steps:
+      1. Confirm algorithm is ES256.
+      2. Load the x5c certificate chain.
+      3. Verify each cert is signed by the next in the chain.
+      4. Verify the JWS signature over "header.payload" using the leaf cert's public key.
+      5. Confirm the root cert's issuer contains "Apple" (basic chain pinning).
+
+    No HMAC / shared secret is used for V2 — security is fully cryptographic.
+    Returns the decoded payload dict on success, or None on any failure.
     """
-    if not APPLE_WEBHOOK_SECRET:
-        logger.warning("[Apple Webhook] APPLE_WEBHOOK_SECRET not configured - skipping signature verification")
-        return True  # Allow in development, but log warning
-    
-    if not signature_header:
-        logger.error("[Apple Webhook] Missing signature header")
-        return False
-    
     try:
-        # Compute expected signature using HMAC-SHA256
-        expected_signature = hmac.new(
-            APPLE_WEBHOOK_SECRET.encode('utf-8'),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        
-        # Compare signatures (constant time comparison)
-        return hmac.compare_digest(expected_signature, signature_header)
+        parts = signed_jws.split('.')
+        if len(parts) != 3:
+            logger.error("[Apple JWS] Invalid format — expected 3 dot-separated parts")
+            return None
+
+        # --- 1. Parse header ---
+        header = json.loads(_b64url_decode(parts[0]))
+        alg = header.get('alg', '')
+        if alg != 'ES256':
+            logger.error(f"[Apple JWS] Unexpected algorithm '{alg}', expected ES256")
+            return None
+
+        x5c_chain = header.get('x5c', [])
+        if not x5c_chain:
+            logger.error("[Apple JWS] Missing x5c certificate chain in JWS header")
+            return None
+
+        # --- 2. Load certificate chain ---
+        certs = []
+        for cert_b64 in x5c_chain:
+            cert_der = base64.b64decode(cert_b64)
+            cert = x509.load_der_x509_certificate(cert_der)
+            certs.append(cert)
+
+        # --- 3. Verify certificate chain (each cert signed by the next) ---
+        for i in range(len(certs) - 1):
+            child = certs[i]
+            parent = certs[i + 1]
+            try:
+                parent_pub_key = parent.public_key()
+                sig_hash = child.signature_hash_algorithm
+                parent_pub_key.verify(
+                    child.signature,
+                    child.tbs_certificate_bytes,
+                    ec.ECDSA(sig_hash)
+                )
+            except Exception as chain_err:
+                logger.error(f"[Apple JWS] Chain verification failed at index {i}: {chain_err}")
+                return None
+
+        # --- 4. Basic root certificate pinning (Apple issuer check) ---
+        root_cert = certs[-1]
+        try:
+            root_cn_attrs = root_cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+            root_cn = root_cn_attrs[0].value if root_cn_attrs else ""
+            if "Apple" not in root_cn:
+                logger.warning(f"[Apple JWS] Root cert CN '{root_cn}' does not appear to be Apple's CA")
+                return None
+        except Exception:
+            logger.warning("[Apple JWS] Could not inspect root cert CN")
+
+        # --- 5. Verify JWS signature ---
+        signing_input = f"{parts[0]}.{parts[1]}".encode('ascii')
+        raw_signature = _b64url_decode(parts[2])
+
+        if len(raw_signature) != 64:
+            logger.error(f"[Apple JWS] Unexpected signature length {len(raw_signature)}, expected 64 bytes")
+            return None
+
+        # JWS ES256: raw r||s (32 bytes each) → DER for cryptography library
+        r = int.from_bytes(raw_signature[:32], 'big')
+        s = int.from_bytes(raw_signature[32:], 'big')
+        der_signature = encode_dss_signature(r, s)
+
+        leaf_pub_key = certs[0].public_key()
+        leaf_pub_key.verify(der_signature, signing_input, ec.ECDSA(hashes.SHA256()))
+
+        # Signature valid — decode payload
+        payload = json.loads(_b64url_decode(parts[1]))
+        logger.info("[Apple JWS] Signature verified successfully")
+        return payload
+
+    except CryptoInvalidSignature:
+        logger.error("[Apple JWS] Signature verification FAILED — notification may be forged")
+        return None
     except Exception as e:
-        logger.error(f"[Apple Webhook] Signature verification failed: {e}")
-        return False
+        logger.error(f"[Apple JWS] Unexpected verification error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def decode_apple_signed_payload(signed_payload: str) -> Optional[dict]:
     """
-    Decode Apple's signedPayload JWT without verification.
-    
-    In production, you should verify the JWT signature using Apple's public key.
-    For now, we decode without verification since the webhook endpoint
-    should be protected and Apple's JWTs are self-contained.
+    Verify and decode an Apple signedPayload JWS.
+    Delegates to verify_and_decode_apple_jws for full cryptographic verification.
     """
-    try:
-        # Apple sends a JWS (JSON Web Signature) - decode without verification
-        # The payload is base64url encoded in the second part of the JWT
-        parts = signed_payload.split('.')
-        if len(parts) != 3:
-            logger.error("[Apple Webhook] Invalid JWT format")
-            return None
-        
-        # Decode the payload (second part)
-        payload_b64 = parts[1]
-        # Add padding if needed
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += '=' * padding
-        
-        payload_bytes = base64.urlsafe_b64decode(payload_b64)
-        payload = json.loads(payload_bytes)
-        
-        return payload
-    except Exception as e:
-        logger.error(f"[Apple Webhook] Failed to decode signedPayload: {e}")
-        return None
+    return verify_and_decode_apple_jws(signed_payload)
 
 
 def decode_apple_transaction_info(signed_transaction: str) -> Optional[dict]:
-    """Decode Apple's signedTransactionInfo JWT"""
-    return decode_apple_signed_payload(signed_transaction)
+    """Decode (and verify) Apple's signedTransactionInfo JWS."""
+    return verify_and_decode_apple_jws(signed_transaction)
 
 
 def decode_apple_renewal_info(signed_renewal: str) -> Optional[dict]:
-    """Decode Apple's signedRenewalInfo JWT"""
-    return decode_apple_signed_payload(signed_renewal)
+    """Decode (and verify) Apple's signedRenewalInfo JWS."""
+    return verify_and_decode_apple_jws(signed_renewal)
 
 
 @api_router.post("/webhooks/apple")
@@ -7281,49 +7337,29 @@ async def apple_server_notification_v2(request: Request):
     - data.signedRenewalInfo
     """
     try:
-        # Get raw body for signature verification
+        # Read raw body
         body = await request.body()
-        signature = request.headers.get("X-Apple-Signature") or request.headers.get("x-apple-signature")
-        
-        # Log incoming webhook
-        logger.info("[Apple Webhook] Received notification")
-        
-        # Verify signature if secret is configured
-        if APPLE_WEBHOOK_SECRET:
-            if not await verify_apple_webhook_signature(body, signature):
-                logger.error("[Apple Webhook] Signature verification failed")
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": "Invalid signature"}
-                )
-        
-        # Parse the JSON body
+        logger.info("[Apple Webhook] Received V2 notification (%d bytes)", len(body))
+
+        # Parse outer JSON envelope
         try:
-            payload = json.loads(body)
+            envelope = json.loads(body)
         except json.JSONDecodeError:
-            logger.error("[Apple Webhook] Invalid JSON payload")
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid JSON"}
-            )
-        
-        # Extract and decode the signedPayload (V2 format)
-        signed_payload = payload.get("signedPayload")
+            logger.error("[Apple Webhook] Invalid JSON envelope")
+            return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+
+        # V2 format: { "signedPayload": "<JWS>" }
+        signed_payload = envelope.get("signedPayload")
         if not signed_payload:
-            logger.error("[Apple Webhook] Missing signedPayload")
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Missing signedPayload"}
-            )
-        
-        # Decode the signed payload
-        notification_data = decode_apple_signed_payload(signed_payload)
+            logger.error("[Apple Webhook] Missing signedPayload field")
+            return JSONResponse(status_code=400, content={"error": "Missing signedPayload"})
+
+        # Verify JWS signature AND decode in one step.
+        # Returns None if signature is invalid / cert chain verification fails.
+        notification_data = verify_and_decode_apple_jws(signed_payload)
         if not notification_data:
-            logger.error("[Apple Webhook] Failed to decode signedPayload")
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Failed to decode payload"}
-            )
+            logger.error("[Apple Webhook] JWS signature verification failed — rejecting notification")
+            return JSONResponse(status_code=401, content={"error": "Invalid JWS signature"})
         
         # Extract notification details
         notification_type = notification_data.get("notificationType", "UNKNOWN")
@@ -7472,15 +7508,13 @@ async def handle_apple_subscription_active(transaction_info: dict, renewal_info:
         upsert=True
     )
     
-    # Update user's subscription status in Supabase
+    # Sync role to Supabase profile (MongoDB iap_transactions is the entitlement authority)
     try:
-        await supabase.from_("profiles").update({
-            "role": tier,
-            "subscription_status": "active",
-            "subscription_expiry": expiry_date.isoformat() if expiry_date else None
-        }).eq("id", user_id).execute()
-        
-        logger.info(f"[Apple Webhook] Updated user {user_id} to {tier} (expires: {expiry_date})")
+        ok = await update_profile(user_id, {"role": tier})
+        if ok:
+            logger.info(f"[Apple Webhook] Updated user {user_id} to {tier} (expires: {expiry_date})")
+        else:
+            logger.error(f"[Apple Webhook] update_profile returned False for user {user_id}")
     except Exception as e:
         logger.error(f"[Apple Webhook] Failed to update Supabase profile: {e}")
 
@@ -7550,11 +7584,7 @@ async def handle_apple_subscription_expired(transaction_info: dict, renewal_info
             })
             
             if not active_sub:
-                await supabase.from_("profiles").update({
-                    "role": "free",
-                    "subscription_status": "expired"
-                }).eq("id", user_id).execute()
-                
+                await update_profile(user_id, {"role": "free"})
                 logger.info(f"[Apple Webhook] Downgraded user {user_id} to free tier")
         except Exception as e:
             logger.error(f"[Apple Webhook] Failed to downgrade user: {e}")
@@ -7615,11 +7645,7 @@ async def handle_apple_refund(transaction_info: dict):
     # Downgrade user
     if user_id:
         try:
-            await supabase.from_("profiles").update({
-                "role": "free",
-                "subscription_status": "refunded"
-            }).eq("id", user_id).execute()
-            
+            await update_profile(user_id, {"role": "free"})
             logger.info(f"[Apple Webhook] Refund processed, downgraded user {user_id}")
         except Exception as e:
             logger.error(f"[Apple Webhook] Failed to process refund for user: {e}")

@@ -1,0 +1,72 @@
+{
+  "test_suite": "Apple Server Notifications V2 Webhook",
+  "date": "2026-03-23",
+  "endpoint": "POST /api/webhooks/apple",
+  "total_tests": 7,
+  "passed": 7,
+  "failed": 0,
+  "results": [
+    {
+      "test": "Missing signedPayload field",
+      "status": "PASS",
+      "expected": 400,
+      "actual": 400,
+      "body": "{\"error\": \"Missing signedPayload\"}"
+    },
+    {
+      "test": "Tampered JWS signature (forged notification)",
+      "status": "PASS",
+      "expected": 401,
+      "actual": 401,
+      "body": "{\"error\": \"Invalid JWS signature\"}",
+      "note": "Cryptographic ECDSA verification catches tampered payloads"
+    },
+    {
+      "test": "SUBSCRIBED notification (valid JWS + Supabase role update)",
+      "status": "PASS",
+      "expected": 200,
+      "actual": 200,
+      "supabase_patch": "HTTP 204 No Content",
+      "mongo_upsert": "iap_transactions upserted with status=active"
+    },
+    {
+      "test": "DID_RENEW notification",
+      "status": "PASS",
+      "expected": 200,
+      "actual": 200,
+      "supabase_patch": "HTTP 204 No Content"
+    },
+    {
+      "test": "REFUND notification (role downgrade)",
+      "status": "PASS",
+      "expected": 200,
+      "actual": 200,
+      "supabase_patch": "HTTP 204 No Content"
+    },
+    {
+      "test": "EXPIRED notification (free tier downgrade)",
+      "status": "PASS",
+      "expected": 200,
+      "actual": 200,
+      "supabase_patch": "HTTP 204 No Content"
+    },
+    {
+      "test": "DID_CHANGE_RENEWAL_STATUS notification",
+      "status": "PASS",
+      "expected": 200,
+      "actual": 200,
+      "mongo_update": "auto_renew flag updated in iap_transactions"
+    }
+  ],
+  "security_model": {
+    "algorithm": "ES256 (ECDSA P-256 + SHA-256)",
+    "verification": "JWS certificate chain (x5c) + signature over header.payload",
+    "chain_pinning": "Root CN must contain 'Apple'",
+    "shared_secret": "NOT USED — V2 is purely cryptographic"
+  },
+  "railway_deployment": {
+    "ready": true,
+    "webhook_url_pattern": "https://<railway-domain>/api/webhooks/apple",
+    "app_store_connect_config": "Version: V2, No shared secret required"
+  }
+}

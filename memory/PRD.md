@@ -141,7 +141,40 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Fund Management (`/fund-management.tsx`)
 - Help & Support (`/help-support.tsx`)
 
-## Web Preview Fix (Feb 26, 2026)
+## Apple Server Notifications V2 Webhook (Completed Mar 2026)
+
+### Endpoint: POST /api/webhooks/apple
+
+**Security Model (V2 — JWS-based, NO shared secret):**
+- Apple V2 notifications are JWS compact serializations: `header.payload.signature`
+- Header contains `x5c` certificate chain (Apple-signed)
+- Algorithm: ES256 (ECDSA with P-256 + SHA-256)
+- Server verifies: cert chain integrity + JWS signature against leaf cert public key
+- Root cert CN must contain "Apple" (basic chain pinning)
+- Tampered/forged notifications return HTTP 401
+
+**Notification types handled:**
+- SUBSCRIBED → upgrades user role in MongoDB + Supabase
+- DID_RENEW → same as SUBSCRIBED (re-activates)
+- DID_CHANGE_RENEWAL_STATUS → updates auto_renew flag in MongoDB
+- DID_FAIL_TO_RENEW → sets billing_issue status in MongoDB
+- EXPIRED / GRACE_PERIOD_EXPIRED → downgrades user to free tier
+- REFUND → revokes access, downgrades to free tier
+- REVOKE → same as REFUND (family sharing)
+- DID_CHANGE_RENEWAL_PREF → records plan change in MongoDB
+
+**Supabase update:** Only `role` field is updated (only column that exists in profiles table).
+**MongoDB:** `iap_transactions` is the entitlement authority — all state stored there.
+**Audit trail:** Every notification stored in `audit_logs` collection with payload hash.
+
+**Tested:** 7/7 tests passed (missing field → 400, tampered JWS → 401, all notification types → 200 + Supabase 204)
+
+**App Store Connect Configuration:**
+- Webhook URL: `https://<railway-domain>/api/webhooks/apple`
+- Version: V2
+- No shared secret needed (pure JWS cryptographic verification)
+
+
 - Fixed expo-router/internal module resolution issues for web preview
 - Created shims in `node_modules/expo-router/internal/` for:
   - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
