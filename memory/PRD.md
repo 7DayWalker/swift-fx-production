@@ -147,7 +147,7 @@ All 11 screens are functional with no ComingSoonGate blocks:
   - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
   - `testing.js` → redirects to testing-library/context-stubs
   - `utils.js` → redirects to utils/url
-- Web preview now working at https://preview-ready-8.preview.emergentagent.com
+- Web preview now working at https://signal-webhook-test.preview.emergentagent.com
 
 ## Test Credentials
 - VIP user: paradoxella@gmail.com / Grace1992@

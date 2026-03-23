@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://preview-ready-8.preview.emergentagent.com/api"
+BASE_URL = "https://signal-webhook-test.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

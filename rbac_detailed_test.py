@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "https://preview-ready-8.preview.emergentagent.com/api"
+BASE_URL = "https://signal-webhook-test.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
 SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
 

@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Optional
 
 # Backend URL from frontend .env
-BASE_URL = "https://preview-ready-8.preview.emergentagent.com/api"
+BASE_URL = "https://signal-webhook-test.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
