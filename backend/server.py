@@ -390,18 +390,24 @@ def check_subscription_active(user_doc: dict) -> bool:
 
 async def get_effective_subscription(user_doc: dict) -> str:
     """
-    Get user's effective subscription tier from MongoDB iap_transactions.
-    Single-source entitlement resolution — matches /api/subscription/status logic.
-    Admin access is separate (checked via is_admin flag, not tier inflation).
+    Get user's effective subscription tier.
+    Resolution order:
+      1. Admin/Super Admin → always "vip"
+      2. Active subscription override (if exists and not expired) → override tier
+      3. Verified IAP transactions in MongoDB → store-based tier
+      4. Fallback → "free"
     """
     user_id = user_doc.get("id") or user_doc.get("user_id", "")
     role = user_doc.get("role", "free")
 
     # Admin / Super Admin get VIP-level access for feature gating.
-    # This is an access grant, not a subscription tier —
-    # but returning "vip" here keeps backward compat with can_access_visibility().
     if role in ("admin", "super_admin"):
         return "vip"
+
+    # Check for active subscription override (auto-expires based on expires_at)
+    override = await get_active_override(user_id)
+    if override:
+        return override.get("tier", "free")
 
     # Resolve from verified IAP transactions in MongoDB (authoritative).
     now = datetime.now(timezone.utc)
@@ -725,6 +731,14 @@ async def require_admin(authorization: Optional[str] = Header(None)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     if not user.admin_enabled:
         raise HTTPException(status_code=403, detail="Admin account is disabled")
+    return user
+
+
+async def require_super_admin(authorization: Optional[str] = Header(None)) -> User:
+    """Require SUPER_ADMIN role. Rejects all other roles with 403."""
+    user = await require_admin(authorization)
+    if not is_super_admin(user):
+        raise HTTPException(status_code=403, detail="Super Admin access required")
     return user
 
 
@@ -2242,6 +2256,155 @@ async def get_admin_stats(admin: User = Depends(require_admin)):
     }
 
 
+# ===================== SUBSCRIPTION OVERRIDE SYSTEM =====================
+VALID_OVERRIDE_TIERS = {"free", "premium", "vip"}
+
+class OverrideSubscriptionRequest(BaseModel):
+    user_id: str
+    tier: str  # "free" | "premium" | "vip"
+    duration_days: int  # 1-30
+
+class RevokeOverrideRequest(BaseModel):
+    user_id: str
+
+
+async def get_active_override(user_id: str) -> Optional[dict]:
+    """Fetch active, non-expired override for a user. Returns None if none found."""
+    now = datetime.now(timezone.utc)
+    override = await db.subscription_overrides.find_one(
+        {"user_id": user_id, "is_active": True},
+        {"_id": 0}
+    )
+    if not override:
+        return None
+    expires_at = override.get("expires_at")
+    if expires_at:
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            except ValueError:
+                return None
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now:
+            return None
+    return override
+
+
+@api_router.post("/admin/override-subscription")
+async def grant_subscription_override(
+    body: OverrideSubscriptionRequest,
+    admin: User = Depends(require_super_admin),
+):
+    """Grant a temporary subscription override. SUPER_ADMIN only."""
+    tier = body.tier.lower()
+    if tier not in VALID_OVERRIDE_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(VALID_OVERRIDE_TIERS)}")
+    if body.duration_days < 1 or body.duration_days > 30:
+        raise HTTPException(status_code=400, detail="duration_days must be between 1 and 30")
+
+    target = await fetch_profile(body.user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=body.duration_days)
+
+    await db.subscription_overrides.update_one(
+        {"user_id": body.user_id},
+        {"$set": {
+            "user_id": body.user_id,
+            "tier": tier,
+            "is_active": True,
+            "expires_at": expires_at.isoformat(),
+            "granted_by": admin.user_id,
+            "granted_at": now.isoformat(),
+        }},
+        upsert=True,
+    )
+
+    # Immutable audit log
+    await db.subscription_override_logs.insert_one({
+        "log_id": f"sol_{uuid.uuid4().hex[:12]}",
+        "action": "GRANT_OVERRIDE",
+        "performed_by": admin.user_id,
+        "target_user": body.user_id,
+        "tier": tier,
+        "duration_days": body.duration_days,
+        "expires_at": expires_at.isoformat(),
+        "timestamp": now.isoformat(),
+    })
+
+    logger.info(f"[Override] SUPER_ADMIN {admin.user_id} granted {tier} override to {body.user_id} for {body.duration_days}d")
+    return {
+        "message": f"Override granted: {tier} until {expires_at.isoformat()}",
+        "user_id": body.user_id,
+        "tier": tier,
+        "expires_at": expires_at.isoformat(),
+        "is_active": True,
+    }
+
+
+@api_router.post("/admin/revoke-override")
+async def revoke_subscription_override(
+    body: RevokeOverrideRequest,
+    admin: User = Depends(require_super_admin),
+):
+    """Revoke an active subscription override. SUPER_ADMIN only."""
+    result = await db.subscription_overrides.update_one(
+        {"user_id": body.user_id, "is_active": True},
+        {"$set": {"is_active": False}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="No active override found for this user")
+
+    now = datetime.now(timezone.utc)
+    await db.subscription_override_logs.insert_one({
+        "log_id": f"sol_{uuid.uuid4().hex[:12]}",
+        "action": "REVOKE_OVERRIDE",
+        "performed_by": admin.user_id,
+        "target_user": body.user_id,
+        "tier": None,
+        "duration_days": None,
+        "expires_at": None,
+        "timestamp": now.isoformat(),
+    })
+
+    logger.info(f"[Override] SUPER_ADMIN {admin.user_id} revoked override for {body.user_id}")
+    return {"message": "Override revoked", "user_id": body.user_id}
+
+
+@api_router.get("/admin/override-status/{user_id}")
+async def get_override_status(user_id: str, admin: User = Depends(require_admin)):
+    """Get current override status for a user. Any admin can view."""
+    override = await db.subscription_overrides.find_one(
+        {"user_id": user_id}, {"_id": 0}
+    )
+    if not override:
+        return {"has_override": False, "override": None}
+
+    active = await get_active_override(user_id)
+    return {
+        "has_override": active is not None,
+        "override": {
+            "tier": override.get("tier"),
+            "is_active": active is not None,
+            "expires_at": override.get("expires_at"),
+            "granted_by": override.get("granted_by"),
+            "granted_at": override.get("granted_at"),
+        },
+    }
+
+
+@api_router.get("/admin/override-logs/{user_id}")
+async def get_override_logs(user_id: str, admin: User = Depends(require_super_admin)):
+    """Get immutable audit logs for a user's overrides. SUPER_ADMIN only."""
+    logs = await db.subscription_override_logs.find(
+        {"target_user": user_id}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(50)
+    return {"logs": logs, "count": len(logs)}
+
+
 # ===================== ADMIN SUBSCRIPTION MANAGEMENT =====================
 class AdminSubscriptionUpdate(BaseModel):
     """Admin model for updating user subscription"""
@@ -2409,7 +2572,11 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
     profile_role = (profile or {}).get("role", "user")
     is_admin = profile_role in ("admin", "super_admin")
 
-    # ── 2. Resolve subscription tier from verified IAP transactions (MongoDB) ──
+    # ── 2. Check for active subscription override first ──
+    override = await get_active_override(user_id)
+    override_info = None
+
+    # ── 3. Resolve subscription tier from verified IAP transactions (MongoDB) ──
     # Only transactions created by /iap/apple/verify or /iap/google/verify are stored here.
     tier_priority = {"vip": 2, "premium": 1}
     best_tier = "free"
@@ -2452,20 +2619,30 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
             subscription_product_id = txn.get("product_id")
             auto_renew = txn.get("auto_renew", False)
 
-    # ── 3. Build feature flags from verified tier ──
+    # ── 4. Apply override if active (takes priority over store subscriptions) ──
     effective = best_tier
+    if override:
+        effective = override.get("tier", best_tier)
+        override_info = {
+            "tier": override.get("tier"),
+            "expires_at": override.get("expires_at"),
+            "is_active": True,
+        }
+
+    # ── 5. Build feature flags from verified tier ──
     ai_weekly_used = (profile or {}).get("ai_weekly_used", 0) or (profile or {}).get("ai_usage_count", 0)
     ai_limit = get_ai_weekly_limit(effective)
 
     return {
         "user_id": user_id,
         "entitlement": effective,              # FREE / PREMIUM / VIP
-        "subscription_active": subscription_active,
-        "subscription_expiry": subscription_expiry,
-        "subscription_platform": subscription_platform,
+        "subscription_active": subscription_active or (override is not None),
+        "subscription_expiry": override.get("expires_at") if override else subscription_expiry,
+        "subscription_platform": "override" if override else subscription_platform,
         "subscription_product_id": subscription_product_id,
         "auto_renew": auto_renew,
         "is_admin": is_admin,
+        "override": override_info,
         "features": {
             "signals_access": effective,
             "ai_analyzer": True,

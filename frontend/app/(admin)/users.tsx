@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   Platform,
   RefreshControl,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
+import { api } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 interface User {
   user_id: string;
@@ -24,14 +27,39 @@ interface User {
   role: 'free' | 'premium' | 'vip';
   subscription_status?: string;
   is_admin?: boolean;
+  admin_role?: string;
   created_at: string;
   ai_usage_count?: number;
+}
+
+interface OverrideStatus {
+  has_override: boolean;
+  override: {
+    tier: string;
+    is_active: boolean;
+    expires_at: string;
+    granted_by: string;
+    granted_at: string;
+  } | null;
+}
+
+interface OverrideLog {
+  log_id: string;
+  action: string;
+  performed_by: string;
+  target_user: string;
+  tier: string | null;
+  duration_days: number | null;
+  expires_at: string | null;
+  timestamp: string;
 }
 
 const ROLES = ['free', 'premium', 'vip'];
 
 export default function UserManagement() {
   const router = useRouter();
+  const { user: currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.admin_role === 'super_admin';
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +70,13 @@ export default function UserManagement() {
   const [selectedRole, setSelectedRole] = useState<'free' | 'premium' | 'vip'>('free');
   const [isUpdating, setIsUpdating] = useState(false);
   const [roleFilter, setRoleFilter] = useState<'all' | 'free' | 'premium' | 'vip'>('all');
+
+  // Override state
+  const [overrideStatus, setOverrideStatus] = useState<OverrideStatus | null>(null);
+  const [overrideLogs, setOverrideLogs] = useState<OverrideLog[]>([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [isOverrideLoading, setIsOverrideLoading] = useState(false);
+  const [isOverrideAction, setIsOverrideAction] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -98,7 +133,11 @@ export default function UserManagement() {
   const openEditModal = (user: User) => {
     setSelectedUser(user);
     setSelectedRole(user.role);
+    setOverrideStatus(null);
     setShowEditModal(true);
+    if (isSuperAdmin) {
+      fetchOverrideStatus(user.user_id);
+    }
   };
 
   const handleUpdateRole = async () => {
@@ -130,6 +169,76 @@ export default function UserManagement() {
       case 'premium': return '#00D4AA';
       default: return '#8A8D98';
     }
+  };
+
+  // Override functions (SUPER_ADMIN only)
+  const fetchOverrideStatus = async (userId: string) => {
+    setIsOverrideLoading(true);
+    try {
+      const { data } = await api.get(`/admin/override-status/${userId}`);
+      setOverrideStatus(data);
+    } catch (err) {
+      console.error('Failed to fetch override status:', err);
+      setOverrideStatus(null);
+    } finally {
+      setIsOverrideLoading(false);
+    }
+  };
+
+  const handleGrantOverride = async (tier: string, days: number) => {
+    if (!selectedUser) return;
+    setIsOverrideAction(true);
+    try {
+      await api.post('/admin/override-subscription', {
+        user_id: selectedUser.user_id,
+        tier,
+        duration_days: days,
+      });
+      const msg = `Override granted: ${tier.toUpperCase()} for ${days} days`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      fetchOverrideStatus(selectedUser.user_id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Failed to grant override';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    } finally {
+      setIsOverrideAction(false);
+    }
+  };
+
+  const handleRevokeOverride = async () => {
+    if (!selectedUser) return;
+    setIsOverrideAction(true);
+    try {
+      await api.post('/admin/revoke-override', { user_id: selectedUser.user_id });
+      const msg = 'Override revoked successfully';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
+      fetchOverrideStatus(selectedUser.user_id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Failed to revoke override';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    } finally {
+      setIsOverrideAction(false);
+    }
+  };
+
+  const fetchOverrideLogs = async () => {
+    if (!selectedUser) return;
+    try {
+      const { data } = await api.get(`/admin/override-logs/${selectedUser.user_id}`);
+      setOverrideLogs(data.logs || []);
+      setShowLogsModal(true);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Failed to fetch logs';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    }
+  };
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    } catch { return iso; }
   };
 
   const getStats = () => {
@@ -280,6 +389,7 @@ export default function UserManagement() {
             </View>
 
             {selectedUser && (
+              <ScrollView style={{ maxHeight: 500 }}>
               <View style={styles.modalBody}>
                 <View style={styles.selectedUserInfo}>
                   <View style={styles.userAvatar}>
@@ -333,8 +443,174 @@ export default function UserManagement() {
                     <Text style={styles.updateButtonText}>Update Role</Text>
                   )}
                 </TouchableOpacity>
+
+                {/* Subscription Override Section - SUPER_ADMIN only */}
+                {isSuperAdmin && (
+                  <View style={overrideStyles.section} data-testid="override-section">
+                    <View style={overrideStyles.sectionHeader}>
+                      <Ionicons name="shield-checkmark" size={18} color="#FF6B35" />
+                      <Text style={overrideStyles.sectionTitle}>Subscription Override</Text>
+                      <View style={overrideStyles.superAdminBadge}>
+                        <Text style={overrideStyles.superAdminBadgeText}>SUPER ADMIN</Text>
+                      </View>
+                    </View>
+
+                    {/* Current Override Status */}
+                    {isOverrideLoading ? (
+                      <ActivityIndicator size="small" color="#00D4AA" style={{ marginVertical: 12 }} />
+                    ) : overrideStatus?.has_override ? (
+                      <View style={overrideStyles.statusCard} data-testid="override-status-active">
+                        <View style={overrideStyles.statusRow}>
+                          <View style={overrideStyles.statusDot} />
+                          <Text style={overrideStyles.statusLabel}>Active Override</Text>
+                        </View>
+                        <View style={overrideStyles.statusDetails}>
+                          <View style={overrideStyles.statusDetail}>
+                            <Text style={overrideStyles.detailLabel}>Tier</Text>
+                            <View style={[overrideStyles.tierBadge, { backgroundColor: `${getRoleColor(overrideStatus.override?.tier || 'free')}20` }]}>
+                              <Text style={[overrideStyles.tierBadgeText, { color: getRoleColor(overrideStatus.override?.tier || 'free') }]}>
+                                {overrideStatus.override?.tier?.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={overrideStyles.statusDetail}>
+                            <Text style={overrideStyles.detailLabel}>Expires</Text>
+                            <Text style={overrideStyles.detailValue}>
+                              {overrideStatus.override?.expires_at ? formatDate(overrideStatus.override.expires_at) : 'N/A'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={overrideStyles.noOverride} data-testid="override-status-none">
+                        <Text style={overrideStyles.noOverrideText}>No active override</Text>
+                      </View>
+                    )}
+
+                    {/* Override Action Buttons */}
+                    <View style={overrideStyles.actionRow}>
+                      <TouchableOpacity
+                        style={[overrideStyles.actionBtn, overrideStyles.premiumBtn]}
+                        onPress={() => handleGrantOverride('premium', 7)}
+                        disabled={isOverrideAction}
+                        data-testid="grant-premium-btn"
+                      >
+                        {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
+                          <>
+                            <Ionicons name="star" size={14} color="#0A0E17" />
+                            <Text style={overrideStyles.actionBtnText}>Premium 7d</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[overrideStyles.actionBtn, overrideStyles.vipBtn]}
+                        onPress={() => handleGrantOverride('vip', 7)}
+                        disabled={isOverrideAction}
+                        data-testid="grant-vip-btn"
+                      >
+                        {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
+                          <>
+                            <Ionicons name="diamond" size={14} color="#0A0E17" />
+                            <Text style={overrideStyles.actionBtnText}>VIP 7d</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[overrideStyles.actionBtn, overrideStyles.revokeBtn, !overrideStatus?.has_override && { opacity: 0.4 }]}
+                        onPress={handleRevokeOverride}
+                        disabled={isOverrideAction || !overrideStatus?.has_override}
+                        data-testid="revoke-override-btn"
+                      >
+                        {isOverrideAction ? <ActivityIndicator size="small" color="#FF4444" /> : (
+                          <>
+                            <Ionicons name="close-circle" size={14} color="#FF4444" />
+                            <Text style={[overrideStyles.actionBtnText, { color: '#FF4444' }]}>Revoke</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* View Audit Logs Button */}
+                    <TouchableOpacity
+                      style={overrideStyles.logsBtn}
+                      onPress={fetchOverrideLogs}
+                      data-testid="view-override-logs-btn"
+                    >
+                      <Ionicons name="document-text-outline" size={16} color="#8A8D98" />
+                      <Text style={overrideStyles.logsBtnText}>View Override History</Text>
+                      <Ionicons name="chevron-forward" size={14} color="#8A8D98" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
+              </ScrollView>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Override Audit Logs Modal */}
+      <Modal
+        visible={showLogsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLogsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Override History</Text>
+              <TouchableOpacity onPress={() => setShowLogsModal(false)}>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 400, padding: 16 }}>
+              {overrideLogs.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                  <Ionicons name="document-text-outline" size={48} color="#8A8D98" />
+                  <Text style={{ color: '#8A8D98', marginTop: 12 }}>No override history</Text>
+                </View>
+              ) : (
+                overrideLogs.map((log, idx) => (
+                  <View key={log.log_id || idx} style={overrideStyles.logCard} data-testid={`override-log-${idx}`}>
+                    <View style={overrideStyles.logHeader}>
+                      <View style={[
+                        overrideStyles.logActionBadge,
+                        { backgroundColor: log.action === 'GRANT_OVERRIDE' ? 'rgba(0, 212, 170, 0.15)' : 'rgba(255, 68, 68, 0.15)' }
+                      ]}>
+                        <Ionicons
+                          name={log.action === 'GRANT_OVERRIDE' ? 'add-circle' : 'remove-circle'}
+                          size={12}
+                          color={log.action === 'GRANT_OVERRIDE' ? '#00D4AA' : '#FF4444'}
+                        />
+                        <Text style={[
+                          overrideStyles.logActionText,
+                          { color: log.action === 'GRANT_OVERRIDE' ? '#00D4AA' : '#FF4444' }
+                        ]}>
+                          {log.action === 'GRANT_OVERRIDE' ? 'GRANTED' : 'REVOKED'}
+                        </Text>
+                      </View>
+                      <Text style={overrideStyles.logTimestamp}>{formatDate(log.timestamp)}</Text>
+                    </View>
+                    {log.tier && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                        <Text style={overrideStyles.logDetail}>Tier: {log.tier.toUpperCase()}</Text>
+                        {log.duration_days && (
+                          <Text style={overrideStyles.logDetail}>Duration: {log.duration_days}d</Text>
+                        )}
+                      </View>
+                    )}
+                    {log.expires_at && (
+                      <Text style={[overrideStyles.logDetail, { marginTop: 4 }]}>
+                        Expires: {formatDate(log.expires_at)}
+                      </Text>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -605,5 +881,174 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#0A0E17',
+  },
+});
+
+const overrideStyles = StyleSheet.create({
+  section: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#2A2F3E',
+    paddingTop: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FF6B35',
+    flex: 1,
+  },
+  superAdminBadge: {
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  superAdminBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#FF6B35',
+  },
+  statusCard: {
+    backgroundColor: 'rgba(0, 212, 170, 0.08)',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 170, 0.2)',
+    marginBottom: 14,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00D4AA',
+  },
+  statusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#00D4AA',
+  },
+  statusDetails: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 10,
+  },
+  statusDetail: {
+    gap: 4,
+  },
+  detailLabel: {
+    fontSize: 10,
+    color: '#8A8D98',
+  },
+  detailValue: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  tierBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tierBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  noOverride: {
+    backgroundColor: '#0A0E17',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  noOverrideText: {
+    fontSize: 12,
+    color: '#8A8D98',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  premiumBtn: {
+    backgroundColor: '#00D4AA',
+  },
+  vipBtn: {
+    backgroundColor: '#FFD700',
+  },
+  revokeBtn: {
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0A0E17',
+  },
+  logsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#0A0E17',
+    borderRadius: 10,
+  },
+  logsBtnText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#8A8D98',
+  },
+  logCard: {
+    backgroundColor: '#0A0E17',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logActionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  logActionText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  logTimestamp: {
+    fontSize: 10,
+    color: '#8A8D98',
+  },
+  logDetail: {
+    fontSize: 11,
+    color: '#B0B3BC',
   },
 });

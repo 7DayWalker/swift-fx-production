@@ -13,6 +13,7 @@ interface User {
   subscription_status?: string;
   picture?: string;
   is_admin?: boolean;
+  admin_role?: string;
 }
 
 type OAuthProvider = 'google' | 'apple';
@@ -46,6 +47,7 @@ const buildUser = (
     email: sbUser.email || '',
     role: isAdmin ? 'vip' : (profileRole as 'free' | 'premium' | 'vip'),
     is_admin: isAdmin,
+    admin_role: profile?.admin_role ?? undefined,
   };
 };
 
