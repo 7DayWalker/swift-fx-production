@@ -15,8 +15,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import { getUpgradeMessage } from '../../src/utils/signalAccess';
 import MockAdBanner from '../../src/components/MockAdBanner';
+import { LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 
 interface Signal {
@@ -84,6 +84,7 @@ const getEntryValidity = (state: string): { label: string; color: string; icon: 
 interface CardProps { item: Signal; theme: any }
 
 const SignalCard = ({ item, theme }: CardProps) => {
+  const router = useRouter();
   const glowAnim = useRef(new Animated.Value(0)).current;
   const isActive = ['active', 'tp1', 'tp2', 'tp3'].includes(item.state);
 
@@ -181,13 +182,11 @@ const SignalCard = ({ item, theme }: CardProps) => {
         </View>
 
         {item.locked ? (
-          <View style={[cardStyles.lockedContainer, { backgroundColor: `${theme.warning}05` }]}>
-            <Ionicons name="lock-closed" size={22} color={theme.warning} />
-            <Text style={[cardStyles.lockedTitle, { color: theme.warning }]}>{getUpgradeMessage(item.visibility)}</Text>
-            <Text style={[cardStyles.lockedSubtitle, { color: theme.textSecondary }]}>
-              Requires {item.visibility === 'vip' ? 'VIP' : 'Premium'} subscription
-            </Text>
-          </View>
+          <LockedSignalBody
+            tier={item.visibility === 'vip' ? 'vip' : 'premium'}
+            onPress={() => router.push('/subscription')}
+            theme={theme}
+          />
         ) : (
           <>
             {/* ── Price details grid ── */}
@@ -344,10 +343,6 @@ const cardStyles = StyleSheet.create({
   tpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   tpTag: { backgroundColor: 'rgba(138,141,152,0.12)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 7, borderWidth: 1 },
   tpTagText: { fontSize: 11, fontWeight: '600' },
-  // Locked
-  lockedContainer: { alignItems: 'center', paddingVertical: 22, borderRadius: 12, marginVertical: 4 },
-  lockedTitle: { fontSize: 14, fontWeight: '700', marginTop: 8 },
-  lockedSubtitle: { fontSize: 11, marginTop: 3, opacity: 0.7 },
   // Result
   resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 10, marginTop: 2, borderTopWidth: 0.5 },
   resultLabel: { fontSize: 12, marginRight: 8, opacity: 0.7 },

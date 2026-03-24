@@ -7,7 +7,7 @@ import requests
 import json
 import time
 
-BASE_URL = "https://signal-webhook-test.preview.emergentagent.com/api"
+BASE_URL = "https://locked-signals-ui.preview.emergentagent.com/api"
 
 def test_complete_rbac_sequence():
     """Test the complete RBAC system following the exact review request"""

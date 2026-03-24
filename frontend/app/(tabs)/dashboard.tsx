@@ -18,6 +18,7 @@ import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
 import MockAdBanner from '../../src/components/MockAdBanner';
+import { UpgradeBanner, LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 
@@ -156,18 +157,9 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Upgrade Banner for Free Users - Routes to canonical /subscription page */}
+        {/* Upgrade Banner for Free Users */}
         {isFreeUser && (
-          <PressableScale onPress={() => router.push('/subscription')} style={[styles.upgradeBanner, { borderColor: `${theme.warning}30` }]} data-testid="upgrade-banner">
-            <View style={styles.upgradeContent}>
-              <Ionicons name="rocket-outline" size={24} color={theme.warning} />
-              <View style={styles.upgradeTextContainer}>
-                <Text style={[styles.upgradeTitle, { color: theme.warning }]}>Upgrade to Premium</Text>
-                <Text style={[styles.upgradeSubtitle, { color: theme.textSecondary }]}>Unlock all signals & AI features</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.warning} />
-          </PressableScale>
+          <UpgradeBanner onPress={() => router.push('/subscription')} theme={theme} />
         )}
 
         {/* Performance Stats - REACTIVE from SignalContext */}
@@ -315,10 +307,11 @@ export default function DashboardScreen() {
                     </View>
 
                     {signal.locked ? (
-                      <View style={styles.lockedContent}>
-                        <Ionicons name="lock-closed" size={16} color={theme.warning} />
-                        <Text style={[styles.lockedText, { color: theme.warning }]}>Upgrade to unlock</Text>
-                      </View>
+                      <LockedSignalBody
+                        tier={signal.visibility as 'premium' | 'vip'}
+                        onPress={() => router.push('/subscription')}
+                        theme={theme}
+                      />
                     ) : (
                       <>
                         {/* Row 2: price grid */}

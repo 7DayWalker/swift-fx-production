@@ -185,7 +185,20 @@ All 11 screens are functional with no ComingSoonGate blocks:
   - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
   - `testing.js` → redirects to testing-library/context-stubs
   - `utils.js` → redirects to utils/url
-- Web preview now working at https://signal-webhook-test.preview.emergentagent.com
+- Web preview now working at https://locked-signals-ui.preview.emergentagent.com
+
+## Premium/VIP Upgrade UX (Completed Mar 24, 2026)
+
+### UpgradeKit.tsx — Shared Premium UI Components
+- `LockedSignalBody`: Blurred price preview + benefit checklist + pulsing CTA (used in locked signal cards)
+- `UpgradeBanner`: Compact gold-accented banner (used on dashboard for free users)
+- `BenefitChecklist`, `UrgencyLine`, `CtaButton`, `BlurredPricePreview`: Composable sub-components
+- Pulsing CTA animation via `useCtaPulse()` (6s interval, native driver)
+
+### Files Updated
+- `app/(tabs)/signals.tsx`: Locked cards now use `<LockedSignalBody>` with blurred preview + animated CTA → routes to `/subscription`
+- `app/(tabs)/dashboard.tsx`: Premium card layout with category chips, state badges, left accent stripes + `<UpgradeBanner>`
+- `src/components/UpgradeKit.tsx`: New shared component library
 
 ## Test Credentials
 - VIP user: paradoxella@gmail.com / Grace1992@
