@@ -2214,18 +2214,31 @@ async def update_user_role(user_id: str, role: UserRole, admin: User = Depends(r
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(admin: User = Depends(require_admin)):
+    """Admin dashboard stats — real counts from MongoDB + Supabase."""
     total_users = await count_profiles()
     premium_users = await count_profiles("premium")
     vip_users = await count_profiles("vip")
+
+    # Signals from MongoDB (all states)
     total_signals = await db.signals.count_documents({})
+    active_signals = await db.signals.count_documents({"state": "active"})
+    closed_signals = await db.signals.count_documents({"state": "closed"})
+    pending_signals = await db.signals.count_documents({"state": "pending"})
+
+    # AI analyses and community posts from MongoDB
     total_ai_analyses = await db.ai_analyses.count_documents({})
-    
+    total_posts = await db.posts.count_documents({})
+
     return {
         "total_users": total_users,
         "premium_users": premium_users,
         "vip_users": vip_users,
         "total_signals": total_signals,
-        "total_ai_analyses": total_ai_analyses
+        "active_signals": active_signals,
+        "closed_signals": closed_signals,
+        "pending_signals": pending_signals,
+        "total_ai_analyses": total_ai_analyses,
+        "total_posts": total_posts,
     }
 
 
@@ -3741,6 +3754,8 @@ async def admin_health_check(admin: User = Depends(require_admin)):
         "api_response_ms": api_response_ms,
         "mongo_connected": mongo_ok,
     }
+
+
 @api_router.post("/admin/automation/start")
 async def start_automation_engine(admin: User = Depends(require_admin)):
     """Start the signal automation engine (Admin only)"""

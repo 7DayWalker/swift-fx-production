@@ -22,7 +22,11 @@ interface AdminStats {
   premium_users: number;
   vip_users: number;
   total_signals: number;
+  active_signals: number;
+  closed_signals: number;
+  pending_signals: number;
   total_ai_analyses: number;
+  total_posts: number;
 }
 
 interface HealthData {
@@ -44,12 +48,10 @@ export default function AdminDashboard() {
   const [healthLoading, setHealthLoading] = useState(true);
 
   useEffect(() => {
-    fetchStats();
-  }, []);
-
-  // Retry health fetch when user/session becomes available
-  useEffect(() => {
-    if (user) fetchHealth();
+    if (user) {
+      fetchStats();
+      fetchHealth();
+    }
   }, [user]);
 
   const getAuthToken = async (): Promise<string | null> => {
@@ -80,24 +82,16 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_admin_stats');
-      if (error) throw error;
-      setStats(data);
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setStats(await res.json());
+      }
     } catch (error) {
       console.error('Failed to fetch admin stats:', error);
-      // Fallback: count signals directly (admin can see all via RLS)
-      try {
-        const { count } = await supabase
-          .from('signals')
-          .select('*', { count: 'exact', head: true });
-        setStats({
-          total_users: 0,
-          premium_users: 0,
-          vip_users: 0,
-          total_signals: count || 0,
-          total_ai_analyses: 0,
-        });
-      } catch { /* ignore */ }
     } finally {
       setIsLoading(false);
     }
@@ -248,14 +242,47 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* AI Usage Card */}
-        <View style={styles.aiCard}>
-          <View style={styles.aiCardHeader}>
-            <Ionicons name="sparkles" size={24} color="#00D4AA" />
-            <Text style={styles.aiCardTitle}>AI Analyses</Text>
+        {/* Signal Breakdown */}
+        <View style={styles.breakdownCard}>
+          <Text style={styles.breakdownTitle}>Signal Breakdown</Text>
+          <View style={styles.breakdownRow}>
+            <View style={styles.breakdownItem}>
+              <View style={[styles.breakdownDot, { backgroundColor: '#00D4AA' }]} />
+              <Text style={styles.breakdownLabel}>Active</Text>
+              <Text style={[styles.breakdownValue, { color: '#00D4AA' }]}>{stats?.active_signals || 0}</Text>
+            </View>
+            <View style={styles.breakdownItem}>
+              <View style={[styles.breakdownDot, { backgroundColor: '#8A8D98' }]} />
+              <Text style={styles.breakdownLabel}>Closed</Text>
+              <Text style={[styles.breakdownValue, { color: '#8A8D98' }]}>{stats?.closed_signals || 0}</Text>
+            </View>
+            <View style={styles.breakdownItem}>
+              <View style={[styles.breakdownDot, { backgroundColor: '#FFD700' }]} />
+              <Text style={styles.breakdownLabel}>Pending</Text>
+              <Text style={[styles.breakdownValue, { color: '#FFD700' }]}>{stats?.pending_signals || 0}</Text>
+            </View>
           </View>
-          <Text style={styles.aiCardValue}>{stats?.total_ai_analyses || 0}</Text>
-          <Text style={styles.aiCardLabel}>Total AI chart analyses performed</Text>
+          {stats && stats.total_signals > 0 && (
+            <View style={styles.breakdownBar}>
+              <View style={[styles.barSegment, { flex: stats.active_signals || 0.01, backgroundColor: '#00D4AA' }]} />
+              <View style={[styles.barSegment, { flex: stats.closed_signals || 0.01, backgroundColor: '#8A8D98' }]} />
+              <View style={[styles.barSegment, { flex: stats.pending_signals || 0.01, backgroundColor: '#FFD700' }]} />
+            </View>
+          )}
+        </View>
+
+        {/* AI + Posts Row */}
+        <View style={styles.miniRow}>
+          <View style={[styles.miniCard, { borderColor: 'rgba(0,212,170,0.2)' }]}>
+            <Ionicons name="sparkles" size={22} color="#00D4AA" />
+            <Text style={styles.miniValue}>{stats?.total_ai_analyses || 0}</Text>
+            <Text style={styles.miniLabel}>AI Analyses</Text>
+          </View>
+          <View style={[styles.miniCard, { borderColor: 'rgba(88,101,242,0.2)' }]}>
+            <Ionicons name="chatbubbles" size={22} color="#5865F2" />
+            <Text style={styles.miniValue}>{stats?.total_posts || 0}</Text>
+            <Text style={styles.miniLabel}>Community Posts</Text>
+          </View>
         </View>
 
         {/* Backend Health Widget */}
@@ -435,35 +462,6 @@ const styles = StyleSheet.create({
     color: '#8A8D98',
     marginTop: 4,
   },
-  aiCard: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
-  },
-  aiCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  aiCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  aiCardValue: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-  },
-  aiCardLabel: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginTop: 4,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -576,5 +574,77 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#2A2F3E',
+  },
+  // Signal Breakdown
+  breakdownCard: {
+    backgroundColor: '#1A1F2E',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  breakdownTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 14,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 14,
+  },
+  breakdownItem: {
+    alignItems: 'center',
+  },
+  breakdownDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 6,
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    color: '#8A8D98',
+    marginBottom: 4,
+  },
+  breakdownValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  breakdownBar: {
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barSegment: {
+    height: '100%',
+  },
+  // Mini cards row
+  miniRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  miniCard: {
+    flex: 1,
+    backgroundColor: '#1A1F2E',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  miniValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 8,
+  },
+  miniLabel: {
+    fontSize: 11,
+    color: '#8A8D98',
+    marginTop: 4,
   },
 });
