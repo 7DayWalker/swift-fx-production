@@ -41,11 +41,16 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [health, setHealth] = useState<HealthData | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
-    fetchHealth();
   }, []);
+
+  // Retry health fetch when user/session becomes available
+  useEffect(() => {
+    if (user) fetchHealth();
+  }, [user]);
 
   const getAuthToken = async (): Promise<string | null> => {
     const { data } = await supabase.auth.getSession();
@@ -53,14 +58,24 @@ export default function AdminDashboard() {
   };
 
   const fetchHealth = async () => {
+    setHealthLoading(true);
     try {
       const token = await getAuthToken();
-      if (!token) return;
+      if (!token) {
+        setHealthLoading(false);
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/api/admin/health`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setHealth(await res.json());
-    } catch (e) { console.warn('Health fetch failed:', e); }
+      if (res.ok) {
+        setHealth(await res.json());
+      }
+    } catch (e) {
+      console.warn('Health fetch failed:', e);
+    } finally {
+      setHealthLoading(false);
+    }
   };
 
   const fetchStats = async () => {
@@ -244,9 +259,19 @@ export default function AdminDashboard() {
         </View>
 
         {/* Backend Health Widget */}
-        {health && (
-          <View style={styles.healthSection} data-testid="backend-health-widget">
-            <Text style={styles.healthTitle}>Backend Health</Text>
+        <View style={styles.healthSection} data-testid="backend-health-widget">
+          <Text style={styles.healthTitle}>Backend Health</Text>
+          {healthLoading && !health ? (
+            <View style={styles.healthGrid}>
+              {['Signal Engine', 'Last Signal', 'API Latency', 'MongoDB'].map(label => (
+                <View key={label} style={styles.healthCard}>
+                  <View style={[styles.healthDot, { backgroundColor: '#3A3F4E' }]} />
+                  <Text style={styles.healthLabel}>{label}</Text>
+                  <ActivityIndicator size="small" color="#8A8D98" style={{ marginTop: 4 }} />
+                </View>
+              ))}
+            </View>
+          ) : health ? (
             <View style={styles.healthGrid}>
               <View style={styles.healthCard}>
                 <View style={[styles.healthDot, { backgroundColor: health.engine_status === 'Running' ? '#00D4AA' : health.engine_status === 'Paused' ? '#FFD700' : '#FF4757' }]} />
@@ -278,8 +303,13 @@ export default function AdminDashboard() {
                 </Text>
               </View>
             </View>
-          </View>
-        )}
+          ) : (
+            <TouchableOpacity style={styles.healthRetry} onPress={fetchHealth} data-testid="health-retry-button">
+              <Ionicons name="refresh" size={18} color="#8A8D98" />
+              <Text style={{ color: '#8A8D98', fontSize: 13, marginLeft: 8 }}>Tap to load health data</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -536,5 +566,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#5A5D68',
     marginTop: 3,
+  },
+  healthRetry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1A1F2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
   },
 });
