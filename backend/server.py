@@ -3699,7 +3699,48 @@ async def get_automation_status():
     }
 
 
-# Admin endpoints for engine control
+@api_router.get("/admin/health")
+async def admin_health_check(admin: User = Depends(require_admin)):
+    """Admin-only backend health widget data."""
+    import time
+    req_start = time.monotonic()
+
+    # 1. Signal Engine Status
+    config = await get_engine_config()
+    if config.get("enabled") and not config.get("paused"):
+        engine_status = "Running"
+    elif config.get("paused"):
+        engine_status = "Paused"
+    else:
+        engine_status = "Disabled"
+    engine_detail = config.get("pause_reason") or None
+
+    # 2. Last Signal Generated Time
+    last_signal = await db.signals.find_one({}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+    last_signal_time = None
+    if last_signal and last_signal.get("created_at"):
+        raw = last_signal["created_at"]
+        last_signal_time = raw.isoformat() if isinstance(raw, datetime) else str(raw)
+
+    # 3. MongoDB Connection Status
+    mongo_ok = False
+    try:
+        await db.command("ping")
+        mongo_ok = True
+    except Exception:
+        mongo_ok = False
+
+    # 4. API Response Time
+    api_response_ms = round((time.monotonic() - req_start) * 1000)
+
+    return {
+        "engine_status": engine_status,
+        "engine_detail": engine_detail,
+        "engine_error_count": config.get("error_count", 0),
+        "last_signal_time": last_signal_time,
+        "api_response_ms": api_response_ms,
+        "mongo_connected": mongo_ok,
+    }
 @api_router.post("/admin/automation/start")
 async def start_automation_engine(admin: User = Depends(require_admin)):
     """Start the signal automation engine (Admin only)"""

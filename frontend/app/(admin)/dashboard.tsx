@@ -15,6 +15,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { supabase } from '../../src/services/supabase';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
+
 interface AdminStats {
   total_users: number;
   premium_users: number;
@@ -23,16 +25,43 @@ interface AdminStats {
   total_ai_analyses: number;
 }
 
+interface HealthData {
+  engine_status: string;
+  engine_detail: string | null;
+  engine_error_count: number;
+  last_signal_time: string | null;
+  api_response_ms: number;
+  mongo_connected: boolean;
+}
+
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [health, setHealth] = useState<HealthData | null>(null);
 
   useEffect(() => {
     fetchStats();
+    fetchHealth();
   }, []);
+
+  const getAuthToken = async (): Promise<string | null> => {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || null;
+  };
+
+  const fetchHealth = async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/api/admin/health`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setHealth(await res.json());
+    } catch (e) { console.warn('Health fetch failed:', e); }
+  };
 
   const fetchStats = async () => {
     try {
@@ -61,7 +90,7 @@ export default function AdminDashboard() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchStats();
+    await Promise.all([fetchStats(), fetchHealth()]);
     setRefreshing(false);
   };
 
@@ -213,6 +242,44 @@ export default function AdminDashboard() {
           <Text style={styles.aiCardValue}>{stats?.total_ai_analyses || 0}</Text>
           <Text style={styles.aiCardLabel}>Total AI chart analyses performed</Text>
         </View>
+
+        {/* Backend Health Widget */}
+        {health && (
+          <View style={styles.healthSection} data-testid="backend-health-widget">
+            <Text style={styles.healthTitle}>Backend Health</Text>
+            <View style={styles.healthGrid}>
+              <View style={styles.healthCard}>
+                <View style={[styles.healthDot, { backgroundColor: health.engine_status === 'Running' ? '#00D4AA' : health.engine_status === 'Paused' ? '#FFD700' : '#FF4757' }]} />
+                <Text style={styles.healthLabel}>Signal Engine</Text>
+                <Text style={[styles.healthValue, { color: health.engine_status === 'Running' ? '#00D4AA' : health.engine_status === 'Paused' ? '#FFD700' : '#FF4757' }]}>
+                  {health.engine_status}
+                </Text>
+                {health.engine_detail && <Text style={styles.healthDetail} numberOfLines={1}>{health.engine_detail}</Text>}
+              </View>
+              <View style={styles.healthCard}>
+                <View style={[styles.healthDot, { backgroundColor: health.last_signal_time ? '#00D4AA' : '#8A8D98' }]} />
+                <Text style={styles.healthLabel}>Last Signal</Text>
+                <Text style={styles.healthValue}>
+                  {health.last_signal_time ? new Date(health.last_signal_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'None'}
+                </Text>
+              </View>
+              <View style={styles.healthCard}>
+                <View style={[styles.healthDot, { backgroundColor: health.api_response_ms < 500 ? '#00D4AA' : health.api_response_ms < 1000 ? '#FFD700' : '#FF4757' }]} />
+                <Text style={styles.healthLabel}>API Latency</Text>
+                <Text style={[styles.healthValue, { color: health.api_response_ms < 500 ? '#00D4AA' : health.api_response_ms < 1000 ? '#FFD700' : '#FF4757' }]}>
+                  {health.api_response_ms}ms
+                </Text>
+              </View>
+              <View style={styles.healthCard}>
+                <View style={[styles.healthDot, { backgroundColor: health.mongo_connected ? '#00D4AA' : '#FF4757' }]} />
+                <Text style={styles.healthLabel}>MongoDB</Text>
+                <Text style={[styles.healthValue, { color: health.mongo_connected ? '#00D4AA' : '#FF4757' }]}>
+                  {health.mongo_connected ? 'Connected' : 'Down'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -423,5 +490,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#00D4AA',
+  },
+  // Health Widget
+  healthSection: {
+    marginBottom: 20,
+  },
+  healthTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  healthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  healthCard: {
+    width: '48%',
+    backgroundColor: '#1A1F2E',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+    flexGrow: 1,
+    flexBasis: '46%',
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  healthLabel: {
+    fontSize: 11,
+    color: '#8A8D98',
+    marginBottom: 4,
+  },
+  healthValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  healthDetail: {
+    fontSize: 10,
+    color: '#5A5D68',
+    marginTop: 3,
   },
 });
