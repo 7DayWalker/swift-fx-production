@@ -288,3 +288,27 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - 18/18 backend tests passed (auth denial, all 6 fields, value validation, response structure)
 - Test file: `/app/backend/tests/test_admin_health.py`
 
+
+## Trading Asset Expansion (Verified Mar 24, 2026)
+
+### Centralized Trading Pairs Constants
+- New file: `/app/frontend/src/constants/tradingPairs.ts`
+- 26 total trading pairs across 4 categories:
+  - **Metals** (4): XAU/USD (Gold), XAG/USD (Silver), XPT/USD (Platinum), XPD/USD (Palladium)
+  - **Forex** (8): EUR/USD, GBP/USD, GBP/JPY, USD/JPY, USD/CHF, AUD/USD, USD/CAD, NZD/USD
+  - **Indices** (7): US30 (Dow), US100 (NASDAQ), SPX500, GER40, UK100, JP225, HK50
+  - **Crypto** (7): BTC/USD, ETH/USD, SOL/USD, BNB/USD, XRP/USD, ADA/USD, DOGE/USD
+- Priority pairs for quick access: XAU/USD, XAG/USD, EUR/USD, GBP/USD, GBP/JPY, US30, US100, BTC/USD, ETH/USD
+
+### PairPicker Component
+- New file: `/app/frontend/src/components/PairPicker.tsx`
+- Reusable component with priority quick-access row + categorized expandable sections
+- Integrated into:
+  - Admin Signal Management (Create + Edit modals) — `/app/frontend/app/(admin)/signals.tsx`
+  - AI Chart Analyzer — `/app/frontend/app/(tabs)/ai.tsx`
+- Replaces old static pair lists
+
+### Verification
+- Visually confirmed PairPicker rendering in Admin Edit Signal modal (screenshot verified)
+- AI Analyzer screen shows correct default pair and PairPicker integration
+- Backend healthy, all API endpoints operational
