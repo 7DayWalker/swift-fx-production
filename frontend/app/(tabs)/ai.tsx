@@ -835,6 +835,25 @@ export default function AIScreen() {
           {/* Upgrade nudge */}
           {showUpgradeNudge && <UpgradeNudge onPress={() => router.push('/subscription')} />}
 
+          {/* Share Analysis Button */}
+          {r.analysis_id ? (
+            <TouchableOpacity
+              style={s.shareBtn}
+              onPress={() => setShareModalVisible(true)}
+              activeOpacity={0.8}
+              data-testid="share-analysis-button"
+            >
+              <View style={s.shareBtnIconWrap}>
+                <Ionicons name="share-social" size={20} color="#00D4AA" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.shareBtnTitle}>Share This Analysis</Text>
+                <Text style={s.shareBtnSub}>Copy link, post to community, or share on social</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#3A3F4E" />
+            </TouchableOpacity>
+          ) : null}
+
           {/* Disclaimer */}
           <View style={s.disclaimerRow}>
             <Ionicons name="information-circle-outline" size={14} color="#6A6D78" />
@@ -1151,4 +1170,10 @@ const s = StyleSheet.create({
   shareOptionSub: { fontSize: 11, color: '#8A8D98', marginTop: 1 },
   modalCloseBtn: { backgroundColor: '#2A2F3E', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 16 },
   modalCloseBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+
+  // Share button in result body
+  shareBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1F2E', borderRadius: 14, padding: 14, gap: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(0,212,170,0.25)' },
+  shareBtnIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,212,170,0.12)', justifyContent: 'center', alignItems: 'center' },
+  shareBtnTitle: { fontSize: 15, fontWeight: '700', color: '#00D4AA' },
+  shareBtnSub: { fontSize: 11, color: '#8A8D98', marginTop: 2 },
 });
