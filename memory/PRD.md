@@ -341,3 +341,20 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - 21/21 backend tests passed (test file: `/app/backend/tests/test_subscription_override.py`)
 - Frontend verification: all controls visible and functional for SUPER_ADMIN
 - Test report: `/app/test_reports/iteration_13.json`
+
+## Read-Only Override View & Source Labels (Mar 24, 2026)
+
+### Backend Changes
+- `GET /api/admin/override-status/{user_id}`: Now returns `source` field (`"override"` when active, `"store"` when not)
+- `GET /api/admin/override-logs/{user_id}`: Access changed from SUPER_ADMIN-only to any admin; added pagination (`page`, `limit`, `total`)
+- `POST /api/admin/override-subscription` and `POST /api/admin/revoke-override`: Remain SUPER_ADMIN only
+
+### Frontend Changes
+- Override section now visible to ALL admins (was SUPER_ADMIN only)
+- Non-SUPER_ADMIN admins see: READ-ONLY badge, override status, source label, "Managed by Super Admin" note, View History button
+- Non-SUPER_ADMIN admins do NOT see: Grant Premium, Grant VIP, Revoke buttons
+- Source labels: "Source: Override (expires in X days)" or "Source: App Store / Google Play Subscription"
+- SUPER_ADMIN view: Same source labels + full controls
+
+### Testing
+- 15/15 backend tests passed: `/app/test_reports/iteration_14.json`
