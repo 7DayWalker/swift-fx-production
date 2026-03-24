@@ -185,7 +185,7 @@ All 11 screens are functional with no ComingSoonGate blocks:
   - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
   - `testing.js` → redirects to testing-library/context-stubs
   - `utils.js` → redirects to utils/url
-- Web preview now working at https://locked-signals-ui.preview.emergentagent.com
+- Web preview now working at https://fx-analytics-pro.preview.emergentagent.com
 
 ## Premium/VIP Upgrade UX (Completed Mar 24, 2026)
 

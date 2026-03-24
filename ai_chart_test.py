@@ -12,7 +12,7 @@ from PIL import Image
 import os
 
 # Configuration
-BASE_URL = "https://locked-signals-ui.preview.emergentagent.com/api"
+BASE_URL = "https://fx-analytics-pro.preview.emergentagent.com/api"
 
 class AIChartAnalyzerTester:
     def __init__(self):

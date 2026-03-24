@@ -25,6 +25,8 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
+import { PairPicker } from '../../src/components/PairPicker';
+import { PRIORITY_PAIRS } from '../../src/constants/tradingPairs';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
@@ -70,7 +72,6 @@ interface HistoryItem {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const TIER_LIMITS: Record<string, number> = { free: 3, premium: 10, vip: -1, admin: -1 };
-const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
 
 type ScreenState = 'upload' | 'analyzing' | 'result' | 'error' | 'limit_reached' | 'history_detail';
@@ -450,13 +451,13 @@ export default function AIScreen() {
   const [usage, setUsage] = useState<AIUsage | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [selectedPair, setSelectedPair] = useState(PAIRS[0]);
+  const [selectedPair, setSelectedPair] = useState(PRIORITY_PAIRS[0]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('H1');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showPairPicker, setShowPairPicker] = useState(false);
   const [showTimeframePicker, setShowTimeframePicker] = useState(false);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
+  const [showPairPicker, setShowPairPicker] = useState(false);
   const [screenState, setScreenState] = useState<ScreenState>('upload');
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -937,17 +938,25 @@ export default function AIScreen() {
           )}
         </View>
 
-        {/* Pair / Timeframe pickers */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
-          <TouchableOpacity style={[s.pickerBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => setShowPairPicker(!showPairPicker)}>
-            <Text style={{ fontSize: 11, color: theme.textSecondary }}>Pair</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{selectedPair}</Text>
-              <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.pickerBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => setShowTimeframePicker(!showTimeframePicker)}>
-            <Text style={{ fontSize: 11, color: theme.textSecondary }}>Timeframe</Text>
+        {/* Pair Picker */}
+        <View style={{ marginBottom: 14 }}>
+          <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>Trading Pair</Text>
+          {showPairPicker ? (
+            <PairPicker selected={selectedPair} onSelect={(p) => { setSelectedPair(p); setShowPairPicker(false); }} theme={theme} />
+          ) : (
+            <TouchableOpacity style={[s.pickerBtn, { backgroundColor: theme.surface, borderColor: theme.border, flex: undefined }]} onPress={() => setShowPairPicker(true)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{selectedPair}</Text>
+                <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Timeframe picker */}
+        <View style={{ marginBottom: 14 }}>
+          <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>Timeframe</Text>
+          <TouchableOpacity style={[s.pickerBtn, { backgroundColor: theme.surface, borderColor: theme.border, flex: undefined }]} onPress={() => setShowTimeframePicker(!showTimeframePicker)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{selectedTimeframe}</Text>
               <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
@@ -955,16 +964,6 @@ export default function AIScreen() {
           </TouchableOpacity>
         </View>
 
-        {showPairPicker && (
-          <View style={[s.pickerDropdown, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            {PAIRS.map(p => (
-              <TouchableOpacity key={p} style={[s.pickerItem, selectedPair === p && { backgroundColor: `${theme.primary}20` }]}
-                onPress={() => { setSelectedPair(p); setShowPairPicker(false); }}>
-                <Text style={[s.pickerItemText, { color: theme.text }, selectedPair === p && { color: theme.primary }]}>{p}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
         {showTimeframePicker && (
           <View style={[s.pickerDropdown, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {TIMEFRAMES.map(tf => (

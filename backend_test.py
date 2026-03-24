@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Optional
 
 # Backend URL from frontend .env
-BASE_URL = "https://locked-signals-ui.preview.emergentagent.com/api"
+BASE_URL = "https://fx-analytics-pro.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"

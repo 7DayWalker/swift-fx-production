@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSignals } from '../../src/context/SignalContext';
 import api from '../../src/services/api';
+import { PairPicker } from '../../src/components/PairPicker';
+import { ALL_PAIRS } from '../../src/constants/tradingPairs';
 
 interface Signal {
   signal_id: string;
@@ -40,7 +42,6 @@ interface Signal {
   activated_at?: string;
 }
 
-const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD', 'ETH/USD'];
 const VISIBILITIES = ['free', 'premium', 'vip'];
 const STATUSES = ['pending', 'active', 'closed'];
 
@@ -711,13 +712,11 @@ export default function SignalManagement() {
               </Text>
 
               <Text style={styles.inputLabel}>Trading Pair</Text>
-              <View style={styles.optionsRow}>
-                {PAIRS.map((pair) => (
-                  <TouchableOpacity key={pair} style={[styles.optionButton, formData.pair === pair && styles.optionButtonActive]} onPress={() => setFormData({ ...formData, pair })}>
-                    <Text style={[styles.optionText, formData.pair === pair && styles.optionTextActive]}>{pair}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <PairPicker
+                selected={formData.pair}
+                onSelect={(pair) => setFormData({ ...formData, pair })}
+                theme={{ background: '#0A0E17', surface: '#1A1F2E', border: '#2A2F3E', text: '#FFFFFF', textSecondary: '#8A8D98', primary: '#00D4AA' }}
+              />
 
               <Text style={styles.inputLabel}>Signal Type</Text>
               <View style={styles.typeRow}>
@@ -791,13 +790,11 @@ export default function SignalManagement() {
                   </View>
 
                   <Text style={styles.inputLabel}>Trading Pair</Text>
-                  <View style={styles.optionsRow}>
-                    {PAIRS.map((pair) => (
-                      <TouchableOpacity key={pair} style={[styles.optionButton, editData.pair === pair && styles.optionButtonActive]} onPress={() => setEditData({ ...editData, pair })}>
-                        <Text style={[styles.optionText, editData.pair === pair && styles.optionTextActive]}>{pair}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  <PairPicker
+                    selected={editData.pair}
+                    onSelect={(pair) => setEditData({ ...editData, pair })}
+                    theme={{ background: '#0A0E17', surface: '#1A1F2E', border: '#2A2F3E', text: '#FFFFFF', textSecondary: '#8A8D98', primary: '#00D4AA' }}
+                  />
 
                   <Text style={styles.inputLabel}>Signal Type</Text>
                   <View style={styles.typeRow}>
