@@ -1878,14 +1878,14 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
         logger.error(f"AI Analysis error: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze chart. Please try again.")
 
-@api_router.get("/ai/history")
-async def get_ai_history(current_user: User = Depends(require_auth)):
-    analyses = await db.ai_analyses.find(
-        {"user_id": current_user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
-    
-    return analyses
+# Legacy /ai/history endpoint removed - replaced by paginated version at line ~8057
+# @api_router.get("/ai/history")
+# async def get_ai_history(current_user: User = Depends(require_auth)):
+#     analyses = await db.ai_analyses.find(
+#         {"user_id": current_user.user_id},
+#         {"_id": 0}
+#     ).sort("created_at", -1).to_list(50)
+#     return analyses
 
 @api_router.get("/ai/usage")
 async def get_ai_usage(current_user: User = Depends(require_auth)):
@@ -7808,11 +7808,16 @@ class AIAnalyzeRequest(PydanticBaseModel):
     image_base64: Optional[str] = None
 
 class AIAnalyzeResponse(PydanticBaseModel):
+    analysis_id: str
     market_bias: str
+    trade_bias: str  # BUY / SELL / WAIT
+    confidence_score: int  # 0-100
     trend_structure: str
     support_levels: List[str]
     resistance_levels: List[str]
     trade_insight: str
+    analysis_text: str
+    detected_pattern: str
     confidence: str
 
 @api_router.post("/ai/analyze")
@@ -7882,12 +7887,21 @@ async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depen
 Analyze the provided chart description or image and respond ONLY with valid JSON in this exact format:
 {
   "market_bias": "Bullish" or "Bearish" or "Neutral",
+  "trade_bias": "BUY" or "SELL" or "WAIT",
+  "confidence_score": 0-100 (integer, your confidence percentage),
   "trend_structure": "Brief description of the trend and any patterns observed",
   "support_levels": ["level1", "level2"],
   "resistance_levels": ["level1", "level2"],
   "trade_insight": "Actionable trading insight based on the analysis",
+  "analysis_text": "A 2-3 sentence executive summary of the full analysis",
+  "detected_pattern": "Name of any detected chart pattern (e.g. Double Top, Head and Shoulders, Ascending Triangle) or 'None' if no clear pattern",
   "confidence": "High" or "Medium" or "Low"
 }
+Rules:
+- trade_bias must be BUY if bullish, SELL if bearish, WAIT if neutral/unclear
+- confidence_score must be an integer 0-100
+- detected_pattern should name the most prominent pattern or "None"
+- analysis_text should be a concise summary suitable for a card preview
 Do not include any text outside the JSON object. Be concise but accurate."""
 
         # Initialize chat with emergentintegrations
@@ -7933,35 +7947,154 @@ Do not include any text outside the JSON object. Be concise but accurate."""
             else:
                 raise ValueError("No JSON found in response")
             
+            # Generate analysis ID
+            analysis_id = f"ai_{uuid.uuid4().hex[:12]}"
+            
+            # Normalize confidence_score to int 0-100
+            raw_score = analysis.get("confidence_score", 50)
+            try:
+                confidence_score = max(0, min(100, int(raw_score)))
+            except (ValueError, TypeError):
+                confidence_score = 50
+            
+            # Normalize trade_bias
+            raw_bias = str(analysis.get("trade_bias", "WAIT")).upper().strip()
+            trade_bias = raw_bias if raw_bias in ("BUY", "SELL", "WAIT") else "WAIT"
+            
             # Validate and normalize response
             result = {
+                "analysis_id": analysis_id,
                 "market_bias": str(analysis.get("market_bias", "Unknown")),
+                "trade_bias": trade_bias,
+                "confidence_score": confidence_score,
                 "trend_structure": str(analysis.get("trend_structure", response_text)),
                 "support_levels": [str(s) for s in analysis.get("support_levels", [])],
                 "resistance_levels": [str(r) for r in analysis.get("resistance_levels", [])],
                 "trade_insight": str(analysis.get("trade_insight", "")),
+                "analysis_text": str(analysis.get("analysis_text", analysis.get("trade_insight", ""))),
+                "detected_pattern": str(analysis.get("detected_pattern", "None")),
                 "confidence": str(analysis.get("confidence", "Low"))
             }
+            
+            # Auto-save analysis to MongoDB ai_analyses collection
+            now_utc = datetime.now(timezone.utc).isoformat()
+            # Truncate image to first 200KB for storage (avoid bloat)
+            stored_image = None
+            if request.image_base64:
+                img_data = request.image_base64
+                if "," in img_data:
+                    img_data = img_data.split(",")[1]
+                stored_image = img_data[:200000] if len(img_data) > 200000 else img_data
+            
+            analysis_doc = {
+                "analysis_id": analysis_id,
+                "user_id": current_user.user_id,
+                "pair": request.pair,
+                "timeframe": request.timeframe,
+                "trade_bias": trade_bias,
+                "market_bias": result["market_bias"],
+                "confidence_score": confidence_score,
+                "confidence": result["confidence"],
+                "trend_structure": result["trend_structure"],
+                "support_levels": result["support_levels"],
+                "resistance_levels": result["resistance_levels"],
+                "trade_insight": result["trade_insight"],
+                "analysis_text": result["analysis_text"],
+                "detected_pattern": result["detected_pattern"],
+                "image_snapshot": stored_image,
+                "created_at": now_utc,
+            }
+            await db.ai_analyses.insert_one(analysis_doc)
+            logger.info(f"[AI] Saved analysis {analysis_id} for user {current_user.user_id}")
             
             return result
             
         except (json.JSONDecodeError, ValueError) as parse_error:
             logger.warning(f"Failed to parse AI response as JSON: {parse_error}")
-            # Return raw response in structured format
-            return {
+            fallback_id = f"ai_{uuid.uuid4().hex[:12]}"
+            fallback_result = {
+                "analysis_id": fallback_id,
                 "market_bias": "Unknown",
+                "trade_bias": "WAIT",
+                "confidence_score": 30,
                 "trend_structure": response_text[:500],
                 "support_levels": [],
                 "resistance_levels": [],
                 "trade_insight": "Analysis completed but structured parsing failed.",
+                "analysis_text": response_text[:300],
+                "detected_pattern": "None",
                 "confidence": "Low"
             }
+            # Still save fallback result
+            now_utc = datetime.now(timezone.utc).isoformat()
+            await db.ai_analyses.insert_one({
+                "analysis_id": fallback_id,
+                "user_id": current_user.user_id,
+                "pair": request.pair,
+                "timeframe": request.timeframe,
+                "trade_bias": "WAIT",
+                "market_bias": "Unknown",
+                "confidence_score": 30,
+                "confidence": "Low",
+                "trend_structure": response_text[:500],
+                "support_levels": [],
+                "resistance_levels": [],
+                "trade_insight": "Analysis completed but structured parsing failed.",
+                "analysis_text": response_text[:300],
+                "detected_pattern": "None",
+                "image_snapshot": None,
+                "created_at": now_utc,
+            })
+            return fallback_result
             
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"AI Analysis error: {e}")
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+
+
+@api_router.get("/ai/history")
+async def ai_analysis_history(
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(require_auth)
+):
+    """Fetch paginated AI analysis history for the authenticated user, newest first."""
+    try:
+        skip = (max(1, page) - 1) * limit
+        clamped_limit = min(limit, 50)
+
+        cursor = db.ai_analyses.find(
+            {"user_id": current_user.user_id},
+            {"_id": 0, "image_snapshot": 0}  # Exclude heavy fields in list view
+        ).sort("created_at", -1).skip(skip).limit(clamped_limit)
+
+        items = await cursor.to_list(clamped_limit)
+        total = await db.ai_analyses.count_documents({"user_id": current_user.user_id})
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": clamped_limit,
+            "has_more": (skip + clamped_limit) < total,
+        }
+    except Exception as e:
+        logger.error(f"AI history error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch analysis history")
+
+
+@api_router.get("/ai/history/{analysis_id}")
+async def ai_analysis_detail(analysis_id: str, current_user: User = Depends(require_auth)):
+    """Fetch a single AI analysis by ID, including the stored image snapshot."""
+    doc = await db.ai_analyses.find_one(
+        {"analysis_id": analysis_id, "user_id": current_user.user_id},
+        {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return doc
 
 
 # Include router
