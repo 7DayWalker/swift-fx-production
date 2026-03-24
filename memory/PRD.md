@@ -203,3 +203,28 @@ All 11 screens are functional with no ComingSoonGate blocks:
 ## Test Credentials
 - VIP user: paradoxella@gmail.com / Grace1992@
 - Admin: ellapauledache@gmail.com / Grace1992@
+
+## AI Chart Analyzer Upgrade (Completed Mar 24, 2026)
+
+### Backend Enhancements
+- `/api/ai/analyze` now returns: `analysis_id`, `trade_bias` (BUY/SELL/WAIT), `confidence_score` (0-100), `analysis_text`, `detected_pattern`, plus original fields
+- Every analysis auto-saved to MongoDB `ai_analyses` collection with: user_id, pair, timeframe, trade_bias, confidence_score, analysis_text, image_snapshot (truncated 200KB), created_at
+- New `/api/ai/history` — paginated, sorted newest-first, excludes heavy image_snapshot in list view
+- New `/api/ai/history/{analysis_id}` — full detail including image_snapshot for reopening past analyses
+- Usage enforcement: weekly counter + 7-day auto-reset (stored in Supabase profiles)
+
+### Frontend Enhancements (`app/(tabs)/ai.tsx`)
+- **TradeBiasBadge**: Prominent BUY (green) / SELL (red) / WAIT (amber) badge with directional icon
+- **ConfidenceMeter**: Animated horizontal bar (0-100%) with color gradient (green/amber/red)
+- **AnalyzingProgress**: 4-step progress (Uploading → Analyzing → Generating Insight → Completed) with animated pulse
+- **SuccessFlash**: Spring scale-in checkmark animation on analysis completion
+- **Recent Analyses**: Collapsible history section showing past analyses with pair, bias, confidence, pattern, time ago
+- **Tap-to-reopen**: Tapping history card fetches full saved result (including chart image) and displays it
+- **UpgradeNudge**: Conversion card ("Upgrade to VIP for unlimited AI analyses") shown to non-VIP users after results
+- **Detected Pattern**: Shows chart pattern name (Double Top, Head and Shoulders, etc.) when identified
+
+### Testing
+- 10/10 backend tests passed (auth, pagination, field validation, persistence, detail endpoint)
+- Legacy duplicate `/api/ai/history` endpoint removed (was conflicting with new paginated version)
+- Test file: `/app/backend/tests/test_ai_analyzer_upgrade.py`
+
