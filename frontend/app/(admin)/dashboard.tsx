@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { supabase } from '../../src/services/supabase';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 interface AdminStats {
   total_users: number;
