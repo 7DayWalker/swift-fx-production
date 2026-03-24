@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import { useRouter, Link, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -365,8 +366,14 @@ export default function RegisterScreen() {
 
             <Text style={[styles.termsText, dynamicStyles.textSecondary]}>
               By signing up, you agree to our{' '}
-              <Text style={[styles.termsLink, { color: theme.primary }]}>Terms of Service</Text> and{' '}
-              <Text style={[styles.termsLink, { color: theme.primary }]}>Privacy Policy</Text>
+              <Text
+                style={[styles.termsLink, { color: theme.primary }]}
+                onPress={() => Linking.openURL('https://swiftfx.online/terms')}
+              >Terms of Service</Text> and{' '}
+              <Text
+                style={[styles.termsLink, { color: theme.primary }]}
+                onPress={() => Linking.openURL('https://swiftfx.online/privacy-policy')}
+              >Privacy Policy</Text>
             </Text>
           </View>
 

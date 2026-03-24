@@ -17,6 +17,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,11 +52,6 @@ interface NotificationPreferences {
   support_replies: boolean;
 }
 
-interface LegalDocument {
-  title: string;
-  last_updated: string;
-  content: string;
-}
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -73,7 +69,7 @@ export default function SettingsScreen() {
   const [showEditName, setShowEditName] = useState(false);
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showLegalDocument, setShowLegalDocument] = useState<string | null>(null);
+  const [showLegalDocument, setShowLegalDocument] = useState<string | null>(null); // kept for modal compat
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -243,23 +239,8 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleViewLegal = async (docType: string) => {
-    try {
-      setLoadingLegal(true);
-      setShowLegalDocument(docType);
-      // Static legal content (no backend needed)
-      const docs: Record<string, LegalDocument> = {
-        terms: { title: 'Terms of Service', last_updated: '2025-01-01', content: 'Terms of Service for Swift FX Signals. By using this application, you agree to these terms. Trading involves risk. Past performance is not indicative of future results.' },
-        privacy: { title: 'Privacy Policy', last_updated: '2025-01-01', content: 'Privacy Policy for Swift FX Signals. We collect and process your data as described in this policy. Your data is stored securely and never sold to third parties.' },
-        risk: { title: 'Risk Disclosure', last_updated: '2025-01-01', content: 'Risk Disclosure: Trading foreign exchange carries a high level of risk. You should be aware of the risks and be willing to accept them in order to invest in the markets.' },
-      };
-      setLegalContent(docs[docType] || { title: docType, last_updated: 'N/A', content: 'Document not available.' });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load document');
-      setShowLegalDocument(null);
-    } finally {
-      setLoadingLegal(false);
-    }
+  const openLegalUrl = (url: string) => {
+    Linking.openURL(url);
   };
 
   const handleClearAppData = async () => {
@@ -557,9 +538,9 @@ export default function SettingsScreen() {
         {/* Privacy & Legal */}
         <Text style={styles.sectionTitle}>Privacy & Legal</Text>
         <View style={styles.card}>
-          {renderSettingItem('document-text-outline', 'Privacy Policy', undefined, () => handleViewLegal('privacy_policy'))}
-          {renderSettingItem('document-outline', 'Terms of Service', undefined, () => handleViewLegal('terms_of_service'))}
-          {renderSettingItem('warning-outline', 'Risk Disclaimer', undefined, () => handleViewLegal('risk_disclaimer'))}
+          {renderSettingItem('document-text-outline', 'Privacy Policy', undefined, () => openLegalUrl('https://swiftfx.online/privacy-policy'))}
+          {renderSettingItem('document-outline', 'Terms of Service', undefined, () => openLegalUrl('https://swiftfx.online/terms'))}
+          {renderSettingItem('warning-outline', 'Risk Disclaimer', undefined, () => openLegalUrl('https://swiftfx.online/risk-disclaimer'))}
         </View>
 
         {/* Account Controls */}
@@ -758,34 +739,6 @@ export default function SettingsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Legal Document Modal */}
-      <Modal visible={!!showLegalDocument} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.legalModalContainer}>
-          <View style={styles.legalHeader}>
-            <TouchableOpacity onPress={() => {
-              setShowLegalDocument(null);
-              setLegalContent(null);
-            }}>
-              <Ionicons name="close" size={24} color={theme.text} />
-            </TouchableOpacity>
-            <Text style={styles.legalTitle}>{legalContent?.title || 'Loading...'}</Text>
-            <View style={{ width: 24 }} />
-          </View>
-          {loadingLegal ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-          ) : (
-            <ScrollView style={styles.legalContent} showsVerticalScrollIndicator={false}>
-              {legalContent?.last_updated && (
-                <Text style={styles.legalDate}>Last updated: {legalContent.last_updated}</Text>
-              )}
-              <Text style={styles.legalText}>{legalContent?.content}</Text>
-            </ScrollView>
-          )}
-        </SafeAreaView>
       </Modal>
 
       {/* Deactivate Confirmation Modal */}

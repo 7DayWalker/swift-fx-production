@@ -141,6 +141,11 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Fund Management (`/fund-management.tsx`)
 - Help & Support (`/help-support.tsx`)
 
+## Legal Links — External Browser (March 2026)
+- All Privacy Policy / Terms / Risk Disclaimer links now open `https://swiftfx.online/{privacy-policy,terms,risk-disclaimer}` via `Linking.openURL`
+- Replaced inline modal (settings.tsx) with direct Linking call
+- Files changed: `settings.tsx`, `app/(auth)/register.tsx`, `subscription.tsx`
+
 ## Apple Server Notifications V2 Webhook (Completed Mar 2026)
 
 ### Endpoint: POST /api/webhooks/apple
