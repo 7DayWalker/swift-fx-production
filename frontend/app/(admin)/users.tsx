@@ -34,6 +34,7 @@ interface User {
 
 interface OverrideStatus {
   has_override: boolean;
+  source: 'override' | 'store';
   override: {
     tier: string;
     is_active: boolean;
@@ -135,9 +136,8 @@ export default function UserManagement() {
     setSelectedRole(user.role);
     setOverrideStatus(null);
     setShowEditModal(true);
-    if (isSuperAdmin) {
-      fetchOverrideStatus(user.user_id);
-    }
+    // All admins can view override status
+    fetchOverrideStatus(user.user_id);
   };
 
   const handleUpdateRole = async () => {
@@ -239,6 +239,16 @@ export default function UserManagement() {
         year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
       });
     } catch { return iso; }
+  };
+
+  const formatDaysRemaining = (iso: string) => {
+    try {
+      const diff = new Date(iso).getTime() - Date.now();
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      if (days <= 0) return 'expired';
+      if (days === 1) return 'in 1 day';
+      return `in ${days} days`;
+    } catch { return ''; }
   };
 
   const getStats = () => {
@@ -444,15 +454,21 @@ export default function UserManagement() {
                   )}
                 </TouchableOpacity>
 
-                {/* Subscription Override Section - SUPER_ADMIN only */}
-                {isSuperAdmin && (
+                {/* Subscription Override Section - All admins can view */}
                   <View style={overrideStyles.section} data-testid="override-section">
                     <View style={overrideStyles.sectionHeader}>
                       <Ionicons name="shield-checkmark" size={18} color="#FF6B35" />
                       <Text style={overrideStyles.sectionTitle}>Subscription Override</Text>
-                      <View style={overrideStyles.superAdminBadge}>
-                        <Text style={overrideStyles.superAdminBadgeText}>SUPER ADMIN</Text>
-                      </View>
+                      {isSuperAdmin ? (
+                        <View style={overrideStyles.superAdminBadge}>
+                          <Text style={overrideStyles.superAdminBadgeText}>SUPER ADMIN</Text>
+                        </View>
+                      ) : (
+                        <View style={overrideStyles.readOnlyBadge} data-testid="read-only-badge">
+                          <Ionicons name="eye-outline" size={10} color="#8A8D98" />
+                          <Text style={overrideStyles.readOnlyBadgeText}>READ-ONLY</Text>
+                        </View>
+                      )}
                     </View>
 
                     {/* Current Override Status */}
@@ -480,59 +496,80 @@ export default function UserManagement() {
                             </Text>
                           </View>
                         </View>
+                        {/* Source Label */}
+                        <View style={overrideStyles.sourceRow} data-testid="source-label">
+                          <Ionicons name="git-branch-outline" size={12} color="#FF6B35" />
+                          <Text style={overrideStyles.sourceText}>
+                            Source: Override {overrideStatus.override?.expires_at ? `(expires ${formatDaysRemaining(overrideStatus.override.expires_at)})` : ''}
+                          </Text>
+                        </View>
+                        {!isSuperAdmin && (
+                          <View style={overrideStyles.managedRow} data-testid="managed-by-label">
+                            <Ionicons name="lock-closed-outline" size={11} color="#8A8D98" />
+                            <Text style={overrideStyles.managedText}>Managed by Super Admin</Text>
+                          </View>
+                        )}
                       </View>
                     ) : (
                       <View style={overrideStyles.noOverride} data-testid="override-status-none">
                         <Text style={overrideStyles.noOverrideText}>No active override</Text>
+                        <View style={overrideStyles.sourceRow} data-testid="source-label-store">
+                          <Ionicons name="storefront-outline" size={12} color="#8A8D98" />
+                          <Text style={[overrideStyles.sourceText, { color: '#8A8D98' }]}>
+                            Source: App Store / Google Play Subscription
+                          </Text>
+                        </View>
                       </View>
                     )}
 
-                    {/* Override Action Buttons */}
-                    <View style={overrideStyles.actionRow}>
-                      <TouchableOpacity
-                        style={[overrideStyles.actionBtn, overrideStyles.premiumBtn]}
-                        onPress={() => handleGrantOverride('premium', 7)}
-                        disabled={isOverrideAction}
-                        data-testid="grant-premium-btn"
-                      >
-                        {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
-                          <>
-                            <Ionicons name="star" size={14} color="#0A0E17" />
-                            <Text style={overrideStyles.actionBtnText}>Premium 7d</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                    {/* Override Action Buttons - SUPER_ADMIN only */}
+                    {isSuperAdmin && (
+                      <View style={overrideStyles.actionRow}>
+                        <TouchableOpacity
+                          style={[overrideStyles.actionBtn, overrideStyles.premiumBtn]}
+                          onPress={() => handleGrantOverride('premium', 7)}
+                          disabled={isOverrideAction}
+                          data-testid="grant-premium-btn"
+                        >
+                          {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
+                            <>
+                              <Ionicons name="star" size={14} color="#0A0E17" />
+                              <Text style={overrideStyles.actionBtnText}>Premium 7d</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[overrideStyles.actionBtn, overrideStyles.vipBtn]}
-                        onPress={() => handleGrantOverride('vip', 7)}
-                        disabled={isOverrideAction}
-                        data-testid="grant-vip-btn"
-                      >
-                        {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
-                          <>
-                            <Ionicons name="diamond" size={14} color="#0A0E17" />
-                            <Text style={overrideStyles.actionBtnText}>VIP 7d</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[overrideStyles.actionBtn, overrideStyles.vipBtn]}
+                          onPress={() => handleGrantOverride('vip', 7)}
+                          disabled={isOverrideAction}
+                          data-testid="grant-vip-btn"
+                        >
+                          {isOverrideAction ? <ActivityIndicator size="small" color="#0A0E17" /> : (
+                            <>
+                              <Ionicons name="diamond" size={14} color="#0A0E17" />
+                              <Text style={overrideStyles.actionBtnText}>VIP 7d</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[overrideStyles.actionBtn, overrideStyles.revokeBtn, !overrideStatus?.has_override && { opacity: 0.4 }]}
-                        onPress={handleRevokeOverride}
-                        disabled={isOverrideAction || !overrideStatus?.has_override}
-                        data-testid="revoke-override-btn"
-                      >
-                        {isOverrideAction ? <ActivityIndicator size="small" color="#FF4444" /> : (
-                          <>
-                            <Ionicons name="close-circle" size={14} color="#FF4444" />
-                            <Text style={[overrideStyles.actionBtnText, { color: '#FF4444' }]}>Revoke</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                        <TouchableOpacity
+                          style={[overrideStyles.actionBtn, overrideStyles.revokeBtn, !overrideStatus?.has_override && { opacity: 0.4 }]}
+                          onPress={handleRevokeOverride}
+                          disabled={isOverrideAction || !overrideStatus?.has_override}
+                          data-testid="revoke-override-btn"
+                        >
+                          {isOverrideAction ? <ActivityIndicator size="small" color="#FF4444" /> : (
+                            <>
+                              <Ionicons name="close-circle" size={14} color="#FF4444" />
+                              <Text style={[overrideStyles.actionBtnText, { color: '#FF4444' }]}>Revoke</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
-                    {/* View Audit Logs Button */}
+                    {/* View Audit Logs Button - all admins */}
                     <TouchableOpacity
                       style={overrideStyles.logsBtn}
                       onPress={fetchOverrideLogs}
@@ -543,7 +580,6 @@ export default function UserManagement() {
                       <Ionicons name="chevron-forward" size={14} color="#8A8D98" />
                     </TouchableOpacity>
                   </View>
-                )}
               </View>
               </ScrollView>
             )}
@@ -1050,5 +1086,44 @@ const overrideStyles = StyleSheet.create({
   logDetail: {
     fontSize: 11,
     color: '#B0B3BC',
+  },
+  readOnlyBadge: {
+    backgroundColor: 'rgba(138, 141, 152, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  readOnlyBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#8A8D98',
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  sourceText: {
+    fontSize: 11,
+    color: '#FF6B35',
+    fontWeight: '500',
+  },
+  managedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  managedText: {
+    fontSize: 10,
+    color: '#8A8D98',
+    fontStyle: 'italic',
   },
 });

@@ -2380,12 +2380,20 @@ async def get_override_status(user_id: str, admin: User = Depends(require_admin)
     override = await db.subscription_overrides.find_one(
         {"user_id": user_id}, {"_id": 0}
     )
-    if not override:
-        return {"has_override": False, "override": None}
 
     active = await get_active_override(user_id)
+
+    # Determine subscription source
+    source = "store"
+    if active:
+        source = "override"
+
+    if not override:
+        return {"has_override": False, "override": None, "source": source}
+
     return {
         "has_override": active is not None,
+        "source": source,
         "override": {
             "tier": override.get("tier"),
             "is_active": active is not None,
@@ -2397,12 +2405,20 @@ async def get_override_status(user_id: str, admin: User = Depends(require_admin)
 
 
 @api_router.get("/admin/override-logs/{user_id}")
-async def get_override_logs(user_id: str, admin: User = Depends(require_super_admin)):
-    """Get immutable audit logs for a user's overrides. SUPER_ADMIN only."""
+async def get_override_logs(
+    user_id: str,
+    page: int = 1,
+    limit: int = 20,
+    admin: User = Depends(require_admin),
+):
+    """Get immutable audit logs for a user's overrides. Any admin can view (read-only)."""
+    skip = (max(1, page) - 1) * min(limit, 50)
+    capped_limit = min(limit, 50)
+    total = await db.subscription_override_logs.count_documents({"target_user": user_id})
     logs = await db.subscription_override_logs.find(
         {"target_user": user_id}, {"_id": 0}
-    ).sort("timestamp", -1).to_list(50)
-    return {"logs": logs, "count": len(logs)}
+    ).sort("timestamp", -1).skip(skip).limit(capped_limit).to_list(capped_limit)
+    return {"logs": logs, "count": len(logs), "total": total, "page": page, "limit": capped_limit}
 
 
 # ===================== ADMIN SUBSCRIPTION MANAGEMENT =====================
