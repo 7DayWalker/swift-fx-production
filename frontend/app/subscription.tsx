@@ -480,6 +480,10 @@ export default function SubscriptionScreen() {
             <TouchableOpacity onPress={() => Linking.openURL('https://swiftfx.online/privacy-policy')}>
               <Text style={[styles.legalLink, { color: theme.primary }]}>Privacy Policy</Text>
             </TouchableOpacity>
+            <Text style={[styles.legalSeparator, { color: theme.textSecondary }]}> | </Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://swiftfx.online/risk-disclaimer')}>
+              <Text style={[styles.legalLink, { color: theme.primary }]}>Risk Disclaimer</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
