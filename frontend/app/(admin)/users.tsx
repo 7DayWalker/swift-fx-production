@@ -55,7 +55,6 @@ interface OverrideLog {
   timestamp: string;
 }
 
-const ROLES = ['free', 'premium', 'vip'];
 
 export default function UserManagement() {
   const router = useRouter();
@@ -68,8 +67,6 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'free' | 'premium' | 'vip'>('free');
-  const [isUpdating, setIsUpdating] = useState(false);
   const [roleFilter, setRoleFilter] = useState<'all' | 'free' | 'premium' | 'vip'>('all');
 
   // Override state
@@ -133,34 +130,10 @@ export default function UserManagement() {
 
   const openEditModal = (user: User) => {
     setSelectedUser(user);
-    setSelectedRole(user.role);
     setOverrideStatus(null);
     setShowEditModal(true);
     // All admins can view override status
     fetchOverrideStatus(user.user_id);
-  };
-
-  const handleUpdateRole = async () => {
-    if (!selectedUser) return;
-
-    setIsUpdating(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: selectedRole })
-        .eq('id', selectedUser.user_id);
-      if (error) throw error;
-      
-      setShowEditModal(false);
-      fetchUsers();
-      const msg = 'User role updated successfully!';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
-    } catch (error: any) {
-      const msg = error.message || 'Failed to update user role';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
-    } finally {
-      setIsUpdating(false);
-    }
   };
 
   const getRoleColor = (role: string) => {
@@ -392,7 +365,7 @@ export default function UserManagement() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change User Role</Text>
+              <Text style={styles.modalTitle}>Manage User</Text>
               <TouchableOpacity onPress={() => setShowEditModal(false)}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -412,47 +385,6 @@ export default function UserManagement() {
                     <Text style={styles.selectedUserEmail}>{selectedUser.email}</Text>
                   </View>
                 </View>
-
-                <Text style={styles.inputLabel}>Select New Role</Text>
-                <View style={styles.roleOptions}>
-                  {ROLES.map((role) => (
-                    <TouchableOpacity
-                      key={role}
-                      style={[
-                        styles.roleOption,
-                        selectedRole === role && styles.roleOptionActive,
-                        selectedRole === role && { borderColor: getRoleColor(role) }
-                      ]}
-                      onPress={() => setSelectedRole(role as any)}
-                    >
-                      <View style={[styles.roleOptionIcon, { backgroundColor: `${getRoleColor(role)}20` }]}>
-                        <Ionicons
-                          name={role === 'vip' ? 'diamond' : role === 'premium' ? 'star' : 'person'}
-                          size={24}
-                          color={getRoleColor(role)}
-                        />
-                      </View>
-                      <Text style={[styles.roleOptionText, { color: getRoleColor(role) }]}>
-                        {role.toUpperCase()}
-                      </Text>
-                      {selectedRole === role && (
-                        <Ionicons name="checkmark-circle" size={20} color={getRoleColor(role)} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.updateButton, isUpdating && styles.updateButtonDisabled]}
-                  onPress={handleUpdateRole}
-                  disabled={isUpdating}
-                >
-                  {isUpdating ? (
-                    <ActivityIndicator color="#0A0E17" />
-                  ) : (
-                    <Text style={styles.updateButtonText}>Update Role</Text>
-                  )}
-                </TouchableOpacity>
 
                 {/* Subscription Override Section - All admins can view */}
                   <View style={overrideStyles.section} data-testid="override-section">
@@ -868,55 +800,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8A8D98',
     marginTop: 2,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  roleOptions: {
-    gap: 12,
-  },
-  roleOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#0A0E17',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  roleOptionActive: {
-    backgroundColor: 'rgba(0, 212, 170, 0.05)',
-  },
-  roleOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  roleOptionText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  updateButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  updateButtonDisabled: {
-    opacity: 0.5,
-  },
-  updateButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A0E17',
   },
 });
 

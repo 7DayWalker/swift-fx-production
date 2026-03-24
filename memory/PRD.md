@@ -358,3 +358,11 @@ All 11 screens are functional with no ComingSoonGate blocks:
 
 ### Testing
 - 15/15 backend tests passed: `/app/test_reports/iteration_14.json`
+
+
+## Old Role Selector Cleanup (Mar 24, 2026)
+- Removed redundant "Select New Role" (FREE/PREMIUM/VIP cards) + "Update Role" button from User Management modal
+- Modal title changed from "Change User Role" to "Manage User"
+- Cleaned up unused state (`selectedRole`, `isUpdating`), function (`handleUpdateRole`), constant (`ROLES`), and 9 unused styles
+- Override section now the sole tier management interface in the modal
+- Screenshot verified: clean modal with user info + override controls only
