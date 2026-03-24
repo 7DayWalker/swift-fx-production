@@ -1527,6 +1527,46 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
         "best_trade_pips": round(best_trade, 1),
         "worst_trade_pips": round(worst_trade, 1),
     }
+
+    # Calculate winning streak (consecutive wins from most recent)
+    winning_streak = 0
+    for s in accessible_signals:
+        if get_pips_value(s) > 0:
+            winning_streak += 1
+        else:
+            break
+
+    # Calculate monthly pips for mini chart (last 6 months)
+    from collections import defaultdict
+    monthly_pips_map: dict[str, float] = defaultdict(float)
+    monthly_wins_map: dict[str, int] = defaultdict(int)
+    monthly_losses_map: dict[str, int] = defaultdict(int)
+    for s in accessible_signals:
+        closed_date = s.get("closed_at") or s.get("created_at")
+        if closed_date:
+            dt = closed_date if isinstance(closed_date, datetime) else datetime.fromisoformat(str(closed_date).replace("Z", "+00:00"))
+            month_key = dt.strftime("%Y-%m")
+            pips_val = get_pips_value(s)
+            monthly_pips_map[month_key] += pips_val
+            if pips_val > 0:
+                monthly_wins_map[month_key] += 1
+            elif pips_val < 0:
+                monthly_losses_map[month_key] += 1
+
+    # Sort by month and take last 6
+    sorted_months = sorted(monthly_pips_map.keys())[-6:]
+    monthly_performance = []
+    for m in sorted_months:
+        month_label = datetime.strptime(m, "%Y-%m").strftime("%b")
+        monthly_performance.append({
+            "month": month_label,
+            "pips": round(monthly_pips_map[m], 1),
+            "wins": monthly_wins_map.get(m, 0),
+            "losses": monthly_losses_map.get(m, 0),
+        })
+
+    basic_stats["winning_streak"] = winning_streak
+    basic_stats["monthly_performance"] = monthly_performance
     
     # For free users, return basic stats only with limited signal history
     if user_role == UserRole.FREE:
