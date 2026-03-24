@@ -228,3 +228,22 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Legacy duplicate `/api/ai/history` endpoint removed (was conflicting with new paginated version)
 - Test file: `/app/backend/tests/test_ai_analyzer_upgrade.py`
 
+## AI Analysis Sharing (Completed Mar 24, 2026)
+
+### Backend
+- `POST /api/ai/share/{analysis_id}` — generates a 16-char `share_token`, stores in doc, idempotent (reuses existing token)
+- `GET /api/ai/shared/{share_token}` — public endpoint (no auth), returns analysis without user_id/image_snapshot, increments view_count
+- `POST /api/ai/share/{analysis_id}/community` — creates community post with `post_type: "ai_analysis"`, includes pair, bias, confidence, pattern
+
+### Frontend (`ai.tsx`)
+- **Share button** in result header (share-outline icon) opens bottom sheet modal
+- **ShareModal**: slide-up sheet with 3 options:
+  - Copy Link — generates public URL via share endpoint, copies to clipboard with success feedback
+  - Native Share — uses RN Share API for Twitter/WhatsApp/Telegram with formatted message
+  - Post to Community — publishes analysis summary to community feed with confirmation state
+- Modal styled as dark bottom sheet with smooth spring animation
+
+### Testing
+- 13/13 backend tests passed (auth, token generation, idempotency, public view, data exclusion, view_count, community post, content validation)
+- Test file: `/app/backend/tests/test_ai_share_endpoints.py`
+
