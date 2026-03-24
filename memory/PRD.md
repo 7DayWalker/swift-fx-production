@@ -247,3 +247,23 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - 13/13 backend tests passed (auth, token generation, idempotency, public view, data exclusion, view_count, community post, content validation)
 - Test file: `/app/backend/tests/test_ai_share_endpoints.py`
 
+## Signal History Screen Fix + Enhancements (Completed Mar 24, 2026)
+
+### Bug Fixed
+- **Root cause**: `SignalContext.refreshHistory()` used mismatched property names (`winning_trades` vs `winning_signals`, `average_pips` vs `avg_pips_per_trade`, hardcoded `best_trade: 0`, `worst_trade: 0`, missing `breakeven_signals`). Frontend read the correct keys but context stored wrong ones, so all breakdown stats showed 0.
+- **Fix**: Rewrote `signal-history.tsx` to fetch directly from backend `/api/signals/history/stats` endpoint which returns all correct data.
+
+### Backend Enhancements
+- `winning_streak`: Consecutive wins from most recent closed signal
+- `monthly_performance`: Array of { month, pips, wins, losses } for last 6 months
+
+### Frontend Enhancements
+- **Winning Streak Badge**: Animated pulse badge when streak >= 3 ("3 Wins in a Row - On Fire!")
+- **Mini Monthly Bar Chart**: Animated bar chart showing monthly pips, wins/losses per month
+- **Last 5 Trades Quick Summary**: Compact list with pair, direction, date, pip result, color-coded dots
+- **Green/Red Gradient Signal Cards**: Left border stripe colored by outcome, subtle gradient overlay
+
+### Testing
+- 26/26 backend tests passed (all stats fields, winning_streak, monthly_performance, access control, data integrity)
+- Test file: `/app/backend/tests/test_signal_history_stats.py`
+
