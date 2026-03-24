@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +29,7 @@ interface Signal {
   tp2?: number;
   tp3?: number;
   tp_hit?: number;
-  take_profit?: number; // Legacy support
+  take_profit?: number;
   risk_reward?: number;
   state: string;
   is_active?: boolean;
@@ -36,8 +37,324 @@ interface Signal {
   created_at: string;
   locked?: boolean;
   final_pips?: number;
-  result_pips?: number; // Legacy support
+  result_pips?: number;
 }
+
+// ─── Signal card helpers ─────────────────────────────────────────────────────
+
+const getSignalAge = (createdAt: string): string => {
+  const diffMs = Date.now() - new Date(createdAt).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Just posted';
+  if (mins < 60) return `Posted ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Posted ${hrs}h ago`;
+  return `Posted ${Math.floor(hrs / 24)}d ago`;
+};
+
+const calcConfidence = (rr?: number, entry?: number, sl?: number, tp1?: number): number => {
+  let ratio = rr;
+  if (!ratio && entry && sl && tp1) {
+    const slDist = Math.abs(entry - sl);
+    if (slDist > 0) ratio = Math.abs(tp1 - entry) / slDist;
+  }
+  if (!ratio) return 62;
+  return Math.min(95, Math.max(48, Math.round(48 + (ratio * 14))));
+};
+
+const calcProjectedPips = (pair: string, entry?: number, tp?: number): number => {
+  if (!entry || !tp) return 0;
+  const diff = Math.abs(tp - entry);
+  const p = pair.toUpperCase();
+  if (p.includes('JPY')) return Math.round(diff * 100);
+  if (p.includes('XAU') || p.includes('GOLD')) return Math.round(diff * 10);
+  if (p.includes('XAG') || p.includes('SILVER')) return Math.round(diff * 100);
+  if (p.includes('BTC') || p.includes('ETH') || p.includes('USDT')) return Math.round(diff);
+  return Math.round(diff * 10000);
+};
+
+const getEntryValidity = (state: string): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap } | null => {
+  if (state === 'pending') return { label: 'Entry Active', color: '#FFD700', icon: 'radio-button-on' };
+  if (['active', 'tp1', 'tp2', 'tp3'].includes(state)) return { label: 'Trade Running', color: '#00D4AA', icon: 'trending-up' };
+  return null;
+};
+
+// ─── SignalCard component (needs its own Animated.Value) ─────────────────────
+
+interface CardProps { item: Signal; theme: any }
+
+const SignalCard = ({ item, theme }: CardProps) => {
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const isActive = ['active', 'tp1', 'tp2', 'tp3'].includes(item.state);
+
+  useEffect(() => {
+    if (isActive && !item.locked) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0.15, duration: 1800, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    return undefined;
+  }, [isActive, item.locked]);
+
+  const badge = (() => {
+    switch (item.visibility) {
+      case 'vip': return { bg: 'rgba(255,215,0,0.2)', color: '#FFD700', text: 'VIP' };
+      case 'premium': return { bg: 'rgba(0,212,170,0.2)', color: '#00D4AA', text: 'PREMIUM' };
+      default: return { bg: 'rgba(138,141,152,0.2)', color: '#8A8D98', text: 'FREE' };
+    }
+  })();
+
+  const stateColor = (() => {
+    switch (item.state) {
+      case 'pending': return '#FFD700';
+      case 'active': case 'tp1': case 'tp2': case 'tp3': return '#00D4AA';
+      default: return '#8A8D98';
+    }
+  })();
+
+  const stateLabel = (() => {
+    switch (item.state) {
+      case 'pending': return 'PENDING';
+      case 'active': return 'ACTIVE';
+      case 'tp1': return 'TP1 HIT';
+      case 'tp2': return 'TP2 HIT';
+      case 'tp3': return 'TP3 HIT';
+      case 'closed': return 'CLOSED';
+      default: return item.state?.toUpperCase() || 'UNKNOWN';
+    }
+  })();
+
+  const confidence = calcConfidence(item.risk_reward, item.entry, item.stop_loss, item.tp1);
+  const bestTp = item.tp3 || item.tp2 || item.tp1 || item.take_profit;
+  const projectedPips = calcProjectedPips(item.pair, item.entry, bestTp);
+  const signalAge = getSignalAge(item.created_at);
+  const validity = getEntryValidity(item.state);
+
+  return (
+    <View style={cardStyles.wrapper}>
+      {/* Glow layer — absolute, opacity-pulsed with native driver */}
+      {isActive && !item.locked && (
+        <Animated.View style={[cardStyles.glowLayer, { opacity: glowAnim }]} />
+      )}
+
+      <View style={[cardStyles.card, { backgroundColor: theme.surface, borderColor: isActive && !item.locked ? 'rgba(0,212,170,0.35)' : theme.border }]}>
+
+        {/* ── Header row ── */}
+        <View style={cardStyles.header}>
+          <View style={cardStyles.headerLeft}>
+            <Text style={[cardStyles.pair, { color: theme.text }]}>{item.pair}</Text>
+            <View style={[cardStyles.statusBadge, { backgroundColor: `${stateColor}20` }]}>
+              <View style={[cardStyles.statusDot, { backgroundColor: stateColor }]} />
+              <Text style={[cardStyles.statusText, { color: stateColor }]}>{stateLabel}</Text>
+            </View>
+          </View>
+          <View style={cardStyles.headerRight}>
+            <View style={[cardStyles.typeBadge, { backgroundColor: item.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }]}>
+              <Ionicons name={item.signal_type === 'buy' ? 'arrow-up' : 'arrow-down'} size={14} color={item.signal_type === 'buy' ? theme.success : theme.error} />
+              <Text style={[cardStyles.typeText, { color: item.signal_type === 'buy' ? theme.success : theme.error }]}>
+                {item.signal_type?.toUpperCase()}
+              </Text>
+            </View>
+            <View style={[cardStyles.visibilityBadge, { backgroundColor: badge.bg }]}>
+              <Text style={[cardStyles.visibilityText, { color: badge.color }]}>{badge.text}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Meta row: Age + Validity ── */}
+        <View style={cardStyles.metaRow}>
+          <View style={cardStyles.metaItem}>
+            <Ionicons name="time-outline" size={11} color={theme.textSecondary} />
+            <Text style={[cardStyles.metaText, { color: theme.textSecondary }]}>{signalAge}</Text>
+          </View>
+          {validity && (
+            <View style={[cardStyles.validityBadge, { backgroundColor: `${validity.color}18`, borderColor: `${validity.color}40` }]}>
+              <Ionicons name={validity.icon} size={11} color={validity.color} />
+              <Text style={[cardStyles.validityText, { color: validity.color }]}>{validity.label}</Text>
+            </View>
+          )}
+        </View>
+
+        {item.locked ? (
+          <View style={[cardStyles.lockedContainer, { backgroundColor: `${theme.warning}05` }]}>
+            <Ionicons name="lock-closed" size={22} color={theme.warning} />
+            <Text style={[cardStyles.lockedTitle, { color: theme.warning }]}>{getUpgradeMessage(item.visibility)}</Text>
+            <Text style={[cardStyles.lockedSubtitle, { color: theme.textSecondary }]}>
+              Requires {item.visibility === 'vip' ? 'VIP' : 'Premium'} subscription
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* ── Price details grid ── */}
+            <View style={[cardStyles.detailsGrid, { backgroundColor: theme.background }]}>
+              <View style={cardStyles.detailItem}>
+                <Text style={[cardStyles.detailLabel, { color: theme.textSecondary }]}>ENTRY</Text>
+                <Text style={[cardStyles.detailValue, { color: theme.text }]}>{item.entry}</Text>
+              </View>
+              <View style={[cardStyles.detailItem, cardStyles.detailItemBorder, { borderColor: `${theme.border}60` }]}>
+                <Text style={[cardStyles.detailLabel, { color: theme.textSecondary }]}>SL</Text>
+                <Text style={[cardStyles.detailValue, { color: theme.error }]}>{item.stop_loss}</Text>
+              </View>
+              <View style={[cardStyles.detailItem, cardStyles.detailItemBorder, { borderColor: `${theme.border}60` }]}>
+                <Text style={[cardStyles.detailLabel, { color: theme.textSecondary }]}>TP1</Text>
+                <Text style={[cardStyles.detailValue, { color: (item.tp_hit || 0) >= 1 ? theme.success : theme.textSecondary }]}>
+                  {item.tp1 || item.take_profit}{(item.tp_hit || 0) >= 1 ? ' ✓' : ''}
+                </Text>
+              </View>
+              <View style={[cardStyles.detailItem, cardStyles.detailItemBorder, { borderColor: `${theme.border}60` }]}>
+                <Text style={[cardStyles.detailLabel, { color: theme.textSecondary }]}>R:R</Text>
+                <Text style={[cardStyles.detailValue, { color: theme.text }]}>1:{item.risk_reward}</Text>
+              </View>
+            </View>
+
+            {/* ── Confidence + Projected pips ── */}
+            {item.state !== 'closed' && (
+              <View style={cardStyles.insightRow}>
+                {/* Confidence meter */}
+                <View style={cardStyles.confidenceWrap}>
+                  <Text style={[cardStyles.insightLabel, { color: theme.textSecondary }]}>Confidence</Text>
+                  <View style={cardStyles.confidenceBar}>
+                    <View style={[cardStyles.confidenceFill, {
+                      width: `${confidence}%` as any,
+                      backgroundColor: confidence >= 75 ? '#00D4AA' : confidence >= 60 ? '#FFD700' : '#FF6B35',
+                    }]} />
+                  </View>
+                  <Text style={[cardStyles.confidencePct, {
+                    color: confidence >= 75 ? '#00D4AA' : confidence >= 60 ? '#FFD700' : '#FF6B35'
+                  }]}>{confidence}%</Text>
+                </View>
+
+                {/* Projected pips */}
+                {projectedPips > 0 && (
+                  <View style={[cardStyles.pipsBadge, { backgroundColor: 'rgba(0,212,170,0.12)', borderColor: 'rgba(0,212,170,0.3)' }]}>
+                    <Ionicons name="arrow-up-circle" size={13} color="#00D4AA" />
+                    <Text style={[cardStyles.pipsText, { color: '#00D4AA' }]}>+{projectedPips} pips</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* ── Additional TPs ── */}
+            {(item.tp2 || item.tp3) && (
+              <View style={cardStyles.tpRow}>
+                {item.tp2 && (
+                  <View style={[cardStyles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 2 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
+                    <Text style={[cardStyles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 2 && { color: theme.success }]}>
+                      TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' ✓' : ''}
+                    </Text>
+                  </View>
+                )}
+                {item.tp3 && (
+                  <View style={[cardStyles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 3 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
+                    <Text style={[cardStyles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 3 && { color: theme.success }]}>
+                      TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' ✓' : ''}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* ── Closed result ── */}
+            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
+              <View style={[cardStyles.resultRow, { borderTopColor: theme.border }]}>
+                <Text style={[cardStyles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
+                <Text style={[cardStyles.resultValue, { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? theme.success : theme.error }]}>
+                  {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}{item.final_pips ?? item.result_pips} pips
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+      </View>
+    </View>
+  );
+};
+
+// ─── Per-card styles (static, defined once) ──────────────────────────────────
+
+const cardStyles = StyleSheet.create({
+  wrapper: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  glowLayer: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#00D4AA',
+    shadowColor: '#00D4AA',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  card: {
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+  },
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  headerLeft: { flex: 1 },
+  headerRight: { alignItems: 'flex-end', gap: 5 },
+  pair: { fontSize: 18, fontWeight: '700', marginBottom: 5, letterSpacing: -0.3 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: 'flex-start' },
+  statusDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 5 },
+  statusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  typeText: { fontSize: 12, fontWeight: '700', marginLeft: 3, letterSpacing: 0.3 },
+  visibilityBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  visibilityText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.3 },
+  // Meta row
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 11, fontWeight: '500' },
+  validityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  validityText: { fontSize: 11, fontWeight: '600' },
+  // Details grid
+  detailsGrid: { flexDirection: 'row', justifyContent: 'space-between', borderRadius: 12, padding: 11, marginBottom: 10 },
+  detailItem: { alignItems: 'center', flex: 1 },
+  detailItemBorder: { borderLeftWidth: 1 },
+  detailLabel: { fontSize: 9, marginBottom: 4, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.7 },
+  detailValue: { fontSize: 13, fontWeight: '700' },
+  // Insight row (confidence + pips)
+  insightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  confidenceWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  insightLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
+  confidenceBar: { flex: 1, height: 4, backgroundColor: 'rgba(138,141,152,0.2)', borderRadius: 2, maxWidth: 70, overflow: 'hidden' },
+  confidenceFill: { height: 4, borderRadius: 2 },
+  confidencePct: { fontSize: 12, fontWeight: '700', minWidth: 34, textAlign: 'right' },
+  pipsBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  pipsText: { fontSize: 11, fontWeight: '700' },
+  // TPs
+  tpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
+  tpTag: { backgroundColor: 'rgba(138,141,152,0.12)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 7, borderWidth: 1 },
+  tpTagText: { fontSize: 11, fontWeight: '600' },
+  // Locked
+  lockedContainer: { alignItems: 'center', paddingVertical: 22, borderRadius: 12, marginVertical: 4 },
+  lockedTitle: { fontSize: 14, fontWeight: '700', marginTop: 8 },
+  lockedSubtitle: { fontSize: 11, marginTop: 3, opacity: 0.7 },
+  // Result
+  resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 10, marginTop: 2, borderTopWidth: 0.5 },
+  resultLabel: { fontSize: 12, marginRight: 8, opacity: 0.7 },
+  resultValue: { fontSize: 14, fontWeight: '700' },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function SignalsScreen() {
   const { user } = useAuth();
@@ -45,23 +362,9 @@ export default function SignalsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // Use centralized signal state with auto-refresh
-  const { 
-    signals, 
-    isLoading, 
-    isRefreshing, 
-    refreshSignals, 
-    lastUpdated 
-  } = useSignals();
-  
+  const { signals, isLoading, isRefreshing, refreshSignals, lastUpdated } = useSignals();
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'closed'>('all');
-  
-  // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
-
-  const onRefresh = async () => {
-    await refreshSignals();
-  };
 
   const filteredSignals = signals.filter(signal => {
     if (filter === 'all') return true;
@@ -69,156 +372,9 @@ export default function SignalsScreen() {
     return signal.state === filter;
   });
 
-  const getStatusColor = (state: string) => {
-    switch (state) {
-      case 'pending': return '#FFD700';
-      case 'active': case 'tp1': case 'tp2': case 'tp3': return '#00D4AA';
-      case 'closed': return '#8A8D98';
-      default: return '#8A8D98';
-    }
-  };
-
-  const getStateLabel = (state: string) => {
-    switch (state) {
-      case 'pending': return 'PENDING';
-      case 'active': return 'ACTIVE';
-      case 'tp1': return 'TP1 HIT';
-      case 'tp2': return 'TP2 HIT';
-      case 'tp3': return 'TP3 HIT';
-      case 'closed': return 'CLOSED';
-      default: return state?.toUpperCase() || 'UNKNOWN';
-    }
-  };
-
-  const getVisibilityBadge = (visibility: string) => {
-    switch (visibility) {
-      case 'vip': return { bg: 'rgba(255, 215, 0, 0.2)', color: '#FFD700', text: 'VIP' };
-      case 'premium': return { bg: 'rgba(0, 212, 170, 0.2)', color: '#00D4AA', text: 'PREMIUM' };
-      default: return { bg: 'rgba(138, 141, 152, 0.2)', color: '#8A8D98', text: 'FREE' };
-    }
-  };
-
-  const renderSignal = ({ item }: { item: Signal }) => {
-    const badge = getVisibilityBadge(item.visibility);
-    
-    return (
-      <View style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <View style={styles.signalHeader}>
-          <View style={styles.signalLeft}>
-            <Text style={[styles.signalPair, { color: theme.text }]}>{item.pair}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.state)}20` }]}>
-              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.state) }]} />
-              <Text style={[styles.statusText, { color: getStatusColor(item.state) }]}>
-                {getStateLabel(item.state)}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.signalRight}>
-            <View style={[
-              styles.typeBadge,
-              { backgroundColor: item.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }
-            ]}>
-              <Ionicons
-                name={item.signal_type === 'buy' ? 'arrow-up' : 'arrow-down'}
-                size={16}
-                color={item.signal_type === 'buy' ? theme.success : theme.error}
-              />
-              <Text style={[
-                styles.typeText,
-                { color: item.signal_type === 'buy' ? theme.success : theme.error }
-              ]}>
-                {item.signal_type?.toUpperCase()}
-              </Text>
-            </View>
-            <View style={[styles.visibilityBadge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.visibilityText, { color: badge.color }]}>{badge.text}</Text>
-            </View>
-          </View>
-        </View>
-
-        {item.locked ? (
-          <View style={[styles.lockedContainer, { backgroundColor: `${theme.warning}05` }]}>
-            <Ionicons name="lock-closed" size={24} color={theme.warning} />
-            <Text style={[styles.lockedTitle, { color: theme.warning }]}>
-              {getUpgradeMessage(item.visibility)}
-            </Text>
-            <Text style={[styles.lockedSubtitle, { color: theme.textSecondary }]}>
-              This signal requires {item.visibility === 'vip' ? 'VIP' : 'Premium'} subscription
-            </Text>
-          </View>
-        ) : (
-          <>
-            <View style={[styles.signalDetails, { backgroundColor: theme.background }]}>
-              <View style={styles.detailItem}>
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Entry</Text>
-                <Text style={[styles.detailValue, { color: theme.text }]}>{item.entry}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>SL</Text>
-                <Text style={[styles.detailValue, { color: theme.error }]}>{item.stop_loss}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>TP1</Text>
-                <Text style={[styles.detailValue, { color: (item.tp_hit || 0) >= 1 ? theme.success : theme.textSecondary }]}>
-                  {item.tp1 || item.take_profit}{(item.tp_hit || 0) >= 1 ? ' ✓' : ''}
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>R:R</Text>
-                <Text style={[styles.detailValue, { color: theme.text }]}>1:{item.risk_reward}</Text>
-              </View>
-            </View>
-            
-            {/* Show TP2 and TP3 if they exist */}
-            {(item.tp2 || item.tp3) && (
-              <View style={styles.additionalTPs}>
-                {item.tp2 && (
-                  <View style={[styles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 2 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
-                    <Text style={[styles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 2 && { color: theme.success }]}>
-                      TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' ✓' : ''}
-                    </Text>
-                  </View>
-                )}
-                {item.tp3 && (
-                  <View style={[styles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 3 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
-                    <Text style={[styles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 3 && { color: theme.success }]}>
-                      TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' ✓' : ''}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-            
-            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
-              <View style={[styles.resultContainer, { borderTopColor: theme.border }]}>
-                <Text style={[styles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
-                <Text style={[
-                  styles.resultValue,
-                  { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? theme.success : theme.error }
-                ]}>
-                  {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}{item.final_pips ?? item.result_pips} pips
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-
-        <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
-          {new Date(item.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </Text>
-      </View>
-    );
-  };
-
-  // Helper function for themed signal rendering
-  const renderSignalWithTheme = (item: Signal, t: typeof theme) => {
-    return renderSignal({ item });
-  };
+  const renderSignal = ({ item }: { item: Signal }) => (
+    <SignalCard item={item} theme={theme} />
+  );
 
   if (isLoading) {
     return (
@@ -273,11 +429,11 @@ export default function SignalsScreen() {
 
       <FlatList
         data={filteredSignals}
-        renderItem={({ item }) => renderSignalWithTheme(item, theme)}
+        renderItem={renderSignal}
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={refreshSignals} tintColor={theme.primary} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -293,238 +449,24 @@ export default function SignalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
-    opacity: 0.7,
-  },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { padding: 16, paddingBottom: 8 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  title: { fontSize: 26, fontWeight: '700', letterSpacing: -0.3 },
+  subtitle: { fontSize: 13, marginTop: 4, opacity: 0.7 },
   historyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 212, 170, 0.18)',
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,212,170,0.08)',
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,170,0.18)',
   },
-  historyButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 5,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  filterTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  filterTabActive: {
-    backgroundColor: '#00D4AA',
-  },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  filterTextActive: {
-    color: '#0A0E17',
-    fontWeight: 'bold',
-  },
-  listContent: {
-    padding: 16,
-  },
-  signalCard: {
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  signalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  signalLeft: {
-    flex: 1,
-  },
-  signalRight: {
-    alignItems: 'flex-end',
-  },
-  signalPair: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    marginRight: 5,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  typeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 3,
-    letterSpacing: 0.3,
-  },
-  visibilityBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  visibilityText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  signalDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderRadius: 14,
-    padding: 12,
-  },
-  detailItem: {
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 10,
-    marginBottom: 4,
-    fontWeight: '500',
-    opacity: 0.7,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  additionalTPs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  tpTag: {
-    backgroundColor: 'rgba(138, 141, 152, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  tpTagHit: {
-    backgroundColor: 'rgba(0, 212, 170, 0.15)',
-    borderColor: '#00D4AA',
-  },
-  tpTagText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tpTagTextHit: {
-    color: '#00D4AA',
-  },
-  lockedContainer: {
-    alignItems: 'center',
-    paddingVertical: 22,
-    backgroundColor: 'rgba(255, 215, 0, 0.04)',
-    borderRadius: 14,
-  },
-  lockedTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 10,
-  },
-  lockedSubtitle: {
-    fontSize: 12,
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  resultContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 0.5,
-  },
-  resultLabel: {
-    fontSize: 13,
-    marginRight: 8,
-    opacity: 0.7,
-  },
-  resultValue: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  timestamp: {
-    fontSize: 10,
-    marginTop: 10,
-    textAlign: 'right',
-    opacity: 0.6,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: 16,
-  },
-  emptyText: {
-    fontSize: 13,
-    marginTop: 8,
-    opacity: 0.7,
-  },
+  historyButtonText: { fontSize: 13, fontWeight: '600', marginLeft: 5 },
+  filterContainer: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 14 },
+  filterTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
+  filterText: { fontSize: 13, fontWeight: '500' },
+  listContent: { padding: 16 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 16 },
+  emptyText: { fontSize: 13, marginTop: 8, opacity: 0.7 },
 });
