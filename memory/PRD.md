@@ -312,3 +312,32 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Visually confirmed PairPicker rendering in Admin Edit Signal modal (screenshot verified)
 - AI Analyzer screen shows correct default pair and PairPicker integration
 - Backend healthy, all API endpoints operational
+
+## Admin Subscription Override System (Mar 24, 2026)
+
+### Backend
+- **New endpoints**:
+  - `POST /api/admin/override-subscription` — Grant temporary override (SUPER_ADMIN only)
+  - `POST /api/admin/revoke-override` — Revoke active override (SUPER_ADMIN only)
+  - `GET /api/admin/override-status/{user_id}` — Check override status (any admin)
+  - `GET /api/admin/override-logs/{user_id}` — Immutable audit logs (SUPER_ADMIN only)
+- **New `require_super_admin` dependency**: Rejects all non-SUPER_ADMIN users with 403
+- **Subscription resolution modified**: Override check inserted between admin role check and IAP transaction lookup
+- **Validation**: tier must be free/premium/vip, duration_days 1-30, user must exist
+- **Auto-expiry**: No manual cleanup needed; `get_active_override()` rejects expired overrides
+
+### New MongoDB Collections
+- `subscription_overrides`: `{user_id, tier, is_active, expires_at, granted_by, granted_at}`
+- `subscription_override_logs`: Immutable audit trail `{log_id, action, performed_by, target_user, tier, duration_days, expires_at, timestamp}`
+
+### Frontend
+- Override controls in User Management modal (SUPER_ADMIN only)
+- Buttons: "Premium 7d", "VIP 7d", "Revoke"
+- Active override status display with tier badge and expiry
+- Override History modal with GRANTED/REVOKED audit log entries
+- AuthContext updated to expose `admin_role` for SUPER_ADMIN detection
+
+### Testing
+- 21/21 backend tests passed (test file: `/app/backend/tests/test_subscription_override.py`)
+- Frontend verification: all controls visible and functional for SUPER_ADMIN
+- Test report: `/app/test_reports/iteration_13.json`
