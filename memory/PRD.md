@@ -267,3 +267,24 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - 26/26 backend tests passed (all stats fields, winning_streak, monthly_performance, access control, data integrity)
 - Test file: `/app/backend/tests/test_signal_history_stats.py`
 
+## Admin Backend Health Widget (Completed Mar 24, 2026)
+
+### Backend
+- `GET /api/admin/health` — admin-only endpoint returning 6 fields:
+  - `engine_status`: Running / Paused / Disabled
+  - `engine_detail`: Pause reason text (if any)
+  - `engine_error_count`: Current error count
+  - `last_signal_time`: ISO datetime of most recent signal
+  - `api_response_ms`: Round-trip latency measured server-side
+  - `mongo_connected`: Boolean ping check
+
+### Frontend (`(admin)/dashboard.tsx`)
+- 4 compact health cards in a 2x2 grid between AI Analyses and Quick Actions
+- Color-coded status dots: green (healthy), yellow (paused), red (down/error)
+- API latency color threshold: <500ms green, <1000ms yellow, 1000ms+ red
+- Refreshes on pull-to-refresh along with admin stats
+
+### Testing
+- 18/18 backend tests passed (auth denial, all 6 fields, value validation, response structure)
+- Test file: `/app/backend/tests/test_admin_health.py`
+
