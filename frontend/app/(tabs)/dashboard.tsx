@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,37 @@ const WATCHLIST = [
   { pair: 'BTC/USD', category: 'crypto' },
   { pair: 'ETH/USD', category: 'crypto' },
 ];
+
+// ─── Dashboard signal card helpers ──────────────────────────────────────────
+
+const getPairCategory = (pair: string): { label: string; color: string } => {
+  const p = pair.toUpperCase();
+  if (p.includes('XAU') || p.includes('XAG') || p.includes('GOLD')) return { label: 'GOLD', color: '#FFD700' };
+  if (p.includes('BTC') || p.includes('ETH') || p.includes('USDT') || p.includes('SOL')) return { label: 'CRYPTO', color: '#A855F7' };
+  return { label: 'FOREX', color: '#00D4AA' };
+};
+
+const getDashboardAge = (createdAt: string): string => {
+  const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
+const getDashboardState = (state: string): { label: string; color: string } => {
+  switch (state) {
+    case 'pending': return { label: 'PENDING', color: '#FFD700' };
+    case 'active': return { label: 'ACTIVE', color: '#00D4AA' };
+    case 'tp1': return { label: 'TP1 HIT', color: '#00D4AA' };
+    case 'tp2': return { label: 'TP2 HIT', color: '#00D4AA' };
+    case 'tp3': return { label: 'TP3 HIT', color: '#00D4AA' };
+    default: return { label: state?.toUpperCase() || '', color: '#8A8D98' };
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
   const { user } = useAuth();
@@ -244,41 +276,90 @@ export default function DashboardScreen() {
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No active signals</Text>
             </View>
           ) : (
-            recentSignals.slice(0, 3).map((signal, index) => (
-              <PressableScale
-                key={signal.signal_id || index}
-                style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={() => router.push(`/(tabs)/signals`)}
-                data-testid={`signal-card-${index}`}
-              >
-                <View style={styles.signalHeader}>
-                  <Text style={[styles.signalPair, { color: theme.text }]}>{signal.pair}</Text>
-                  <View style={[
-                    styles.signalTypeBadge,
-                    { backgroundColor: signal.signal_type === 'buy' ? `${theme.success}20` : `${theme.error}20` }
-                  ]}>
-                    <Text style={[
-                      styles.signalTypeText,
-                      { color: signal.signal_type === 'buy' ? theme.success : theme.error }
-                    ]}>
-                      {signal.signal_type?.toUpperCase()}
-                    </Text>
+            recentSignals.slice(0, 3).map((signal, index) => {
+              const isBuy = signal.signal_type === 'buy';
+              const dirColor = isBuy ? theme.success : theme.error;
+              const category = getPairCategory(signal.pair);
+              const stateInfo = getDashboardState(signal.state);
+              const tp = signal.tp1 || signal.take_profit;
+
+              return (
+                <PressableScale
+                  key={signal.signal_id || index}
+                  style={[styles.signalCard, { backgroundColor: theme.surface, borderColor: `${dirColor}25` }]}
+                  onPress={() => router.push('/(tabs)/signals')}
+                  data-testid={`signal-card-${index}`}
+                >
+                  {/* Left accent stripe */}
+                  <View style={[styles.signalAccent, { backgroundColor: dirColor }]} />
+
+                  <View style={styles.signalBody}>
+                    {/* Row 1: pair + state | direction + category */}
+                    <View style={styles.signalHeader}>
+                      <View style={styles.signalLeft}>
+                        <Text style={[styles.signalPair, { color: theme.text }]}>{signal.pair}</Text>
+                        <View style={[styles.signalStateBadge, { backgroundColor: `${stateInfo.color}18` }]}>
+                          <View style={[styles.signalStateDot, { backgroundColor: stateInfo.color }]} />
+                          <Text style={[styles.signalStateText, { color: stateInfo.color }]}>{stateInfo.label}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.signalRight}>
+                        <View style={[styles.signalTypeBadge, { backgroundColor: `${dirColor}20`, borderColor: `${dirColor}40`, borderWidth: 1 }]}>
+                          <Ionicons name={isBuy ? 'arrow-up' : 'arrow-down'} size={11} color={dirColor} />
+                          <Text style={[styles.signalTypeText, { color: dirColor }]}>{signal.signal_type?.toUpperCase()}</Text>
+                        </View>
+                        <View style={[styles.categoryChip, { backgroundColor: `${category.color}15` }]}>
+                          <Text style={[styles.categoryText, { color: category.color }]}>{category.label}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {signal.locked ? (
+                      <View style={styles.lockedContent}>
+                        <Ionicons name="lock-closed" size={16} color={theme.warning} />
+                        <Text style={[styles.lockedText, { color: theme.warning }]}>Upgrade to unlock</Text>
+                      </View>
+                    ) : (
+                      <>
+                        {/* Row 2: price grid */}
+                        <View style={[styles.priceGrid, { backgroundColor: theme.background }]}>
+                          <View style={styles.priceCol}>
+                            <Text style={[styles.priceLabel, { color: theme.textSecondary }]}>ENTRY</Text>
+                            <Text style={[styles.priceValue, { color: theme.text }]}>{signal.entry}</Text>
+                          </View>
+                          <View style={[styles.priceCol, styles.priceColBorder, { borderColor: `${theme.border}50` }]}>
+                            <Text style={[styles.priceLabel, { color: theme.textSecondary }]}>TP1</Text>
+                            <Text style={[styles.priceValue, { color: theme.success }]}>{tp}</Text>
+                          </View>
+                          <View style={[styles.priceCol, styles.priceColBorder, { borderColor: `${theme.border}50` }]}>
+                            <Text style={[styles.priceLabel, { color: theme.textSecondary }]}>SL</Text>
+                            <Text style={[styles.priceValue, { color: theme.error }]}>{signal.stop_loss}</Text>
+                          </View>
+                          {signal.risk_reward ? (
+                            <View style={[styles.priceCol, styles.priceColBorder, { borderColor: `${theme.border}50` }]}>
+                              <Text style={[styles.priceLabel, { color: theme.textSecondary }]}>R:R</Text>
+                              <Text style={[styles.priceValue, { color: theme.text }]}>1:{signal.risk_reward}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {/* Row 3: age + tap hint */}
+                        <View style={styles.signalFooter}>
+                          <View style={styles.signalAgeRow}>
+                            <Ionicons name="time-outline" size={10} color={theme.textSecondary} />
+                            <Text style={[styles.signalAge, { color: theme.textSecondary }]}>{getDashboardAge(signal.created_at)}</Text>
+                          </View>
+                          <View style={styles.tapHint}>
+                            <Text style={[styles.tapHintText, { color: theme.primary }]}>View details</Text>
+                            <Ionicons name="chevron-forward" size={11} color={theme.primary} />
+                          </View>
+                        </View>
+                      </>
+                    )}
                   </View>
-                </View>
-                {signal.locked ? (
-                  <View style={styles.lockedContent}>
-                    <Ionicons name="lock-closed" size={16} color={theme.warning} />
-                    <Text style={[styles.lockedText, { color: theme.warning }]}>Upgrade to unlock</Text>
-                  </View>
-                ) : (
-                  <View style={styles.signalDetails}>
-                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>Entry: {signal.entry}</Text>
-                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>TP1: {signal.tp1 || signal.take_profit}</Text>
-                    <Text style={[styles.signalDetailText, { color: theme.textSecondary }]}>SL: {signal.stop_loss}</Text>
-                  </View>
-                )}
-              </PressableScale>
-            ))
+                </PressableScale>
+              );
+            })
           )}
         </View>
 
@@ -474,31 +555,125 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textAlign: 'center',
   },
+  // ── Active Signal Card ──────────────────────────────────────────────────────
   signalCard: {
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 18,
     marginBottom: 10,
     borderWidth: 1,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  signalAccent: {
+    width: 4,
+    borderRadius: 0,
+  },
+  signalBody: {
+    flex: 1,
+    padding: 14,
   },
   signalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
   },
+  signalLeft: { flex: 1 },
+  signalRight: { alignItems: 'flex-end', gap: 5 },
   signalPair: {
     fontSize: 17,
     fontWeight: '700',
+    marginBottom: 5,
+    letterSpacing: -0.2,
+  },
+  signalStateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  signalStateDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginRight: 4,
+  },
+  signalStateText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   signalTypeBadge: {
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 8,
+    gap: 3,
   },
   signalTypeText: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  categoryChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  categoryText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  priceGrid: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 9,
+  },
+  priceCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  priceColBorder: {
+    borderLeftWidth: 1,
+  },
+  priceLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+    opacity: 0.7,
+  },
+  priceValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  signalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  signalAgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  signalAge: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  tapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  tapHintText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   signalDetails: {
     flexDirection: 'row',
@@ -507,6 +682,7 @@ const styles = StyleSheet.create({
   signalDetailText: {
     fontSize: 12,
   },
+  // ────────────────────────────────────────────────────────────────────────────
   lockedContent: {
     flexDirection: 'row',
     alignItems: 'center',
