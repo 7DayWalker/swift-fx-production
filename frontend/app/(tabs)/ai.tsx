@@ -11,7 +11,10 @@ import {
   Platform,
   Animated,
   FlatList,
+  Share,
+  Modal,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -287,6 +290,152 @@ const UpgradeNudge = ({ onPress }: { onPress: () => void }) => (
   </TouchableOpacity>
 );
 
+// ─── Share Modal ─────────────────────────────────────────────────────────────
+interface ShareModalProps {
+  visible: boolean;
+  onClose: () => void;
+  analysisId: string;
+  result: AnalysisResult;
+  getAuthToken: () => Promise<string | null>;
+}
+
+const ShareModal = ({ visible, onClose, analysisId, result, getAuthToken }: ShareModalProps) => {
+  const [isSharing, setIsSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [communityPosted, setCommunityPosted] = useState(false);
+  const slideAnim = useRef(new Animated.Value(300)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setCopied(false);
+      setCommunityPosted(false);
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 65, useNativeDriver: true }).start();
+    } else {
+      slideAnim.setValue(300);
+    }
+  }, [visible]);
+
+  const handleCopyLink = async () => {
+    try {
+      setIsSharing(true);
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to generate link');
+      const data = await res.json();
+      const shareUrl = `${API_BASE_URL}/api/ai/shared/${data.share_token}`;
+      await Clipboard.setStringAsync(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch (e) {
+      Platform.OS === 'web' ? window.alert('Failed to copy link') : Alert.alert('Error', 'Failed to generate share link');
+    } finally { setIsSharing(false); }
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      setIsSharing(true);
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to generate link');
+      const data = await res.json();
+      const shareUrl = `${API_BASE_URL}/api/ai/shared/${data.share_token}`;
+
+      const message = `AI Analysis: ${result.pair} (${result.timeframe})\nBias: ${result.trade_bias} | Confidence: ${result.confidence_score}%${result.detected_pattern && result.detected_pattern !== 'None' ? `\nPattern: ${result.detected_pattern}` : ''}\n\n${shareUrl}`;
+
+      await Share.share({ message, title: `Swift FX AI Analysis - ${result.pair}` });
+    } catch (e: any) {
+      if (e?.message !== 'User did not share') {
+        Platform.OS === 'web' ? window.alert('Share failed') : Alert.alert('Error', 'Failed to share');
+      }
+    } finally { setIsSharing(false); }
+  };
+
+  const handleCommunityShare = async () => {
+    try {
+      setIsSharing(true);
+      const token = await getAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}/community`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to post');
+      setCommunityPosted(true);
+    } catch (e) {
+      Platform.OS === 'web' ? window.alert('Failed to post to community') : Alert.alert('Error', 'Failed to share to community');
+    } finally { setIsSharing(false); }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={onClose}>
+        <Animated.View style={[s.modalSheet, { transform: [{ translateY: slideAnim }] }]}>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>Share Analysis</Text>
+            <Text style={s.modalSubtitle}>{result.pair} - {result.trade_bias} ({result.confidence_score}%)</Text>
+
+            <View style={{ gap: 10, marginTop: 16 }}>
+              {/* Copy Link */}
+              <TouchableOpacity style={s.shareOption} onPress={handleCopyLink} disabled={isSharing} data-testid="share-copy-link">
+                <View style={[s.shareIconWrap, { backgroundColor: 'rgba(0,212,170,0.12)' }]}>
+                  <Ionicons name={copied ? 'checkmark' : 'link'} size={20} color="#00D4AA" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{copied ? 'Link Copied!' : 'Copy Link'}</Text>
+                  <Text style={s.shareOptionSub}>Share a public link to this analysis</Text>
+                </View>
+                {isSharing && <ActivityIndicator size="small" color="#00D4AA" />}
+              </TouchableOpacity>
+
+              {/* Native Share */}
+              <TouchableOpacity style={s.shareOption} onPress={handleNativeShare} disabled={isSharing} data-testid="share-native">
+                <View style={[s.shareIconWrap, { backgroundColor: 'rgba(88,101,242,0.12)' }]}>
+                  <Ionicons name="share-social" size={20} color="#5865F2" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>Share</Text>
+                  <Text style={s.shareOptionSub}>Twitter, WhatsApp, Telegram & more</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Community */}
+              <TouchableOpacity
+                style={[s.shareOption, communityPosted && { borderColor: 'rgba(0,212,170,0.3)' }]}
+                onPress={handleCommunityShare}
+                disabled={isSharing || communityPosted}
+                data-testid="share-community"
+              >
+                <View style={[s.shareIconWrap, { backgroundColor: communityPosted ? 'rgba(0,212,170,0.12)' : 'rgba(255,215,0,0.12)' }]}>
+                  <Ionicons name={communityPosted ? 'checkmark-circle' : 'people'} size={20} color={communityPosted ? '#00D4AA' : '#FFD700'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{communityPosted ? 'Posted to Community!' : 'Post to Community'}</Text>
+                  <Text style={s.shareOptionSub}>Share your insight with the Swift FX community</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={s.modalCloseBtn} onPress={onClose} data-testid="share-modal-close">
+              <Text style={s.modalCloseBtnText}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═════════════════════════════════════════════════════════════════════════════
@@ -315,6 +464,9 @@ export default function AIScreen() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Share state
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   // ─── Data Fetching ───────────────────────────────────────────────────────
   useEffect(() => { fetchUsage(); }, [user, subscriptionStatus]);
@@ -606,9 +758,16 @@ export default function AIScreen() {
             <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={s.resultHeaderTitle}>{isFromHistory ? 'Past Analysis' : 'Analysis Result'}</Text>
-          <TouchableOpacity style={s.headerBtn} onPress={startNewAnalysis} data-testid="new-analysis-button">
-            <Ionicons name="add" size={22} color="#00D4AA" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {r.analysis_id ? (
+              <TouchableOpacity style={s.headerBtn} onPress={() => setShareModalVisible(true)} data-testid="share-button">
+                <Ionicons name="share-outline" size={20} color="#00D4AA" />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={s.headerBtn} onPress={startNewAnalysis} data-testid="new-analysis-button">
+              <Ionicons name="add" size={22} color="#00D4AA" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView style={{ flex: 1, padding: 16 }} contentContainerStyle={{ paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
@@ -690,6 +849,17 @@ export default function AIScreen() {
             </View>
           </PressableScale>
         </ScrollView>
+
+        {/* Share Modal */}
+        {r.analysis_id ? (
+          <ShareModal
+            visible={shareModalVisible}
+            onClose={() => setShareModalVisible(false)}
+            analysisId={r.analysis_id}
+            result={r}
+            getAuthToken={getAuthToken}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -968,4 +1138,17 @@ const s = StyleSheet.create({
   historyMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   historyMetaText: { fontSize: 10, color: '#6A6D78' },
   historyConfScore: { fontSize: 11, fontWeight: '700', marginLeft: 'auto' },
+
+  // Share Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#141824', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  modalHandle: { width: 36, height: 4, backgroundColor: '#3A3F4E', borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 4 },
+  modalSubtitle: { fontSize: 13, color: '#8A8D98', textAlign: 'center', marginBottom: 4 },
+  shareOption: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1A1F2E', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#2A2F3E' },
+  shareIconWrap: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  shareOptionTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  shareOptionSub: { fontSize: 11, color: '#8A8D98', marginTop: 1 },
+  modalCloseBtn: { backgroundColor: '#2A2F3E', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 16 },
+  modalCloseBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 });

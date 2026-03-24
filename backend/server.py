@@ -8097,6 +8097,86 @@ async def ai_analysis_detail(analysis_id: str, current_user: User = Depends(requ
     return doc
 
 
+# ===================== AI ANALYSIS SHARING =====================
+
+@api_router.post("/ai/share/{analysis_id}")
+async def share_analysis(analysis_id: str, current_user: User = Depends(require_auth)):
+    """Generate a shareable link for an AI analysis."""
+    doc = await db.ai_analyses.find_one(
+        {"analysis_id": analysis_id, "user_id": current_user.user_id},
+        {"_id": 0, "image_snapshot": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    # Reuse existing share_token if already shared
+    if doc.get("share_token"):
+        return {"share_token": doc["share_token"], "analysis_id": analysis_id}
+
+    share_token = uuid.uuid4().hex[:16]
+    await db.ai_analyses.update_one(
+        {"analysis_id": analysis_id},
+        {"$set": {"share_token": share_token, "shared_at": datetime.now(timezone.utc).isoformat(), "view_count": 0}}
+    )
+    return {"share_token": share_token, "analysis_id": analysis_id}
+
+
+@api_router.get("/ai/shared/{share_token}")
+async def view_shared_analysis(share_token: str):
+    """Public endpoint — view a shared AI analysis (no auth required)."""
+    doc = await db.ai_analyses.find_one(
+        {"share_token": share_token},
+        {"_id": 0, "image_snapshot": 0, "user_id": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Shared analysis not found or link expired")
+
+    # Increment view count (fire-and-forget)
+    await db.ai_analyses.update_one(
+        {"share_token": share_token},
+        {"$inc": {"view_count": 1}}
+    )
+    return doc
+
+
+@api_router.post("/ai/share/{analysis_id}/community")
+async def share_analysis_to_community(analysis_id: str, current_user: User = Depends(require_auth)):
+    """Post an AI analysis summary to the community feed."""
+    doc = await db.ai_analyses.find_one(
+        {"analysis_id": analysis_id, "user_id": current_user.user_id},
+        {"_id": 0, "image_snapshot": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    # Build community post content
+    bias_emoji = {"BUY": "↑", "SELL": "↓", "WAIT": "—"}.get(doc.get("trade_bias", "WAIT"), "—")
+    content = (
+        f"{bias_emoji} AI Analysis: {doc.get('pair', 'N/A')} ({doc.get('timeframe', '')})\n"
+        f"Bias: {doc.get('trade_bias', 'WAIT')} | Confidence: {doc.get('confidence_score', 0)}%\n"
+    )
+    if doc.get("detected_pattern") and doc["detected_pattern"] != "None":
+        content += f"Pattern: {doc['detected_pattern']}\n"
+    if doc.get("analysis_text"):
+        content += f"\n{doc['analysis_text'][:280]}"
+
+    post_id = f"post_{uuid.uuid4().hex[:12]}"
+    post_doc = {
+        "post_id": post_id,
+        "user_id": current_user.user_id,
+        "user_name": current_user.name,
+        "content": content,
+        "post_type": "ai_analysis",
+        "image": None,
+        "likes": [],
+        "source_analysis_id": analysis_id,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.posts.insert_one(post_doc)
+    post_doc.pop("_id", None)
+    return post_doc
+
+
 # Include router
 app.include_router(api_router)
 
