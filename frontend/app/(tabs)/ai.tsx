@@ -759,11 +759,9 @@ export default function AIScreen() {
           </TouchableOpacity>
           <Text style={s.resultHeaderTitle}>{isFromHistory ? 'Past Analysis' : 'Analysis Result'}</Text>
           <View style={{ flexDirection: 'row', gap: 4 }}>
-            {r.analysis_id ? (
-              <TouchableOpacity style={s.headerBtn} onPress={() => setShareModalVisible(true)} data-testid="share-button">
-                <Ionicons name="share-outline" size={20} color="#00D4AA" />
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity style={s.headerBtn} onPress={() => setShareModalVisible(true)} data-testid="share-button">
+              <Ionicons name="share-outline" size={20} color="#00D4AA" />
+            </TouchableOpacity>
             <TouchableOpacity style={s.headerBtn} onPress={startNewAnalysis} data-testid="new-analysis-button">
               <Ionicons name="add" size={22} color="#00D4AA" />
             </TouchableOpacity>
@@ -836,23 +834,21 @@ export default function AIScreen() {
           {showUpgradeNudge && <UpgradeNudge onPress={() => router.push('/subscription')} />}
 
           {/* Share Analysis Button */}
-          {r.analysis_id ? (
-            <TouchableOpacity
-              style={s.shareBtn}
-              onPress={() => setShareModalVisible(true)}
-              activeOpacity={0.8}
-              data-testid="share-analysis-button"
-            >
-              <View style={s.shareBtnIconWrap}>
-                <Ionicons name="share-social" size={20} color="#00D4AA" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.shareBtnTitle}>Share This Analysis</Text>
-                <Text style={s.shareBtnSub}>Copy link, post to community, or share on social</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#3A3F4E" />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            style={s.shareBtn}
+            onPress={() => setShareModalVisible(true)}
+            activeOpacity={0.8}
+            data-testid="share-analysis-button"
+          >
+            <View style={s.shareBtnIconWrap}>
+              <Ionicons name="share-social" size={20} color="#00D4AA" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.shareBtnTitle}>Share This Analysis</Text>
+              <Text style={s.shareBtnSub}>Copy link, post to community, or share on social</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#3A3F4E" />
+          </TouchableOpacity>
 
           {/* Disclaimer */}
           <View style={s.disclaimerRow}>
@@ -870,15 +866,13 @@ export default function AIScreen() {
         </ScrollView>
 
         {/* Share Modal */}
-        {r.analysis_id ? (
-          <ShareModal
-            visible={shareModalVisible}
-            onClose={() => setShareModalVisible(false)}
-            analysisId={r.analysis_id}
-            result={r}
-            getAuthToken={getAuthToken}
-          />
-        ) : null}
+        <ShareModal
+          visible={shareModalVisible}
+          onClose={() => setShareModalVisible(false)}
+          analysisId={r.analysis_id || ''}
+          result={r}
+          getAuthToken={getAuthToken}
+        />
       </SafeAreaView>
     );
   }
