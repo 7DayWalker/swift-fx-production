@@ -2599,6 +2599,113 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
     }
 
 
+# ==============================================================================
+# ACADEMY PROGRESS SYSTEM
+# ==============================================================================
+
+@api_router.post("/academy/lesson-complete")
+async def mark_lesson_complete(body: dict, current_user: User = Depends(require_auth)):
+    course_id = body.get("course_id")
+    lesson_id = body.get("lesson_id")
+    if not course_id or lesson_id is None:
+        raise HTTPException(status_code=400, detail="course_id and lesson_id required")
+
+    col = db["academy_progress"]
+    await col.update_one(
+        {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id},
+        {"$set": {
+            "user_id": current_user.user_id,
+            "course_id": course_id,
+            "lesson_id": lesson_id,
+            "completed": True,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"success": True}
+
+
+@api_router.post("/academy/quiz-submit")
+async def submit_quiz(body: dict, current_user: User = Depends(require_auth)):
+    course_id = body.get("course_id")
+    lesson_id = body.get("lesson_id")
+    score = body.get("score", 0)
+    if not course_id:
+        raise HTTPException(status_code=400, detail="course_id required")
+
+    col = db["academy_progress"]
+    # Save quiz result
+    await col.update_one(
+        {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id or "quiz"},
+        {"$set": {
+            "user_id": current_user.user_id,
+            "course_id": course_id,
+            "lesson_id": lesson_id or "quiz",
+            "completed": True,
+            "score": score,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    passed = score >= 60
+    # Update leaderboard XP
+    if passed:
+        lb = db["academy_leaderboard"]
+        profile = await fetch_profile(current_user.user_id)
+        display_name = (profile or {}).get("name") or (profile or {}).get("email", "User")[:20]
+        await lb.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {"user_id": current_user.user_id, "display_name": display_name},
+             "$inc": {"total_xp": int(score)}},
+            upsert=True,
+        )
+    return {"success": True, "score": score, "passed": passed}
+
+
+@api_router.get("/academy/progress")
+async def get_academy_progress(current_user: User = Depends(require_auth)):
+    col = db["academy_progress"]
+    records = await col.find(
+        {"user_id": current_user.user_id, "completed": True},
+        {"_id": 0, "course_id": 1, "lesson_id": 1, "score": 1, "completed_at": 1},
+    ).to_list(length=500)
+
+    completed_lessons = len(records)
+    courses_done = set()
+    by_course: dict = {}
+    for r in records:
+        cid = r["course_id"]
+        by_course.setdefault(cid, []).append(r["lesson_id"])
+
+    # Total lessons across all known courses (static count)
+    total_lessons = 150  # Approximate across all courses
+
+    return {
+        "completed_lessons": completed_lessons,
+        "total_lessons": total_lessons,
+        "progress_pct": round(completed_lessons / total_lessons * 100, 1) if total_lessons > 0 else 0,
+        "completed_courses": len(courses_done),
+        "by_course": by_course,
+        "records": records,
+    }
+
+
+@api_router.get("/academy/leaderboard")
+async def get_academy_leaderboard(current_user: User = Depends(require_auth)):
+    lb = db["academy_leaderboard"]
+    top = await lb.find({}, {"_id": 0}).sort("total_xp", -1).to_list(length=50)
+    # Add rank
+    for i, entry in enumerate(top):
+        entry["rank"] = i + 1
+    # Find current user rank
+    my_entry = await lb.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    my_rank = None
+    if my_entry:
+        higher = await lb.count_documents({"total_xp": {"$gt": my_entry.get("total_xp", 0)}})
+        my_rank = higher + 1
+    return {"leaderboard": top, "my_rank": my_rank, "my_xp": (my_entry or {}).get("total_xp", 0)}
+
+
 # ===================== USER SUBSCRIPTION INFO ENDPOINT =====================
 @api_router.get("/subscription/status")
 async def get_subscription_status(current_user: User = Depends(require_auth)):
