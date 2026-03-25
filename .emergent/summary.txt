@@ -1,137 +1,494 @@
-<analysis>**original_problem_statement**: The main objective was to fix the broken Expo web preview, debug admin navigation routing, conduct a full architectural audit and deterministic redesign of the Signal Auto-Closure Engine, clean the database, prepare the app for deployment (fixing deployment blockers), document the full system architecture, and sync the latest Railway production environment variables while re-enabling the Apple Server Notification v2 webhook.
+<analysis>original_problem_statement: The user initially requested to verify a Trading Pairs feature. Following that, the user requested a series of features and bug fixes:
 
-**User's preferred language**: English (INSTRUCT next agent to respond in English only)
+1.  **Admin Subscription Override System**: Implement a secure system for  users to grant or revoke temporary subscription tiers (Premium/VIP) for any user. This system must include strict role-based access control (RBAC), validation, and immutable audit logging for all actions.
+2.  **Read-Only Admin View**: Enhance the override system by providing a read-only view for regular  users. They should be able to see a user's override status and history but not modify it. The UI must clearly label the subscription's source ( vs. ).
+3.  **UI Cleanup**: Remove a redundant, old role-selection UI from the User Management modal, as the new override system has replaced its functionality.
+4.  **Bug Fix (User List Roles)**: Fix a bug where the user list in the Admin Panel showed a user's base role (e.g., free) instead of their *effective* tier granted by an override.
+5.  **Bug Fix (Admin Creation)**: Fix a critical bug where creating a new admin from the Admin Management screen resulted in an infinite spinner, preventing new admins from being created.
 
-**what currently exists?** 
-A full-stack trading signals application. 
-- **Frontend**: Managed Expo (SDK 54) + React Native + expo-router.
-- **Backend**: FastAPI running continuously via Supervisor.
-- **Database**: MongoDB Atlas for business logic (Signals, IAP, etc.) and Supabase Postgres for Authentication/User Profiles.
-- **Engine**: Signal Lifecycle Engine v3.0 (Deterministic, Gap-protected, 5s poll interval, no hardcoded price fallbacks).
+**User's preferred language**: English
+
+**what currently exists?**
+A full-stack trading signals application built with an Expo (React Native) frontend and a monolithic FastAPI backend (). The application uses MongoDB for primary data (signals, analyses, logs) and Supabase (Postgres) for user authentication and profiles. The app features trading signals, an AI analyzer, a community feed, and a multi-level admin dashboard with  and  roles.
 
 **Last working item**:
-- **Last item agent was working**: Re-enabling the Apple Server Notifications v2 webhook () in  with proper signature verification, and syncing the latest Railway production environment variables into the local .
-- **Status**: USER VERIFICATION PENDING
-- **Agent Testing Done**: Y (Verified backend health and MongoDB connection after env updates).
-- **Which testing method agent to use?**: Manual testing by curl / python -c to hit the webhook with a mock Apple V2 payload to test signature verification.
-- **User Testing Done**: N
+    - Last item agent was working: The agent was debugging a recurring issue where the Create Admin button in the Admin Management screen spins indefinitely for the user. A backend race condition was fixed, but the user reported the issue persists. The agent's last action was to add more client-side logging and restart the frontend service to rule out caching issues.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? screenshot tool. The next agent must log in as a SUPER_ADMIN, attempt to create a new admin, and capture the screenshot along with the browser console logs to check for the newly added client-side logs and any network errors.
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-Issue 1: 🔴 P0 - EAS Android Build Failing ( and dependency errors)
-- **Attempted fixes**: The agent fixed earlier deployment blockers (, ), but the EAS build failed during execution. The agent observed the build logs but moved on to architecture documentation before fixing the root causes.
-- **Next debug checklist**: 
-  1. Open  and fix  to be a 6-character hex string (e.g.,  instead of  or similar).
-  2. Open  and remove  from dependencies (it should be accessed via ).
-- **Why fix this issue and what will be achieved with the fix?**: Resolving this will allow the Expo Application Services (EAS) to successfully build the / binaries for production distribution.
-- **Status**: IN PROGRESS
-- **Is recurring issue?**: N
-- **Should Test frontend/backend/both after fix?**: Frontend (EAS Build check)
-- **Blocked on other issue**: None
+  Issue 1: 🔴 P0 - Create Admin button spins indefinitely on the frontend.
+  
+  Issues Detail:
+  - Issue 1: 
+     - Attempted fixes: 
+        - **Backend**: A race condition in the  endpoint was fixed. The original code was failing to update the new user's profile to an 'admin' role because the Supabase DB trigger to create the profile is asynchronous. A fix was implemented with a 5-attempt retry loop, exponential backoff, and explicit verification to ensure the profile is updated correctly. This was verified via .
+        - **Backend**: A duplicate  function was found and removed to prevent ambiguity.
+        - **Frontend**: The  function in  was updated with a  block, a 15-second timeout, and more detailed error alerting to the user.
+        - **Frontend**:  statements were added to trace the request flow from the client side.
+        - **Infra**: The 
+  Usage: expo [command] [options]
+
+  Options:
+  
+    -V, --version                     output the version number
+    --non-interactive                 Fail, if an interactive prompt would be required to continue.
+    -h, --help                        output usage information
+  
+  Commands:
+
+    init [name]                       Create a new Expo project
+    start [path]                      Start a local dev server for the app
+    start:web [path]                  Start a Webpack dev server for the web app
+    export [path]                     Export the static files of the app for hosting it on a web server
+    install [packages...]             Install a module or other package to a project
+    run:android [path]                Run the Android app binary locally
+    run:ios [path]                    Run the iOS app binary locally
+    send [path]                       Share the project's URL to an email address
+
+    login                             Login to an Expo account
+    logout                            Logout of an Expo account
+    register                          Sign up for a new Expo account
+    whoami                            Return the currently authenticated account
+
+    client:install:ios                Install Expo Go for iOS on the simulator
+    client:install:android            Install Expo Go for Android on a connected device or emulator
+
+    config [path]                     Show the project config
+    doctor [path]                     Diagnose issues with the project
+    upgrade [sdk-version]             Upgrade the project packages and config for the given SDK version
+
+    customize:web [path]              Eject the default web files for customization
+    prebuild [path]                   Create native iOS and Android project files before building natively.
+                                      Learn more: https://docs.expo.dev/workflow/customizing/
+
+    build:web [path]                  Build the web app for production
+
+    credentials:manager [path]        Superseded by eas credentials in eas-cli
+
+    url [path]                        Log a URL for opening the project in Expo Go
+    url:ipa [path]                    Log the download URL for the standalone iOS binary
+    url:apk [path]                    Log the download URL for the standalone Android binary
+
+    webhooks [path]                   List all webhooks for a project
+    webhooks:add [path]               Add a webhook to a project
+    webhooks:remove [path]            Delete a webhook
+    webhooks:update [path]            Update an existing webhook
+
+    build:ios [path]                  Superseded by eas build in eas-cli
+    build:android [path]              Superseded by eas build in eas-cli
+    build:status [path]               Superseded by eas build:list in eas-cli
+    eject [path]                      Superseded by expo prebuild
+    fetch:ios:certs [path]            Superseded by eas credentials in eas-cli
+    fetch:android:keystore [path]     Superseded by eas credentials in eas-cli
+    fetch:android:hashes [path]       Superseded by eas credentials in eas-cli
+    fetch:android:upload-cert [path]  Superseded by eas credentials in eas-cli
+    publish [path]                    Superseded by eas update in eas-cli
+    publish:set [path]                Superseded by eas update:republish in eas-cli
+    publish:rollback [path]           Superseded by eas update:republish in eas-cli
+    publish:history [path]            Superseded by eas update:list in eas-cli
+    publish:details [path]            Superseded by eas update:view in eas-cli
+    push:android:upload [path]        Superseded by eas credentials in eas-cli
+    push:android:show [path]          Superseded by eas credentials in eas-cli
+    push:android:clear [path]         Superseded by eas credentials in eas-cli
+    upload:android [path]             Superseded by eas submit in eas-cli
+    upload:ios [path]                 Superseded by eas submit in eas-cli
+    client:ios [path]                 Superseded by Expo Dev Clients
+
+[01:34:31]   Run a command with --help for more info 💡
+[01:34:31]     $ expo start --help
+[01:34:31] frontend service was restarted multiple times to clear the Metro bundler cache.
+     - Next debug checklist:
+        1. Log in as a  ( / ).
+        2. Use the  to navigate to the Admin Management page and open the Create Admin modal.
+        3. Fill in the form with details for a **brand new, non-existent** admin email.
+        4. Click the Create Admin button.
+        5. **Crucially**, inspect the generated console log file () for the custom logs (Attempting to create admin..., Admin creation successful, or Admin creation failed...) and any network errors in the browser console.
+        6. Simultaneously, check the backend logs (==> /var/log/supervisor/backend.err.log <==
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?select=*&role=eq.admin "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/auth/v1/admin/users "HTTP/1.1 200 OK"
+INFO:server:[Audit] super_admin 55a913cb-c10a-4c9a-b92b-b5ed73b0b183: list on admins/all
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/rest/v1/profiles?id=eq.55a913cb-c10a-4c9a-b92b-b5ed73b0b183&select=* "HTTP/1.1 200 OK"
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [120] using WatchFiles
+INFO:server:[CORS] Configured to allow ALL origins (*)
+INFO:     Started server process [157]
+INFO:     Waiting for application startup.
+INFO:server:============================================================
+INFO:server:[Startup] Swift FX Backend Starting...
+INFO:server:============================================================
+INFO:server:[Startup] Ensuring MongoDB indexes...
+INFO:server:[Startup] MongoDB indexes ensured
+INFO:httpx:HTTP Request: GET https://hrzghlqcfccnmgcipxxo.supabase.co/auth/v1/admin/users "HTTP/1.1 200 OK"
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.208.149.2:49838 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:49838 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:47428 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:49838 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:47428 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:47428 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53440 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:54460 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:54474 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:44484 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:60228 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:60236 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:41094 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:57756 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:57756 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:57756 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55020 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55036 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55052 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:41514 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:41518 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53750 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53752 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:53754 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46608 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:38632 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46608 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:38632 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46608 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46608 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:50314 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46412 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59064 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59064 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:34888 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:34888 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59064 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59064 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:46694 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:45278 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:51304 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:51308 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:36622 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:51308 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:51308 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:45622 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:43312 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:43324 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:52680 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:52680 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59184 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59184 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59184 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:58620 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55320 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55320 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:55320 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:50276 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:45024 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:45024 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:52850 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:52770 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:52772 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:46660 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:56118 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:56118 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:33182 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:59430 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:37832 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:33746 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:41782 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:41782 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:33608 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:46392 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:48284 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:40814 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:42604 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:42604 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:57208 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:39506 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:60590 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:43664 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:40164 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:52694 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:39068 - "GET /api/admin/rbac/me HTTP/1.1" 200 OK
+INFO:     10.208.149.2:58888 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:58874 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.130.204:39068 - "GET /api/admin/rbac/admins HTTP/1.1" 200 OK
+INFO:     10.208.149.2:58874 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:58874 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:55262 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:48708 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:56152 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:44606 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:43084 - "GET /api/subscription/status HTTP/1.1" 200 OK
+INFO:     10.208.149.2:43084 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.130.204:50486 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     10.208.149.2:50630 - "GET /api/signals HTTP/1.1" 200 OK) to confirm if the  request is being received from the frontend. Previous logs indicated it was not.
+     - Why fix this issue and what will be achieved with the fix? This is a critical bug blocking a core administrative function. Fixing it will allow s to provision new admin accounts.
+     - Status:  IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend (with console log inspection).
+     - Blocked on other issue: None.
 
 **In progress Task List**:
-Task 1: 🟡 P1 - Apple Server Notifications v2 Testing
-- **Where to resume**: Create a test script to send a mock App Store Server Notification (V2 payload) to  to verify that  correctly decodes/validates the payload.
-- **What will be achieved with this?**: Confirms that production auto-renewing subscriptions will correctly update MongoDB entitlements when triggered by Apple.
-- **Status**: TESTING PENDING
-- **Should Test frontend/backend/both after fix?**: Backend
-- **Blocked on something**: None
+  None.
 
-**Upcoming and Future Tasks**:
-- 🔴 P0: Fix  schema and  to pass EAS Build validation.
-- 🟡 P1: Complete End-to-End IAP testing on physical devices.
-- 🟢 P2: Implement a reliable alternative Gold price API (current sources like  and CoinGecko face heavy rate-limiting, causing the deterministic engine to safely skip XAU/USD processing).
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - 🟡 P1: Complete End-to-End IAP testing on physical devices.
+    - 🟢 P2: Implement a reliable alternative Gold price API (current sources face heavy rate-limiting).
+    
+    Future Tasks:
+    - 🟢 P2: Add push notifications on new signal creation with confidence score to drive re-engagement.
+    - 🟢 P2: Implement a leaderboard/feed of top shared AI analyses to encourage more sharing.
+    - 🔧 P2: Add real-time polling to the Admin Health widget for automatic refreshes.
+    - 🔧 P3: **Refactor **. The file is over 8,500 lines and is a critical maintenance bottleneck. It must be split into smaller, domain-specific modules.
 
-**Completed work in this session**:
-- Web Preview Fix: Bypassed  routing conflicts by creating internal path shims for  (DONE)
-- Admin Navigation: Registered missing  in  Stack navigator (DONE)
-- Signal Engine Redesign (v3.0): Implemented 5s deterministic polling, removed 650 Gold fallback, added gap protection (SL/TP execute at defined levels, not gapped market prices) (DONE)
-- Database Clean Reset: Cleared all legacy signals; verified  is not used (system uses ) (DONE)
-- Deployment Blockers Fixed: Optimized N+1 notification queries, repaired , removed hardcoded Supabase keys in , fixed OAuth fallback URL in  (DONE)
-- Architecture Documentation: Generated full system architecture report (DONE)
-- Apple Webhook & ENV Sync: Updated local  with Railway production variables and restored  (DONE)
+**Completed work in this session**
+- **Bug Fix (Admin Creation - Backend)**: Fixed the root cause of the admin creation failure by implementing a robust retry mechanism in the  endpoint to handle a race condition with Supabase profile creation.
+- **Bug Fix (User List Roles)**: Fixed the User Management list to display the *effective* subscription tier from overrides by creating a new  endpoint and merging the data on the frontend.
+- **UI Refactor (User Management)**: Removed the old, redundant role selection UI from the User Management modal, streamlining the interface.
+- **Feature (Admin Read-Only View)**: Implemented a read-only view of the subscription override system for regular  users, including clear Source labels.
+- **Feature (Admin Subscription Override)**: Implemented the complete subscription override system, including backend endpoints (, , , ),  RBAC, and immutable audit logging to a new  MongoDB collection.
+- **Verification (Trading Pairs)**: Successfully verified the Trading Pairs feature from the previous session using screenshots of the Admin and AI Analyzer screens.
 
-**Earlier issues found/mentioned but not fixed**:
-- Issue 1: EAS Build Failed due to  color hex validation and  direct installation.
-  - Debug checklist: Check  and  in .
-  - Why to solve: To allow the mobile app to be built and deployed.
-  - Should Test: Frontend
-  - Is recurring issue? N
+**Earlier issues found/mentioned but not fixed**
+   - **Expo Tunnel Instability**: The  tunnel used by the Expo web preview was highly unstable, causing frequent  errors, timeouts, and 502 Bad Gateway responses. This required numerous restarts of the 
+  Usage: expo [command] [options]
 
-**Known issue recurrence from previous fork**:
-- Issue recurrence in previous fork: ngrok Expo tunnel connection failure ().
-- Recurrence count: 2
-- Status: RESOLVED (By bypassing the issue entirely using internal routing shims so tunnel isn't strictly required for local viewing).
+  Options:
+  
+    -V, --version                     output the version number
+    --non-interactive                 Fail, if an interactive prompt would be required to continue.
+    -h, --help                        output usage information
+  
+  Commands:
 
-**Code Architecture**:
+    init [name]                       Create a new Expo project
+    start [path]                      Start a local dev server for the app
+    start:web [path]                  Start a Webpack dev server for the web app
+    export [path]                     Export the static files of the app for hosting it on a web server
+    install [packages...]             Install a module or other package to a project
+    run:android [path]                Run the Android app binary locally
+    run:ios [path]                    Run the iOS app binary locally
+    send [path]                       Share the project's URL to an email address
+
+    login                             Login to an Expo account
+    logout                            Logout of an Expo account
+    register                          Sign up for a new Expo account
+    whoami                            Return the currently authenticated account
+
+    client:install:ios                Install Expo Go for iOS on the simulator
+    client:install:android            Install Expo Go for Android on a connected device or emulator
+
+    config [path]                     Show the project config
+    doctor [path]                     Diagnose issues with the project
+    upgrade [sdk-version]             Upgrade the project packages and config for the given SDK version
+
+    customize:web [path]              Eject the default web files for customization
+    prebuild [path]                   Create native iOS and Android project files before building natively.
+                                      Learn more: https://docs.expo.dev/workflow/customizing/
+
+    build:web [path]                  Build the web app for production
+
+    credentials:manager [path]        Superseded by eas credentials in eas-cli
+
+    url [path]                        Log a URL for opening the project in Expo Go
+    url:ipa [path]                    Log the download URL for the standalone iOS binary
+    url:apk [path]                    Log the download URL for the standalone Android binary
+
+    webhooks [path]                   List all webhooks for a project
+    webhooks:add [path]               Add a webhook to a project
+    webhooks:remove [path]            Delete a webhook
+    webhooks:update [path]            Update an existing webhook
+
+    build:ios [path]                  Superseded by eas build in eas-cli
+    build:android [path]              Superseded by eas build in eas-cli
+    build:status [path]               Superseded by eas build:list in eas-cli
+    eject [path]                      Superseded by expo prebuild
+    fetch:ios:certs [path]            Superseded by eas credentials in eas-cli
+    fetch:android:keystore [path]     Superseded by eas credentials in eas-cli
+    fetch:android:hashes [path]       Superseded by eas credentials in eas-cli
+    fetch:android:upload-cert [path]  Superseded by eas credentials in eas-cli
+    publish [path]                    Superseded by eas update in eas-cli
+    publish:set [path]                Superseded by eas update:republish in eas-cli
+    publish:rollback [path]           Superseded by eas update:republish in eas-cli
+    publish:history [path]            Superseded by eas update:list in eas-cli
+    publish:details [path]            Superseded by eas update:view in eas-cli
+    push:android:upload [path]        Superseded by eas credentials in eas-cli
+    push:android:show [path]          Superseded by eas credentials in eas-cli
+    push:android:clear [path]         Superseded by eas credentials in eas-cli
+    upload:android [path]             Superseded by eas submit in eas-cli
+    upload:ios [path]                 Superseded by eas submit in eas-cli
+    client:ios [path]                 Superseded by Expo Dev Clients
+
+[01:34:31]   Run a command with --help for more info 💡
+[01:34:31]     $ expo start --help
+[01:34:31] supervisor service and significantly hindered frontend debugging and verification.
+
+**Known issue recurrence from previous fork**
+  - **Issue recurrence in previous fork**: The Expo/ngrok tunnel instability is a direct and persistent recurrence from the previous session. The Create Admin bug is a recurrence in the sense that the user reported it was not fixed after the agent's first attempt.
+  - **Recurrence count**: 2+
+  - **Status**: IN PROGRESS (for the admin creation bug), NOT RESOLVED (for tunnel instability).
+
+**Code Architecture**
 
 
-**Key Technical Concepts**:
-- **Frontend**: Managed Expo SDK 54, React Native 0.81.5, , Zustand.
-- **Backend**: FastAPI (111 endpoints), running continuously via Supervisor (no scale-to-zero). Background async worker for Signal Engine.
-- **Database**: MongoDB Atlas (18 collections for business logic) + Supabase Postgres (Auth & Profiles).
-- **Signal Engine V3**: Polling-based (5s). Strictly deterministic with gap protection. Relies on active API feeds (Frankfurter, CoinGecko, GoldAPI).
+**Key Technical Concepts**
+- **Role-Based Access Control (RBAC)**: Implemented a two-tier admin system (, ) with protected endpoints using FastAPI dependencies.
+- **Audit Logging**: Created an immutable log in MongoDB for sensitive administrative actions.
+- **Async Race Condition**: Diagnosed and fixed a race condition between Supabase Auth user creation and DB trigger-based profile creation using a retry-with-backoff strategy in Python's .
+- **Frontend State Merging**: Fetched data from two separate backend endpoints ( and ) and merged them on the client-side to display a correct, unified view.
 
-**key DB schema**:
-- :  *(Note:  is always null; engine reads )*.
+**key DB schema**
+  -  (MongoDB - New): 
+  -  (Supabase/Postgres):  and  fields are used for authorization. User documents in Mongo now contain a  object: .
 
-**changes in tech stack**:
-- Railway is now officially the designated production runtime for the backend.
+**changes in tech stack**
+  - None.
 
-**All files of reference**:
--  (Contains the v3.0 Signal Engine and newly added Apple webhook).
--  (Updated with Railway production config).
--  (Needs immediate fix for ).
--  (Dependencies).
--  (Updated).
+**All files of reference**
+- 
+- 
+- 
+- 
+- 
 
 **Areas that need refactoring**:
-- The backend relies heavily on  and CoinGecko for XAU/USD pricing, which frequently rate-limit the server. A more robust data provider will be needed long-term.
+- ****: This is a critical priority. The file has now exceeded 8,500 lines, making it extremely difficult to maintain and debug. It must be broken down into multiple smaller files using FastAPI's .
 
-**key api endpoints**:
--  (Apple Server Notifications v2 - just restored)
+**key api endpoints**
 - 
--  (Emergent LLM Key usage)
-
-**Critical Info for New Agent**:
-- **DO NOT redeploy the backend.** The user explicitly stated Railway is now the production runtime and handles backend deployment. You only needed to sync the  and add the webhook endpoint.
-- **DO NOT attempt to run Docker/Emergent deployments again.** The last deployment attempt via  passed pre-checks but the EAS Android build failed. Focus on fixing the EAS build constraints ( hex code and  dependencies).
-
-**documents and test reports created in this job**:
+- 
+- 
+- 
+- 
 - 
 
-**Last 10 User Messages and any pending HUMAN messages** (Latest to Oldest):
-1. User: Asked to re-enable Apple Server Notification webhook () and verify signatures. (Completed)
-2. User: Provided updated Railway production environment variables and asked to sync them locally. (Completed)
-3. User: Requested a FULL technical architecture summary of the entire project. (Completed)
-4. User: Shared EAS build failure logs and asked to fix deployment blockers. (Failed/Pending - logs analyzed but EAS fix not yet implemented).
-5. User: Requested  health check. (Completed)
-6. User: Requested database clean reset of signals. (Completed)
-7. User: Asked to verify active Gold signal structure and TP evaluation logic. (Completed)
-8. User: Demanded Signal Engine Redesign (deterministic, 5s poll, gap protection, no fake prices). (Completed)
-9. User: Requested full Signal Engine Architectural Audit. (Completed)
-10. User: Reported Support Tickets card in Admin panel does not navigate. (Completed)
+**Critical Info for New Agent**
+- **Expo Tunnel is Unstable**: Be prepared for the frontend preview to fail with 502 errors or ngrok connection errors. The only solution is to restart the service (expo: ERROR (not running)
+expo: started) and wait. Do not assume your code is broken if the web preview fails; check the service status and logs first.
+- **Admin Creation Bug**: The user reports the create admin spinner is still hanging. The backend is likely fixed, but the frontend request is not reaching it. Focus on client-side debugging using the new  statements and browser developer tools (via the screenshot tool's log capture) to diagnose the network issue.
+- **Auth Model**: Authorization relies on a combination of a  field and an  field in the user's profile. The  check requires  AND .
+
+**documents and test reports created in this job**
+  - 
+  - 
+  -  (updated multiple times)
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User**: Reports the Create Admin button still spins forever, even after the last fix. (Status: IN PROGRESS)
+2.  **User**: Confirms they have more credits to continue. (Status: ACKNOWLEDGED)
+3.  **User**: Asks if all changes for Super Admin override have been tested. (Status: COMPLETED, verification was performed)
+4.  **User**: Requests removal of a redundant role selection UI from the User Management modal. (Status: COMPLETED)
+5.  **User**: Reports that the User Management list incorrectly shows free for users with an active VIP override. (Status: COMPLETED, fixed)
+6.  **User**: Provides the new request to add a read-only subscription override view for regular admins. (Status: COMPLETED)
+7.  **User**: Provides the new request to implement the Admin Subscription Override system. (Status: COMPLETED)
+8.  **User**: Approves the plan to verify the Trading Pairs feature. (Status: COMPLETED, verified)
+9.  **User**: Asks the agent to confirm its plan. (Status: COMPLETED, plan was sent and approved)
 
 **Project Health Check:**
-- Broken: EAS Android Build (Due to minor configuration schema validations).
-- Working: Backend, Web Preview, Signal Auto-closure Engine, Database mappings.
-- Mocked: None (Hardcoded fake prices successfully removed).
+- **Broken**: The Expo/ngrok tunnel environment remains highly unstable, causing significant delays in frontend development and verification.
 
-**3rd Party Integrations**:
-- OpenAI/Anthropic GPT-4o / Sonnet 4.5 — uses Emergent LLM Key
+**3rd Party Integrations**
 - Supabase (Auth/Postgres) — requires User API Key
 - Apple App Store Server API — requires User API Key
-- Google Play Developer API — requires User API Key
-- Frankfurter / CoinGecko / GoldAPI (Price Feeds) — Unauthenticated / Free tiers
+- OpenAI GPT-4o — uses Emergent LLM Key
 
-**Testing status**:
-- Testing agent used after significant changes: NO (Tested via bash/curl)
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None
-- Known regressions: None
+**Testing status**
+  - Testing agent used after significant changes: YES (for both iterations of the subscription override feature).
+  - Test files created: The testing agent created test files like .
+  - Known regressions: None.
 
-**Credentials to test flow**:
+**Credentials to test flow:**
 - VIP user:  / 
-- Admin:  / 
+- SUPER_ADMIN:  / 
+- SUPER_ADMIN:  / 
 
-**What agent forgot to execute**:
-- The agent observed the EAS Build failure explicitly indicating  required a 6-character hex string and  needed to be removed, but the agent pivoted to the Architectural Summary request and forgot to actually patch  and .</analysis>
+**What agent forgot to execute**
+The agent did not forget but was actively debugging a complex, recurring frontend bug when the session ended. The core issue appears to be the frontend environment or a client-side network problem, as the backend has been repeatedly verified.</analysis>

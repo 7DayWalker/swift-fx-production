@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 # Backend URL from environment
 BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://fx-analytics-pro.preview.emergentagent.com"
+    BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com"
 
 # Supabase auth config
 SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"

@@ -109,33 +109,39 @@ export default function AdminManagementScreen() {
     }
 
     setCreating(true);
+
+    // Safety timeout: reset spinner after 20s no matter what
+    const safetyTimer = setTimeout(() => {
+      setCreating(false);
+      Alert.alert('Timeout', 'The request is taking too long. Please check the admin list and try again if needed.');
+    }, 20000);
+
     try {
-      const response = await Promise.race([
-        api.post('/admin/rbac/admins', {
-          email: newAdminEmail.trim().toLowerCase(),
-          name: newAdminName.trim(),
-          password: newAdminPassword,
-          admin_role: newAdminRole,
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Request timed out. Please try again.')), 15000)
-        ),
-      ]);
+      console.log('[AdminCreate] Sending request...', { email: newAdminEmail, role: newAdminRole });
+      const response = await api.post('/admin/rbac/admins', {
+        email: newAdminEmail.trim().toLowerCase(),
+        name: newAdminName.trim(),
+        password: newAdminPassword,
+        admin_role: newAdminRole,
+      });
+      console.log('[AdminCreate] Success:', response.data);
 
       setShowCreateModal(false);
       setNewAdminEmail('');
       setNewAdminName('');
       setNewAdminPassword('');
       setNewAdminRole('signal_admin');
-      await fetchData(true);
+      fetchData(true);
       Alert.alert('Success', 'Admin account created successfully');
     } catch (error: any) {
+      console.log('[AdminCreate] Error:', error?.response?.status, error?.response?.data, error?.message);
       const detail =
         error?.response?.data?.detail ||
         error?.message ||
         'Failed to create admin. Check connection and try again.';
       Alert.alert('Error', String(detail));
     } finally {
+      clearTimeout(safetyTimer);
       setCreating(false);
     }
   };

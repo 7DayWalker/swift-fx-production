@@ -185,7 +185,7 @@ All 11 screens are functional with no ComingSoonGate blocks:
   - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
   - `testing.js` → redirects to testing-library/context-stubs
   - `utils.js` → redirects to utils/url
-- Web preview now working at https://fx-analytics-pro.preview.emergentagent.com
+- Web preview now working at https://rbac-audit-logs.preview.emergentagent.com
 
 ## Premium/VIP Upgrade UX (Completed Mar 24, 2026)
 
@@ -383,4 +383,21 @@ The `create_admin` endpoint was silently failing to update the new admin's profi
 2. **Backend**: Removed duplicate `require_super_admin` function definition (was defined twice in server.py)
 3. **Frontend**: Added 15s `Promise.race` timeout on `handleCreateAdmin` to prevent infinite spinner. Improved error messages for timeout and network failures.
 
+### Additional Resilience Fixes (Mar 25, 2026 - Fork)
+**Root cause of recurring spinner**: The `supabase.auth.getSession()` call in the axios request interceptor (`api.ts`) had no timeout. If the Supabase client got into a stuck state (common with unstable ngrok tunnel), this call would hang indefinitely, preventing the API request from ever being sent.
 
+**Fixes applied:**
+1. **API interceptor timeout** (`api.ts`): Wrapped `supabase.auth.getSession()` in a `Promise.race` with a 5-second timeout. If session retrieval hangs, the request proceeds without auth (will fail with 401 instead of hanging).
+2. **Create admin safety timeout** (`admin-management.tsx`): Added a 20-second safety `setTimeout` that resets the `creating` spinner and alerts the user, regardless of what happens with the API call. Cleared in the `finally` block on normal completion.
+3. **Non-blocking list refresh**: Changed `await fetchData(true)` to `fetchData(true)` (fire-and-forget) after admin creation so the spinner reset is not blocked by the list refresh.
+
+**Files changed:** `frontend/src/services/api.ts`, `frontend/app/(admin)/admin-management.tsx`
+**Status:** VERIFIED - E2E tested twice via screenshot tool with console log capture. Admin creation succeeds and list updates correctly.
+
+## Pending Tasks
+- P1: End-to-End IAP testing on physical devices
+- P2: Reliable alternative Gold price API
+- P2: Push notifications on new signal creation
+- P2: Leaderboard/feed of top shared AI analyses
+- P2: Real-time polling for Admin Health widget
+- P3: Refactor server.py (8500+ lines monolith)

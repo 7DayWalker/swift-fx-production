@@ -96,7 +96,7 @@
   },
   "environment_verification": {
     "supabase_url": "https://hrzghlqcfccnmgcipxxo.supabase.co",
-    "backend_url": "https://fx-analytics-pro.preview.emergentagent.com",
+    "backend_url": "https://rbac-audit-logs.preview.emergentagent.com",
     "supabase_init": "CONFIRMED - INITIAL_SESSION event fires correctly",
     "backend_startup": "CONFIRMED - Super Admin roles restored, Signal Auto-Engine started"
   }

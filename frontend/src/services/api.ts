@@ -20,16 +20,24 @@ export const api = axios.create({
   },
 });
 
+// Helper: getSession with a timeout to prevent indefinite hangs
+const getSessionWithTimeout = (timeoutMs = 5000): Promise<string | null> => {
+  return Promise.race([
+    supabase.auth.getSession().then(({ data: { session } }) => session?.access_token ?? null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+};
+
 // Add request interceptor to include Supabase access token
 api.interceptors.request.use(
   async (config) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        config.headers.Authorization = `Bearer ${session.access_token}`;
+      const token = await getSessionWithTimeout();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Failed to get Supabase session:', error);
+      console.error('[API] Failed to get Supabase session:', error);
     }
     return config;
   },

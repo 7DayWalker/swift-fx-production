@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Backend URL from frontend .env
-BASE_URL = "https://fx-analytics-pro.preview.emergentagent.com/api"
+BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com/api"
 
 # Test credentials from review request
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"

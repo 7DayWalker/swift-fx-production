@@ -18,7 +18,7 @@ import os
 import re
 
 # Backend URL for API testing
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://fx-analytics-pro.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://rbac-audit-logs.preview.emergentagent.com')
 if BASE_URL.endswith('/'):
     BASE_URL = BASE_URL.rstrip('/')
 
