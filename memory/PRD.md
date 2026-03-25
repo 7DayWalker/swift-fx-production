@@ -401,3 +401,35 @@ The `create_admin` endpoint was silently failing to update the new admin's profi
 - P2: Leaderboard/feed of top shared AI analyses
 - P2: Real-time polling for Admin Health widget
 - P3: Refactor server.py (8500+ lines monolith)
+
+## Admin Capability Tier Override System (Mar 25, 2026 - Fork)
+
+### Goal
+SUPER_ADMIN and ADMIN automatically get VIP-level feature access while showing real billing tier.
+
+### Backend Changes (`server.py`)
+- Added `billing_tier`, `capability_tier`, `capability_source` to `/api/subscription/status` response
+- `billing_tier` = pure store/IAP tier (no override, no admin)
+- `capability_tier` = if admin -> "vip", else -> effective (IAP + override)
+- `capability_source` = "admin_privilege" for admins, "subscription" for normal users
+- Feature flags (`fund_management`, `academy`, `image_uploads`, `ai_limit`) now derived from `capability_tier`
+
+### Frontend Changes
+- **SubscriptionContext**: Maps `capability_tier` to `subscription` field for backward compat. Added `isAdminPrivilege` helper.
+- **SubscriptionBadge**: Shows shield icon + "Admin" tag for admin privilege users.
+- **SubscriptionCard**: Shows "FREE (Admin Privilege: VIP Access)" purple banner for admins, hides upgrade button.
+- **Subscription page**: Shows admin privilege label, hides billing cycle + plan cards + manage subscription for admins.
+- **Dashboard**: Uses `capability_tier` for `isFreeUser` -> no upgrade banner for admins.
+- **AI tab**: Uses `capability_tier` for `showUpgradeNudge` -> no upgrade nudge for admins.
+
+### Files Changed
+- `backend/server.py` (subscription/status endpoint)
+- `frontend/src/context/SubscriptionContext.tsx`
+- `frontend/src/components/SubscriptionBadge.tsx`
+- `frontend/app/subscription.tsx`
+- `frontend/app/(tabs)/dashboard.tsx`
+- `frontend/app/(tabs)/ai.tsx`
+
+### Testing Status
+- **VERIFIED** - Backend: 15/16 tests passed (test_capability_tier_override.py), Frontend: 100% verified
+- Test report: `/app/test_reports/iteration_15.json`
