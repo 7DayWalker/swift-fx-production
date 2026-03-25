@@ -1,114 +1,102 @@
 # Swift FX Signals - Product Requirements Document
 
 ## Overview
-A full-stack trading signals application built with Expo (React Native) frontend and FastAPI backend. Features trading signals, AI analysis, community feed, multi-level admin dashboard, and a gamified Academy learning system.
+A full-stack trading signals application built with Expo (React Native) frontend and FastAPI backend. Features trading signals, AI analysis, community feed, multi-level admin dashboard, and a gamified Academy learning system with streak-based engagement.
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with TypeScript
 - **Backend**: FastAPI (Python) — monolith in `server.py`
 - **Auth**: Supabase (Postgres)
-- **DB**: MongoDB (signals, analyses, academy, audit logs)
+- **DB**: MongoDB (signals, analyses, academy, streaks, audit logs)
 - **AI**: OpenAI GPT-4o via Emergent LLM Key
 - **TTS**: OpenAI TTS via Emergent LLM Key (VIP), expo-speech (Free/Premium)
 
-## User Tiers
-- **Free**: Basic signals, beginner academy courses
-- **Premium**: Advanced signals, intermediate academy
-- **VIP**: All features, advanced academy, AI TTS narration
-- **Admin**: Full VIP access + admin panel
-
 ## Core Features
 
-### 1. Trading Signals System
+### 1. Academy System (Full Premium Learning Engine)
+
+**Backend Endpoints:**
+- `POST /api/academy/lesson-complete` — Mark lesson complete, returns XP breakdown
+- `GET /api/academy/progress` — User's course-by-course progress
+- `POST /api/academy/quiz-submit` — Quiz scoring with XP rewards
+- `GET /api/academy/leaderboard` — XP-based global rankings
+- `POST /api/academy/tts` — VIP OpenAI TTS with MongoDB caching
+- `GET /api/academy/streak-status` — Current streak, shield, risk status
+
+**XP Economy:**
+- Lesson completion: +20 XP
+- Quiz pass (60-99%): +40 XP
+- Perfect quiz (100%): +60 XP
+- Daily streak bonus: +10 XP
+- 7-day streak milestone: +50 XP bonus
+- Farming prevention: 0 XP for duplicate completions
+
+**Streak System:**
+- +1 streak on daily lesson/quiz completion
+- 24h inactivity resets streak
+- VIP Streak Shield: 1 missed day protection per week
+- Tracks current_streak, longest_streak, last_activity_date
+
+**Frontend Screens:**
+- `academy/index.tsx` — Progress widget + streak badge + XP rewards card + categories
+- `academy/[category].tsx` — Course list with progress bars
+- `academy/lesson.tsx` — Full learning engine (completion, TTS, quiz, animations)
+- `academy/leaderboard.tsx` — XP rankings with podium
+- `academy/_layout.tsx` — Route definitions
+
+**MongoDB Collections:**
+- `academy_progress` — lesson completions, quiz scores
+- `academy_streaks` — streak data per user
+- `academy_leaderboard` — XP rankings
+- `academy_tts_cache` — cached TTS audio
+
+### 2. Trading Signals System
 - Signal creation/management (admin)
 - Real-time signal display
 - Trading pairs selector
 
-### 2. AI Analyzer
+### 3. AI Analyzer
 - GPT-4o powered market analysis
 - Community sharing
 
-### 3. Admin Dashboard
+### 4. Admin Dashboard
 - RBAC: ADMIN and SUPER_ADMIN roles
 - User management with subscription override
 - Read-only view for regular admins
 - Audit logging for sensitive actions
 
-### 4. Academy System (COMPLETED - Feb 25, 2026)
-Full premium gamified learning engine:
-
-**Backend Endpoints:**
-- `POST /api/academy/lesson-complete` — Mark lesson complete
-- `GET /api/academy/progress` — Get user's academy progress
-- `POST /api/academy/quiz-submit` — Submit quiz with scoring
-- `GET /api/academy/leaderboard` — XP-based rankings
-- `POST /api/academy/tts` — VIP OpenAI TTS with MongoDB caching
-
-**Frontend Screens:**
-- `academy/index.tsx` — Progress widget + category list
-- `academy/[category].tsx` — Course list with progress bars
-- `academy/lesson.tsx` — Full learning engine with:
-  - Sequential lesson locking (N requires N-1 complete)
-  - Lesson completion tracking
-  - Coming Soon video banner (premium placeholder)
-  - Dual-tier TTS (expo-speech free, OpenAI VIP)
-  - Quiz system with randomization, scoring, XP
-  - Key Takeaways cards
-  - Success animations + haptic feedback
-- `academy/leaderboard.tsx` — XP rankings with podium
-
-**Data:**
-- `academyContent.ts` — 24 courses, 150 lessons across 3 tiers
-- `academy_progress` MongoDB collection
-- `academy_tts_cache` MongoDB collection
-
 ### 5. Subscription System
 - IAP integration (Apple App Store)
-- Subscription override system for admins
-
-## Key DB Collections (MongoDB)
-- `signals`, `analyses`, `community_posts`
-- `academy_progress` — lesson completions, quiz scores, XP
-- `academy_tts_cache` — cached TTS audio (base64)
-- `subscription_override_logs` — audit trail
-
-## Testing
-- Backend: 24/24 academy tests passing (iteration_16)
-- Frontend: All screens verified via screenshots
-- Test file: `/app/backend/tests/test_academy_endpoints.py`
+- Capability tier gating (Free/Premium/VIP)
+- Admin privilege auto-grants VIP access
 
 ---
 
 ## Completed Work
 
-### Session 1-3 (Previous)
-- Trading signals system
-- AI analyzer with GPT-4o
-- Community feed
-- Admin dashboard with RBAC
-- Subscription override system
-- Trading pairs feature
+### Sessions 1-3 (Previous)
+- Trading signals, AI analyzer, community feed
+- Admin dashboard with RBAC, subscription override
 
 ### Session 4 (Feb 25, 2026)
 - Fixed "Create Admin" infinite spinner
-- Enhanced Admin capability tier UI labeling
-- Updated support email to support@swiftfx.online
-- **Academy Backend**: Progress tracking, lesson completion, quiz scoring, leaderboard, TTS endpoints
+- Admin capability tier UI labeling
+- Support email update
 
-### Session 5 (Feb 25, 2026) — Current
-- **Academy Frontend Complete**: All 4 screens implemented
-- Category page with per-course progress bars
-- Lesson page with sequential locking, completion tracking
-- Coming Soon video banner component
-- Dual-tier TTS (expo-speech + OpenAI VIP)
-- Quiz system with scoring, XP, animated results
-- Leaderboard screen with podium + rankings
-- Admin privilege access fix across all academy screens
-- Testing: 24/24 backend tests, frontend verified
+### Session 5 (Feb 25, 2026)
+- Academy Backend: progress, completion, quiz, leaderboard, TTS endpoints
+- Academy Frontend: All 4 screens with sequential locking, dual-tier TTS, quiz scoring
+
+### Session 6 (Feb 25, 2026) — Current
+- **Daily Streak System**: Backend streak tracking with 24h reset, VIP Shield
+- **XP Economy**: Lesson +20, Quiz +40/+60, Streak +10, 7-day milestone +50
+- **Farming Prevention**: 0 XP for re-completed lessons
+- **Streak UI**: Animated fire badge on Academy home, XP reward display on completion
+- **Testing**: 20/20 backend tests passed, frontend 100% verified
 
 ---
 
-## Upcoming Tasks (Prioritized)
+## Upcoming Tasks
 
 ### P1
 - End-to-End IAP testing on physical devices
