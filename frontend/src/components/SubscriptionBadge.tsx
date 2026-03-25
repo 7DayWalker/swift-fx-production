@@ -36,7 +36,7 @@ export function SubscriptionBadge({
   onPress,
   variant = 'default',
 }: SubscriptionBadgeProps) {
-  const { status, getPlanDisplayName, isLoading } = useSubscription();
+  const { status, getPlanDisplayName, isLoading, isAdminPrivilege } = useSubscription();
   const { theme } = useTheme();
 
   if (isLoading || !status) {
@@ -49,7 +49,7 @@ export function SubscriptionBadge({
     );
   }
 
-  const tier = status.subscription || 'free';
+  const tier = status.capability_tier || 'free';
   const colors = TIER_COLORS[tier] || TIER_COLORS.free;
   const planName = getPlanDisplayName();
 
@@ -72,6 +72,9 @@ export function SubscriptionBadge({
         <Text style={[styles.minimalText, styles[`text_${size}`], { color: colors.text }]}>
           {planName}
         </Text>
+        {isAdminPrivilege && (
+          <Text style={[styles.adminTag, styles[`text_${size}`]]}>Admin</Text>
+        )}
       </View>
     );
 
@@ -98,7 +101,7 @@ export function SubscriptionBadge({
     ]}>
       {showIcon && (
         <Ionicons 
-          name={getIcon()} 
+          name={isAdminPrivilege ? 'shield-checkmark-outline' : getIcon()} 
           size={size === 'small' ? 10 : size === 'medium' ? 12 : 14} 
           color={colors.text} 
           style={styles.icon}
@@ -107,6 +110,9 @@ export function SubscriptionBadge({
       <Text style={[styles.badgeText, styles[`text_${size}`], { color: colors.text }]}>
         {planName}
       </Text>
+      {isAdminPrivilege && (
+        <Text style={[styles.adminTag, styles[`text_${size}`]]}>Admin</Text>
+      )}
     </View>
   );
 
@@ -127,7 +133,7 @@ interface SubscriptionCardProps {
 }
 
 export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
-  const { status, isLoading } = useSubscription();
+  const { status, isLoading, isAdminPrivilege } = useSubscription();
   const { theme } = useTheme();
 
   if (isLoading || !status) {
@@ -138,9 +144,10 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
     );
   }
 
-  const tier = status.subscription || 'free';
+  const tier = status.capability_tier || 'free';
   const colors = TIER_COLORS[tier] || TIER_COLORS.free;
   const isExpiring = status.subscription_expiry && new Date(status.subscription_expiry) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const billingTierDisplay = (status.billing_tier || 'free').toUpperCase();
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: colors.border, borderWidth: 1 }]}>
@@ -149,7 +156,7 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
           <Text style={[styles.cardTitle, { color: theme.text }]}>Current Plan</Text>
           <SubscriptionBadge size="medium" />
         </View>
-        {status.subscription !== 'vip' && onUpgradePress && (
+        {!isAdminPrivilege && status.capability_tier !== 'vip' && onUpgradePress && (
           <TouchableOpacity 
             style={[styles.upgradeButton, { backgroundColor: '#10B981' }]}
             onPress={onUpgradePress}
@@ -159,6 +166,16 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Admin Privilege Banner */}
+      {isAdminPrivilege && (
+        <View style={styles.adminPrivilegeBanner} data-testid="admin-privilege-banner">
+          <Ionicons name="shield-checkmark" size={16} color="#8B5CF6" />
+          <Text style={styles.adminPrivilegeText}>
+            {billingTierDisplay} (Admin Privilege: VIP Access)
+          </Text>
+        </View>
+      )}
 
       <View style={styles.featuresList}>
         <FeatureRow 
@@ -170,27 +187,27 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
         <FeatureRow 
           icon="analytics" 
           label="AI Analyzer" 
-          value={`${status.features.ai_used}/${status.features.ai_limit === 'unlimited' ? '∞' : status.features.ai_limit}`} 
+          value={`${status.features.ai_used}/${status.features.ai_limit === 'unlimited' ? '\u221E' : status.features.ai_limit}`} 
           theme={theme}
           warning={status.features.ai_limit_reached}
         />
         <FeatureRow 
           icon="briefcase" 
           label="Fund Management" 
-          value={status.features.fund_management ? '✓' : '✗'} 
+          value={status.features.fund_management ? '\u2713' : '\u2717'} 
           theme={theme}
           enabled={status.features.fund_management}
         />
         <FeatureRow 
           icon="school" 
           label="Academy" 
-          value={status.features.academy ? '✓' : '✗'} 
+          value={status.features.academy ? '\u2713' : '\u2717'} 
           theme={theme}
           enabled={status.features.academy}
         />
       </View>
 
-      {status.subscription_expiry && (
+      {status.subscription_expiry && !isAdminPrivilege && (
         <View style={[styles.expiryRow, isExpiring && { backgroundColor: '#FEF3C7' }]}>
           <Ionicons 
             name={isExpiring ? 'warning' : 'calendar'} 
@@ -304,6 +321,32 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+
+  // Admin tag styles
+  adminTag: {
+    color: '#8B5CF6',
+    fontWeight: '700',
+    marginLeft: 4,
+    letterSpacing: 0.3,
+  },
+  adminPrivilegeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  adminPrivilegeText: {
+    color: '#8B5CF6',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
 
   // Card styles

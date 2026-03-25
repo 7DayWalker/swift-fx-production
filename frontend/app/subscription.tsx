@@ -35,7 +35,7 @@ export default function SubscriptionScreen() {
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { status: subscriptionStatus, refreshStatus, isLoading: subLoading } = useSubscription();
+  const { status: subscriptionStatus, refreshStatus, isLoading: subLoading, isAdminPrivilege } = useSubscription();
   
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
@@ -268,12 +268,22 @@ export default function SubscriptionScreen() {
           <Text style={[styles.currentPlanLabel, { color: theme.textSecondary }]}>Current Plan</Text>
           <View style={styles.currentPlanRow}>
             <SubscriptionBadge size="large" showIcon={true} />
-            {subscriptionStatus?.subscription_expiry && (
+            {subscriptionStatus?.subscription_expiry && !isAdminPrivilege && (
               <Text style={[styles.expiryText, { color: theme.textSecondary }]}>
                 Expires: {new Date(subscriptionStatus.subscription_expiry).toLocaleDateString()}
               </Text>
             )}
           </View>
+
+          {/* Admin Privilege Label */}
+          {isAdminPrivilege && (
+            <View style={styles.adminPrivilegeRow} data-testid="subscription-admin-privilege">
+              <Ionicons name="shield-checkmark" size={18} color="#8B5CF6" />
+              <Text style={styles.adminPrivilegeLabel}>
+                {(subscriptionStatus?.billing_tier || 'free').toUpperCase()} (Admin Privilege: VIP Access)
+              </Text>
+            </View>
+          )}
           
           {/* Feature Summary */}
           <View style={styles.featureSummary}>
@@ -306,7 +316,8 @@ export default function SubscriptionScreen() {
           </View>
         </View>
 
-        {/* Billing Cycle Selector */}
+        {/* Billing Cycle Selector - Hidden for admin privilege users */}
+        {!isAdminPrivilege && (
         <View style={styles.cycleSection}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Choose Billing Cycle</Text>
           <View style={[styles.cycleSelector, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -328,8 +339,11 @@ export default function SubscriptionScreen() {
             ))}
           </View>
         </View>
+        )}
 
-        {/* Plans */}
+        {/* Plans - Hidden for admin privilege users */}
+        {!isAdminPrivilege && (
+        <>
         <View style={styles.plansSection}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Available Plans</Text>
           
@@ -437,6 +451,8 @@ export default function SubscriptionScreen() {
               : 'Secure checkout. Your subscription activates only after payment confirmation.'}
           </Text>
         </View>
+        </>
+        )}
 
         {/* Restore Purchases (Mobile only) */}
         {isIAPAvailable() && Platform.OS !== 'web' && (
@@ -456,8 +472,8 @@ export default function SubscriptionScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Manage Subscription (for existing subscribers) */}
-        {subscriptionStatus?.subscription && subscriptionStatus.subscription !== 'free' && (
+        {/* Manage Subscription (for existing subscribers, not admin privilege) */}
+        {!isAdminPrivilege && subscriptionStatus?.subscription && subscriptionStatus.subscription !== 'free' && (
           <TouchableOpacity 
             style={[styles.manageButton, { borderColor: theme.border }]}
             onPress={handleManageSubscription}
@@ -565,6 +581,24 @@ const styles = StyleSheet.create({
   expiryText: {
     color: '#F59E0B',
     fontSize: 12,
+  },
+  adminPrivilegeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  adminPrivilegeLabel: {
+    color: '#8B5CF6',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   featureSummary: {
     gap: 8,

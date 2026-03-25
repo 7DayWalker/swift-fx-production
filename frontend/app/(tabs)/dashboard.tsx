@@ -85,7 +85,7 @@ export default function DashboardScreen() {
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   
   // Use subscription context for plan info (real-time reactive)
-  const currentPlan = subscriptionStatus?.subscription || 'free';
+  const currentPlan = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
   const isFreeUser = currentPlan === 'free';
   
   // REACTIVE STATS - Directly computed from SignalContext (no caching, no local state)

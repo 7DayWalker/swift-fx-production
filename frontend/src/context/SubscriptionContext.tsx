@@ -20,7 +20,10 @@ export interface SubscriptionFeatures {
 
 export interface SubscriptionStatus {
   user_id: string;
-  subscription: SubscriptionPlan;
+  subscription: SubscriptionPlan;       // Backward compat: maps to capability_tier
+  billing_tier: SubscriptionPlan;       // Pure store/IAP tier
+  capability_tier: SubscriptionPlan;    // Effective tier for feature gating
+  capability_source: 'admin_privilege' | 'subscription';
   subscription_active: boolean;
   subscription_expiry: string | null;
   subscription_platform: string | null;
@@ -39,6 +42,7 @@ interface SubscriptionContextType {
   canAccessSignal: (visibility: string) => boolean;
   getPlanBadgeColor: () => string;
   getPlanDisplayName: () => string;
+  isAdminPrivilege: boolean;
 }
 
 // ── Defaults (used only when user is not logged in) ──
@@ -80,12 +84,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const response = await api.get('/subscription/status');
       const data = response.data;
 
-      // Map backend "entitlement" to context "subscription" for backward compat.
-      const entitlement: SubscriptionPlan = data.entitlement || 'free';
+      // Map backend fields to context.
+      // capability_tier is the effective tier for all feature gating.
+      const capabilityTier: SubscriptionPlan = data.capability_tier || data.entitlement || 'free';
+      const billingTier: SubscriptionPlan = data.billing_tier || data.entitlement || 'free';
+      const capabilitySource = data.capability_source || 'subscription';
 
       setStatus({
         user_id: data.user_id,
-        subscription: entitlement,
+        subscription: capabilityTier,          // Backward compat: uses capability_tier
+        billing_tier: billingTier,
+        capability_tier: capabilityTier,
+        capability_source: capabilitySource,
         subscription_active: data.subscription_active ?? false,
         subscription_expiry: data.subscription_expiry ?? null,
         subscription_platform: data.subscription_platform ?? null,
@@ -143,7 +153,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const getPlanBadgeColor = useCallback((): string => {
     if (!status) return '#6B7280';
-    switch (status.subscription) {
+    switch (status.capability_tier) {
       case 'vip': return '#7C3AED';
       case 'premium': return '#D97706';
       default: return '#6B7280';
@@ -152,16 +162,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const getPlanDisplayName = useCallback((): string => {
     if (!status) return 'Free';
-    switch (status.subscription) {
+    switch (status.capability_tier) {
       case 'vip': return 'VIP';
       case 'premium': return 'Premium';
       default: return 'Free';
     }
   }, [status]);
 
+  const isAdminPrivilege = status?.capability_source === 'admin_privilege';
+
   return (
     <SubscriptionContext.Provider
-      value={{ status, isLoading, error, refreshStatus, hasFeature, canAccessSignal, getPlanBadgeColor, getPlanDisplayName }}
+      value={{ status, isLoading, error, refreshStatus, hasFeature, canAccessSignal, getPlanBadgeColor, getPlanDisplayName, isAdminPrivilege }}
     >
       {children}
     </SubscriptionContext.Provider>

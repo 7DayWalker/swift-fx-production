@@ -650,7 +650,7 @@ export default function AIScreen() {
   const resetToUpload = () => { setScreenState('upload'); setAnalysisResult(null); setErrorMessage(null); };
   const startNewAnalysis = () => { setScreenState('upload'); setSelectedImage(null); setImageBase64(null); setAnalysisResult(null); setErrorMessage(null); setSelectedPair(PAIRS[0]); setSelectedTimeframe('H1'); };
 
-  const showUpgradeNudge = subscriptionStatus?.subscription !== 'vip' && subscriptionStatus?.subscription !== 'admin';
+  const showUpgradeNudge = subscriptionStatus?.capability_tier !== 'vip' && subscriptionStatus?.capability_source !== 'admin_privilege';
 
   // ─── Loading ─────────────────────────────────────────────────────────────
   if (isLoadingUsage) {

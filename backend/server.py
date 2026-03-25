@@ -2673,14 +2673,29 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
             "is_active": True,
         }
 
-    # ── 5. Build feature flags from verified tier ──
+    # ── 5. Resolve capability tier (admin privilege override) ──
+    # billing_tier  = pure store/IAP tier (no override, no admin elevation)
+    # capability_tier = effective tier for feature gating (admin/super_admin → vip)
+    # capability_source = "admin_privilege" | "subscription"
+    billing_tier = best_tier
+    if is_admin:
+        capability_tier = "vip"
+        capability_source = "admin_privilege"
+    else:
+        capability_tier = effective
+        capability_source = "subscription"
+
+    # ── 6. Build feature flags from capability tier ──
     ai_weekly_used = (profile or {}).get("ai_weekly_used", 0) or (profile or {}).get("ai_usage_count", 0)
-    ai_limit = get_ai_weekly_limit(effective)
+    ai_limit = get_ai_weekly_limit(capability_tier)
 
     return {
         "user_id": user_id,
-        "entitlement": effective,              # FREE / PREMIUM / VIP
-        "subscription_active": subscription_active or (override is not None),
+        "entitlement": effective,              # Legacy: IAP + override tier
+        "billing_tier": billing_tier,          # Pure store tier (no override/admin)
+        "capability_tier": capability_tier,    # Effective tier for feature gating
+        "capability_source": capability_source,  # "admin_privilege" | "subscription"
+        "subscription_active": subscription_active or (override is not None) or is_admin,
         "subscription_expiry": override.get("expires_at") if override else subscription_expiry,
         "subscription_platform": "override" if override else subscription_platform,
         "subscription_product_id": subscription_product_id,
@@ -2688,15 +2703,15 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
         "is_admin": is_admin,
         "override": override_info,
         "features": {
-            "signals_access": effective,
+            "signals_access": capability_tier,
             "ai_analyzer": True,
             "ai_limit": ai_limit if ai_limit < 100000 else "unlimited",
             "ai_used": ai_weekly_used,
             "ai_remaining": max(0, ai_limit - ai_weekly_used) if ai_limit < 100000 else "unlimited",
             "ai_limit_reached": ai_weekly_used >= ai_limit if ai_limit < 100000 else False,
-            "fund_management": effective == "vip" or is_admin,
-            "academy": effective == "vip" or is_admin,
-            "image_uploads": effective != "free" or is_admin,
+            "fund_management": capability_tier == "vip",
+            "academy": capability_tier == "vip",
+            "image_uploads": capability_tier != "free",
         },
     }
 
