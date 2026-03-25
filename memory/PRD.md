@@ -1,14 +1,14 @@
 # Swift FX Signals - Product Requirements Document
 
 ## Overview
-A full-stack trading signals application built with Expo (React Native) frontend and FastAPI backend. Features trading signals, AI analysis, community feed, multi-level admin dashboard, and a gamified Academy learning system with streak-based engagement.
+A full-stack trading signals application built with Expo (React Native) frontend and FastAPI backend. Features trading signals, AI analysis, community feed, multi-level admin dashboard, and a gamified Academy learning system with streak-based engagement and AI-generated enriched content.
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with TypeScript
 - **Backend**: FastAPI (Python) — monolith in `server.py`
 - **Auth**: Supabase (Postgres)
-- **DB**: MongoDB (signals, analyses, academy, streaks, audit logs)
-- **AI**: OpenAI GPT-4o via Emergent LLM Key
+- **DB**: MongoDB Atlas (signals, analyses, academy, streaks, content, audit logs)
+- **AI**: OpenAI GPT-4o via Emergent LLM Key (content generation + analysis)
 - **TTS**: OpenAI TTS via Emergent LLM Key (VIP), expo-speech (Free/Premium)
 
 ## Core Features
@@ -22,6 +22,8 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - `GET /api/academy/leaderboard` — XP-based global rankings
 - `POST /api/academy/tts` — VIP OpenAI TTS with MongoDB caching
 - `GET /api/academy/streak-status` — Current streak, shield, risk status
+- `GET /api/academy/lesson-content/{course_id}/{lesson_id}` — Enriched AI-generated content
+- `POST /api/academy/generate-content-batch` — Super admin batch content generation
 
 **XP Economy:**
 - Lesson completion: +20 XP
@@ -37,32 +39,37 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - VIP Streak Shield: 1 missed day protection per week
 - Tracks current_streak, longest_streak, last_activity_date
 
+**Enriched Content (COMPLETED - Feb 25, 2026):**
+- 132 non-quiz lessons regenerated with GPT-4o
+- Structured sections: Overview (400-700 words), How to Apply This, Mini Action Task, Key Takeaways
+- Tier-appropriate tone: Beginner=foundational, Intermediate=strategic, Advanced=institutional
+- Real trading examples and psychological insights in every lesson
+- Stored permanently in MongoDB `academy_lesson_content` collection
+- Frontend fetches and displays all sections with themed UI
+
 **Frontend Screens:**
 - `academy/index.tsx` — Progress widget + streak badge + XP rewards card + categories
 - `academy/[category].tsx` — Course list with progress bars
-- `academy/lesson.tsx` — Full learning engine (completion, TTS, quiz, animations)
+- `academy/lesson.tsx` — Full learning engine with enriched content, TTS, quiz, animations
 - `academy/leaderboard.tsx` — XP rankings with podium
-- `academy/_layout.tsx` — Route definitions
 
 **MongoDB Collections:**
 - `academy_progress` — lesson completions, quiz scores
 - `academy_streaks` — streak data per user
 - `academy_leaderboard` — XP rankings
-- `academy_tts_cache` — cached TTS audio
+- `academy_tts_cache` — cached TTS audio (base64)
+- `academy_lesson_content` — 132 enriched lesson documents
 
 ### 2. Trading Signals System
 - Signal creation/management (admin)
-- Real-time signal display
-- Trading pairs selector
+- Real-time signal display, Trading pairs selector
 
 ### 3. AI Analyzer
-- GPT-4o powered market analysis
-- Community sharing
+- GPT-4o powered market analysis, Community sharing
 
 ### 4. Admin Dashboard
 - RBAC: ADMIN and SUPER_ADMIN roles
 - User management with subscription override
-- Read-only view for regular admins
 - Audit logging for sensitive actions
 
 ### 5. Subscription System
@@ -74,25 +81,26 @@ A full-stack trading signals application built with Expo (React Native) frontend
 
 ## Completed Work
 
-### Sessions 1-3 (Previous)
+### Sessions 1-4 (Previous)
 - Trading signals, AI analyzer, community feed
 - Admin dashboard with RBAC, subscription override
-
-### Session 4 (Feb 25, 2026)
-- Fixed "Create Admin" infinite spinner
-- Admin capability tier UI labeling
-- Support email update
+- Create Admin fix, Admin capability tier UI
 
 ### Session 5 (Feb 25, 2026)
-- Academy Backend: progress, completion, quiz, leaderboard, TTS endpoints
-- Academy Frontend: All 4 screens with sequential locking, dual-tier TTS, quiz scoring
+- Academy Backend + Frontend: All screens, sequential locking, dual-tier TTS, quiz scoring
 
-### Session 6 (Feb 25, 2026) — Current
-- **Daily Streak System**: Backend streak tracking with 24h reset, VIP Shield
-- **XP Economy**: Lesson +20, Quiz +40/+60, Streak +10, 7-day milestone +50
-- **Farming Prevention**: 0 XP for re-completed lessons
-- **Streak UI**: Animated fire badge on Academy home, XP reward display on completion
-- **Testing**: 20/20 backend tests passed, frontend 100% verified
+### Session 6 (Feb 25, 2026)
+- Daily Streak System + XP Economy with farming prevention
+- Streak UI with animated fire badge
+
+### Session 7 (Feb 25, 2026) — Current
+- **Enriched Content Generation**: GPT-4o generated 132 lessons with structured content
+- **New Sections**: "How to Apply This" (practical steps), "Mini Action Task" (exercises)
+- **Content Quality**: 400-700 words average, real trading examples, psychological insights
+- **Tier Differentiation**: Beginner=foundational, Intermediate=strategic, Advanced=institutional
+- **Backend**: Content retrieval endpoint + admin batch generation endpoint
+- **Frontend**: Enriched content display with themed section cards
+- **Testing**: 15/15 backend, 100% frontend (iteration_18)
 
 ---
 
@@ -104,6 +112,7 @@ A full-stack trading signals application built with Expo (React Native) frontend
 ### P2
 - Reliable alternative Gold price API
 - Push notifications on new signals
+- Smart push reminders for streak-at-risk users
 - Leaderboard/feed of top shared AI analyses
 - Real-time polling for Admin Health widget
 
