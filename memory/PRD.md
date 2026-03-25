@@ -366,3 +366,10 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - Cleaned up unused state (`selectedRole`, `isUpdating`), function (`handleUpdateRole`), constant (`ROLES`), and 9 unused styles
 - Override section now the sole tier management interface in the modal
 - Screenshot verified: clean modal with user info + override controls only
+
+## User List Effective Tier Fix (Mar 25, 2026)
+- **Bug**: User Management list showed Supabase profile role instead of effective tier (ignoring overrides)
+- **Backend**: Added `GET /api/admin/active-overrides` — returns all active, non-expired overrides as `{user_id: tier}` map
+- **Frontend**: `fetchUsers()` now calls both Supabase RPC and `/admin/active-overrides` in parallel, merges override tiers into user list
+- **Result**: Role badges and stats counter (Total/Free/Premium/VIP) now reflect the effective subscription tier
+

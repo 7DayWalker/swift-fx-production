@@ -24,12 +24,13 @@ interface User {
   user_id: string;
   name: string;
   email: string;
-  role: 'free' | 'premium' | 'vip';
+  role: string;
   subscription_status?: string;
   is_admin?: boolean;
   admin_role?: string;
   created_at: string;
   ai_usage_count?: number;
+  has_override?: boolean;
 }
 
 interface OverrideStatus {
@@ -86,17 +87,32 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_all_users');
-      if (error) throw error;
-      const mapped = (data || []).map((u: any) => ({
-        user_id: u.user_id,
-        name: u.name || u.email,
-        email: u.email,
-        role: u.role === 'admin' ? 'admin' : u.role,
-        is_admin: u.role === 'admin',
-        admin_role: u.admin_role,
-        created_at: u.created_at,
-      }));
+      // Fetch users from Supabase and active overrides from backend in parallel
+      const [usersResult, overridesResult] = await Promise.all([
+        supabase.rpc('get_all_users'),
+        api.get('/admin/active-overrides').catch(() => ({ data: { overrides: {} } })),
+      ]);
+
+      if (usersResult.error) throw usersResult.error;
+
+      const activeOverrides: Record<string, string> = overridesResult.data?.overrides || {};
+
+      const mapped = (usersResult.data || []).map((u: any) => {
+        const baseRole = u.role === 'admin' || u.role === 'super_admin' ? u.role : u.role;
+        // If user has an active override, use the override tier for display
+        const effectiveRole = activeOverrides[u.user_id] || baseRole;
+
+        return {
+          user_id: u.user_id,
+          name: u.name || u.email,
+          email: u.email,
+          role: effectiveRole,
+          is_admin: u.role === 'admin' || u.role === 'super_admin',
+          admin_role: u.admin_role,
+          created_at: u.created_at,
+          has_override: !!activeOverrides[u.user_id],
+        };
+      });
       setUsers(mapped);
     } catch (error) {
       console.error('Failed to fetch users:', error);

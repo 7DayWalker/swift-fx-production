@@ -2219,6 +2219,34 @@ async def get_all_users(admin: User = Depends(require_admin)):
     users = await list_profiles()
     return users
 
+
+@api_router.get("/admin/active-overrides")
+async def get_all_active_overrides(admin: User = Depends(require_admin)):
+    """Return all active, non-expired subscription overrides as a user_id->tier map."""
+    now = datetime.now(timezone.utc)
+    overrides = await db.subscription_overrides.find(
+        {"is_active": True}, {"_id": 0, "user_id": 1, "tier": 1, "expires_at": 1}
+    ).to_list(500)
+
+    active = {}
+    for ov in overrides:
+        expires_at = ov.get("expires_at")
+        if expires_at:
+            if isinstance(expires_at, str):
+                try:
+                    exp_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+            else:
+                exp_dt = expires_at
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if exp_dt <= now:
+                continue
+        active[ov["user_id"]] = ov.get("tier", "free")
+
+    return {"overrides": active}
+
 @api_router.put("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, role: UserRole, admin: User = Depends(require_admin)):
     result = await update_profile(user_id, {"role": role})
