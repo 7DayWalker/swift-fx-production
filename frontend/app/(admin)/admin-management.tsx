@@ -108,24 +108,33 @@ export default function AdminManagementScreen() {
       return;
     }
 
+    setCreating(true);
     try {
-      setCreating(true);
-      await api.post('/admin/rbac/admins', {
-        email: newAdminEmail,
-        name: newAdminName,
-        password: newAdminPassword,
-        admin_role: newAdminRole,
-      });
+      const response = await Promise.race([
+        api.post('/admin/rbac/admins', {
+          email: newAdminEmail.trim().toLowerCase(),
+          name: newAdminName.trim(),
+          password: newAdminPassword,
+          admin_role: newAdminRole,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please try again.')), 15000)
+        ),
+      ]);
 
-      Alert.alert('Success', 'Admin account created successfully');
       setShowCreateModal(false);
       setNewAdminEmail('');
       setNewAdminName('');
       setNewAdminPassword('');
       setNewAdminRole('signal_admin');
-      fetchData(true);
+      await fetchData(true);
+      Alert.alert('Success', 'Admin account created successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to create admin');
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'Failed to create admin. Check connection and try again.';
+      Alert.alert('Error', String(detail));
     } finally {
       setCreating(false);
     }

@@ -5125,15 +5125,6 @@ class AdminUpdate(BaseModel):
     admin_enabled: Optional[bool] = None
     name: Optional[str] = None
 
-def require_super_admin(current_user: User = Depends(require_admin)):
-    """Dependency that requires Super Admin role"""
-    if not is_super_admin(current_user):
-        raise HTTPException(
-            status_code=403,
-            detail="This action requires Super Admin privileges"
-        )
-    return current_user
-
 def require_permission(resource: str, action: str):
     """Create a dependency that checks for specific permission"""
     def check_permission(current_user: User = Depends(require_admin)):
@@ -5232,13 +5223,29 @@ async def create_admin(
     user_id = new_user["id"]
     now = datetime.now(timezone.utc)
     
-    # Update the auto-created profile with admin role
-    await update_profile(user_id, {
-        "name": admin_data.name,
-        "role": UserRole.ADMIN.value,
-        "admin_role": admin_data.admin_role.value,
-        "admin_enabled": True,
-    })
+    # Update the auto-created profile with admin role.
+    # Supabase trigger creates the profile row asynchronously, so we retry.
+    profile_updated = False
+    for attempt in range(5):
+        success = await update_profile(user_id, {
+            "name": admin_data.name,
+            "role": UserRole.ADMIN.value,
+            "admin_role": admin_data.admin_role.value,
+            "admin_enabled": True,
+        })
+        if success:
+            # Verify the update actually took effect
+            profile = await fetch_profile(user_id)
+            if profile and profile.get("role") == UserRole.ADMIN.value:
+                profile_updated = True
+                break
+        await asyncio.sleep(0.5 * (attempt + 1))  # backoff: 0.5s, 1s, 1.5s, 2s, 2.5s
+
+    if not profile_updated:
+        logger.error(f"[RBAC] Failed to update profile for new admin {user_id} after 5 attempts")
+        # Clean up: delete the auth user since the profile update failed
+        await delete_auth_user(user_id)
+        raise HTTPException(status_code=500, detail="Failed to configure admin profile. Please try again.")
     
     await log_admin_action(
         super_admin.user_id,

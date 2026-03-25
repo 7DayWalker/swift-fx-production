@@ -373,3 +373,14 @@ All 11 screens are functional with no ComingSoonGate blocks:
 - **Frontend**: `fetchUsers()` now calls both Supabase RPC and `/admin/active-overrides` in parallel, merges override tiers into user list
 - **Result**: Role badges and stats counter (Total/Free/Premium/VIP) now reflect the effective subscription tier
 
+## Admin Creation Bug Fix (Mar 25, 2026)
+
+### Root Cause
+The `create_admin` endpoint was silently failing to update the new admin's profile. After Supabase Auth created the user, a database trigger auto-creates a profile row with `role: "free"`. The subsequent `update_profile()` PATCH call was silently failing (return value not checked), leaving the admin with `role: "free"` and `admin_role: null` — so they never appeared in the admin list.
+
+### Fixes Applied
+1. **Backend**: Added retry loop (5 attempts with backoff) for profile update after admin creation, with verification that the update took effect. If all retries fail, the auth user is deleted and a 500 error is returned.
+2. **Backend**: Removed duplicate `require_super_admin` function definition (was defined twice in server.py)
+3. **Frontend**: Added 15s `Promise.race` timeout on `handleCreateAdmin` to prevent infinite spinner. Improved error messages for timeout and network failures.
+
+
