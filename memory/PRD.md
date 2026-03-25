@@ -53,6 +53,12 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - `academy/lesson.tsx` — Full learning engine with enriched content, TTS, quiz, animations
 - `academy/leaderboard.tsx` — XP rankings with podium
 
+**UI Components (Verified Feb 25, 2026):**
+- `FormattedContent` — Justified text, paragraph breaks, auto-detected Trading Example callouts
+- `ConceptDiagram` — Dynamic diagrams (Risk/Reward, Candlestick, Support/Resistance, Trend, Psychology)
+- `TTSPlayerBasic` — Built-in expo-speech for Free/Premium users
+- `TTSPlayerVIP` — OpenAI TTS for VIP users on Advanced courses
+
 **MongoDB Collections:**
 - `academy_progress` — lesson completions, quiz scores
 - `academy_streaks` — streak data per user
@@ -93,7 +99,7 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - Daily Streak System + XP Economy with farming prevention
 - Streak UI with animated fire badge
 
-### Session 7 (Feb 25, 2026) — Current
+### Session 7 (Feb 25, 2026)
 - **Enriched Content Generation**: GPT-4o generated 132 lessons with structured content
 - **New Sections**: "How to Apply This" (practical steps), "Mini Action Task" (exercises)
 - **Content Quality**: 400-700 words average, real trading examples, psychological insights
@@ -101,6 +107,11 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - **Backend**: Content retrieval endpoint + admin batch generation endpoint
 - **Frontend**: Enriched content display with themed section cards
 - **Testing**: 15/15 backend, 100% frontend (iteration_18)
+
+### Session 8 (Feb 25, 2026)
+- **UI Formatting**: FormattedContent component (justified text, paragraph breaks, Trading Example callouts)
+- **Concept Diagrams**: ConceptDiagram component (Risk/Reward, Candlestick, Support/Resistance, Trend, Psychology)
+- **Verification**: All UI components visually verified via screenshots - rendering correctly
 
 ---
 
@@ -117,4 +128,4 @@ A full-stack trading signals application built with Expo (React Native) frontend
 - Real-time polling for Admin Health widget
 
 ### P3
-- **Refactor server.py** (8500+ lines) into modular FastAPI routers
+- **Refactor server.py** (9000+ lines) into modular FastAPI routers
