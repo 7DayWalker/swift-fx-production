@@ -2706,6 +2706,49 @@ async def get_academy_leaderboard(current_user: User = Depends(require_auth)):
     return {"leaderboard": top, "my_rank": my_rank, "my_xp": (my_entry or {}).get("total_xp", 0)}
 
 
+@api_router.post("/academy/tts")
+async def generate_academy_tts(body: dict, current_user: User = Depends(require_auth)):
+    course_id = body.get("course_id")
+    lesson_id = body.get("lesson_id")
+    text = body.get("text", "")
+    if not course_id or lesson_id is None or not text:
+        raise HTTPException(status_code=400, detail="course_id, lesson_id and text required")
+
+    profile = await fetch_profile(current_user.user_id)
+    role = (profile or {}).get("role", "free")
+    effective = await get_effective_subscription({"id": current_user.user_id, "role": role})
+    is_admin = role in ("admin", "super_admin")
+    if effective != "vip" and not is_admin:
+        raise HTTPException(status_code=403, detail="VIP feature only")
+
+    cache_col = db["academy_tts_cache"]
+    cached = await cache_col.find_one(
+        {"course_id": course_id, "lesson_id": lesson_id}, {"_id": 0}
+    )
+    if cached and cached.get("audio_base64"):
+        return {"audio_base64": cached["audio_base64"], "cached": True}
+
+    try:
+        from emergentintegrations.llm.openai import OpenAITextToSpeech
+        tts_client = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY"))
+        truncated = text[:4096]
+        audio_base64 = await tts_client.generate_speech_base64(
+            text=truncated, model="tts-1", voice="nova"
+        )
+        await cache_col.update_one(
+            {"course_id": course_id, "lesson_id": lesson_id},
+            {"$set": {
+                "course_id": course_id, "lesson_id": lesson_id,
+                "audio_base64": audio_base64,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        return {"audio_base64": audio_base64, "cached": False}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+
+
 # ===================== USER SUBSCRIPTION INFO ENDPOINT =====================
 @api_router.get("/subscription/status")
 async def get_subscription_status(current_user: User = Depends(require_auth)):

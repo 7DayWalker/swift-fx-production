@@ -12,6 +12,7 @@ export default function AcademyLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[category]" />
       <Stack.Screen name="lesson" />
+      <Stack.Screen name="leaderboard" />
     </Stack>
   );
 }
