@@ -275,7 +275,7 @@ export default function SettingsScreen() {
       setShowDeactivateConfirm(false);
       Alert.alert(
         'Account Deactivation',
-        'Please contact support@swiftfx.app to deactivate your account.',
+        'Please contact support@swiftfx.online to deactivate your account.',
         [{ text: 'OK' }]
       );
     } catch (error: any) {
@@ -291,7 +291,7 @@ export default function SettingsScreen() {
       setShowDeleteConfirm(false);
       Alert.alert(
         'Deletion Request',
-        'Please contact support@swiftfx.app to request account deletion. We will process your request within 30 days.'
+        'Please contact support@swiftfx.online to request account deletion. We will process your request within 30 days.'
       );
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to submit deletion request');

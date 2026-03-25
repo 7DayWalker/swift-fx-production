@@ -150,7 +150,7 @@ export default function SubscriptionScreen() {
       // Web — no IAP available
       Alert.alert(
         'Contact Support',
-        'To upgrade your plan, please use the mobile app for in-app purchase, or contact support@swiftfx.app.',
+        'To upgrade your plan, please use the mobile app for in-app purchase, or contact support@swiftfx.online.',
       );
     }
   };

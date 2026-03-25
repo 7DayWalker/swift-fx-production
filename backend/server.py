@@ -5909,7 +5909,7 @@ class FAQUpdate(BaseModel):
 
 # WhatsApp Support Number
 SUPPORT_WHATSAPP = "+2348169427440"
-SUPPORT_EMAIL = "support@swiftfx.app"
+SUPPORT_EMAIL = "support@swiftfx.online"
 
 # Pre-populated FAQs
 DEFAULT_FAQS = [
@@ -6575,7 +6575,7 @@ You have the right to:
 - Opt-out of marketing communications
 
 **6. Contact Us**
-For privacy inquiries, contact us at support@swiftfx.app
+For privacy inquiries, contact us at support@swiftfx.online
         """
     },
     "terms_of_service": {
@@ -6623,7 +6623,7 @@ Swift FX Signals is not liable for any trading losses or damages resulting from 
 We may update these terms at any time. Continued use constitutes acceptance.
 
 **10. Contact**
-Questions about these terms: support@swiftfx.app
+Questions about these terms: support@swiftfx.online
         """
     },
     "risk_disclaimer": {
@@ -6680,7 +6680,7 @@ By using Swift FX Signals, you acknowledge that:
 - You accept full responsibility for your trading decisions
 - You will not hold Swift FX liable for any losses
 
-**For questions about risk, contact: support@swiftfx.app**
+**For questions about risk, contact: support@swiftfx.online**
         """
     }
 }

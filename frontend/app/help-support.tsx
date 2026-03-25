@@ -316,7 +316,7 @@ export default function HelpSupportScreen() {
         <View style={styles.contactInfo}>
           <Text style={[styles.contactTitle, dynamicStyles.text]}>Email Support</Text>
           <Text style={[styles.contactDesc, dynamicStyles.textSecondary]}>
-            {supportInfo?.email || 'support@swiftfx.app'}
+            {supportInfo?.email || 'support@swiftfx.online'}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
