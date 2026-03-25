@@ -40,6 +40,7 @@ export default function AcademyScreen() {
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
   const hasAccess = (req: string) => {
+    if (isAdminPrivilege) return true;
     if (req === 'free') return true;
     if (req === 'premium') return userTier === 'premium' || userTier === 'vip';
     if (req === 'vip') return userTier === 'vip';

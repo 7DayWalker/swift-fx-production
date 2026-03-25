@@ -387,7 +387,7 @@ export default function LessonScreen() {
   const color = getCategoryColor(category);
   const courseContent = getCourseContent(courseId);
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
-  const isVip = userTier === 'vip';
+  const isVip = userTier === 'vip' || isAdminPrivilege;
 
   // Fetch existing progress
   const fetchProgress = useCallback(async () => {
@@ -404,6 +404,7 @@ export default function LessonScreen() {
   // Tier access check
   const requiredRole = CATEGORY_REQUIRED_ROLE[category] || 'free';
   const hasAccess = () => {
+    if (isAdminPrivilege) return true;
     if (requiredRole === 'free') return true;
     if (requiredRole === 'premium') return userTier === 'premium' || userTier === 'vip';
     if (requiredRole === 'vip') return userTier === 'vip';

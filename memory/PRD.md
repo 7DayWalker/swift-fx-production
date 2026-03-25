@@ -1,435 +1,123 @@
 # Swift FX Signals - Product Requirements Document
 
-## Original Problem Statement
-Professional trading signals mobile app (Expo SDK 54 + React Native) with FastAPI backend, MongoDB data store, and Supabase authentication. Production-grade cross-platform subscription system with iOS/Android In-App Purchases.
-
-## Architecture
-- **Frontend**: Expo SDK 54, Expo Router v6, React 19.1.0, Reanimated v4.1.1, react-native-iap
-- **Backend**: FastAPI + MongoDB (signals, iap_transactions) + Supabase (auth, profiles)
-- **Auth**: Supabase auth with RBAC (Super Admin, Admin, User roles)
-- **Payments**: In-App Purchase only (Stripe removed). iOS + Android IAP configured.
-
-## Signal Lifecycle Engine v3.0 (Feb 26, 2026)
-
-### Major Redesign - Deterministic Auditable Mode
-
-**Architecture:**
-- SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine
-- NOT tick-level real-time execution, NOT broker execution
-- Deterministic: Same inputs always produce same outputs
-- Gap-protected: Price gaps use defined SL/TP/Entry, not jumped prices
-- Auditable: Every closure stores full price trace and source
-
-**Configuration:**
-- Poll interval: 5 seconds (configurable via `SIGNAL_POLL_INTERVAL` env var)
-- Min poll interval: 3 seconds
-- Max poll interval: 300 seconds
-- Single instance enforcement via distributed lock
-
-**Price Sources (NO HARDCODED FALLBACKS):**
-- Forex: frankfurter.app (free API, mid-rate)
-- Gold: goldapi.io → CoinGecko PAX Gold fallback
-- Crypto: CoinGecko
-- If ALL APIs fail for a symbol → symbol is SKIPPED (no fake prices)
-
-**Gap Protection Rules:**
-- Pending activation: Uses DEFINED entry price, not gapped market price
-- SL closure: Uses DEFINED SL price, not gapped market price
-- TP closure: Uses DEFINED TP price, not gapped market price
-- Example: If BUY SL=4111 and price gaps 4200→4100, closes at 4111 (not 4100)
-
-**Audit Trail Fields Stored at Closure:**
-- exit_price, exit_reason
-- pip_size, pip_multiplier, pip_math_trace
-- price_source, poll_timestamp
-- closure_last_price, closure_current_price
-- For activations: activation_price_source, activation_poll_timestamp
-
-**Test Simulation Endpoint:**
-- POST /api/admin/automation/test-simulation
-- Simulates gap scenarios to verify deterministic behavior
-
-## Monetization Model (LOCKED)
-- **PREMIUM**: Premium Forex Signals, Advanced insights, 10 AI analyses/week
-- **VIP**: VIP Signals + Premium included, Unlimited AI, Academy, Fund Management
-- VIP > Premium. VIP inherits all Premium access.
-
-## Official Product IDs
-```
-com.swiftfx.signals.premium.weekly
-com.swiftfx.signals.premium.monthly
-com.swiftfx.signals.premium.yearly
-com.swiftfx.signals.vip.weekly
-com.swiftfx.signals.vip.monthly
-com.swiftfx.signals.vip.yearly
-```
-
-## Entitlement Authority
-- Backend `/api/subscription/status` is the ONLY authority
-- Entitlement derived strictly from MongoDB `iap_transactions`
-- `get_effective_subscription()` unified to use MongoDB (same source)
-- No Supabase profile.role fallback for subscription tier
-- `is_admin` grants feature access, does NOT inflate tier
-- Frontend must NOT unlock content based on local purchase state
-
-## Production Readiness (Completed Feb 22, 2026)
-
-### Production Fixes Applied
-- [x] Fix 1: Google mock expiry removed — rejects if no expiryTimeMillis
-- [x] Fix 2: APPLE_ENVIRONMENT has no default — fails fast if not set
-- [x] Fix 3: Unified MongoDB entitlement resolution across ALL endpoints
-- [x] Fix 4: MongoDB indexes created on startup (10 indexes across 6 collections)
-- [x] Fix 5: CORS cleaned — env-var-driven, no localhost/preview/regex
-- [x] Fix 6: Critical env vars fail fast (SUPABASE_URL, SERVICE_KEY, EMERGENT_LLM_KEY)
-- [x] Fix 7: /api/health endpoint added
-- [x] Testing: 17/17 backend tests passed (iteration_8)
-
-### Required Production Environment Variables
-```
-MONGO_URL=<production_mongo_uri>
-DB_NAME=swiftfx_db
-SUPABASE_URL=<supabase_project_url>
-SUPABASE_SERVICE_ROLE_KEY=<supabase_service_key>
-EMERGENT_LLM_KEY=<llm_key>
-APPLE_SHARED_SECRET=<app_store_shared_secret>
-APPLE_BUNDLE_ID=com.swiftfx.signals
-APPLE_ENVIRONMENT=production
-GOOGLE_SERVICE_ACCOUNT_JSON=<service_account_json>
-GOOGLE_PACKAGE_NAME=com.swiftfx.signals
-CORS_ORIGINS=<production_frontend_url>
-```
-
-## Pricing Authority
-- Store (Apple/Google) is the ONLY pricing authority
-- Backend `/api/subscription/plans` returns metadata only (no pricing fields)
-- Frontend uses `react-native-iap.getSubscriptions()` → `localizedPrice`
-- Loading spinner shown when store products unavailable
-
-## Prioritized Backlog
-
-### P1 — Full IAP End-to-End Test
-- Build native APK via EAS
-- Test purchase flow on Android internal testing + iOS TestFlight
-- Verify receipt validation with Apple/Google
-- Test restore purchases + subscription expiry
-
-### P2 — Production Infrastructure
-- Persistent backend domain
-- FCM/APNs production push notification credentials
-- OAuth production redirect URLs
-
-### P3 — Investment Tier Features
-- Fund management, investor dashboard, fund performance tracking
-
-### P4 — Admin Enhancements
-- Support ticket system, referral tracking
-
-## Production Hardening (Completed Feb 26, 2026)
-
-### Security & Performance Fixes Applied
-- [x] Removed legacy `/api/iap/status` endpoint (use `/api/subscription/status`)
-- [x] Removed disabled webhook endpoints (`/webhooks/apple`, `/webhooks/google`)
-- [x] Fixed unbounded MongoDB queries: `to_list(None)` → `to_list(10000)` for device_tokens
-- [x] Optimized dashboard stats: Replaced in-memory loop with MongoDB aggregation pipeline
-- [x] CORS validation: Origins must be valid URLs (http:// or https://), logged at startup
-- [x] Fixed `/api/support/info` endpoint crash for unauthenticated users
-
-### Admin & User Features Verified
-All 11 screens are functional with no ComingSoonGate blocks:
-- Admin Fund Applications (`/admin/fund-applications.tsx`)
-- Admin Referrals (`/admin/referrals.tsx`)
-- Fund Management (`/fund-management.tsx`)
-- Help & Support (`/help-support.tsx`)
-
-## Legal Links — External Browser (March 2026)
-- All Privacy Policy / Terms / Risk Disclaimer links now open `https://swiftfx.online/{privacy-policy,terms,risk-disclaimer}` via `Linking.openURL`
-- Replaced inline modal (settings.tsx) with direct Linking call
-- Files changed: `settings.tsx`, `app/(auth)/register.tsx`, `subscription.tsx`
-
-## Apple Server Notifications V2 Webhook (Completed Mar 2026)
-
-### Endpoint: POST /api/webhooks/apple
-
-**Security Model (V2 — JWS-based, NO shared secret):**
-- Apple V2 notifications are JWS compact serializations: `header.payload.signature`
-- Header contains `x5c` certificate chain (Apple-signed)
-- Algorithm: ES256 (ECDSA with P-256 + SHA-256)
-- Server verifies: cert chain integrity + JWS signature against leaf cert public key
-- Root cert CN must contain "Apple" (basic chain pinning)
-- Tampered/forged notifications return HTTP 401
-
-**Notification types handled:**
-- SUBSCRIBED → upgrades user role in MongoDB + Supabase
-- DID_RENEW → same as SUBSCRIBED (re-activates)
-- DID_CHANGE_RENEWAL_STATUS → updates auto_renew flag in MongoDB
-- DID_FAIL_TO_RENEW → sets billing_issue status in MongoDB
-- EXPIRED / GRACE_PERIOD_EXPIRED → downgrades user to free tier
-- REFUND → revokes access, downgrades to free tier
-- REVOKE → same as REFUND (family sharing)
-- DID_CHANGE_RENEWAL_PREF → records plan change in MongoDB
-
-**Supabase update:** Only `role` field is updated (only column that exists in profiles table).
-**MongoDB:** `iap_transactions` is the entitlement authority — all state stored there.
-**Audit trail:** Every notification stored in `audit_logs` collection with payload hash.
-
-**Tested:** 7/7 tests passed (missing field → 400, tampered JWS → 401, all notification types → 200 + Supabase 204)
-
-**App Store Connect Configuration:**
-- Webhook URL: `https://<railway-domain>/api/webhooks/apple`
-- Version: V2
-- No shared secret needed (pure JWS cryptographic verification)
-
-
-- Fixed expo-router/internal module resolution issues for web preview
-- Created shims in `node_modules/expo-router/internal/` for:
-  - `routing.js` → redirects to matchers, getRoutesCore, sortRoutes
-  - `testing.js` → redirects to testing-library/context-stubs
-  - `utils.js` → redirects to utils/url
-- Web preview now working at https://rbac-audit-logs.preview.emergentagent.com
-
-## Premium/VIP Upgrade UX (Completed Mar 24, 2026)
-
-### UpgradeKit.tsx — Shared Premium UI Components
-- `LockedSignalBody`: Blurred price preview + benefit checklist + pulsing CTA (used in locked signal cards)
-- `UpgradeBanner`: Compact gold-accented banner (used on dashboard for free users)
-- `BenefitChecklist`, `UrgencyLine`, `CtaButton`, `BlurredPricePreview`: Composable sub-components
-- Pulsing CTA animation via `useCtaPulse()` (6s interval, native driver)
-
-### Files Updated
-- `app/(tabs)/signals.tsx`: Locked cards now use `<LockedSignalBody>` with blurred preview + animated CTA → routes to `/subscription`
-- `app/(tabs)/dashboard.tsx`: Premium card layout with category chips, state badges, left accent stripes + `<UpgradeBanner>`
-- `src/components/UpgradeKit.tsx`: New shared component library
-
-## Test Credentials
-- VIP user: paradoxella@gmail.com / Grace1992@
-- Admin: ellapauledache@gmail.com / Grace1992@
-
-## AI Chart Analyzer Upgrade (Completed Mar 24, 2026)
-
-### Backend Enhancements
-- `/api/ai/analyze` now returns: `analysis_id`, `trade_bias` (BUY/SELL/WAIT), `confidence_score` (0-100), `analysis_text`, `detected_pattern`, plus original fields
-- Every analysis auto-saved to MongoDB `ai_analyses` collection with: user_id, pair, timeframe, trade_bias, confidence_score, analysis_text, image_snapshot (truncated 200KB), created_at
-- New `/api/ai/history` — paginated, sorted newest-first, excludes heavy image_snapshot in list view
-- New `/api/ai/history/{analysis_id}` — full detail including image_snapshot for reopening past analyses
-- Usage enforcement: weekly counter + 7-day auto-reset (stored in Supabase profiles)
-
-### Frontend Enhancements (`app/(tabs)/ai.tsx`)
-- **TradeBiasBadge**: Prominent BUY (green) / SELL (red) / WAIT (amber) badge with directional icon
-- **ConfidenceMeter**: Animated horizontal bar (0-100%) with color gradient (green/amber/red)
-- **AnalyzingProgress**: 4-step progress (Uploading → Analyzing → Generating Insight → Completed) with animated pulse
-- **SuccessFlash**: Spring scale-in checkmark animation on analysis completion
-- **Recent Analyses**: Collapsible history section showing past analyses with pair, bias, confidence, pattern, time ago
-- **Tap-to-reopen**: Tapping history card fetches full saved result (including chart image) and displays it
-- **UpgradeNudge**: Conversion card ("Upgrade to VIP for unlimited AI analyses") shown to non-VIP users after results
-- **Detected Pattern**: Shows chart pattern name (Double Top, Head and Shoulders, etc.) when identified
-
-### Testing
-- 10/10 backend tests passed (auth, pagination, field validation, persistence, detail endpoint)
-- Legacy duplicate `/api/ai/history` endpoint removed (was conflicting with new paginated version)
-- Test file: `/app/backend/tests/test_ai_analyzer_upgrade.py`
-
-## AI Analysis Sharing (Completed Mar 24, 2026)
-
-### Backend
-- `POST /api/ai/share/{analysis_id}` — generates a 16-char `share_token`, stores in doc, idempotent (reuses existing token)
-- `GET /api/ai/shared/{share_token}` — public endpoint (no auth), returns analysis without user_id/image_snapshot, increments view_count
-- `POST /api/ai/share/{analysis_id}/community` — creates community post with `post_type: "ai_analysis"`, includes pair, bias, confidence, pattern
-
-### Frontend (`ai.tsx`)
-- **Share button** in result header (share-outline icon) opens bottom sheet modal
-- **ShareModal**: slide-up sheet with 3 options:
-  - Copy Link — generates public URL via share endpoint, copies to clipboard with success feedback
-  - Native Share — uses RN Share API for Twitter/WhatsApp/Telegram with formatted message
-  - Post to Community — publishes analysis summary to community feed with confirmation state
-- Modal styled as dark bottom sheet with smooth spring animation
-
-### Testing
-- 13/13 backend tests passed (auth, token generation, idempotency, public view, data exclusion, view_count, community post, content validation)
-- Test file: `/app/backend/tests/test_ai_share_endpoints.py`
-
-## Signal History Screen Fix + Enhancements (Completed Mar 24, 2026)
-
-### Bug Fixed
-- **Root cause**: `SignalContext.refreshHistory()` used mismatched property names (`winning_trades` vs `winning_signals`, `average_pips` vs `avg_pips_per_trade`, hardcoded `best_trade: 0`, `worst_trade: 0`, missing `breakeven_signals`). Frontend read the correct keys but context stored wrong ones, so all breakdown stats showed 0.
-- **Fix**: Rewrote `signal-history.tsx` to fetch directly from backend `/api/signals/history/stats` endpoint which returns all correct data.
-
-### Backend Enhancements
-- `winning_streak`: Consecutive wins from most recent closed signal
-- `monthly_performance`: Array of { month, pips, wins, losses } for last 6 months
-
-### Frontend Enhancements
-- **Winning Streak Badge**: Animated pulse badge when streak >= 3 ("3 Wins in a Row - On Fire!")
-- **Mini Monthly Bar Chart**: Animated bar chart showing monthly pips, wins/losses per month
-- **Last 5 Trades Quick Summary**: Compact list with pair, direction, date, pip result, color-coded dots
-- **Green/Red Gradient Signal Cards**: Left border stripe colored by outcome, subtle gradient overlay
-
-### Testing
-- 26/26 backend tests passed (all stats fields, winning_streak, monthly_performance, access control, data integrity)
-- Test file: `/app/backend/tests/test_signal_history_stats.py`
-
-## Admin Backend Health Widget (Completed Mar 24, 2026)
-
-### Backend
-- `GET /api/admin/health` — admin-only endpoint returning 6 fields:
-  - `engine_status`: Running / Paused / Disabled
-  - `engine_detail`: Pause reason text (if any)
-  - `engine_error_count`: Current error count
-  - `last_signal_time`: ISO datetime of most recent signal
-  - `api_response_ms`: Round-trip latency measured server-side
-  - `mongo_connected`: Boolean ping check
-
-### Frontend (`(admin)/dashboard.tsx`)
-- 4 compact health cards in a 2x2 grid between AI Analyses and Quick Actions
-- Color-coded status dots: green (healthy), yellow (paused), red (down/error)
-- API latency color threshold: <500ms green, <1000ms yellow, 1000ms+ red
-- Refreshes on pull-to-refresh along with admin stats
-
-### Testing
-- 18/18 backend tests passed (auth denial, all 6 fields, value validation, response structure)
-- Test file: `/app/backend/tests/test_admin_health.py`
-
-
-## Trading Asset Expansion (Verified Mar 24, 2026)
-
-### Centralized Trading Pairs Constants
-- New file: `/app/frontend/src/constants/tradingPairs.ts`
-- 26 total trading pairs across 4 categories:
-  - **Metals** (4): XAU/USD (Gold), XAG/USD (Silver), XPT/USD (Platinum), XPD/USD (Palladium)
-  - **Forex** (8): EUR/USD, GBP/USD, GBP/JPY, USD/JPY, USD/CHF, AUD/USD, USD/CAD, NZD/USD
-  - **Indices** (7): US30 (Dow), US100 (NASDAQ), SPX500, GER40, UK100, JP225, HK50
-  - **Crypto** (7): BTC/USD, ETH/USD, SOL/USD, BNB/USD, XRP/USD, ADA/USD, DOGE/USD
-- Priority pairs for quick access: XAU/USD, XAG/USD, EUR/USD, GBP/USD, GBP/JPY, US30, US100, BTC/USD, ETH/USD
-
-### PairPicker Component
-- New file: `/app/frontend/src/components/PairPicker.tsx`
-- Reusable component with priority quick-access row + categorized expandable sections
-- Integrated into:
-  - Admin Signal Management (Create + Edit modals) — `/app/frontend/app/(admin)/signals.tsx`
-  - AI Chart Analyzer — `/app/frontend/app/(tabs)/ai.tsx`
-- Replaces old static pair lists
-
-### Verification
-- Visually confirmed PairPicker rendering in Admin Edit Signal modal (screenshot verified)
-- AI Analyzer screen shows correct default pair and PairPicker integration
-- Backend healthy, all API endpoints operational
-
-## Admin Subscription Override System (Mar 24, 2026)
-
-### Backend
-- **New endpoints**:
-  - `POST /api/admin/override-subscription` — Grant temporary override (SUPER_ADMIN only)
-  - `POST /api/admin/revoke-override` — Revoke active override (SUPER_ADMIN only)
-  - `GET /api/admin/override-status/{user_id}` — Check override status (any admin)
-  - `GET /api/admin/override-logs/{user_id}` — Immutable audit logs (SUPER_ADMIN only)
-- **New `require_super_admin` dependency**: Rejects all non-SUPER_ADMIN users with 403
-- **Subscription resolution modified**: Override check inserted between admin role check and IAP transaction lookup
-- **Validation**: tier must be free/premium/vip, duration_days 1-30, user must exist
-- **Auto-expiry**: No manual cleanup needed; `get_active_override()` rejects expired overrides
-
-### New MongoDB Collections
-- `subscription_overrides`: `{user_id, tier, is_active, expires_at, granted_by, granted_at}`
-- `subscription_override_logs`: Immutable audit trail `{log_id, action, performed_by, target_user, tier, duration_days, expires_at, timestamp}`
-
-### Frontend
-- Override controls in User Management modal (SUPER_ADMIN only)
-- Buttons: "Premium 7d", "VIP 7d", "Revoke"
-- Active override status display with tier badge and expiry
-- Override History modal with GRANTED/REVOKED audit log entries
-- AuthContext updated to expose `admin_role` for SUPER_ADMIN detection
-
-### Testing
-- 21/21 backend tests passed (test file: `/app/backend/tests/test_subscription_override.py`)
-- Frontend verification: all controls visible and functional for SUPER_ADMIN
-- Test report: `/app/test_reports/iteration_13.json`
-
-## Read-Only Override View & Source Labels (Mar 24, 2026)
-
-### Backend Changes
-- `GET /api/admin/override-status/{user_id}`: Now returns `source` field (`"override"` when active, `"store"` when not)
-- `GET /api/admin/override-logs/{user_id}`: Access changed from SUPER_ADMIN-only to any admin; added pagination (`page`, `limit`, `total`)
-- `POST /api/admin/override-subscription` and `POST /api/admin/revoke-override`: Remain SUPER_ADMIN only
-
-### Frontend Changes
-- Override section now visible to ALL admins (was SUPER_ADMIN only)
-- Non-SUPER_ADMIN admins see: READ-ONLY badge, override status, source label, "Managed by Super Admin" note, View History button
-- Non-SUPER_ADMIN admins do NOT see: Grant Premium, Grant VIP, Revoke buttons
-- Source labels: "Source: Override (expires in X days)" or "Source: App Store / Google Play Subscription"
-- SUPER_ADMIN view: Same source labels + full controls
-
-### Testing
-- 15/15 backend tests passed: `/app/test_reports/iteration_14.json`
-
-
-## Old Role Selector Cleanup (Mar 24, 2026)
-- Removed redundant "Select New Role" (FREE/PREMIUM/VIP cards) + "Update Role" button from User Management modal
-- Modal title changed from "Change User Role" to "Manage User"
-- Cleaned up unused state (`selectedRole`, `isUpdating`), function (`handleUpdateRole`), constant (`ROLES`), and 9 unused styles
-- Override section now the sole tier management interface in the modal
-- Screenshot verified: clean modal with user info + override controls only
-
-## User List Effective Tier Fix (Mar 25, 2026)
-- **Bug**: User Management list showed Supabase profile role instead of effective tier (ignoring overrides)
-- **Backend**: Added `GET /api/admin/active-overrides` — returns all active, non-expired overrides as `{user_id: tier}` map
-- **Frontend**: `fetchUsers()` now calls both Supabase RPC and `/admin/active-overrides` in parallel, merges override tiers into user list
-- **Result**: Role badges and stats counter (Total/Free/Premium/VIP) now reflect the effective subscription tier
-
-## Admin Creation Bug Fix (Mar 25, 2026)
-
-### Root Cause
-The `create_admin` endpoint was silently failing to update the new admin's profile. After Supabase Auth created the user, a database trigger auto-creates a profile row with `role: "free"`. The subsequent `update_profile()` PATCH call was silently failing (return value not checked), leaving the admin with `role: "free"` and `admin_role: null` — so they never appeared in the admin list.
-
-### Fixes Applied
-1. **Backend**: Added retry loop (5 attempts with backoff) for profile update after admin creation, with verification that the update took effect. If all retries fail, the auth user is deleted and a 500 error is returned.
-2. **Backend**: Removed duplicate `require_super_admin` function definition (was defined twice in server.py)
-3. **Frontend**: Added 15s `Promise.race` timeout on `handleCreateAdmin` to prevent infinite spinner. Improved error messages for timeout and network failures.
-
-### Additional Resilience Fixes (Mar 25, 2026 - Fork)
-**Root cause of recurring spinner**: The `supabase.auth.getSession()` call in the axios request interceptor (`api.ts`) had no timeout. If the Supabase client got into a stuck state (common with unstable ngrok tunnel), this call would hang indefinitely, preventing the API request from ever being sent.
-
-**Fixes applied:**
-1. **API interceptor timeout** (`api.ts`): Wrapped `supabase.auth.getSession()` in a `Promise.race` with a 5-second timeout. If session retrieval hangs, the request proceeds without auth (will fail with 401 instead of hanging).
-2. **Create admin safety timeout** (`admin-management.tsx`): Added a 20-second safety `setTimeout` that resets the `creating` spinner and alerts the user, regardless of what happens with the API call. Cleared in the `finally` block on normal completion.
-3. **Non-blocking list refresh**: Changed `await fetchData(true)` to `fetchData(true)` (fire-and-forget) after admin creation so the spinner reset is not blocked by the list refresh.
-
-**Files changed:** `frontend/src/services/api.ts`, `frontend/app/(admin)/admin-management.tsx`
-**Status:** VERIFIED - E2E tested twice via screenshot tool with console log capture. Admin creation succeeds and list updates correctly.
-
-## Pending Tasks
-- P1: End-to-End IAP testing on physical devices
-- P2: Reliable alternative Gold price API
-- P2: Push notifications on new signal creation
-- P2: Leaderboard/feed of top shared AI analyses
-- P2: Real-time polling for Admin Health widget
-- P3: Refactor server.py (8500+ lines monolith)
-
-## Admin Capability Tier Override System (Mar 25, 2026 - Fork)
-
-### Goal
-SUPER_ADMIN and ADMIN automatically get VIP-level feature access while showing real billing tier.
-
-### Backend Changes (`server.py`)
-- Added `billing_tier`, `capability_tier`, `capability_source` to `/api/subscription/status` response
-- `billing_tier` = pure store/IAP tier (no override, no admin)
-- `capability_tier` = if admin -> "vip", else -> effective (IAP + override)
-- `capability_source` = "admin_privilege" for admins, "subscription" for normal users
-- Feature flags (`fund_management`, `academy`, `image_uploads`, `ai_limit`) now derived from `capability_tier`
-
-### Frontend Changes
-- **SubscriptionContext**: Maps `capability_tier` to `subscription` field for backward compat. Added `isAdminPrivilege` helper.
-- **SubscriptionBadge**: Shows shield icon + "Admin" tag for admin privilege users.
-- **SubscriptionCard**: Shows "FREE (Admin Privilege: VIP Access)" purple banner for admins, hides upgrade button.
-- **Subscription page**: Shows admin privilege label, hides billing cycle + plan cards + manage subscription for admins.
-- **Dashboard**: Uses `capability_tier` for `isFreeUser` -> no upgrade banner for admins.
-- **AI tab**: Uses `capability_tier` for `showUpgradeNudge` -> no upgrade nudge for admins.
-
-### Files Changed
-- `backend/server.py` (subscription/status endpoint)
-- `frontend/src/context/SubscriptionContext.tsx`
-- `frontend/src/components/SubscriptionBadge.tsx`
-- `frontend/app/subscription.tsx`
-- `frontend/app/(tabs)/dashboard.tsx`
-- `frontend/app/(tabs)/ai.tsx`
-
-### Testing Status
-- **VERIFIED** - Backend: 15/16 tests passed (test_capability_tier_override.py), Frontend: 100% verified
-- Test report: `/app/test_reports/iteration_15.json`
+## Overview
+A full-stack trading signals application built with Expo (React Native) frontend and FastAPI backend. Features trading signals, AI analysis, community feed, multi-level admin dashboard, and a gamified Academy learning system.
+
+## Tech Stack
+- **Frontend**: Expo (React Native) with TypeScript
+- **Backend**: FastAPI (Python) — monolith in `server.py`
+- **Auth**: Supabase (Postgres)
+- **DB**: MongoDB (signals, analyses, academy, audit logs)
+- **AI**: OpenAI GPT-4o via Emergent LLM Key
+- **TTS**: OpenAI TTS via Emergent LLM Key (VIP), expo-speech (Free/Premium)
+
+## User Tiers
+- **Free**: Basic signals, beginner academy courses
+- **Premium**: Advanced signals, intermediate academy
+- **VIP**: All features, advanced academy, AI TTS narration
+- **Admin**: Full VIP access + admin panel
+
+## Core Features
+
+### 1. Trading Signals System
+- Signal creation/management (admin)
+- Real-time signal display
+- Trading pairs selector
+
+### 2. AI Analyzer
+- GPT-4o powered market analysis
+- Community sharing
+
+### 3. Admin Dashboard
+- RBAC: ADMIN and SUPER_ADMIN roles
+- User management with subscription override
+- Read-only view for regular admins
+- Audit logging for sensitive actions
+
+### 4. Academy System (COMPLETED - Feb 25, 2026)
+Full premium gamified learning engine:
+
+**Backend Endpoints:**
+- `POST /api/academy/lesson-complete` — Mark lesson complete
+- `GET /api/academy/progress` — Get user's academy progress
+- `POST /api/academy/quiz-submit` — Submit quiz with scoring
+- `GET /api/academy/leaderboard` — XP-based rankings
+- `POST /api/academy/tts` — VIP OpenAI TTS with MongoDB caching
+
+**Frontend Screens:**
+- `academy/index.tsx` — Progress widget + category list
+- `academy/[category].tsx` — Course list with progress bars
+- `academy/lesson.tsx` — Full learning engine with:
+  - Sequential lesson locking (N requires N-1 complete)
+  - Lesson completion tracking
+  - Coming Soon video banner (premium placeholder)
+  - Dual-tier TTS (expo-speech free, OpenAI VIP)
+  - Quiz system with randomization, scoring, XP
+  - Key Takeaways cards
+  - Success animations + haptic feedback
+- `academy/leaderboard.tsx` — XP rankings with podium
+
+**Data:**
+- `academyContent.ts` — 24 courses, 150 lessons across 3 tiers
+- `academy_progress` MongoDB collection
+- `academy_tts_cache` MongoDB collection
+
+### 5. Subscription System
+- IAP integration (Apple App Store)
+- Subscription override system for admins
+
+## Key DB Collections (MongoDB)
+- `signals`, `analyses`, `community_posts`
+- `academy_progress` — lesson completions, quiz scores, XP
+- `academy_tts_cache` — cached TTS audio (base64)
+- `subscription_override_logs` — audit trail
+
+## Testing
+- Backend: 24/24 academy tests passing (iteration_16)
+- Frontend: All screens verified via screenshots
+- Test file: `/app/backend/tests/test_academy_endpoints.py`
+
+---
+
+## Completed Work
+
+### Session 1-3 (Previous)
+- Trading signals system
+- AI analyzer with GPT-4o
+- Community feed
+- Admin dashboard with RBAC
+- Subscription override system
+- Trading pairs feature
+
+### Session 4 (Feb 25, 2026)
+- Fixed "Create Admin" infinite spinner
+- Enhanced Admin capability tier UI labeling
+- Updated support email to support@swiftfx.online
+- **Academy Backend**: Progress tracking, lesson completion, quiz scoring, leaderboard, TTS endpoints
+
+### Session 5 (Feb 25, 2026) — Current
+- **Academy Frontend Complete**: All 4 screens implemented
+- Category page with per-course progress bars
+- Lesson page with sequential locking, completion tracking
+- Coming Soon video banner component
+- Dual-tier TTS (expo-speech + OpenAI VIP)
+- Quiz system with scoring, XP, animated results
+- Leaderboard screen with podium + rankings
+- Admin privilege access fix across all academy screens
+- Testing: 24/24 backend tests, frontend verified
+
+---
+
+## Upcoming Tasks (Prioritized)
+
+### P1
+- End-to-End IAP testing on physical devices
+
+### P2
+- Reliable alternative Gold price API
+- Push notifications on new signals
+- Leaderboard/feed of top shared AI analyses
+- Real-time polling for Admin Health widget
+
+### P3
+- **Refactor server.py** (8500+ lines) into modular FastAPI routers

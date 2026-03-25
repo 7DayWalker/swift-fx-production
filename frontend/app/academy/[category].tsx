@@ -45,6 +45,7 @@ export default function CourseListScreen() {
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
   const hasAccess = () => {
+    if (isAdminPrivilege) return true;
     const req = meta.requiredRole;
     if (req === 'free') return true;
     if (req === 'premium') return userTier === 'premium' || userTier === 'vip';
