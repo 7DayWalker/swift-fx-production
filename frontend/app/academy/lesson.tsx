@@ -27,7 +27,212 @@ const CATEGORY_REQUIRED_ROLE: Record<string, 'free' | 'premium' | 'vip'> = {
   beginner: 'free', intermediate: 'premium', advanced: 'vip',
 };
 
-// ─── Coming Soon Video Banner ───
+// ─── Formatted Paragraphs renderer ───
+function FormattedContent({ text, color }: { text: string; color: string }) {
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+  // If no double-newlines, chunk by ~3 sentences
+  const blocks = paragraphs.length > 1
+    ? paragraphs
+    : text.split(/(?<=\.)\s+/).reduce((acc: string[], sentence, i) => {
+        const idx = Math.floor(i / 3);
+        acc[idx] = (acc[idx] || '') + (acc[idx] ? ' ' : '') + sentence;
+        return acc;
+      }, []);
+
+  return (
+    <View>
+      {blocks.map((para, i) => {
+        const trimmed = para.trim();
+        // Detect example callouts
+        const isExample = /^(example|for instance|consider|imagine|let'?s say|scenario)/i.test(trimmed);
+        if (isExample) {
+          return (
+            <View key={i} style={fc.exampleBox}>
+              <View style={fc.exampleHeader}>
+                <Ionicons name="analytics-outline" size={14} color={color} />
+                <Text style={[fc.exampleLabel, { color }]}>Trading Example</Text>
+              </View>
+              <Text style={fc.exampleText}>{trimmed}</Text>
+            </View>
+          );
+        }
+        return <Text key={i} style={fc.para}>{trimmed}</Text>;
+      })}
+    </View>
+  );
+}
+const fc = StyleSheet.create({
+  para: { fontSize: 15, color: '#C0C4CC', lineHeight: 26, textAlign: 'justify', marginBottom: 14 },
+  exampleBox: { backgroundColor: '#141822', borderLeftWidth: 3, borderLeftColor: '#FFD700', borderRadius: 8, padding: 14, marginBottom: 16 },
+  exampleHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  exampleLabel: { fontSize: 12, fontWeight: '700', marginLeft: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  exampleText: { fontSize: 14, color: '#D4D4D4', lineHeight: 24, textAlign: 'justify' },
+});
+
+// ─── Concept Diagram (visual aid based on course topic) ───
+function ConceptDiagram({ courseId, lessonTitle, color }: { courseId: string; lessonTitle: string; color: string }) {
+  const title = lessonTitle.toLowerCase();
+  const cid = courseId.toLowerCase();
+
+  // Risk/Reward diagram
+  if (cid.includes('risk') || title.includes('risk') || title.includes('stop-loss') || title.includes('position size')) {
+    return (
+      <View style={cd.card}>
+        <Text style={cd.title}>Risk / Reward Ratio</Text>
+        <View style={cd.barWrap}>
+          <View style={cd.barRow}>
+            <Text style={cd.barLabel}>Risk</Text>
+            <View style={[cd.bar, { flex: 1, backgroundColor: '#FF6B6B30' }]}>
+              <View style={[cd.barFill, { width: '100%', backgroundColor: '#FF6B6B' }]} />
+            </View>
+            <Text style={[cd.barVal, { color: '#FF6B6B' }]}>1x</Text>
+          </View>
+          <View style={cd.barRow}>
+            <Text style={cd.barLabel}>Reward</Text>
+            <View style={[cd.bar, { flex: 1, backgroundColor: '#00D4AA20' }]}>
+              <View style={[cd.barFill, { width: '100%', backgroundColor: '#00D4AA' }]} />
+            </View>
+            <Text style={[cd.barVal, { color: '#00D4AA' }]}>2-3x</Text>
+          </View>
+        </View>
+        <Text style={cd.caption}>Always target a minimum 1:2 risk-to-reward ratio</Text>
+      </View>
+    );
+  }
+
+  // Candlestick / Chart pattern
+  if (cid.includes('chart') || cid.includes('candle') || title.includes('chart') || title.includes('candlestick') || title.includes('pattern')) {
+    const bars = [40, 55, 45, 65, 60, 75, 70, 85, 80, 90];
+    return (
+      <View style={cd.card}>
+        <Text style={cd.title}>Price Action Visualization</Text>
+        <View style={cd.chartWrap}>
+          {bars.map((h, i) => (
+            <View key={i} style={cd.candleCol}>
+              <View style={[cd.candle, { height: h, backgroundColor: i > 0 && bars[i] >= bars[i-1] ? '#00D4AA' : '#FF6B6B' }]} />
+            </View>
+          ))}
+        </View>
+        <View style={cd.chartLabels}>
+          <Text style={cd.chartLabel}>Open</Text>
+          <Ionicons name="arrow-forward" size={12} color="#8A8D98" />
+          <Text style={cd.chartLabel}>Time</Text>
+          <Ionicons name="arrow-forward" size={12} color="#8A8D98" />
+          <Text style={cd.chartLabel}>Close</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Support / Resistance
+  if (title.includes('support') || title.includes('resistance') || title.includes('level') || cid.includes('support')) {
+    return (
+      <View style={cd.card}>
+        <Text style={cd.title}>Support & Resistance Levels</Text>
+        <View style={cd.levelWrap}>
+          <View style={[cd.levelLine, { borderColor: '#FF6B6B' }]}>
+            <Text style={[cd.levelText, { color: '#FF6B6B' }]}>Resistance $1.2450</Text>
+          </View>
+          <View style={cd.priceZone}>
+            <Ionicons name="swap-vertical" size={20} color={color} />
+            <Text style={[cd.priceText, { color }]}>Price Action Zone</Text>
+          </View>
+          <View style={[cd.levelLine, { borderColor: '#00D4AA' }]}>
+            <Text style={[cd.levelText, { color: '#00D4AA' }]}>Support $1.2380</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Trend / Moving average / Momentum
+  if (title.includes('trend') || title.includes('moving') || title.includes('momentum') || cid.includes('trend') || cid.includes('moving')) {
+    return (
+      <View style={cd.card}>
+        <Text style={cd.title}>Trend Direction</Text>
+        <View style={cd.trendWrap}>
+          <View style={cd.trendItem}>
+            <Ionicons name="trending-up" size={28} color="#00D4AA" />
+            <Text style={[cd.trendLabel, { color: '#00D4AA' }]}>Uptrend</Text>
+            <Text style={cd.trendSub}>Higher highs & higher lows</Text>
+          </View>
+          <View style={cd.trendDivider} />
+          <View style={cd.trendItem}>
+            <Ionicons name="remove-outline" size={28} color="#FFD700" />
+            <Text style={[cd.trendLabel, { color: '#FFD700' }]}>Sideways</Text>
+            <Text style={cd.trendSub}>Range-bound movement</Text>
+          </View>
+          <View style={cd.trendDivider} />
+          <View style={cd.trendItem}>
+            <Ionicons name="trending-down" size={28} color="#FF6B6B" />
+            <Text style={[cd.trendLabel, { color: '#FF6B6B' }]}>Downtrend</Text>
+            <Text style={cd.trendSub}>Lower highs & lower lows</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Psychology / Emotions
+  if (cid.includes('psych') || title.includes('psychol') || title.includes('emotion') || title.includes('discipline') || title.includes('fear') || title.includes('greed')) {
+    return (
+      <View style={cd.card}>
+        <Text style={cd.title}>Trader Psychology Cycle</Text>
+        <View style={cd.cycleWrap}>
+          {[
+            { icon: 'happy-outline', label: 'Optimism', color: '#00D4AA' },
+            { icon: 'rocket-outline', label: 'Excitement', color: '#FFD700' },
+            { icon: 'warning-outline', label: 'Anxiety', color: '#FF8C00' },
+            { icon: 'sad-outline', label: 'Fear', color: '#FF6B6B' },
+            { icon: 'refresh-outline', label: 'Recovery', color: '#00D4AA' },
+          ].map((step, i) => (
+            <View key={i} style={cd.cycleStep}>
+              <View style={[cd.cycleIcon, { backgroundColor: `${step.color}20` }]}>
+                <Ionicons name={step.icon as any} size={18} color={step.color} />
+              </View>
+              <Text style={[cd.cycleLabel, { color: step.color }]}>{step.label}</Text>
+              {i < 4 && <Ionicons name="chevron-forward" size={14} color="#4A4F5E" style={{ marginHorizontal: 2 }} />}
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // Default: general concept card for any other topic
+  return null;
+}
+
+const cd = StyleSheet.create({
+  card: { backgroundColor: '#141822', borderRadius: 14, padding: 18, marginBottom: 18, borderWidth: 1, borderColor: '#2A2F3E' },
+  title: { fontSize: 13, fontWeight: '700', color: '#8A8D98', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14, textAlign: 'center' },
+  caption: { fontSize: 12, color: '#8A8D98', textAlign: 'center', marginTop: 10, fontStyle: 'italic' },
+  barWrap: { gap: 10 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  barLabel: { width: 55, fontSize: 12, color: '#8A8D98', fontWeight: '600' },
+  bar: { height: 18, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 4 },
+  barVal: { width: 35, fontSize: 13, fontWeight: 'bold', textAlign: 'right' },
+  chartWrap: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', height: 100, gap: 6, paddingVertical: 8 },
+  candleCol: { alignItems: 'center', justifyContent: 'flex-end' },
+  candle: { width: 14, borderRadius: 3 },
+  chartLabels: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 },
+  chartLabel: { fontSize: 11, color: '#8A8D98' },
+  levelWrap: { gap: 12 },
+  levelLine: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 6, padding: 10, alignItems: 'center' },
+  levelText: { fontSize: 13, fontWeight: '600' },
+  priceZone: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8 },
+  priceText: { fontSize: 14, fontWeight: '600' },
+  trendWrap: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  trendItem: { alignItems: 'center', flex: 1 },
+  trendDivider: { width: 1, height: 40, backgroundColor: '#2A2F3E' },
+  trendLabel: { fontSize: 13, fontWeight: '700', marginTop: 6 },
+  trendSub: { fontSize: 10, color: '#8A8D98', marginTop: 2, textAlign: 'center' },
+  cycleWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
+  cycleStep: { flexDirection: 'row', alignItems: 'center' },
+  cycleIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  cycleLabel: { fontSize: 11, fontWeight: '600', marginLeft: 4 },
+});
 function ComingSoonBanner({ color }: { color: string }) {
   const pulseAnim = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
@@ -623,41 +828,46 @@ export default function LessonScreen() {
 
           {/* Overview — enriched or fallback */}
           {!isQuiz && !contentLoading && (enrichedContent?.overview || lesson.overview) && (
-            <View style={[s.section, { backgroundColor: theme.surface }]}>
+            <View style={[s.section, { backgroundColor: theme.surface, paddingHorizontal: 20 }]}>
               <Text style={[s.sectionLabel, { color: theme.text }]}>Lesson Overview</Text>
-              <Text style={s.overviewText}>{enrichedContent?.overview || lesson.overview}</Text>
+              <FormattedContent text={enrichedContent?.overview || lesson.overview} color={color} />
             </View>
+          )}
+
+          {/* Concept Diagram */}
+          {!isQuiz && !contentLoading && enrichedContent?.generated && (
+            <ConceptDiagram courseId={courseId} lessonTitle={lesson.title} color={color} />
           )}
 
           {/* How to Apply This — enriched content */}
           {!isQuiz && enrichedContent?.how_to_apply && (
-            <View style={[s.section, { backgroundColor: `${color}08`, borderWidth: 1, borderColor: `${color}20` }]}>
+            <View style={[s.section, { backgroundColor: `${color}08`, borderWidth: 1, borderColor: `${color}20`, paddingHorizontal: 20 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <View style={[s.sectionIcon, { backgroundColor: `${color}20` }]}>
                   <Ionicons name="bulb-outline" size={16} color={color} />
                 </View>
                 <Text style={[s.sectionLabel, { color, marginBottom: 0, marginLeft: 8 }]}>How to Apply This</Text>
               </View>
-              <Text style={s.overviewText}>{enrichedContent.how_to_apply}</Text>
+              <FormattedContent text={enrichedContent.how_to_apply} color={color} />
             </View>
           )}
 
           {/* Mini Action Task — enriched content */}
           {!isQuiz && enrichedContent?.mini_action_task && (
-            <View style={[s.actionCard, { borderColor: '#FFD70040' }]}>
+            <View style={[s.actionCard, { borderColor: '#FFD70040', paddingHorizontal: 20 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <View style={[s.sectionIcon, { backgroundColor: '#FFD70020' }]}>
                   <Ionicons name="rocket-outline" size={16} color="#FFD700" />
                 </View>
                 <Text style={[s.sectionLabel, { color: '#FFD700', marginBottom: 0, marginLeft: 8 }]}>Mini Action Task</Text>
               </View>
-              <Text style={[s.overviewText, { color: '#E0E0E0' }]}>{enrichedContent.mini_action_task}</Text>
+              <Text style={s.taskText}>{enrichedContent.mini_action_task}</Text>
             </View>
           )}
 
           {/* Key Takeaways — enriched or fallback */}
           {!isQuiz && ((enrichedContent?.key_takeaways?.length > 0) || (lesson.keyTakeaways && lesson.keyTakeaways.length > 0)) && (
-            <View style={[s.section, { backgroundColor: theme.surface }]}>
+            <View style={[s.section, { backgroundColor: theme.surface, paddingHorizontal: 20 }]}>
               <Text style={[s.sectionLabel, { color: theme.text }]}>Key Takeaways</Text>
               {(enrichedContent?.key_takeaways || lesson.keyTakeaways || []).map((t: string, i: number) => (
                 <View key={i} style={s.bulletRow}>
@@ -878,11 +1088,12 @@ const s = StyleSheet.create({
   durText: { fontSize: 13, color: '#8A8D98' },
   section: { borderRadius: 12, padding: 16, marginBottom: 14 },
   sectionIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  overviewText: { fontSize: 14, color: '#C0C4CC', lineHeight: 24 },
+  overviewText: { fontSize: 15, color: '#C0C4CC', lineHeight: 26, textAlign: 'justify' },
   actionCard: { borderRadius: 12, padding: 16, marginBottom: 14, backgroundColor: '#1A1F2E', borderWidth: 1 },
+  taskText: { fontSize: 15, color: '#E0E0E0', lineHeight: 26, textAlign: 'justify' },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 10 },
-  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7, marginRight: 10 },
-  bulletText: { flex: 1, fontSize: 14, color: '#FFFFFF', lineHeight: 20 },
+  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 9, marginRight: 10 },
+  bulletText: { flex: 1, fontSize: 15, color: '#FFFFFF', lineHeight: 24, textAlign: 'justify' },
   navRow: { marginTop: 8, alignItems: 'center' },
   completeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 10, gap: 8, marginTop: 8 },
   completeBtnText: { fontSize: 15, fontWeight: 'bold', color: '#0A0E17' },
