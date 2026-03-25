@@ -2802,7 +2802,7 @@ async def get_streak_status(current_user: User = Depends(require_auth)):
 
 
 @api_router.get("/academy/lesson-content/{course_id}/{lesson_id}")
-async def get_lesson_content(course_id: str, lesson_id: int, current_user: User = Depends(require_auth)):
+async def get_lesson_content(course_id: str, lesson_id: int):
     col = db["academy_lesson_content"]
     doc = await col.find_one(
         {"course_id": course_id, "lesson_id": lesson_id}, {"_id": 0}

@@ -404,6 +404,7 @@ export default function LessonScreen() {
   const [quizResult, setQuizResult] = useState<{ score: number; total: number; xp: number; passed: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrichedContent, setEnrichedContent] = useState<any>(null);
+  const [contentLoading, setContentLoading] = useState(false);
 
   const category = params.category || 'beginner';
   const courseId = params.course || '';
@@ -426,15 +427,21 @@ export default function LessonScreen() {
 
   // Fetch enriched content when lesson selected
   useEffect(() => {
-    if (selectedLesson === null) { setEnrichedContent(null); return; }
+    if (selectedLesson === null) { setEnrichedContent(null); setContentLoading(false); return; }
     const lesson = courseContent?.lessons.find((l: any) => l.id === selectedLesson);
-    if (!lesson || lesson.type === 'quiz') return;
+    if (!lesson || lesson.type === 'quiz') { setContentLoading(false); return; }
+    let cancelled = false;
+    setContentLoading(true);
     (async () => {
       try {
         const { data } = await api.get(`/academy/lesson-content/${courseId}/${selectedLesson}`);
-        if (data?.generated) setEnrichedContent(data);
-      } catch {}
+        if (!cancelled && data?.generated) setEnrichedContent(data);
+      } catch (err) {
+        console.log('[Academy] Content fetch failed, using static content');
+      }
+      if (!cancelled) setContentLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [selectedLesson, courseId]);
 
   // Tier access check
@@ -600,14 +607,22 @@ export default function LessonScreen() {
           )}
 
           {/* TTS Player for text/video lessons */}
-          {!isQuiz && (enrichedContent?.overview || lesson.overview) && (
+          {!isQuiz && !contentLoading && (enrichedContent?.overview || lesson.overview) && (
             isVip
               ? <TTSPlayerVIP courseId={courseId} lessonId={lesson.id} text={enrichedContent?.overview || lesson.overview} color={color} />
               : <TTSPlayerBasic text={enrichedContent?.overview || lesson.overview} color={color} />
           )}
 
+          {/* Content loading indicator */}
+          {!isQuiz && contentLoading && (
+            <View style={[s.section, { backgroundColor: theme.surface, alignItems: 'center', paddingVertical: 24 }]}>
+              <ActivityIndicator size="small" color={color} />
+              <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 8 }}>Loading lesson content...</Text>
+            </View>
+          )}
+
           {/* Overview — enriched or fallback */}
-          {!isQuiz && (enrichedContent?.overview || lesson.overview) && (
+          {!isQuiz && !contentLoading && (enrichedContent?.overview || lesson.overview) && (
             <View style={[s.section, { backgroundColor: theme.surface }]}>
               <Text style={[s.sectionLabel, { color: theme.text }]}>Lesson Overview</Text>
               <Text style={s.overviewText}>{enrichedContent?.overview || lesson.overview}</Text>
