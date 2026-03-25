@@ -1,0 +1,886 @@
+[
+  {
+    "course_id": "intro-trading",
+    "course_title": "Introduction to Trading",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "What is Trading?",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Types of Financial Markets",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Understanding Market Participants",
+        "type": "text"
+      },
+      {
+        "lesson_id": 4,
+        "title": "How Prices Move",
+        "type": "video"
+      }
+    ]
+  },
+  {
+    "course_id": "chart-basics",
+    "course_title": "Chart Reading Basics",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Introduction to Charts",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Candlestick Anatomy",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Common Candlestick Patterns",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Timeframes Explained",
+        "type": "text"
+      },
+      {
+        "lesson_id": 5,
+        "title": "Reading Price Action",
+        "type": "video"
+      }
+    ]
+  },
+  {
+    "course_id": "risk-management",
+    "course_title": "Risk Management 101",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Why Risk Management Matters",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Position Sizing",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Stop Losses and Take Profits",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "The 1% Rule",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "trading-psychology",
+    "course_title": "Trading Psychology",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "The Trader\\",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Fear and Greed",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Dealing with Losses",
+        "type": "text"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Building Discipline",
+        "type": "video"
+      }
+    ]
+  },
+  {
+    "course_id": "forex-basics",
+    "course_title": "Forex Fundamentals",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "What is Forex?",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Currency Pairs Explained",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Pips, Lots, and Leverage",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "What Moves Currency Prices",
+        "type": "text"
+      },
+      {
+        "lesson_id": 5,
+        "title": "Forex Trading Sessions",
+        "type": "video"
+      }
+    ]
+  },
+  {
+    "course_id": "crypto-basics",
+    "course_title": "Cryptocurrency Fundamentals",
+    "category": "beginner",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "What is Cryptocurrency?",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "How Blockchain Works",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Bitcoin vs Altcoins",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Crypto Wallets and Security",
+        "type": "text"
+      },
+      {
+        "lesson_id": 5,
+        "title": "Crypto Trading Basics",
+        "type": "video"
+      }
+    ]
+  },
+  {
+    "course_id": "technical-analysis",
+    "course_title": "Technical Analysis",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Technical Analysis Foundations",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Market Structure Analysis",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Trend Lines and Channels",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Chart Patterns Deep Dive",
+        "type": "video"
+      },
+      {
+        "lesson_id": 5,
+        "title": "Volume Analysis",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "support-resistance",
+    "course_title": "Support & Resistance",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Understanding S/R Levels",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Identifying Key Levels",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Trading S/R Bounces",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Breakout Trading from S/R",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "fibonacci",
+    "course_title": "Fibonacci Trading",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Fibonacci Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Fibonacci Retracements",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Fibonacci Extensions",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Fibonacci Confluence",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "moving-averages",
+    "course_title": "Moving Averages Mastery",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Types of Moving Averages",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "MA as Dynamic S/R",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "MA Crossover Strategies",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Multiple MA Systems",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "rsi-macd",
+    "course_title": "RSI & MACD Strategies",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "RSI Fundamentals",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "RSI Trading Strategies",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "MACD Fundamentals",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "MACD Divergence Trading",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "breakout-trading",
+    "course_title": "Breakout Trading",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Breakout Trading Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Identifying Breakout Setups",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "False Breakout Recognition",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Breakout Entry Techniques",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "trend-trading",
+    "course_title": "Trend Trading Strategies",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Identifying Trends",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Trend Following Entries",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Trailing Stops in Trends",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Trend Exhaustion Signs",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "swing-trading",
+    "course_title": "Swing Trading",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Swing Trading Fundamentals",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Swing Trade Setups",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Position Sizing for Swings",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Managing Overnight Risk",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "backtesting",
+    "course_title": "Backtesting Strategies",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Why Backtesting Matters",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Manual Backtesting Process",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Analyzing Backtest Results",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Avoiding Curve Fitting",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "trade-management",
+    "course_title": "Trade Management",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Entry Techniques",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Exit Strategies",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Scaling In and Out",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "When to Move to Breakeven",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "news-trading",
+    "course_title": "News Trading",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Economic Calendar Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Trading the News",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Understanding Market Expectations",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "News Trading Risks",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "correlation",
+    "course_title": "Market Correlation",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Correlation Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Currency Correlations",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Using Correlation for Confirmation",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Portfolio Correlation Risk",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "crypto-technical",
+    "course_title": "Crypto Technical Analysis",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Bitcoin Chart Patterns",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Altcoin Analysis",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Crypto Support and Resistance",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Crypto Volume and Liquidity",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "crypto-onchain",
+    "course_title": "On-Chain Analysis",
+    "category": "intermediate",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Introduction to On-Chain Data",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Exchange Flows",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Whale Watching",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "HODL Waves and Supply",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "institutional",
+    "course_title": "Institutional Trading",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "How Institutions Trade",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Order Blocks",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Fair Value Gaps (FVG)",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Liquidity Concepts",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "order-flow",
+    "course_title": "Order Flow Analysis",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Order Flow Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Volume Profile Analysis",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Delta and Cumulative Delta",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Absorption and Exhaustion",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "smart-money",
+    "course_title": "Smart Money Concepts",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Smart Money vs Dumb Money",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Accumulation and Distribution",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Inducement and Manipulation",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Trading with Smart Money",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "liquidity",
+    "course_title": "Liquidity Trading",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Liquidity Fundamentals",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Liquidity Pools",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Trading Liquidity Sweeps",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Advanced Liquidity Concepts",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "market-structure",
+    "course_title": "Market Structure Analysis",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Market Structure Deep Dive",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Multi-Timeframe Structure",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Internal vs External Structure",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Structure-Based Trading",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "algorithmic",
+    "course_title": "Algorithmic Trading Intro",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "What is Algorithmic Trading?",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Types of Trading Algorithms",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Building Your First Algorithm",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Risks of Automated Trading",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "portfolio",
+    "course_title": "Portfolio Management",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Portfolio Theory Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Asset Allocation",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Position Correlation",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Risk Budgeting",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "options",
+    "course_title": "Options Trading",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Options Fundamentals",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Options Greeks",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Basic Options Strategies",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Hedging with Options",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "intermarket",
+    "course_title": "Intermarket Analysis",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Intermarket Relationships",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Currency & Commodity Links",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Risk-On vs Risk-Off",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Using Intermarket Analysis",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "pro-psychology",
+    "course_title": "Pro Trading Psychology",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Elite Trader Mindset",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Performance Under Pressure",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Developing Discipline",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Continuous Improvement",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "defi-trading",
+    "course_title": "DeFi Trading Strategies",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Understanding DeFi",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "DEX Trading",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Yield Farming Basics",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "DeFi Risk Management",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "course_id": "crypto-derivatives",
+    "course_title": "Crypto Derivatives Trading",
+    "category": "advanced",
+    "lessons": [
+      {
+        "lesson_id": 1,
+        "title": "Crypto Futures Explained",
+        "type": "video"
+      },
+      {
+        "lesson_id": 2,
+        "title": "Funding Rates Strategy",
+        "type": "video"
+      },
+      {
+        "lesson_id": 3,
+        "title": "Liquidation and Risk",
+        "type": "video"
+      },
+      {
+        "lesson_id": 4,
+        "title": "Crypto Options Basics",
+        "type": "text"
+      }
+    ]
+  }
+]

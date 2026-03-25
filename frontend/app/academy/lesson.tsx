@@ -403,6 +403,7 @@ export default function LessonScreen() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizResult, setQuizResult] = useState<{ score: number; total: number; xp: number; passed: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enrichedContent, setEnrichedContent] = useState<any>(null);
 
   const category = params.category || 'beginner';
   const courseId = params.course || '';
@@ -422,6 +423,19 @@ export default function LessonScreen() {
   }, [courseId]);
 
   useFocusEffect(useCallback(() => { fetchProgress(); }, [fetchProgress]));
+
+  // Fetch enriched content when lesson selected
+  useEffect(() => {
+    if (selectedLesson === null) { setEnrichedContent(null); return; }
+    const lesson = courseContent?.lessons.find((l: any) => l.id === selectedLesson);
+    if (!lesson || lesson.type === 'quiz') return;
+    (async () => {
+      try {
+        const { data } = await api.get(`/academy/lesson-content/${courseId}/${selectedLesson}`);
+        if (data?.generated) setEnrichedContent(data);
+      } catch {}
+    })();
+  }, [selectedLesson, courseId]);
 
   // Tier access check
   const requiredRole = CATEGORY_REQUIRED_ROLE[category] || 'free';
@@ -586,25 +600,51 @@ export default function LessonScreen() {
           )}
 
           {/* TTS Player for text/video lessons */}
-          {!isQuiz && lesson.overview && (
+          {!isQuiz && (enrichedContent?.overview || lesson.overview) && (
             isVip
-              ? <TTSPlayerVIP courseId={courseId} lessonId={lesson.id} text={lesson.overview} color={color} />
-              : <TTSPlayerBasic text={lesson.overview} color={color} />
+              ? <TTSPlayerVIP courseId={courseId} lessonId={lesson.id} text={enrichedContent?.overview || lesson.overview} color={color} />
+              : <TTSPlayerBasic text={enrichedContent?.overview || lesson.overview} color={color} />
           )}
 
-          {/* Overview */}
-          {!isQuiz && lesson.overview && (
+          {/* Overview — enriched or fallback */}
+          {!isQuiz && (enrichedContent?.overview || lesson.overview) && (
             <View style={[s.section, { backgroundColor: theme.surface }]}>
               <Text style={[s.sectionLabel, { color: theme.text }]}>Lesson Overview</Text>
-              <Text style={s.overviewText}>{lesson.overview}</Text>
+              <Text style={s.overviewText}>{enrichedContent?.overview || lesson.overview}</Text>
             </View>
           )}
 
-          {/* Key Takeaways */}
-          {!isQuiz && lesson.keyTakeaways && lesson.keyTakeaways.length > 0 && (
+          {/* How to Apply This — enriched content */}
+          {!isQuiz && enrichedContent?.how_to_apply && (
+            <View style={[s.section, { backgroundColor: `${color}08`, borderWidth: 1, borderColor: `${color}20` }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View style={[s.sectionIcon, { backgroundColor: `${color}20` }]}>
+                  <Ionicons name="bulb-outline" size={16} color={color} />
+                </View>
+                <Text style={[s.sectionLabel, { color, marginBottom: 0, marginLeft: 8 }]}>How to Apply This</Text>
+              </View>
+              <Text style={s.overviewText}>{enrichedContent.how_to_apply}</Text>
+            </View>
+          )}
+
+          {/* Mini Action Task — enriched content */}
+          {!isQuiz && enrichedContent?.mini_action_task && (
+            <View style={[s.actionCard, { borderColor: '#FFD70040' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View style={[s.sectionIcon, { backgroundColor: '#FFD70020' }]}>
+                  <Ionicons name="rocket-outline" size={16} color="#FFD700" />
+                </View>
+                <Text style={[s.sectionLabel, { color: '#FFD700', marginBottom: 0, marginLeft: 8 }]}>Mini Action Task</Text>
+              </View>
+              <Text style={[s.overviewText, { color: '#E0E0E0' }]}>{enrichedContent.mini_action_task}</Text>
+            </View>
+          )}
+
+          {/* Key Takeaways — enriched or fallback */}
+          {!isQuiz && ((enrichedContent?.key_takeaways?.length > 0) || (lesson.keyTakeaways && lesson.keyTakeaways.length > 0)) && (
             <View style={[s.section, { backgroundColor: theme.surface }]}>
               <Text style={[s.sectionLabel, { color: theme.text }]}>Key Takeaways</Text>
-              {lesson.keyTakeaways.map((t, i) => (
+              {(enrichedContent?.key_takeaways || lesson.keyTakeaways || []).map((t: string, i: number) => (
                 <View key={i} style={s.bulletRow}>
                   <View style={[s.bullet, { backgroundColor: color }]} />
                   <Text style={s.bulletText}>{t}</Text>
@@ -822,7 +862,9 @@ const s = StyleSheet.create({
   typeBadgeText: { fontSize: 12, fontWeight: '600', marginLeft: 4 },
   durText: { fontSize: 13, color: '#8A8D98' },
   section: { borderRadius: 12, padding: 16, marginBottom: 14 },
+  sectionIcon: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   overviewText: { fontSize: 14, color: '#C0C4CC', lineHeight: 24 },
+  actionCard: { borderRadius: 12, padding: 16, marginBottom: 14, backgroundColor: '#1A1F2E', borderWidth: 1 },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 10 },
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7, marginRight: 10 },
   bulletText: { flex: 1, fontSize: 14, color: '#FFFFFF', lineHeight: 20 },

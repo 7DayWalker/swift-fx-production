@@ -2801,6 +2801,147 @@ async def get_streak_status(current_user: User = Depends(require_auth)):
     }
 
 
+@api_router.get("/academy/lesson-content/{course_id}/{lesson_id}")
+async def get_lesson_content(course_id: str, lesson_id: int, current_user: User = Depends(require_auth)):
+    col = db["academy_lesson_content"]
+    doc = await col.find_one(
+        {"course_id": course_id, "lesson_id": lesson_id}, {"_id": 0}
+    )
+    if doc:
+        return doc
+    return {"course_id": course_id, "lesson_id": lesson_id, "generated": False}
+
+
+@api_router.post("/academy/generate-content-batch")
+async def generate_content_batch(current_user: User = Depends(require_auth)):
+    profile = await fetch_profile(current_user.user_id)
+    if not profile or profile.get("admin_role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    import asyncio
+    asyncio.create_task(_run_batch_content_generation())
+    return {"status": "started", "message": "Batch content generation started in background"}
+
+
+async def _generate_single_lesson(course_id: str, course_title: str, lesson_id: int, lesson_title: str, tier: str) -> dict:
+    """Generate enriched content for a single lesson using GPT-4o."""
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+    import uuid
+
+    tier_guidance = {
+        "beginner": "Write as if explaining to someone who has never traded before. Use simple language, everyday analogies, and step-by-step reasoning. Make the reader feel confident and capable of learning.",
+        "intermediate": "Write with strategic depth. Assume the reader knows basic trading concepts like candlesticks, support/resistance, and risk management. Focus on edge-finding, pattern recognition, and building a systematic approach.",
+        "advanced": "Write at institutional and professional level. Assume the reader is experienced with technical and fundamental analysis. Focus on advanced techniques, market microstructure, professional-grade execution, and institutional thinking."
+    }
+
+    prompt = f"""You are a professional trading mentor writing educational content for the "{course_title}" course ({tier} level).
+
+Write a comprehensive lesson titled: "{lesson_title}"
+
+REQUIREMENTS:
+- Minimum 500 words, target 600-700 words for the overview
+- Professional trading mentor tone — authoritative yet approachable
+- NOT motivational quotes, NOT generic finance blog style
+- Include at least one REAL trading example with specific price action scenario
+- Include psychological insight on why this concept matters for traders
+- {tier_guidance.get(tier, tier_guidance["beginner"])}
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{{
+  "overview": "Main lesson content. 500-700 words. Include real trading examples woven naturally into the explanation. Include psychological dimension.",
+  "how_to_apply": "Practical step-by-step guidance titled 'How to Apply This'. 100-150 words. Concrete, actionable steps.",
+  "mini_action_task": "A specific exercise the student should complete right now. 50-80 words. Be precise about what to do.",
+  "key_takeaways": ["takeaway 1", "takeaway 2", "takeaway 3", "takeaway 4"]
+}}"""
+
+    try:
+        chat = LlmChat(
+            api_key=os.environ.get("EMERGENT_LLM_KEY"),
+            session_id=str(uuid.uuid4()),
+            system_message="You are an expert trading educator. Return only valid JSON. No markdown formatting.",
+        )
+        chat = chat.with_model("openai", "gpt-4o")
+        response = await chat.send_message(UserMessage(text=prompt))
+        text = response.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+        import json as json_module
+        content = json_module.loads(text)
+        content["course_id"] = course_id
+        content["lesson_id"] = lesson_id
+        content["course_title"] = course_title
+        content["lesson_title"] = lesson_title
+        content["tier"] = tier
+        content["generated"] = True
+        content["generated_at"] = datetime.now(timezone.utc).isoformat()
+        content["word_count"] = len(content.get("overview", "").split())
+        return content
+    except Exception as e:
+        print(f"[Academy Content] Failed to generate for {course_id}/{lesson_id}: {e}")
+        return None
+
+
+async def _run_batch_content_generation():
+    """Background task: generate content for all lessons."""
+    import json as json_module
+    try:
+        with open("/app/backend/academy_metadata.json") as f:
+            courses = json_module.load(f)
+    except Exception as e:
+        print(f"[Academy Content] Failed to load metadata: {e}")
+        return
+
+    col = db["academy_lesson_content"]
+    total = sum(len(c["lessons"]) for c in courses)
+    done = 0
+    skipped = 0
+    failed = 0
+
+    print(f"[Academy Content] Starting batch generation for {total} lessons across {len(courses)} courses", flush=True)
+
+    for course in courses:
+        cid = course["course_id"]
+        ctitle = course["course_title"]
+        tier = course["category"]
+
+        for lesson in course["lessons"]:
+            lid = lesson["lesson_id"]
+            ltitle = lesson["title"]
+
+            try:
+                existing = await col.find_one({"course_id": cid, "lesson_id": lid})
+                if existing and existing.get("generated"):
+                    done += 1
+                    skipped += 1
+                    print(f"[Academy Content] [{done}/{total}] Skipped {cid}/{lid} (already exists)", flush=True)
+                    continue
+
+                content = await _generate_single_lesson(cid, ctitle, lid, ltitle, tier)
+                if content:
+                    await col.update_one(
+                        {"course_id": cid, "lesson_id": lid},
+                        {"$set": content},
+                        upsert=True,
+                    )
+                    done += 1
+                    print(f"[Academy Content] [{done}/{total}] Generated {cid}/{lid}: {content.get('word_count', 0)} words", flush=True)
+                else:
+                    done += 1
+                    failed += 1
+                    print(f"[Academy Content] [{done}/{total}] FAILED {cid}/{lid}", flush=True)
+            except Exception as e:
+                done += 1
+                failed += 1
+                print(f"[Academy Content] [{done}/{total}] ERROR {cid}/{lid}: {e}", flush=True)
+
+            import asyncio
+            await asyncio.sleep(0.5)
+
+    print(f"[Academy Content] Batch complete: {done} total, {skipped} skipped, {failed} failed", flush=True)
+
+
 @api_router.get("/academy/progress")
 async def get_academy_progress(current_user: User = Depends(require_auth)):
     col = db["academy_progress"]
