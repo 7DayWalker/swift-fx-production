@@ -342,8 +342,8 @@ const qr = StyleSheet.create({
   btnText: { fontSize: 14, fontWeight: 'bold', color: '#0A0E17' },
 });
 
-// ─── Success Animation ───
-function CompletionSuccess({ color }: { color: string }) {
+// ─── Success Animation with XP ───
+function CompletionSuccess({ color, xpData }: { color: string; xpData?: { base_xp: number; bonus_xp: number; total_xp_earned: number; streak_increased: boolean; current_streak: number } | null }) {
   const scale = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: true }).start();
@@ -355,6 +355,23 @@ function CompletionSuccess({ color }: { color: string }) {
         <Ionicons name="checkmark" size={28} color={color} />
       </View>
       <Text style={[succ.text, { color }]}>Lesson Complete!</Text>
+      {xpData && xpData.total_xp_earned > 0 && (
+        <View style={succ.xpWrap}>
+          <Text style={succ.xpText}>+{xpData.total_xp_earned} XP</Text>
+          {xpData.bonus_xp > 0 && (
+            <View style={succ.bonusRow}>
+              <Ionicons name="flame" size={14} color="#FF8C00" />
+              <Text style={succ.bonusText}>+{xpData.bonus_xp} streak bonus</Text>
+            </View>
+          )}
+          {xpData.streak_increased && (
+            <View style={succ.bonusRow}>
+              <Ionicons name="flame" size={14} color="#FF8C00" />
+              <Text style={succ.bonusText}>{xpData.current_streak} day streak!</Text>
+            </View>
+          )}
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -362,6 +379,10 @@ const succ = StyleSheet.create({
   wrap: { alignItems: 'center', paddingVertical: 12 },
   circle: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 2, marginBottom: 8 },
   text: { fontSize: 15, fontWeight: 'bold' },
+  xpWrap: { alignItems: 'center', marginTop: 8 },
+  xpText: { fontSize: 20, fontWeight: 'bold', color: '#FFD700' },
+  bonusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  bonusText: { fontSize: 12, color: '#FF8C00', fontWeight: '600' },
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -377,6 +398,7 @@ export default function LessonScreen() {
   const [completedLessons, setCompletedLessons] = useState<Set<number>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [xpReward, setXpReward] = useState<{ base_xp: number; bonus_xp: number; total_xp_earned: number; streak_increased: boolean; current_streak: number } | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, boolean>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizResult, setQuizResult] = useState<{ score: number; total: number; xp: number; passed: boolean } | null>(null);
@@ -457,11 +479,12 @@ export default function LessonScreen() {
     if (completedLessons.has(lessonId) || completing) return;
     setCompleting(true);
     try {
-      await api.post('/academy/lesson-complete', { course_id: courseId, lesson_id: lessonId });
+      const { data } = await api.post('/academy/lesson-complete', { course_id: courseId, lesson_id: lessonId });
       setCompletedLessons(prev => new Set([...prev, lessonId]));
+      if (data?.xp) setXpReward(data.xp);
       setShowSuccess(true);
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => setShowSuccess(false), 2000);
+      setTimeout(() => { setShowSuccess(false); setXpReward(null); }, 3000);
     } catch {}
     setCompleting(false);
   };
@@ -474,15 +497,17 @@ export default function LessonScreen() {
     const correct = Object.values(quizAnswers).filter(Boolean).length;
     const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
     const passed = pct >= 60;
-    const xp = passed ? pct : 0;
     setQuizSubmitted(true);
-    setQuizResult({ score: correct, total, xp, passed });
     try {
-      await api.post('/academy/quiz-submit', { course_id: courseId, lesson_id: lessonContent.id, score: pct });
-      if (passed) {
+      const { data } = await api.post('/academy/quiz-submit', { course_id: courseId, lesson_id: lessonContent.id, score: pct });
+      const totalXp = data?.xp?.total_xp_earned || 0;
+      setQuizResult({ score: correct, total, xp: totalXp, passed: data?.passed ?? passed });
+      if (data?.passed) {
         setCompletedLessons(prev => new Set([...prev, lessonContent.id]));
       }
-    } catch {}
+    } catch {
+      setQuizResult({ score: correct, total, xp: 0, passed });
+    }
   };
 
   // ─── Navigate to next lesson ───
@@ -616,7 +641,7 @@ export default function LessonScreen() {
           )}
 
           {/* Success Animation */}
-          {showSuccess && <CompletionSuccess color={color} />}
+          {showSuccess && <CompletionSuccess color={color} xpData={xpReward} />}
 
           {/* Mark Complete + Navigation */}
           {!isQuiz && !quizResult && (

@@ -2603,6 +2603,112 @@ async def check_academy_access(current_user: User = Depends(require_auth)):
 # ACADEMY PROGRESS SYSTEM
 # ==============================================================================
 
+async def _get_user_capability(user_id: str) -> str:
+    profile = await fetch_profile(user_id)
+    role = (profile or {}).get("role", "free")
+    effective = await get_effective_subscription({"id": user_id, "role": role})
+    is_admin = role in ("admin", "super_admin")
+    if is_admin:
+        return "vip"
+    return effective
+
+
+async def _update_streak_and_xp(user_id: str, base_xp: int) -> dict:
+    """Core streak logic. Returns streak info and total XP awarded."""
+    streaks = db["academy_streaks"]
+    lb = db["academy_leaderboard"]
+    now_utc = datetime.now(timezone.utc)
+    today_str = now_utc.strftime("%Y-%m-%d")
+
+    doc = await streaks.find_one({"user_id": user_id}, {"_id": 0})
+    if not doc:
+        doc = {"user_id": user_id, "current_streak": 0, "longest_streak": 0,
+               "last_activity_date": None, "streak_shield_used_this_week": False,
+               "shield_week_start": None}
+
+    last_date = doc.get("last_activity_date")
+    current = doc.get("current_streak", 0)
+    longest = doc.get("longest_streak", 0)
+    streak_increased = False
+    shield_used = False
+    bonus_xp = 0
+    milestone_7 = False
+
+    cap = await _get_user_capability(user_id)
+    is_vip = cap == "vip"
+
+    if last_date == today_str:
+        # Already active today — no streak change, just award base XP
+        pass
+    else:
+        yesterday = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
+        if last_date == yesterday:
+            current += 1
+            streak_increased = True
+        elif last_date is not None:
+            # Missed at least one day — check VIP streak shield
+            days_missed = (now_utc.date() - datetime.strptime(last_date, "%Y-%m-%d").date()).days
+            week_start = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
+            shield_available = (is_vip and days_missed <= 2
+                                and not doc.get("streak_shield_used_this_week", False))
+            if shield_available and doc.get("shield_week_start") != week_start:
+                doc["streak_shield_used_this_week"] = False
+
+            if is_vip and days_missed <= 2 and not doc.get("streak_shield_used_this_week", False):
+                current += 1
+                shield_used = True
+                streak_increased = True
+                doc["streak_shield_used_this_week"] = True
+                doc["shield_week_start"] = week_start
+            else:
+                current = 1
+                streak_increased = True
+        else:
+            current = 1
+            streak_increased = True
+
+        if current > longest:
+            longest = current
+
+        # Daily streak XP bonus
+        bonus_xp += 10
+
+        # 7-day milestone
+        if current > 0 and current % 7 == 0:
+            bonus_xp += 50
+            milestone_7 = True
+
+    total_xp = base_xp + bonus_xp
+
+    await streaks.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id, "current_streak": current,
+            "longest_streak": longest, "last_activity_date": today_str,
+            "streak_shield_used_this_week": doc.get("streak_shield_used_this_week", False),
+            "shield_week_start": doc.get("shield_week_start"),
+        }},
+        upsert=True,
+    )
+
+    # Update leaderboard
+    profile = await fetch_profile(user_id)
+    display_name = (profile or {}).get("name") or (profile or {}).get("email", "User")[:20]
+    await lb.update_one(
+        {"user_id": user_id},
+        {"$set": {"user_id": user_id, "display_name": display_name},
+         "$inc": {"total_xp": total_xp}},
+        upsert=True,
+    )
+
+    return {
+        "current_streak": current, "longest_streak": longest,
+        "streak_increased": streak_increased, "shield_used": shield_used,
+        "base_xp": base_xp, "bonus_xp": bonus_xp, "total_xp_earned": total_xp,
+        "milestone_7": milestone_7, "is_vip": is_vip,
+    }
+
+
 @api_router.post("/academy/lesson-complete")
 async def mark_lesson_complete(body: dict, current_user: User = Depends(require_auth)):
     course_id = body.get("course_id")
@@ -2611,18 +2717,24 @@ async def mark_lesson_complete(body: dict, current_user: User = Depends(require_
         raise HTTPException(status_code=400, detail="course_id and lesson_id required")
 
     col = db["academy_progress"]
+    existing = await col.find_one(
+        {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id, "completed": True}
+    )
+    already_done = existing is not None
+
     await col.update_one(
         {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id},
         {"$set": {
-            "user_id": current_user.user_id,
-            "course_id": course_id,
-            "lesson_id": lesson_id,
-            "completed": True,
+            "user_id": current_user.user_id, "course_id": course_id,
+            "lesson_id": lesson_id, "completed": True,
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
     )
-    return {"success": True}
+
+    base_xp = 0 if already_done else 20
+    streak_info = await _update_streak_and_xp(current_user.user_id, base_xp)
+    return {"success": True, "xp": streak_info}
 
 
 @api_router.post("/academy/quiz-submit")
@@ -2634,32 +2746,59 @@ async def submit_quiz(body: dict, current_user: User = Depends(require_auth)):
         raise HTTPException(status_code=400, detail="course_id required")
 
     col = db["academy_progress"]
-    # Save quiz result
     await col.update_one(
         {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id or "quiz"},
         {"$set": {
-            "user_id": current_user.user_id,
-            "course_id": course_id,
-            "lesson_id": lesson_id or "quiz",
-            "completed": True,
-            "score": score,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": current_user.user_id, "course_id": course_id,
+            "lesson_id": lesson_id or "quiz", "completed": True,
+            "score": score, "completed_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
     )
     passed = score >= 60
-    # Update leaderboard XP
+    base_xp = 0
     if passed:
-        lb = db["academy_leaderboard"]
-        profile = await fetch_profile(current_user.user_id)
-        display_name = (profile or {}).get("name") or (profile or {}).get("email", "User")[:20]
-        await lb.update_one(
-            {"user_id": current_user.user_id},
-            {"$set": {"user_id": current_user.user_id, "display_name": display_name},
-             "$inc": {"total_xp": int(score)}},
-            upsert=True,
-        )
-    return {"success": True, "score": score, "passed": passed}
+        if score == 100:
+            base_xp = 60
+        else:
+            base_xp = 40
+    streak_info = await _update_streak_and_xp(current_user.user_id, base_xp)
+    return {"success": True, "score": score, "passed": passed, "xp": streak_info}
+
+
+@api_router.get("/academy/streak-status")
+async def get_streak_status(current_user: User = Depends(require_auth)):
+    streaks = db["academy_streaks"]
+    doc = await streaks.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not doc:
+        return {
+            "current_streak": 0, "longest_streak": 0,
+            "last_activity_date": None, "streak_at_risk": False,
+            "has_streak_shield": False, "shield_available": False,
+        }
+    now_utc = datetime.now(timezone.utc)
+    today_str = now_utc.strftime("%Y-%m-%d")
+    last_date = doc.get("last_activity_date")
+    active_today = last_date == today_str
+    streak_at_risk = not active_today and doc.get("current_streak", 0) > 0
+
+    cap = await _get_user_capability(current_user.user_id)
+    is_vip = cap == "vip"
+    week_start = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
+    shield_available = is_vip and not (
+        doc.get("streak_shield_used_this_week", False)
+        and doc.get("shield_week_start") == week_start
+    )
+
+    return {
+        "current_streak": doc.get("current_streak", 0),
+        "longest_streak": doc.get("longest_streak", 0),
+        "last_activity_date": last_date,
+        "active_today": active_today,
+        "streak_at_risk": streak_at_risk,
+        "has_streak_shield": is_vip,
+        "shield_available": shield_available,
+    }
 
 
 @api_router.get("/academy/progress")
