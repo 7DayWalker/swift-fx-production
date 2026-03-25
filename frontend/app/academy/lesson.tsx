@@ -608,7 +608,7 @@ export default function LessonScreen() {
 
           {/* TTS Player for text/video lessons */}
           {!isQuiz && !contentLoading && (enrichedContent?.overview || lesson.overview) && (
-            isVip
+            isVip && category === 'advanced'
               ? <TTSPlayerVIP courseId={courseId} lessonId={lesson.id} text={enrichedContent?.overview || lesson.overview} color={color} />
               : <TTSPlayerBasic text={enrichedContent?.overview || lesson.overview} color={color} />
           )}
