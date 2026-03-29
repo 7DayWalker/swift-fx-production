@@ -2,7 +2,7 @@
   "expo": {
     "name": "Swift FX Signals",
     "slug": "swiftfx-mobile",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "swiftfx",
@@ -13,7 +13,8 @@
       "checkAutomatically": "NEVER",
       "fallbackToCacheTimeout": 0
     },
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.0.4",
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.swiftfx.signals",
@@ -28,15 +29,19 @@
               "swiftfx"
             ]
           }
-        ]
-      }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "3"
     },
+
     "android": {
       "package": "com.swiftfx.signals",
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "intentFilters": [
@@ -45,13 +50,11 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "https",
-              "host": "swiftfx.app",
-              "pathPrefix": "/register"
+              "scheme": "swiftfx"
             },
             {
-              "scheme": "swiftfx",
-              "host": "*"
+              "scheme": "https",
+              "host": "swiftfx.app"
             }
           ],
           "category": [
@@ -61,11 +64,13 @@
         }
       ]
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -79,9 +84,11 @@
       ],
       "expo-web-browser"
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "extra": {
       "router": {},
       "eas": {
