@@ -5,23 +5,27 @@
   },
   "build": {
     "base": {
-      "distribution": "store"
+      "distribution": "store",
+      "node": "18"
     },
     "development": {
       "extends": "base",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "workingDirectory": "frontend"
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
+      "workingDirectory": "frontend",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "extends": "base",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "workingDirectory": "frontend"
     }
   },
   "submit": {
