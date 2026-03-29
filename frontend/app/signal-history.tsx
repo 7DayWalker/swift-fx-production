@@ -14,9 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme } from '../src/context/ThemeContext';
-import { supabase } from '../src/services/supabase';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
+import api from '../src/services/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Signal {
@@ -228,23 +226,10 @@ export default function SignalHistoryScreen() {
 
   const fetchHistory = async () => {
     try {
-      let headers: Record<string, string> = {};
-      if (!token) {
-        const { data: session } = await supabase.auth.getSession();
-        if (session?.session?.access_token) {
-          headers = { Authorization: `Bearer ${session.session.access_token}` };
-        }
-      } else {
-        headers = { Authorization: `Bearer ${token}` };
-      }
-
-      const res = await fetch(`${API_BASE_URL}/api/signals/history/stats`, { headers });
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      }
+      const res = await api.get('/signals/history/stats');
+      setData(res.data);
     } catch (e) {
-      console.error('Failed to fetch signal history:', e);
+      console.error('[SignalHistory] Failed to fetch:', e);
     } finally {
       setIsLoading(false);
     }

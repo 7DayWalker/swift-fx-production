@@ -13,9 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
-import { supabase } from '../../src/services/supabase';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import api from '../../src/services/api';
 
 interface AdminStats {
   total_users: number;
@@ -54,27 +52,13 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
-  const getAuthToken = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data?.session?.access_token || null;
-  };
-
   const fetchHealth = async () => {
     setHealthLoading(true);
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        setHealthLoading(false);
-        return;
-      }
-      const res = await fetch(`${API_BASE_URL}/api/admin/health`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setHealth(await res.json());
-      }
+      const res = await api.get('/admin/health');
+      setHealth(res.data);
     } catch (e) {
-      console.warn('Health fetch failed:', e);
+      console.warn('[AdminDash] Health fetch failed:', e);
     } finally {
       setHealthLoading(false);
     }
@@ -82,16 +66,10 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setStats(await res.json());
-      }
+      const res = await api.get('/admin/stats');
+      setStats(res.data);
     } catch (error) {
-      console.error('Failed to fetch admin stats:', error);
+      console.error('[AdminDash] Failed to fetch stats:', error);
     } finally {
       setIsLoading(false);
     }

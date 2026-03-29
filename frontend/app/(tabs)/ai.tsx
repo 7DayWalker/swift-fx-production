@@ -23,12 +23,11 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
+import api from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 import { PairPicker } from '../../src/components/PairPicker';
 import { PRIORITY_PAIRS } from '../../src/constants/tradingPairs';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface AIUsage {
@@ -297,10 +296,9 @@ interface ShareModalProps {
   onClose: () => void;
   analysisId: string;
   result: AnalysisResult;
-  getAuthToken: () => Promise<string | null>;
 }
 
-const ShareModal = ({ visible, onClose, analysisId, result, getAuthToken }: ShareModalProps) => {
+const ShareModal = ({ visible, onClose, analysisId, result }: ShareModalProps) => {
   const [isSharing, setIsSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [communityPosted, setCommunityPosted] = useState(false);
@@ -319,15 +317,8 @@ const ShareModal = ({ visible, onClose, analysisId, result, getAuthToken }: Shar
   const handleCopyLink = async () => {
     try {
       setIsSharing(true);
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to generate link');
-      const data = await res.json();
-      const shareUrl = `${API_BASE_URL}/api/ai/shared/${data.share_token}`;
+      const res = await api.post(`/ai/share/${analysisId}`);
+      const shareUrl = `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ai/shared/${res.data.share_token}`;
       await Clipboard.setStringAsync(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
@@ -339,15 +330,8 @@ const ShareModal = ({ visible, onClose, analysisId, result, getAuthToken }: Shar
   const handleNativeShare = async () => {
     try {
       setIsSharing(true);
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to generate link');
-      const data = await res.json();
-      const shareUrl = `${API_BASE_URL}/api/ai/shared/${data.share_token}`;
+      const res = await api.post(`/ai/share/${analysisId}`);
+      const shareUrl = `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ai/shared/${res.data.share_token}`;
 
       const message = `AI Analysis: ${result.pair} (${result.timeframe})\nBias: ${result.trade_bias} | Confidence: ${result.confidence_score}%${result.detected_pattern && result.detected_pattern !== 'None' ? `\nPattern: ${result.detected_pattern}` : ''}\n\n${shareUrl}`;
 
@@ -362,13 +346,7 @@ const ShareModal = ({ visible, onClose, analysisId, result, getAuthToken }: Shar
   const handleCommunityShare = async () => {
     try {
       setIsSharing(true);
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/share/${analysisId}/community`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to post');
+      await api.post(`/ai/share/${analysisId}/community`);
       setCommunityPosted(true);
     } catch (e) {
       Platform.OS === 'web' ? window.alert('Failed to post to community') : Alert.alert('Error', 'Failed to share to community');
@@ -473,11 +451,6 @@ export default function AIScreen() {
   useEffect(() => { fetchUsage(); }, [user, subscriptionStatus]);
   useEffect(() => { if (user) fetchHistory(); }, [user]);
 
-  const getAuthToken = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data?.session?.access_token || null;
-  };
-
   const fetchUsage = async () => {
     try {
       if (!user) { setUsage({ current_usage: 0, weekly_limit: 0, remaining: 0, has_access: false }); setIsLoadingUsage(false); return; }
@@ -510,39 +483,27 @@ export default function AIScreen() {
   const fetchHistory = async () => {
     try {
       setIsLoadingHistory(true);
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/history?limit=10`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data.items || []);
-      }
-    } catch (e) { console.warn('Failed to fetch AI history:', e); }
+      const res = await api.get('/ai/history', { params: { limit: 10 } });
+      setHistory(res.data.items || []);
+    } catch (e) { console.warn('[AI] Failed to fetch history:', e); }
     finally { setIsLoadingHistory(false); }
   };
 
   const fetchHistoryDetail = async (analysisId: string) => {
     try {
-      const token = await getAuthToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/history/${analysisId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const result: AnalysisResult = {
-          ...data,
-          disclaimer: 'AI-generated analysis for educational purposes only.',
-        };
-        // Restore image from snapshot
-        if (data.image_snapshot) {
-          setSelectedImage(`data:image/png;base64,${data.image_snapshot}`);
-        } else {
-          setSelectedImage(null);
-        }
-        setAnalysisResult(result);
+      const res = await api.get(`/ai/history/${analysisId}`);
+      const data = res.data;
+      const result: AnalysisResult = {
+        ...data,
+        disclaimer: 'AI-generated analysis for educational purposes only.',
+      };
+      // Restore image from snapshot
+      if (data.image_snapshot) {
+        setSelectedImage(`data:image/png;base64,${data.image_snapshot}`);
+      } else {
+        setSelectedImage(null);
+      }
+      setAnalysisResult(result);
         setScreenState('history_detail');
       }
     } catch (e) { console.warn('Failed to fetch analysis detail:', e); }
@@ -607,17 +568,12 @@ export default function AIScreen() {
       let cleanBase64 = imageBase64 || undefined;
       if (cleanBase64?.includes(',')) cleanBase64 = cleanBase64.split(',')[1];
 
-      const token = await getAuthToken();
-      if (!token) { setErrorMessage('Not authenticated.'); setScreenState('error'); return; }
+      const payload = { prompt: `Analyze this ${selectedPair} chart on ${selectedTimeframe} timeframe.`, pair: selectedPair, timeframe: selectedTimeframe, image_base64: cleanBase64 };
+      console.log('[AI] Request:', { pair: payload.pair, timeframe: payload.timeframe, hasImage: !!payload.image_base64 });
 
-      const res = await fetch(`${API_BASE_URL}/api/ai/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ prompt: `Analyze this ${selectedPair} chart on ${selectedTimeframe} timeframe.`, pair: selectedPair, timeframe: selectedTimeframe, image_base64: cleanBase64 }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) { setErrorMessage(data.detail || `Analysis failed (${res.status})`); setScreenState('error'); return; }
+      const res = await api.post('/ai/analyze', payload);
+      const data = res.data;
+      console.log('[AI] Response:', { status: res.status, bias: data.trade_bias, confidence: data.confidence_score, id: data.analysis_id });
 
       const result: AnalysisResult = {
         analysis_id: data.analysis_id || '',
@@ -643,7 +599,9 @@ export default function AIScreen() {
       fetchUsage();
       fetchHistory(); // Refresh history list
     } catch (e: any) {
-      setErrorMessage(e.message || 'Failed to analyze chart.'); setScreenState('error');
+      const errorDetail = e.response?.data?.detail || e.message || 'Failed to analyze chart.';
+      console.error('[AI] Error:', { status: e.response?.status, detail: errorDetail, message: e.message });
+      setErrorMessage(errorDetail); setScreenState('error');
     }
   };
 
@@ -872,7 +830,6 @@ export default function AIScreen() {
           onClose={() => setShareModalVisible(false)}
           analysisId={r.analysis_id || ''}
           result={r}
-          getAuthToken={getAuthToken}
         />
       </SafeAreaView>
     );
