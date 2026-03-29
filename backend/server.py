@@ -40,8 +40,9 @@ from supabase_auth import (
 
 # Emergent LLM Key for Claude Vision
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-if not EMERGENT_LLM_KEY:
-    logging.warning("[Config] EMERGENT_LLM_KEY not set — AI analyzer will be unavailable")
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY') or EMERGENT_LLM_KEY
+if not OPENAI_API_KEY:
+    logging.warning("[Config] Neither OPENAI_API_KEY nor EMERGENT_LLM_KEY set — AI features will be unavailable")
 
 # ===================== IAP CONFIGURATION =====================
 # Apple App Store
@@ -1835,22 +1836,17 @@ async def analyze_chart_legacy(
     
     # Analyze with Claude Vision
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        from openai import AsyncOpenAI
         
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"chart_analysis_{uuid.uuid4().hex[:8]}",
-            system_message="""You are an expert forex and cryptocurrency technical analyst. 
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        
+        system_message = """You are an expert forex and cryptocurrency technical analyst. 
 Analyze trading charts and provide structured analysis. Be concise and professional.
 Handle charts in any orientation (portrait or landscape) and from any trading platform (MT4, MT5, TradingView, mobile apps).
 Ignore any UI elements, status bars, or app buttons in the image - focus only on the chart data.
 Always include a risk disclaimer."""
-        ).with_model("anthropic", "claude-sonnet-4-20250514")
-        
-        image_attachment = ImageContent(image_base64=image_base64)
-        
-        user_message = UserMessage(
-            text=f"""Analyze this {pair} chart on the {timeframe} timeframe. 
+
+        user_text = f"""Analyze this {pair} chart on the {timeframe} timeframe. 
 The image may be a portrait or landscape screenshot from any trading platform or a photo of a screen.
 Focus on the candlestick/price data and ignore any mobile UI elements.
 
@@ -1862,24 +1858,33 @@ Provide:
 5. Trade Insight (brief actionable insight)
 6. Confidence Level (High/Medium/Low)
 
-Format your response as JSON with keys: market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence""",
-            file_contents=[image_attachment]
+Format your response as JSON with keys: market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence"""
+
+        response = await client.chat.completions.create(
+            model="claude-sonnet-4-20250514",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+                ]}
+            ],
+            max_tokens=1500,
         )
-        
-        response = await chat.send_message(user_message)
+        response_text = response.choices[0].message.content
         
         # Parse response
         import json
         try:
             # Try to extract JSON from response
-            json_start = response.find("{")
-            json_end = response.rfind("}") + 1
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
             if json_start >= 0 and json_end > json_start:
-                analysis_data = json.loads(response[json_start:json_end])
+                analysis_data = json.loads(response_text[json_start:json_end])
             else:
                 analysis_data = {
                     "market_bias": "Unable to parse",
-                    "trend_structure": response[:200],
+                    "trend_structure": response_text[:200],
                     "support_levels": [],
                     "resistance_levels": [],
                     "trade_insight": "Please try again with a clearer chart image",
@@ -1888,10 +1893,10 @@ Format your response as JSON with keys: market_bias, trend_structure, support_le
         except Exception:
             analysis_data = {
                 "market_bias": "Analysis complete",
-                "trend_structure": response[:500],
+                "trend_structure": response_text[:500],
                 "support_levels": [],
                 "resistance_levels": [],
-                "trade_insight": response[-200:] if len(response) > 200 else response,
+                "trade_insight": response_text[-200:] if len(response_text) > 200 else response_text,
                 "confidence": "Medium"
             }
         
@@ -2825,8 +2830,10 @@ async def generate_content_batch(current_user: User = Depends(require_auth)):
 
 async def _generate_single_lesson(course_id: str, course_title: str, lesson_id: int, lesson_title: str, tier: str) -> dict:
     """Generate enriched content for a single lesson using GPT-4o."""
-    from emergentintegrations.llm.openai import LlmChat, UserMessage
+    from openai import AsyncOpenAI
     import uuid
+
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
     tier_guidance = {
         "beginner": "Write as if explaining to someone who has never traded before. Use simple language, everyday analogies, and step-by-step reasoning. Make the reader feel confident and capable of learning.",
@@ -2855,14 +2862,15 @@ Return ONLY valid JSON (no markdown, no code blocks):
 }}"""
 
     try:
-        chat = LlmChat(
-            api_key=os.environ.get("EMERGENT_LLM_KEY"),
-            session_id=str(uuid.uuid4()),
-            system_message="You are an expert trading educator. Return only valid JSON. No markdown formatting.",
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert trading educator. Return only valid JSON. No markdown formatting."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=2000,
         )
-        chat = chat.with_model("openai", "gpt-4o")
-        response = await chat.send_message(UserMessage(text=prompt))
-        text = response.strip()
+        text = response.choices[0].message.content.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
             if text.endswith("```"):
@@ -3009,12 +3017,14 @@ async def generate_academy_tts(body: dict, current_user: User = Depends(require_
         return {"audio_base64": cached["audio_base64"], "cached": True}
 
     try:
-        from emergentintegrations.llm.openai import OpenAITextToSpeech
-        tts_client = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY"))
+        from openai import AsyncOpenAI
+        tts_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         truncated = text[:4096]
-        audio_base64 = await tts_client.generate_speech_base64(
-            text=truncated, model="tts-1", voice="nova"
+        tts_response = await tts_client.audio.speech.create(
+            model="tts-1", voice="nova", input=truncated
         )
+        audio_bytes = tts_response.content
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
         await cache_col.update_one(
             {"course_id": course_id, "lesson_id": lesson_id},
             {"$set": {
@@ -8567,7 +8577,7 @@ async def admin_get_iap_stats(admin: User = Depends(require_admin)):
     }
 
 
-# ===================== AI CHART ANALYZER (using emergentintegrations) =====================
+# ===================== AI CHART ANALYZER =====================
 from pydantic import BaseModel as PydanticBaseModel
 
 class AIAnalyzeRequest(PydanticBaseModel):
@@ -8592,14 +8602,14 @@ class AIAnalyzeResponse(PydanticBaseModel):
 @api_router.post("/ai/analyze")
 async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depends(require_auth)):
     """
-    AI Chart Analysis endpoint using emergentintegrations library.
+    AI Chart Analysis endpoint using OpenAI SDK.
     Requires Supabase authentication and active subscription.
     Server-side enforcement of AI usage limits.
     """
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        from openai import AsyncOpenAI
         
-        if not EMERGENT_LLM_KEY:
+        if not OPENAI_API_KEY:
             raise HTTPException(status_code=500, detail="AI service not configured")
         
         # Fetch user profile for subscription check
@@ -8673,15 +8683,10 @@ Rules:
 - analysis_text should be a concise summary suitable for a card preview
 Do not include any text outside the JSON object. Be concise but accurate."""
 
-        # Initialize chat with emergentintegrations
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"ai_analyze_{uuid.uuid4().hex[:8]}",
-            system_message=system_prompt
-        )
+        # Initialize OpenAI client
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         
         # Use gpt-4o for multimodal (image) support
-        chat.with_model("openai", "gpt-4o")
         
         # Build user message
         user_text = f"Analyze this {request.pair} chart on {request.timeframe} timeframe:\n\n{request.prompt}"
@@ -8693,18 +8698,26 @@ Do not include any text outside the JSON object. Be concise but accurate."""
             if "," in image_data:
                 image_data = image_data.split(",")[1]
             
-            # Use ImageContent for base64 images
-            image_content = ImageContent(image_base64=image_data)
-            
-            user_message = UserMessage(
-                text=user_text,
-                file_contents=[image_content]
-            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}}
+                ]}
+            ]
         else:
-            user_message = UserMessage(text=user_text)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text}
+            ]
         
         # Send message and get response
-        response_text = await chat.send_message(user_message)
+        ai_response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=1500,
+        )
+        response_text = ai_response.choices[0].message.content
         
         # Parse JSON response
         try:
