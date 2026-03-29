@@ -1,34 +1,13 @@
 {
-  "cli": {
-    "version": ">= 5.0.0",
-    "appVersionSource": "local"
-  },
   "build": {
-    "base": {
-      "distribution": "store",
-      "node": "18"
-    },
     "development": {
-      "extends": "base",
-      "developmentClient": true,
-      "distribution": "internal",
-      "workingDirectory": "frontend"
+      "distribution": "internal"
     },
     "preview": {
-      "extends": "base",
-      "distribution": "internal",
-      "workingDirectory": "frontend",
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "extends": "base",
-      "autoIncrement": true,
-      "workingDirectory": "frontend"
+      "autoIncrement": true
     }
-  },
-  "submit": {
-    "production": {}
   }
 }
