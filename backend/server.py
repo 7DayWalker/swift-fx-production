@@ -43,24 +43,6 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 if not EMERGENT_LLM_KEY:
     logging.warning("[Config] EMERGENT_LLM_KEY not set — AI features will be unavailable")
 
-EMERGENT_API_BASE = "https://api.emergent.sh/v1"
-
-
-async def emergent_chat_completion(messages: list, model: str = "gpt-4o", max_tokens: int = 1500) -> str:
-    """Send a chat completion request to the Emergent API. Returns the assistant's text."""
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            f"{EMERGENT_API_BASE}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {EMERGENT_LLM_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "messages": messages, "max_tokens": max_tokens},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
-
 # ===================== IAP CONFIGURATION =====================
 # Apple App Store
 APPLE_SHARED_SECRET = os.environ.get('APPLE_SHARED_SECRET')
@@ -1853,13 +1835,22 @@ async def analyze_chart_legacy(
     
     # Analyze with Claude Vision
     try:
-        system_message = """You are an expert forex and cryptocurrency technical analyst. 
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"chart_analysis_{uuid.uuid4().hex[:8]}",
+            system_message="""You are an expert forex and cryptocurrency technical analyst. 
 Analyze trading charts and provide structured analysis. Be concise and professional.
 Handle charts in any orientation (portrait or landscape) and from any trading platform (MT4, MT5, TradingView, mobile apps).
 Ignore any UI elements, status bars, or app buttons in the image - focus only on the chart data.
 Always include a risk disclaimer."""
-
-        user_text = f"""Analyze this {pair} chart on the {timeframe} timeframe. 
+        ).with_model("anthropic", "claude-sonnet-4-20250514")
+        
+        image_attachment = ImageContent(image_base64=image_base64)
+        
+        user_message = UserMessage(
+            text=f"""Analyze this {pair} chart on the {timeframe} timeframe. 
 The image may be a portrait or landscape screenshot from any trading platform or a photo of a screen.
 Focus on the candlestick/price data and ignore any mobile UI elements.
 
@@ -1871,19 +1862,11 @@ Provide:
 5. Trade Insight (brief actionable insight)
 6. Confidence Level (High/Medium/Low)
 
-Format your response as JSON with keys: market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence"""
-
-        response_text = await emergent_chat_completion(
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user_text},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
-                ]}
-            ],
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
+Format your response as JSON with keys: market_bias, trend_structure, support_levels, resistance_levels, trade_insight, confidence""",
+            file_contents=[image_attachment]
         )
+        
+        response_text = await chat.send_message(user_message)
         
         # Parse response
         import json
@@ -2842,6 +2825,8 @@ async def generate_content_batch(current_user: User = Depends(require_auth)):
 
 async def _generate_single_lesson(course_id: str, course_title: str, lesson_id: int, lesson_title: str, tier: str) -> dict:
     """Generate enriched content for a single lesson using GPT-4o."""
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+    import uuid
 
     tier_guidance = {
         "beginner": "Write as if explaining to someone who has never traded before. Use simple language, everyday analogies, and step-by-step reasoning. Make the reader feel confident and capable of learning.",
@@ -2870,15 +2855,14 @@ Return ONLY valid JSON (no markdown, no code blocks):
 }}"""
 
     try:
-        text = await emergent_chat_completion(
-            messages=[
-                {"role": "system", "content": "You are an expert trading educator. Return only valid JSON. No markdown formatting."},
-                {"role": "user", "content": prompt},
-            ],
-            model="gpt-4o",
-            max_tokens=2000,
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message="You are an expert trading educator. Return only valid JSON. No markdown formatting.",
         )
-        text = text.strip()
+        chat = chat.with_model("openai", "gpt-4o")
+        response = await chat.send_message(UserMessage(text=prompt))
+        text = response.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
             if text.endswith("```"):
@@ -3025,19 +3009,12 @@ async def generate_academy_tts(body: dict, current_user: User = Depends(require_
         return {"audio_base64": cached["audio_base64"], "cached": True}
 
     try:
+        from emergentintegrations.llm.openai import OpenAITextToSpeech
+        tts_client = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY)
         truncated = text[:4096]
-        async with httpx.AsyncClient(timeout=120.0) as tts_client:
-            tts_response = await tts_client.post(
-                f"{EMERGENT_API_BASE}/audio/speech",
-                headers={
-                    "Authorization": f"Bearer {EMERGENT_LLM_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"model": "tts-1", "voice": "nova", "input": truncated},
-            )
-            tts_response.raise_for_status()
-            audio_bytes = tts_response.content
-        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+        audio_base64 = await tts_client.generate_speech_base64(
+            text=truncated, model="tts-1", voice="nova"
+        )
         await cache_col.update_one(
             {"course_id": course_id, "lesson_id": lesson_id},
             {"$set": {
@@ -8620,6 +8597,8 @@ async def ai_analyze_chart(request: AIAnalyzeRequest, current_user: User = Depen
     Server-side enforcement of AI usage limits.
     """
     try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        
         if not EMERGENT_LLM_KEY:
             raise HTTPException(status_code=500, detail="AI service not configured")
         
@@ -8694,6 +8673,13 @@ Rules:
 - analysis_text should be a concise summary suitable for a card preview
 Do not include any text outside the JSON object. Be concise but accurate."""
 
+        # Initialize chat with emergentintegrations
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"ai_analyze_{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt
+        ).with_model("openai", "gpt-4o")
+        
         # Build user message
         user_text = f"Analyze this {request.pair} chart on {request.timeframe} timeframe:\n\n{request.prompt}"
         
@@ -8704,25 +8690,13 @@ Do not include any text outside the JSON object. Be concise but accurate."""
             if "," in image_data:
                 image_data = image_data.split(",")[1]
             
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user_text},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}}
-                ]}
-            ]
+            image_content = ImageContent(image_base64=image_data)
+            user_message = UserMessage(text=user_text, file_contents=[image_content])
         else:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_text}
-            ]
+            user_message = UserMessage(text=user_text)
         
-        # Send message via Emergent API
-        response_text = await emergent_chat_completion(
-            messages=messages,
-            model="gpt-4o",
-            max_tokens=1500,
-        )
+        # Send message via emergentintegrations
+        response_text = await chat.send_message(user_message)
         
         # Parse JSON response
         try:
