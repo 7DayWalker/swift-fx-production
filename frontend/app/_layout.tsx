@@ -51,6 +51,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="auth" />
         <Stack.Screen name="register" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />

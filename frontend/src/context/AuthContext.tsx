@@ -153,8 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Native (iOS / Android): open in-app browser, capture redirect with tokens
-    const redirectTo = Linking.createURL('/');
+    // Native (iOS / Android): open in-app browser, redirect to swiftfx://auth
+    const redirectTo = 'swiftfx://auth';
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo, skipBrowserRedirect: true },
@@ -165,26 +165,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
-      // Supabase returns tokens in the URL hash fragment
-      const hashPart = result.url.split('#')[1];
-      if (hashPart) {
-        const params: Record<string, string> = {};
-        hashPart.split('&').forEach((pair) => {
-          const [key, value] = pair.split('=');
-          if (key && value) params[decodeURIComponent(key)] = decodeURIComponent(value);
-        });
+      // PKCE flow: extract code from callback URL
+      const parsed = new URL(result.url);
+      const code = parsed.searchParams.get('code');
 
-        const { access_token, refresh_token } = params;
-        if (access_token && refresh_token) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          });
-          if (sessionError) throw sessionError;
-          // onAuthStateChange fires → fetchProfile → user state updated
-          return;
-        }
+      if (code) {
+        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        if (sessionError) throw sessionError;
+        return;
       }
+
+      // Implicit flow fallback: tokens in hash fragment
+      const hashParams = new URLSearchParams(result.url.split('#')[1] || '');
+      const access_token = hashParams.get('access_token');
+      const refresh_token = hashParams.get('refresh_token');
+
+      if (access_token && refresh_token) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (sessionError) throw sessionError;
+        return;
+      }
+
       throw new Error('Authentication completed but no session tokens received');
     }
 
