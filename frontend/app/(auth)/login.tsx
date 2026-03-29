@@ -63,12 +63,11 @@ export default function LoginScreen() {
     setOauthLoading(provider);
     try {
       await signInWithProvider(provider);
-      // On native, onAuthStateChange handles user state.
       // On web, the page redirects so this code won't execute.
-      // After session is set, the auth listener routes appropriately.
-      // We add a small delay then navigate (native only, web redirects)
+      // On native, openAuthSessionAsync stored the callback URL —
+      // route to /auth which handles session exchange in one place.
       if (Platform.OS !== 'web') {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/auth');
       }
     } catch (error: any) {
       const msg = error.message || 'Something went wrong';

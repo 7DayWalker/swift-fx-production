@@ -5,6 +5,17 @@ import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
+/**
+ * Bridge for passing the OAuth callback URL from openAuthSessionAsync
+ * (which consumes the deep link) to auth.tsx (which handles session exchange).
+ */
+let _pendingOAuthCallbackUrl: string | null = null;
+export const getPendingOAuthCallbackUrl = (): string | null => {
+  const url = _pendingOAuthCallbackUrl;
+  _pendingOAuthCallbackUrl = null;
+  return url;
+};
+
 interface User {
   user_id: string;
   name: string;
@@ -165,31 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
-      // PKCE flow: extract code from callback URL
-      const parsed = new URL(result.url);
-      const code = parsed.searchParams.get('code');
-
-      if (code) {
-        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-        if (sessionError) throw sessionError;
-        return;
-      }
-
-      // Implicit flow fallback: tokens in hash fragment
-      const hashParams = new URLSearchParams(result.url.split('#')[1] || '');
-      const access_token = hashParams.get('access_token');
-      const refresh_token = hashParams.get('refresh_token');
-
-      if (access_token && refresh_token) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
-        if (sessionError) throw sessionError;
-        return;
-      }
-
-      throw new Error('Authentication completed but no session tokens received');
+      // Store the callback URL — session exchange happens in auth.tsx only
+      _pendingOAuthCallbackUrl = result.url;
+      return;
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {

@@ -3,13 +3,16 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../src/services/supabase';
+import { getPendingOAuthCallbackUrl } from '../src/context/AuthContext';
 
 /**
- * OAuth callback route — handles swiftfx://auth deep link.
+ * OAuth callback route — the SINGLE place where session exchange happens.
  *
- * After Google/Apple login, the OAuth provider redirects here.
- * This screen exchanges the auth code for a session, then navigates
- * the user into the app.
+ * Reached via two paths:
+ *  1. openAuthSessionAsync captured the redirect → login.tsx routes here,
+ *     callback URL is available via getPendingOAuthCallbackUrl().
+ *  2. External deep link (swiftfx://auth) opens the app directly →
+ *     callback URL comes from Linking.getInitialURL().
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -21,10 +24,19 @@ export default function AuthCallbackScreen() {
 
     const handleOAuthCallback = async () => {
       try {
-        const url = await Linking.getInitialURL();
+        // 1. Check bridge from openAuthSessionAsync (login.tsx flow)
+        // 2. Fall back to deep link URL (external browser flow)
+        const url = getPendingOAuthCallbackUrl() || (await Linking.getInitialURL());
         console.log('[AuthCallback] URL received:', url);
 
         if (!url) {
+          // No callback URL at all — check if a session already exists
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.log('[AuthCallback] Existing session found, redirecting');
+            if (mounted) router.replace('/(tabs)/dashboard');
+            return;
+          }
           throw new Error('No callback URL received');
         }
 
@@ -55,7 +67,7 @@ export default function AuthCallbackScreen() {
               throw new Error('No auth tokens found in callback URL');
             }
           } else {
-            // Last resort: check if session was already set by Supabase's detectSessionInUrl
+            // Last resort: session may already exist from auto-detection
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
               throw new Error('No auth code or tokens in callback URL');
@@ -64,7 +76,7 @@ export default function AuthCallbackScreen() {
           }
         }
 
-        // Session is established — onAuthStateChange in AuthContext will update user state
+        // Session established — onAuthStateChange in AuthContext updates user state
         if (mounted) {
           console.log('[AuthCallback] Success — redirecting to dashboard');
           router.replace('/(tabs)/dashboard');
