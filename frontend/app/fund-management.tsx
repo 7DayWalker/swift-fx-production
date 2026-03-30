@@ -50,38 +50,6 @@ const INVESTMENT_TIERS = [
   },
 ];
 
-// Performance metrics data
-const PERFORMANCE_METRICS = [
-  {
-    id: 'totalReturn',
-    label: 'Total Return',
-    value: '+127.4%',
-    color: '#10B981',
-    icon: 'trending-up',
-  },
-  {
-    id: 'monthlyAvg',
-    label: 'Monthly Avg',
-    value: '+8.2%',
-    color: '#00D4AA',
-    icon: 'analytics',
-  },
-  {
-    id: 'winRate',
-    label: 'Win Rate',
-    value: '73%',
-    color: '#8B5CF6',
-    icon: 'stats-chart',
-  },
-  {
-    id: 'clients',
-    label: 'Active Clients',
-    value: '500+',
-    color: '#F59E0B',
-    icon: 'people',
-  },
-];
-
 // WhatsApp contact details
 const FUND_MANAGER_PHONE = '2348169427440';
 
@@ -96,18 +64,69 @@ export default function FundManagementScreen() {
   const [selectedTier, setSelectedTier] = useState<typeof INVESTMENT_TIERS[0] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Portfolio state — fetched from backend per-user
+  const [portfolio, setPortfolio] = useState<any>(null);
+  const [performanceHistory, setPerformanceHistory] = useState<any[]>([]);
+  const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(true);
+
   // Get subscription from backend status (authoritative source)
   const subscription = status?.subscription || 'free';
   
   // Entitlement check: Premium and VIP users can apply
   const canApply = subscription === 'premium' || subscription === 'vip';
 
-  // Re-check subscription on screen focus (not only on mount)
+  // Fetch user portfolio on focus
   useFocusEffect(
     useCallback(() => {
       refreshStatus();
-    }, [refreshStatus])
+      fetchPortfolio();
+    }, [])
   );
+
+  const fetchPortfolio = async () => {
+    setIsLoadingPortfolio(true);
+    try {
+      const res = await api.get('/investor/dashboard');
+      setPortfolio(res.data.portfolio || null);
+      setPerformanceHistory(res.data.performance_history || []);
+    } catch (e: any) {
+      // 403 = not an approved investor — expected for most users
+      setPortfolio(null);
+      setPerformanceHistory([]);
+    } finally {
+      setIsLoadingPortfolio(false);
+    }
+  };
+
+  // Build metrics from real portfolio data (or show dashes if no portfolio)
+  const getPerformanceMetrics = () => {
+    if (!portfolio) {
+      return [
+        { id: 'totalReturn', label: 'Total Return', value: '--', color: '#10B981', icon: 'trending-up' },
+        { id: 'equity', label: 'Current Equity', value: '--', color: '#00D4AA', icon: 'analytics' },
+        { id: 'capital', label: 'Invested Capital', value: '--', color: '#8B5CF6', icon: 'stats-chart' },
+        { id: 'status', label: 'Status', value: '--', color: '#F59E0B', icon: 'shield-checkmark' },
+      ];
+    }
+
+    const totalReturn = portfolio.total_return_pct ?? 0;
+    const returnSign = totalReturn >= 0 ? '+' : '';
+
+    // Compute monthly avg from performance history
+    let monthlyAvg = '--';
+    if (performanceHistory.length > 0) {
+      const avg = performanceHistory.reduce((sum: number, p: any) => sum + (p.return_pct || 0), 0) / performanceHistory.length;
+      const avgSign = avg >= 0 ? '+' : '';
+      monthlyAvg = `${avgSign}${avg.toFixed(1)}%`;
+    }
+
+    return [
+      { id: 'totalReturn', label: 'Total Return', value: `${returnSign}${totalReturn.toFixed(1)}%`, color: totalReturn >= 0 ? '#10B981' : '#EF4444', icon: 'trending-up' },
+      { id: 'equity', label: 'Current Equity', value: `$${(portfolio.current_equity || 0).toLocaleString()}`, color: '#00D4AA', icon: 'analytics' },
+      { id: 'capital', label: 'Invested Capital', value: `$${(portfolio.invested_capital || 0).toLocaleString()}`, color: '#8B5CF6', icon: 'stats-chart' },
+      { id: 'monthlyAvg', label: 'Monthly Avg', value: monthlyAvg, color: '#F59E0B', icon: 'calendar' },
+    ];
+  };
 
   // Get user plan display name (uppercase for message)
   const getUserPlanUpperCase = (): string => {
@@ -293,19 +312,25 @@ export default function FundManagementScreen() {
           </Text>
         </View>
 
-        {/* Performance Metrics - Card Grid */}
-        <Text style={[styles.sectionTitle, dynamicStyles.text]}>Fund Performance</Text>
-        <View style={styles.metricsGrid}>
-          {PERFORMANCE_METRICS.map((metric) => (
-            <View key={metric.id} style={[styles.metricCard, dynamicStyles.card]}>
-              <View style={[styles.metricIconContainer, { backgroundColor: `${metric.color}20` }]}>
-                <Ionicons name={metric.icon as any} size={20} color={metric.color} />
+        {/* Performance Metrics - Dynamic from user portfolio */}
+        <Text style={[styles.sectionTitle, dynamicStyles.text]}>
+          {portfolio ? 'Your Portfolio' : 'Fund Performance'}
+        </Text>
+        {isLoadingPortfolio ? (
+          <ActivityIndicator size="small" color={theme.primary} style={{ marginBottom: 16 }} />
+        ) : (
+          <View style={styles.metricsGrid}>
+            {getPerformanceMetrics().map((metric) => (
+              <View key={metric.id} style={[styles.metricCard, dynamicStyles.card]}>
+                <View style={[styles.metricIconContainer, { backgroundColor: `${metric.color}20` }]}>
+                  <Ionicons name={metric.icon as any} size={20} color={metric.color} />
+                </View>
+                <Text style={[styles.metricValue, { color: metric.color }]}>{metric.value}</Text>
+                <Text style={[styles.metricLabel, dynamicStyles.textSecondary]}>{metric.label}</Text>
               </View>
-              <Text style={[styles.metricValue, { color: metric.color }]}>{metric.value}</Text>
-              <Text style={[styles.metricLabel, dynamicStyles.textSecondary]}>{metric.label}</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Investment Tiers */}
         <View style={[styles.card, dynamicStyles.card]}>
