@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import { supabase } from '../../src/services/supabase';
+import api from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 
@@ -76,19 +76,8 @@ export default function CommunityScreen() {
 
   const fetchPosts = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_community_posts');
-      if (error) throw error;
-      const mapped = (data || []).map((p: any) => ({
-        post_id: p.id,
-        user_id: p.user_id,
-        user_name: p.user_name || 'User',
-        content: p.content,
-        post_type: p.post_type,
-        image: p.image_url,
-        likes: (p.likes || []).map(String),
-        created_at: p.created_at,
-      }));
-      setPosts(mapped);
+      const res = await api.get('/community/posts');
+      setPosts(res.data || []);
     } catch (error) {
       console.error('Failed to fetch posts:', error);
     } finally {
@@ -110,16 +99,13 @@ export default function CommunityScreen() {
 
     setIsSubmitting(true);
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Not authenticated');
+      const formData = new FormData();
+      formData.append('content', newPostContent.trim());
+      formData.append('post_type', newPostType);
 
-      const { error } = await supabase.from('posts').insert({
-        user_id: authUser.id,
-        content: newPostContent.trim(),
-        post_type: newPostType,
-        image_url: null, // Image upload requires Supabase Storage (future)
+      await api.post('/community/posts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (error) throw error;
       
       // Reset form
       setNewPostContent('');
@@ -128,7 +114,7 @@ export default function CommunityScreen() {
       setShowCreateModal(false);
       fetchPosts();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create post');
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to create post');
     } finally {
       setIsSubmitting(false);
     }
@@ -173,35 +159,18 @@ export default function CommunityScreen() {
 
   const toggleLike = async (postId: string) => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
-
-      const isCurrentlyLiked = posts.find(p => p.post_id === postId)?.likes?.includes(authUser.id);
-
-      if (isCurrentlyLiked) {
-        // Unlike
-        await supabase.from('post_likes').delete()
-          .eq('post_id', postId)
-          .eq('user_id', authUser.id);
-        setPosts(posts.map(post => {
-          if (post.post_id === postId) {
-            return { ...post, likes: post.likes.filter((id: string) => id !== authUser.id) };
-          }
-          return post;
-        }));
-      } else {
-        // Like
-        await supabase.from('post_likes').insert({
-          post_id: postId,
-          user_id: authUser.id,
-        });
-        setPosts(posts.map(post => {
-          if (post.post_id === postId) {
-            return { ...post, likes: [...(post.likes || []), authUser.id] };
-          }
-          return post;
-        }));
-      }
+      const res = await api.post(`/community/posts/${postId}/like`);
+      const { liked, likes_count } = res.data;
+      setPosts(posts.map(post => {
+        if (post.post_id === postId) {
+          const userId = user?.id || '';
+          const newLikes = liked
+            ? [...(post.likes || []), userId]
+            : (post.likes || []).filter((id: string) => id !== userId);
+          return { ...post, likes: newLikes };
+        }
+        return post;
+      }));
     } catch (error) {
       console.error('Failed to toggle like:', error);
     }
@@ -211,16 +180,8 @@ export default function CommunityScreen() {
     setSelectedPost(post);
     setLoadingComments(true);
     try {
-      const { data, error } = await supabase.rpc('get_post_comments', { target_post_id: post.post_id });
-      if (error) throw error;
-      const mapped = (data || []).map((c: any) => ({
-        comment_id: c.id,
-        user_id: c.user_id,
-        user_name: c.user_name || 'User',
-        content: c.content,
-        created_at: c.created_at,
-      }));
-      setComments(mapped);
+      const res = await api.get(`/community/posts/${post.post_id}/comments`);
+      setComments(res.data || []);
     } catch (error) {
       console.error('Failed to fetch comments:', error);
     } finally {
@@ -232,26 +193,13 @@ export default function CommunityScreen() {
     if (!newComment.trim() || !selectedPost) return;
 
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase.from('comments').insert({
-        post_id: selectedPost.post_id,
-        user_id: authUser.id,
+      const res = await api.post(`/community/posts/${selectedPost.post_id}/comments`, {
         content: newComment.trim(),
-      }).select().single();
-      if (error) throw error;
-
-      setComments([...comments, {
-        comment_id: data.id,
-        user_id: authUser.id,
-        user_name: user?.name || 'You',
-        content: data.content,
-        created_at: data.created_at,
-      }]);
+      });
+      setComments([...comments, res.data]);
       setNewComment('');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add comment');
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to add comment');
     }
   };
 
