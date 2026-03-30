@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
+import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import {
   isCalendarNotificationEnabled,
   setCalendarNotificationEnabled,
@@ -547,6 +548,9 @@ export default function EconomicCalendarScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
 
       {/* Filter Modal */}
       <Modal

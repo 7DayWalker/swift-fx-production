@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
+import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 
 // News item type
 interface NewsItem {
@@ -364,6 +365,9 @@ export default function MarketNewsScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
     </SafeAreaView>
   );
 }

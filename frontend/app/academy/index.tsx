@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
+import { AdBanner, useRewardedAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 
 interface Category {
   id: string;
@@ -153,6 +154,7 @@ export default function AcademyScreen() {
   const [animatedWidth] = useState(new Animated.Value(0));
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
+  const { showRewardedAd, isAdReady } = useRewardedAd();
   const hasAccess = (req: string) => {
     if (isAdminPrivilege) return true;
     if (req === 'free') return true;
@@ -191,7 +193,7 @@ export default function AcademyScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + 20 + AD_BANNER_HEIGHT }} showsVerticalScrollIndicator={false}>
         <View style={styles.welcomeSection}>
           <View style={[styles.welcomeIcon, { backgroundColor: `${theme.primary}20` }]}>
             <Ionicons name="school" size={32} color={theme.primary} />
@@ -295,9 +297,27 @@ export default function AcademyScreen() {
             <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/subscription')}>
               <Text style={styles.upgradeButtonText}>View Plans</Text>
             </TouchableOpacity>
+            {userTier === 'free' && (
+              <TouchableOpacity
+                data-testid="academy-watch-ad-btn"
+                style={[styles.upgradeButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#FFD700', marginTop: 8 }]}
+                onPress={async () => {
+                  const rewarded = await showRewardedAd();
+                  if (rewarded) {
+                    router.push('/academy/intermediate' as any);
+                  }
+                }}
+              >
+                <Ionicons name="play-circle-outline" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                <Text style={[styles.upgradeButtonText, { color: '#FFD700' }]}>Watch Ad to Preview</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
     </SafeAreaView>
   );
 }

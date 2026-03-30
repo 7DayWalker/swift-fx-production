@@ -2,15 +2,28 @@
  * Centralized Ad Manager — controls frequency, state, and test/production ID switching.
  *
  * All ad unit IDs live here. Swap TEST → production when going live.
+ * TestIds are hardcoded Google well-known test IDs to avoid importing
+ * the native-only SDK at the module level (breaks web bundling).
  */
 import { Platform } from 'react-native';
-import { TestIds } from 'react-native-google-mobile-ads';
 
-// ─── Ad Unit IDs (TEST for now — replace with production IDs later) ─────────
+// ─── Ad Unit IDs (Google well-known TEST IDs — replace with production IDs later) ──
 export const AD_UNITS = {
-  BANNER: TestIds.BANNER,
-  INTERSTITIAL: TestIds.INTERSTITIAL,
-  REWARDED: TestIds.REWARDED,
+  BANNER: Platform.select({
+    android: 'ca-app-pub-3940256099942544/6300978111',
+    ios: 'ca-app-pub-3940256099942544/2934735716',
+    default: 'test-banner',
+  }),
+  INTERSTITIAL: Platform.select({
+    android: 'ca-app-pub-3940256099942544/1033173712',
+    ios: 'ca-app-pub-3940256099942544/4411468910',
+    default: 'test-interstitial',
+  }),
+  REWARDED: Platform.select({
+    android: 'ca-app-pub-3940256099942544/5224354917',
+    ios: 'ca-app-pub-3940256099942544/1712485313',
+    default: 'test-rewarded',
+  }),
 };
 
 // ─── Interstitial Frequency Gate ────────────────────────────────────────────

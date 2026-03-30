@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
+import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 
@@ -32,7 +33,7 @@ export default function MoreScreen() {
   // Defaults to false until fund-related tables are created
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
 
   // Dynamic styles based on theme
   const dynamicStyles = {
@@ -206,6 +207,9 @@ export default function MoreScreen() {
 
         <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.0</Text>
       </ScrollView>
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
 
       {/* Logout Confirmation Modal */}
       <Modal

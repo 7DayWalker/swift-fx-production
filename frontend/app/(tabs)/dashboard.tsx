@@ -17,7 +17,7 @@ import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
-import { AdBanner } from '../../src/components/ads';
+import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { UpgradeBanner, LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
@@ -82,7 +82,7 @@ export default function DashboardScreen() {
   } = useSignals();
   
   // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
   
   // Use subscription context for plan info (real-time reactive)
   const currentPlan = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
@@ -356,9 +356,10 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* Show mock ad for free users */}
-        <AdBanner />
       </ScrollView>
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
     </SafeAreaView>
   );
 }

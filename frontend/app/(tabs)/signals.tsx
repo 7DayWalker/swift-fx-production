@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import MockAdBanner from '../../src/components/MockAdBanner';
+import { AdBanner, useInterstitialAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 
@@ -359,7 +359,10 @@ export default function SignalsScreen() {
   
   const { signals, isLoading, isRefreshing, refreshSignals, lastUpdated } = useSignals();
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'closed'>('all');
-  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
+
+  // Interstitial — fires after multiple meaningful actions (refresh / filter change)
+  const { recordAndMaybeShow } = useInterstitialAd();
 
   const filteredSignals = signals.filter(signal => {
     if (filter === 'all') return true;
@@ -428,7 +431,7 @@ export default function SignalsScreen() {
         keyExtractor={(item) => item.signal_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={refreshSignals} tintColor={theme.primary} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={() => { refreshSignals(); recordAndMaybeShow(); }} tintColor={theme.primary} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -437,8 +440,10 @@ export default function SignalsScreen() {
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Check back later for new trading signals</Text>
           </View>
         }
-        ListFooterComponent={user?.role === 'free' ? <MockAdBanner /> : null}
       />
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
     </SafeAreaView>
   );
 }

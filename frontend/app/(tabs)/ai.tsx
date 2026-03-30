@@ -24,6 +24,7 @@ import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
 import api from '../../src/services/api';
+import { AdBanner, useInterstitialAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 import { PairPicker } from '../../src/components/PairPicker';
@@ -447,6 +448,9 @@ export default function AIScreen() {
   // Share state
   const [shareModalVisible, setShareModalVisible] = useState(false);
 
+  // Interstitial — fires after AI analysis completes (frequency-gated)
+  const { recordAndMaybeShow } = useInterstitialAd();
+
   // ─── Data Fetching ───────────────────────────────────────────────────────
   useEffect(() => { fetchUsage(); }, [user, subscriptionStatus]);
   useEffect(() => { if (user) fetchHistory(); }, [user]);
@@ -595,6 +599,7 @@ export default function AIScreen() {
 
       setAnalysisResult(result);
       setShowSuccess(true); // Trigger success animation
+      recordAndMaybeShow(); // Record meaningful action for interstitial gate
       fetchUsage();
       fetchHistory(); // Refresh history list
     } catch (e: any) {
@@ -970,6 +975,9 @@ export default function AIScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Fixed bottom ad banner — free users only */}
+      <AdBanner />
     </SafeAreaView>
   );
 }
