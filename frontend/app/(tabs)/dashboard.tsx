@@ -17,7 +17,7 @@ import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { SubscriptionBadge } from '../../src/components/SubscriptionBadge';
-import MockAdBanner from '../../src/components/MockAdBanner';
+import { AdBanner } from '../../src/components/ads';
 import { UpgradeBanner, LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
@@ -357,7 +357,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* Show mock ad for free users */}
-        {user?.role === 'free' && <MockAdBanner />}
+        <AdBanner />
       </ScrollView>
     </SafeAreaView>
   );

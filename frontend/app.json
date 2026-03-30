@@ -44,6 +44,9 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-3940256099942544~3347511713"
+      },
       "intentFilters": [
         {
           "action": "VIEW",
@@ -82,7 +85,14 @@
           "backgroundColor": "#0A0E17"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
     ],
 
     "experiments": {
