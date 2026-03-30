@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "554548283491",
+    "project_id": "swift-fx-89f91",
+    "storage_bucket": "swift-fx-89f91.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:554548283491:android:a4368ea3c5ea1607949056",
+        "android_client_info": {
+          "package_name": "com.swiftfx.signals"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4rXb1z3dARRhPyBXTAcaMV5vUvKby4jU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

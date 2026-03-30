@@ -504,8 +504,7 @@ export default function AIScreen() {
         setSelectedImage(null);
       }
       setAnalysisResult(result);
-        setScreenState('history_detail');
-      }
+      setScreenState('history_detail');
     } catch (e) { console.warn('Failed to fetch analysis detail:', e); }
   };
 
