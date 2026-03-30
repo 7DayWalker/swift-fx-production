@@ -1,0 +1,207 @@
+"""
+main.py — FastAPI application entry point.
+Creates the app, registers all routers, configures CORS, and handles lifecycle events.
+"""
+import os
+import logging
+import asyncio
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+
+# ─── Environment ──────────────────────────────────────────────────────────────
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env', override=False)
+
+# ─── Logging (global, single config) ─────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+)
+logger = logging.getLogger(__name__)
+
+# ─── Database (import to trigger connection) ──────────────────────────────────
+from core.database import db, client
+
+# ─── Supabase helpers (used by startup routines) ─────────────────────────────
+from supabase_auth import fetch_profile_by_email, update_profile
+
+# ─── Config ───────────────────────────────────────────────────────────────────
+from core.config import PROTECTED_SUPER_ADMINS
+from models.enums import UserRole, AdminRole
+
+# ─── FastAPI app ──────────────────────────────────────────────────────────────
+app = FastAPI(title="Swift FX Signals API")
+
+# ─── Import and register ALL routers ─────────────────────────────────────────
+from api.routes import (
+    signals,
+    admin,
+    subscriptions,
+    ai,
+    community,
+    academy,
+    fund,
+    calendar,
+    settings,
+    referral,
+    support,
+    dashboard,
+)
+
+app.include_router(signals.router)
+app.include_router(admin.router)
+app.include_router(subscriptions.router)
+app.include_router(ai.router)
+app.include_router(community.router)
+app.include_router(academy.router)
+app.include_router(fund.router)
+app.include_router(calendar.router)
+app.include_router(settings.router)
+app.include_router(referral.router)
+app.include_router(support.router)
+app.include_router(dashboard.router)
+
+# ─── Signal Engine ────────────────────────────────────────────────────────────
+from services.signal_engine import (
+    get_engine_config, run_price_automation,
+)
+
+price_automation_running = False
+engine_task = None
+
+# Give admin routes access to the engine state
+import api.routes.admin as admin_module
+admin_module.set_signal_engine({
+    'get_running': lambda: price_automation_running,
+    'get_task': lambda: engine_task,
+})
+
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
+
+if raw_cors == '*':
+    CORS_ORIGINS = ["*"]
+    logger.info("[CORS] Configured to allow ALL origins (*)")
+else:
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in raw_cors.split(',')
+        if origin.strip()
+    ]
+    if not CORS_ORIGINS:
+        logger.warning("[CORS] CORS_ORIGINS not configured - web/admin access will be blocked")
+    else:
+        for origin in CORS_ORIGINS:
+            if not origin.startswith(('http://', 'https://')):
+                raise ValueError(f"[CORS] Invalid origin format: {origin}. Must start with http:// or https://")
+        logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+)
+
+
+# ─── Health check ─────────────────────────────────────────────────────────────
+@app.get("/api/health")
+async def health_check():
+    """Health check for load balancer / deployment verification."""
+    try:
+        await db.command("ping")
+        mongo_ok = True
+    except Exception:
+        mongo_ok = False
+    return {
+        "status": "healthy" if mongo_ok else "degraded",
+        "mongo": "connected" if mongo_ok else "disconnected",
+    }
+
+
+# ─── Lifecycle events ─────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    """Initializes indexes, signal engine, super admin accounts, and default data."""
+    global price_automation_running, engine_task
+
+    logger.info("=" * 60)
+    logger.info("[Startup] Swift FX Backend Starting...")
+    logger.info("=" * 60)
+
+    # MongoDB indexes
+    logger.info("[Startup] Ensuring MongoDB indexes...")
+    await db.iap_transactions.create_index([("user_id", 1), ("status", 1)])
+    await db.iap_transactions.create_index("expiry_date")
+    await db.iap_transactions.create_index("transaction_id", unique=True)
+    await db.signals.create_index([("created_at", -1)])
+    await db.signals.create_index("state")
+    await db.device_tokens.create_index("user_id")
+    await db.device_tokens.create_index("is_active")
+    await db.ai_analyses.create_index([("user_id", 1), ("created_at", -1)])
+    await db.posts.create_index("created_at")
+    await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+    logger.info("[Startup] MongoDB indexes ensured")
+
+    # Super Admin initialization
+    await initialize_super_admins()
+
+    # Default FAQs
+    from api.routes.support import initialize_faqs
+    await initialize_faqs()
+
+    # Signal engine
+    config = await get_engine_config()
+    if config.get("enabled", True) and not config.get("paused", False):
+        logger.info("[Startup] Starting Signal Auto-Engine...")
+        price_automation_running = True
+        engine_task = asyncio.create_task(run_price_automation())
+        logger.info("[Startup] Signal Auto-Engine task created")
+    else:
+        logger.info("[Startup] Signal Auto-Engine is DISABLED or PAUSED")
+        if config.get("paused"):
+            logger.info(f"[Startup] Pause reason: {config.get('pause_reason', 'No reason specified')}")
+
+    logger.info("[Startup] Startup complete")
+
+
+async def initialize_super_admins():
+    """Create or update protected Super Admin accounts on startup"""
+    for email in PROTECTED_SUPER_ADMINS:
+        existing = await fetch_profile_by_email(email.lower())
+        if existing:
+            if (existing.get("role") != UserRole.ADMIN.value
+                    or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value
+                    or not existing.get("is_admin")):
+                await update_profile(existing["id"], {
+                    "role": UserRole.ADMIN.value,
+                    "admin_role": AdminRole.SUPER_ADMIN.value,
+                    "admin_enabled": True,
+                })
+                logger.info(f"[RBAC] Restored Super Admin role for {email}")
+            else:
+                logger.info(f"[RBAC] Super Admin {email} verified")
+        else:
+            logger.info(f"[RBAC] Super Admin {email} not found in profiles - must be created via Supabase Auth")
+    logger.info("[RBAC] Super Admin initialization complete")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Gracefully stop the signal engine on shutdown"""
+    global price_automation_running, engine_task
+
+    logger.info("[Shutdown] Stopping Signal Auto-Engine...")
+    price_automation_running = False
+    if engine_task:
+        engine_task.cancel()
+        try:
+            await engine_task
+        except asyncio.CancelledError:
+            pass
+    client.close()
+    logger.info("[Shutdown] Server shutdown complete")
