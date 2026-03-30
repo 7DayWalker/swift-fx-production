@@ -4921,6 +4921,34 @@ async def update_fund_application(
         {"$set": update_data}
     )
     
+    # When approved, auto-create investor portfolio if it doesn't exist yet
+    if status == "approved":
+        existing_portfolio = await db.investor_portfolios.find_one({
+            "user_id": application["user_id"]
+        })
+        if not existing_portfolio:
+            portfolio_id = f"portfolio_{uuid.uuid4().hex[:12]}"
+            now = datetime.now(timezone.utc)
+            portfolio = {
+                "portfolio_id": portfolio_id,
+                "user_id": application["user_id"],
+                "application_id": application["application_id"],
+                "full_name": application.get("full_name", ""),
+                "email": application.get("email", ""),
+                "invested_capital": application.get("intended_amount", 0),
+                "current_equity": application.get("intended_amount", 0),
+                "total_return_pct": 0.0,
+                "investment_tier": application.get("investment_tier", "standard"),
+                "performance_fee": 20.0,
+                "lockup_months": 3,
+                "account_status": "active",
+                "start_date": now.isoformat(),
+                "created_at": now.isoformat(),
+                "updated_at": None,
+            }
+            await db.investor_portfolios.insert_one(portfolio)
+            logger.info(f"[Fund] Auto-created portfolio {portfolio_id} for user {application['user_id']} on approval")
+    
     logger.info(f"[Fund] Admin {admin.user_id} updated application {application_id} to {status}")
     
     return {
