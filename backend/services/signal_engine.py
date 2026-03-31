@@ -33,40 +33,35 @@ async def send_signal_close_notification(signal_id, pair, signal_type, pips, vis
     await _notify_close(signal_id, pair, signal_type, pips, visibility)
 
 # ==============================================================================
-# SIGNAL LIFECYCLE ENGINE v3.0 - DETERMINISTIC AUDITABLE MODE
+# SIGNAL LIFECYCLE ENGINE v3.1 - ABSOLUTE THRESHOLD, GAP-PROTECTED
 # ==============================================================================
 #
 # ARCHITECTURE OVERVIEW:
 # ----------------------
-# This is a SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine.
-# It is NOT tick-level real-time execution. It is NOT broker execution.
+# SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine.
+# NOT tick-level real-time. NOT broker execution.
 #
 # KEY CHARACTERISTICS:
-# 1. POLLING-BASED: Prices fetched every N seconds (default 5s, configurable)
-# 2. SNAPSHOT PRICES: Each poll gets a single price point per instrument
+# 1. POLLING: 1s active ticks, 10s idle sleep (no active signals)
+# 2. ABSOLUTE THRESHOLDS: Every tick evaluated independently — NO crossing detection
 # 3. DETERMINISTIC: Same inputs always produce same outputs
-# 4. GAP-PROTECTED: Price gaps use defined SL/TP/Entry, not jumped prices
+# 4. GAP-PROTECTED: Price gaps trigger at DEFINED SL/TP/Entry, not gapped price
 # 5. AUDITABLE: Every closure stores full price trace and source
 #
-# CROSSING DETECTION RULES:
-# - Activation/closure requires price to CROSS through target level
-# - If last_price unavailable, uses simple threshold comparison
-# - Gap protection ensures execution at defined levels, not market gaps
+# EVALUATION HIERARCHY (per tick):
+# 1. Stop Loss — evaluated FIRST, NO buffer, triggers immediately on breach
+# 2. Take Profit — evaluated second, 0.5 buffer for broker spread
+# 3. Entry — evaluated for pending signals, 0.5 buffer
+#
+# SINGLE-TP SIGNALS: If tp2/tp3 are null, hitting tp1 closes trade as PROFIT.
 #
 # PRICE SOURCES:
-# - Forex: frankfurter.app (free API, mid-rate)
-# - Gold: goldapi.io → CoinGecko PAX Gold fallback
+# - Gold (XAUUSD): TwelveData (primary) → Metals-API → GoldAPI
+# - Forex: frankfurter.app
 # - Crypto: CoinGecko
-# - NO SIMULATED/HARDCODED PRICES - if API fails, symbol is skipped
+# - NO SIMULATED/HARDCODED PRICES — if ALL providers fail, symbol skipped
 #
-# SINGLE INSTANCE ENFORCEMENT:
-# - DB-based distributed lock prevents duplicate engine execution
-# - Lock auto-expires after 2x poll interval for crash recovery
-#
-# DATA STORED AT CLOSURE:
-# - exit_price, exit_reason, price_source, poll_timestamp
-# - last_price, current_price, activation_price
-# - pip_size, pip_multiplier, calculated_pips with full math trace
+# CACHE: 3-second TTL in-memory cache (market_data.py) to optimize API limits
 #
 # ==============================================================================
 
@@ -250,26 +245,24 @@ def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: st
 
 class DeterministicPriceTrigger:
     """
-    Deterministic price trigger checker with gap protection.
+    Absolute threshold price trigger — NO crossing detection.
     
-    KEY RULES:
-    1. Uses crossing detection when last_price is available
-    2. Falls back to threshold comparison when last_price unavailable
-    3. Returns the DEFINED level price, not the gapped market price
+    Every tick is evaluated independently against the target level.
+    No comparison between last_price and current_price.
     
-    GAP PROTECTION:
-    - If price gaps through SL/TP/Entry between polls, we still trigger
-    - But we use the DEFINED level price for execution, not the gapped price
-    - This ensures deterministic, auditable results
+    EXECUTION RULES:
+      BUY signals:
+        Entry:  price >= entry - BUFFER
+        TP:     price >= TP - BUFFER
+        SL:     price <= stop_loss        (NO buffer)
+      
+      SELL signals:
+        Entry:  price <= entry + BUFFER
+        TP:     price <= TP + BUFFER
+        SL:     price >= stop_loss        (NO buffer)
     
-    EXECUTION BUFFER (0.5):
-    - Applied to ENTRY and TP comparisons only
-    - NOT applied to STOP LOSS (SL must trigger exactly at the defined level)
-    - Compensates for minor price differences between data provider and broker
-    
-    IMPORTANT: No crossing detection. Every tick is evaluated independently
-    against the threshold. This prevents missed triggers when last_price is
-    stale or when price gaps through a level between polls.
+    GAP PROTECTION: Returns the DEFINED level price for execution,
+    not the gapped market price. Deterministic and auditable.
     """
     
     BUFFER = 0.5  # Execution precision buffer (in price units)
@@ -888,7 +881,7 @@ async def run_price_automation():
     
     logger.info("=" * 60)
     logger.info("[Engine] Signal Auto-Engine v3.1 STARTED")
-    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s | Cache TTL: 10s")
+    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s | Cache TTL: 3s")
     logger.info(f"[Engine] Execution buffer: {DeterministicPriceTrigger.BUFFER}")
     logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, BUFFERED, AUDITABLE")
     logger.info("[Engine] Visibility rules ACTIVE: Free/Premium/VIP")

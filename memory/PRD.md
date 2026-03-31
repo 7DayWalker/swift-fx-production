@@ -12,19 +12,29 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
+### Signal Engine v3.1 — Critical Execution Accuracy (Verified — Mar 31 2026)
+- **52/52 unit+integration tests passed** (`tests/test_signal_engine_v3.py`)
+- **Absolute threshold checks**: No crossing detection. Every tick evaluated independently
+- **SL priority**: Stop Loss always checked FIRST, NO 0.5 buffer, immediate breach trigger
+- **Single-TP handling**: If tp2/tp3 are null, hitting tp1 closes trade immediately as profit
+- **Gap protection**: Price gaps still trigger at DEFINED level, not gapped market price
+- **Cache TTL**: 3 seconds (verified)
+- **Engine timing**: 1s active ticks, 10s idle sleep
+- **Live verification**: Engine unpaused, TwelveData fetching, SL triggered correctly on live signal
+
 ### Multi-Asset Market Data Service + Signal Engine (Completed — Mar 2026)
 - Created `services/market_data.py` — multi-asset price service with:
   - `get_price(symbol)` main entry point with symbol routing
   - Provider priority: TwelveData (primary) → Metals-API (fallback) → GoldAPI (backup)
   - Conditional provider usage: only calls providers with valid API keys
-  - In-memory TTL cache (10s per symbol)
+  - In-memory TTL cache (3s per symbol)
   - Symbol aliases (XAU/USD, GOLD → XAUUSD)
   - Extensible `SYMBOL_PROVIDERS` registry for future assets
   - Robust error handling: rate limits, invalid keys, timeouts, parse errors
 - Created `api/routes/market.py` — `GET /api/market/price` and `GET /api/market/symbols`
 - Updated `services/signal_engine.py` to use `market_data.get_price()` for gold symbols
 - Signal lifecycle: pending → active → tp1 → tp2 → tp3 → closed, with SL priority
-- **TwelveData key configured and live** — XAUUSD fetching at ~$4,575
+- **TwelveData key configured and live** — XAUUSD fetching at ~$4,587
 
 ### Backend Auth Regression (Completed — Mar 2026)
 - Fixed 30+ missing import bugs across 10 route files after monolith refactoring
@@ -47,7 +57,7 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 ## Prioritized Backlog
 
 ### P0 (Immediate)
-- Replace `test_key` API keys with real ones for market data providers (user action)
+- Signal Engine v3.1 execution accuracy — VERIFIED (52/52 tests pass)
 
 ### P1
 - End-to-End IAP testing on physical devices

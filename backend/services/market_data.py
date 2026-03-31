@@ -30,7 +30,7 @@ METALS_API_KEY = os.environ.get("METALS_API_KEY", "")
 GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
 
 # ---------------------------------------------------------------------------
-# In-memory price cache — keyed by symbol, TTL = 5 seconds
+# In-memory price cache — keyed by symbol, TTL = 3 seconds
 # ---------------------------------------------------------------------------
 _price_cache: dict[str, dict] = {}
 CACHE_TTL_SECONDS = 3

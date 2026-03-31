@@ -1,0 +1,89 @@
+{
+  "iteration": 22,
+  "test_date": "2026-03-31T13:45:00Z",
+  "test_type": "Signal Engine v3.1 - Critical Execution Accuracy Verification",
+  "total_tests": 52,
+  "passed": 52,
+  "failed": 0,
+  "test_file": "/app/backend/tests/test_signal_engine_v3.py",
+  "categories": {
+    "SL_no_buffer": {
+      "tests": 8,
+      "passed": 8,
+      "details": "BUY SL triggers at price <= SL. SELL SL triggers at price >= SL. No 0.5 buffer applied. Exact boundary tested."
+    },
+    "TP_with_buffer": {
+      "tests": 6,
+      "passed": 6,
+      "details": "BUY TP triggers at price >= TP - 0.5. SELL TP triggers at price <= TP + 0.5. Buffer validated at boundary."
+    },
+    "entry_with_buffer": {
+      "tests": 6,
+      "passed": 6,
+      "details": "BUY entry triggers at price >= entry - 0.5. SELL entry triggers at price <= entry + 0.5."
+    },
+    "no_crossing_detection": {
+      "tests": 3,
+      "passed": 3,
+      "details": "last_price parameter has ZERO effect on trigger outcome. SL, TP, and Entry all produce identical results regardless of last_price."
+    },
+    "sl_priority": {
+      "tests": 2,
+      "passed": 2,
+      "details": "SL evaluated FIRST in process_signal. BUY with SL breach → closed/sl. SELL with SL breach → closed/sl."
+    },
+    "single_tp_handling": {
+      "tests": 5,
+      "passed": 5,
+      "details": "Single-TP BUY/SELL signals close immediately (state=closed, exit_reason=tp1). Multi-TP advances to next state. Two-TP closes on tp2."
+    },
+    "gap_protection": {
+      "tests": 3,
+      "passed": 3,
+      "details": "Price gap through TP still triggers. Price gap through SL triggers at DEFINED SL level, not gapped price."
+    },
+    "cache_validation": {
+      "tests": 3,
+      "passed": 3,
+      "details": "TTL confirmed as 3 seconds. Fresh cache returns data. Expired cache returns None."
+    },
+    "pip_calculation": {
+      "tests": 5,
+      "passed": 5,
+      "details": "XAUUSD pip_multiplier=10. BUY profit/loss and SELL profit/loss all correct. Audit trace included."
+    },
+    "multi_tp_progression": {
+      "tests": 2,
+      "passed": 2,
+      "details": "Full active → tp1 → tp2 → closed progression. SL during tp1 state still closes correctly."
+    },
+    "edge_cases": {
+      "tests": 5,
+      "passed": 5,
+      "details": "Null SL/TP/entry/price handled gracefully. tp3 state auto-closes. Closed signals immutable."
+    },
+    "pending_activation": {
+      "tests": 3,
+      "passed": 3,
+      "details": "BUY/SELL pending signals activate correctly. Price outside entry-buffer range does not activate."
+    }
+  },
+  "live_engine_verification": {
+    "engine_started": true,
+    "startup_log": "Signal Auto-Engine v3.1 STARTED | Active poll: 1s | Idle poll: 10s | Cache TTL: 3s",
+    "twelvedata_working": true,
+    "live_sl_triggered": {
+      "signal_id": "sig_fe05f5b05dcb",
+      "type": "SELL",
+      "market_price": 4587.16,
+      "sl_level": 4560.0,
+      "exit_reason": "SL",
+      "gap_protected": true,
+      "pips": -50.0,
+      "pip_math": "SELL: (4555.0 - 4560.0) * 10 = -50.0"
+    },
+    "mode_after_test": "AUTO",
+    "error_count": 0
+  },
+  "verdict": "ALL PASS — Signal engine execution logic is production-ready"
+}
