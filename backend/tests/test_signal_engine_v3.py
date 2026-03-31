@@ -145,18 +145,20 @@ class TestTriggerTP:
 
 
 class TestTriggerEntry:
-    """Entry uses 0.5 buffer. BUY: price >= entry - 0.5, SELL: price <= entry + 0.5"""
+    """Entry uses 0.5 epsilon. BUY: price <= entry + 0.5, SELL: price >= entry - 0.5 (v4.0)"""
 
     def test_buy_entry_exact(self):
         triggered, _ = trigger.check_entry_triggered(2650.0, 2650.0, "buy")
         assert triggered is True
 
     def test_buy_entry_within_buffer(self):
-        triggered, _ = trigger.check_entry_triggered(2649.6, 2650.0, "buy")
+        """BUY: 2650.4 <= 2650.5 → TRUE (within epsilon)"""
+        triggered, _ = trigger.check_entry_triggered(2650.4, 2650.0, "buy")
         assert triggered is True
 
     def test_buy_entry_outside_buffer(self):
-        triggered, _ = trigger.check_entry_triggered(2649.4, 2650.0, "buy")
+        """BUY: 2651.0 <= 2650.5 → FALSE (above epsilon)"""
+        triggered, _ = trigger.check_entry_triggered(2651.0, 2650.0, "buy")
         assert triggered is False
 
     def test_sell_entry_exact(self):
@@ -164,11 +166,13 @@ class TestTriggerEntry:
         assert triggered is True
 
     def test_sell_entry_within_buffer(self):
-        triggered, _ = trigger.check_entry_triggered(2650.4, 2650.0, "sell")
+        """SELL: 2649.6 >= 2649.5 → TRUE (within epsilon)"""
+        triggered, _ = trigger.check_entry_triggered(2649.6, 2650.0, "sell")
         assert triggered is True
 
     def test_sell_entry_outside_buffer(self):
-        triggered, _ = trigger.check_entry_triggered(2650.6, 2650.0, "sell")
+        """SELL: 2649.0 >= 2649.5 → FALSE (below epsilon)"""
+        triggered, _ = trigger.check_entry_triggered(2649.0, 2650.0, "sell")
         assert triggered is False
 
 
@@ -465,8 +469,9 @@ class TestPendingActivation:
         signal = make_signal(
             signal_type="buy", entry=2650.0, state="pending",
         )
-        # Price far below entry - buffer
-        result = await ctrl.process_signal(signal, 2640.0, "test", datetime.now(timezone.utc))
+        # v4.0: BUY entry is price <= entry + eps (2650.5)
+        # Price 2660 is ABOVE entry + eps → NOT triggered
+        result = await ctrl.process_signal(signal, 2660.0, "test", datetime.now(timezone.utc))
         assert result is None
 
 

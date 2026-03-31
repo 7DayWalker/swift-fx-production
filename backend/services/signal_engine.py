@@ -33,35 +33,38 @@ async def send_signal_close_notification(signal_id, pair, signal_type, pips, vis
     await _notify_close(signal_id, pair, signal_type, pips, visibility)
 
 # ==============================================================================
-# SIGNAL LIFECYCLE ENGINE v3.1 - ABSOLUTE THRESHOLD, GAP-PROTECTED
+# SIGNAL LIFECYCLE ENGINE v4.0 - AUDITED ABSOLUTE THRESHOLD ENGINE
 # ==============================================================================
 #
-# ARCHITECTURE OVERVIEW:
-# ----------------------
-# SNAPSHOT-BASED, POLLING-DRIVEN signal lifecycle engine.
-# NOT tick-level real-time. NOT broker execution.
+# AUDIT DATE: March 31, 2026
 #
-# KEY CHARACTERISTICS:
-# 1. POLLING: 1s active ticks, 10s idle sleep (no active signals)
-# 2. ABSOLUTE THRESHOLDS: Every tick evaluated independently — NO crossing detection
-# 3. DETERMINISTIC: Same inputs always produce same outputs
-# 4. GAP-PROTECTED: Price gaps trigger at DEFINED SL/TP/Entry, not gapped price
-# 5. AUDITABLE: Every closure stores full price trace and source
+# ROOT CAUSES FIXED:
+# 1. Entry trigger was INVERTED (BUY/SELL conditions were swapped)
+# 2. Cache served stale prices 2/3 ticks (3s TTL with 1s polling)
+# 3. No trace-level logging made issues invisible
+#
+# EXECUTION RULES (FINAL — VERIFIED):
+#   BUY:
+#     Entry:  price <= entry + EPSILON     (buy limit: price drops to entry)
+#     SL:     price <= stop_loss           (NO epsilon)
+#     TP:     price >= tp - EPSILON
+#
+#   SELL:
+#     Entry:  price >= entry - EPSILON     (sell limit: price rises to entry)
+#     SL:     price >= stop_loss           (NO epsilon)
+#     TP:     price <= tp + EPSILON
+#
+# PRICE_EPSILON = 0.5 — applied ONLY to Entry and TP, NEVER to SL
 #
 # EVALUATION HIERARCHY (per tick):
-# 1. Stop Loss — evaluated FIRST, NO buffer, triggers immediately on breach
-# 2. Take Profit — evaluated second, 0.5 buffer for broker spread
-# 3. Entry — evaluated for pending signals, 0.5 buffer
+#   1. Stop Loss — HIGHEST priority, NO epsilon, immediate on breach
+#   2. Take Profit — second priority, with epsilon
+#   3. Entry — for pending signals, with epsilon
 #
-# SINGLE-TP SIGNALS: If tp2/tp3 are null, hitting tp1 closes trade as PROFIT.
+# SINGLE-TP: If tp2/tp3 are null, hitting tp1 → state="closed", outcome=profit
 #
-# PRICE SOURCES:
-# - Gold (XAUUSD): TwelveData (primary) → Metals-API → GoldAPI
-# - Forex: frankfurter.app
-# - Crypto: CoinGecko
-# - NO SIMULATED/HARDCODED PRICES — if ALL providers fail, symbol skipped
-#
-# CACHE: 3-second TTL in-memory cache (market_data.py) to optimize API limits
+# CACHE: Engine always fetches FRESH prices (bypasses TTL cache).
+#        Cache only used by HTTP API endpoints.
 #
 # ==============================================================================
 
@@ -79,7 +82,7 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, dict]:
     CRITICAL: NO HARDCODED FALLBACK PRICES.
     If API fails, symbol is omitted from results.
     """
-    from services.market_data import get_price, _normalize_symbol, SYMBOL_PROVIDERS
+    from services.market_data import get_price_fresh, _normalize_symbol, SYMBOL_PROVIDERS
     
     prices = {}
     
@@ -103,13 +106,14 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, dict]:
         elif mapping["type"] == "crypto":
             crypto_symbols.append((symbol, mapping["symbol"]))
     
-    # Fetch from market_data service (handles caching + multi-provider fallback)
+    # Fetch from market_data service — ALWAYS FRESH (bypass TTL cache)
     for orig_symbol, md_symbol in market_data_symbols:
         try:
-            result = await get_price(md_symbol)
+            result = await get_price_fresh(md_symbol)
             prices[orig_symbol] = {
                 "price": result["price"],
                 "source": result["source"],
+                "fresh": True,
             }
         except Exception as e:
             logger.warning(f"[PriceFetch] {orig_symbol} via market_data FAILED: {e}")
@@ -240,32 +244,36 @@ def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: st
 
 
 # ==============================================================================
-# DETERMINISTIC PRICE TRIGGER ENGINE v3.0 - WITH GAP PROTECTION
+# DETERMINISTIC PRICE TRIGGER ENGINE v4.0 - AUDITED ABSOLUTE THRESHOLDS
 # ==============================================================================
 
 class DeterministicPriceTrigger:
     """
-    Absolute threshold price trigger — NO crossing detection.
+    AUDITED absolute threshold price trigger — NO crossing detection.
     
-    Every tick is evaluated independently against the target level.
-    No comparison between last_price and current_price.
+    Every tick is evaluated independently. No dependency on previous_price.
     
-    EXECUTION RULES:
-      BUY signals:
-        Entry:  price >= entry - BUFFER
-        TP:     price >= TP - BUFFER
-        SL:     price <= stop_loss        (NO buffer)
+    EXECUTION RULES (v4.0 — AUDITED):
+      BUY signals (limit order: buy when price drops to entry):
+        Entry:  price <= entry + EPSILON
+        TP:     price >= tp - EPSILON
+        SL:     price <= stop_loss        (NO epsilon)
       
-      SELL signals:
-        Entry:  price <= entry + BUFFER
-        TP:     price <= TP + BUFFER
-        SL:     price >= stop_loss        (NO buffer)
+      SELL signals (limit order: sell when price rises to entry):
+        Entry:  price >= entry - EPSILON
+        TP:     price <= tp + EPSILON
+        SL:     price >= stop_loss        (NO epsilon)
+    
+    PRICE_EPSILON = 0.5 — broker spread tolerance.
+    Applied ONLY to Entry and TP. NEVER to SL.
     
     GAP PROTECTION: Returns the DEFINED level price for execution,
     not the gapped market price. Deterministic and auditable.
     """
     
-    BUFFER = 0.5  # Execution precision buffer (in price units)
+    PRICE_EPSILON = 0.5  # Broker spread tolerance (in price units)
+    # Legacy alias
+    BUFFER = PRICE_EPSILON
     
     @staticmethod
     def check_sl_triggered(
@@ -275,10 +283,10 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Stop Loss is triggered. NO BUFFER — must be 100% reliable.
+        Stop Loss — NO EPSILON. Triggers immediately on breach.
         
-        BUY:  SL triggers when price <= stop_loss
-        SELL: SL triggers when price >= stop_loss
+        BUY:  price <= stop_loss  (price drops below SL)
+        SELL: price >= stop_loss  (price rises above SL)
         """
         if not stop_loss or not current_price:
             return (False, None)
@@ -300,21 +308,21 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Take Profit is triggered. BUFFER applied for precision.
+        Take Profit — EPSILON applied for broker spread tolerance.
         
-        BUY:  TP triggers when price >= TP - BUFFER
-        SELL: TP triggers when price <= TP + BUFFER
+        BUY:  price >= tp - EPSILON  (price rises to TP)
+        SELL: price <= tp + EPSILON  (price drops to TP)
         """
         if not take_profit or not current_price:
             return (False, None)
         
-        buf = DeterministicPriceTrigger.BUFFER
+        eps = DeterministicPriceTrigger.PRICE_EPSILON
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            triggered = current_price <= take_profit + buf
+            triggered = current_price <= take_profit + eps
         else:
-            triggered = current_price >= take_profit - buf
+            triggered = current_price >= take_profit - eps
         
         return (triggered, take_profit if triggered else None)
     
@@ -326,21 +334,26 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Entry price is reached for pending signals. BUFFER applied.
+        Entry — EPSILON applied. Limit order behavior.
         
-        BUY:  Entry triggers when price >= entry - BUFFER
-        SELL: Entry triggers when price <= entry + BUFFER
+        BUY:  price <= entry + EPSILON  (price drops TO entry for buy limit)
+        SELL: price >= entry - EPSILON  (price rises TO entry for sell limit)
+        
+        v4.0 FIX: Previous version had BUY/SELL conditions INVERTED,
+        causing pending orders to trigger late or not at all.
         """
         if not entry_price or not current_price:
             return (False, None)
         
-        buf = DeterministicPriceTrigger.BUFFER
+        eps = DeterministicPriceTrigger.PRICE_EPSILON
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            triggered = current_price <= entry_price + buf
+            # SELL LIMIT: activate when price rises to entry
+            triggered = current_price >= entry_price - eps
         else:
-            triggered = current_price >= entry_price - buf
+            # BUY LIMIT: activate when price drops to entry
+            triggered = current_price <= entry_price + eps
         
         return (triggered, entry_price if triggered else None)
 
@@ -566,23 +579,35 @@ class SignalLifecycleController:
         signal: dict,
         current_price: float,
         price_source: str,
-        poll_timestamp: datetime
+        poll_timestamp: datetime,
+        price_fresh: bool = True
     ) -> Optional[dict]:
         """
         MAIN ENTRY POINT: Process a single signal with current price.
         
-        DETERMINISTIC GAP-PROTECTED LOGIC:
-        - Activation uses DEFINED entry price, not gapped market price
-        - SL closure uses DEFINED SL price, not gapped market price
-        - TP closure uses DEFINED TP price, not gapped market price
-        
-        Returns dict with action taken, or None if no action.
+        TRACE LOGGING: Every evaluation is logged with exact comparison.
         """
         signal_id = signal["signal_id"]
         current_state = self.get_current_state(signal)
         signal_type = signal.get("signal_type", "buy")
         pair = signal.get("pair", "")
         last_price = signal.get("last_price")
+        entry = signal.get("entry")
+        stop_loss = signal.get("stop_loss")
+        tp1 = signal.get("tp1")
+        tp2 = signal.get("tp2")
+        tp3 = signal.get("tp3")
+        
+        sig_type = signal_type.lower()
+        eps = DeterministicPriceTrigger.PRICE_EPSILON
+        
+        # ===== STEP 1: MANDATORY TRACE LOG (every signal, every cycle) =====
+        logger.info(
+            f"[TRACE] {signal_id} | {pair} {sig_type.upper()} | state={current_state} | "
+            f"price={current_price} | entry={entry} sl={stop_loss} "
+            f"tp1={tp1} tp2={tp2} tp3={tp3} | "
+            f"prev_price={last_price} | src={price_source} | fresh={price_fresh}"
+        )
         
         # Build price context for audit trail
         price_context = {
@@ -602,20 +627,32 @@ class SignalLifecycleController:
             {"$set": {"last_price": current_price}}
         )
         
-        # === PENDING SIGNALS ===
+        # === PENDING SIGNALS: Check ENTRY ===
         if current_state == "pending":
-            entry = signal.get("entry")
+            if not entry:
+                return None
             
-            # Check if entry price hit (returns tuple with gap-protected price)
             triggered, activation_price = self.trigger.check_entry_triggered(
                 current_price, entry, signal_type, last_price
             )
             
+            # TRACE: Log exact entry evaluation
+            if sig_type == "sell":
+                logger.info(
+                    f"[TRACE] {signal_id} | ENTRY CHECK: "
+                    f"price({current_price}) >= entry({entry}) - eps({eps}) = {entry - eps} "
+                    f"→ {current_price >= entry - eps} → {'TRIGGERED' if triggered else 'waiting'}"
+                )
+            else:
+                logger.info(
+                    f"[TRACE] {signal_id} | ENTRY CHECK: "
+                    f"price({current_price}) <= entry({entry}) + eps({eps}) = {entry + eps} "
+                    f"→ {current_price <= entry + eps} → {'TRIGGERED' if triggered else 'waiting'}"
+                )
+            
             if triggered:
-                # GAP PROTECTION: activate at DEFINED entry, not gapped price
                 success = await self.activate_signal(signal_id, activation_price, price_context)
                 if success:
-                    # Send notification
                     visibility = SignalVisibility(signal.get("visibility", "free"))
                     asyncio.create_task(send_signal_notification(
                         signal_id, pair, SignalType(signal_type), visibility
@@ -630,17 +667,17 @@ class SignalLifecycleController:
         
         # === ACTIVE/TP1/TP2/TP3 SIGNALS ===
         if current_state in ["active", "tp1", "tp2", "tp3"]:
-            stop_loss = signal.get("stop_loss")
-            entry = signal.get("entry_price_actual") or signal.get("entry")
+            entry_actual = signal.get("entry_price_actual") or entry
             
             # Auto-close TP3 state immediately
             if current_state == "tp3":
                 tp3_price = signal.get("tp3") or signal.get("tp2") or signal.get("tp1")
+                logger.info(f"[TRACE] {signal_id} | TP3 STATE → auto-closing at {tp3_price}")
                 success = await self.close_signal(
                     signal_id, current_state, tp3_price, ExitReason.TP3, signal, price_context
                 )
                 if success:
-                    pips = calculate_signal_pips(entry, tp3_price, signal_type, pair)
+                    pips = calculate_signal_pips(entry_actual, tp3_price, signal_type, pair)
                     visibility = SignalVisibility(signal.get("visibility", "free"))
                     asyncio.create_task(send_signal_close_notification(
                         signal_id, pair, signal_type, pips, visibility
@@ -648,17 +685,31 @@ class SignalLifecycleController:
                     return {"action": "closed", "reason": "tp3", "signal_id": signal_id}
                 return None
             
-            # CHECK STOP LOSS FIRST (priority over TP)
+            # ===== PRIORITY 1: CHECK STOP LOSS FIRST =====
             if stop_loss:
                 sl_triggered, sl_exit_price = self.trigger.check_sl_triggered(
                     current_price, stop_loss, signal_type, last_price
                 )
                 
+                # TRACE: Log exact SL evaluation
+                if sig_type == "sell":
+                    logger.info(
+                        f"[TRACE] {signal_id} | SL CHECK: "
+                        f"price({current_price}) >= sl({stop_loss}) "
+                        f"→ {current_price >= stop_loss} → {'TRIGGERED' if sl_triggered else 'safe'}"
+                    )
+                else:
+                    logger.info(
+                        f"[TRACE] {signal_id} | SL CHECK: "
+                        f"price({current_price}) <= sl({stop_loss}) "
+                        f"→ {current_price <= stop_loss} → {'TRIGGERED' if sl_triggered else 'safe'}"
+                    )
+                
                 if sl_triggered:
-                    # GAP PROTECTION: close at DEFINED SL, not gapped price
                     logger.info(
                         f"[Engine] SL TRIGGERED for {signal_id}: "
-                        f"market={current_price}, exit_at={sl_exit_price} (gap_protected={sl_exit_price != current_price})"
+                        f"market={current_price}, exit_at={sl_exit_price} "
+                        f"(gap_protected={sl_exit_price != current_price})"
                     )
                     
                     success = await self.close_signal(
@@ -666,7 +717,7 @@ class SignalLifecycleController:
                     )
                     
                     if success:
-                        pips = calculate_signal_pips(entry, sl_exit_price, signal_type, pair)
+                        pips = calculate_signal_pips(entry_actual, sl_exit_price, signal_type, pair)
                         visibility = SignalVisibility(signal.get("visibility", "free"))
                         asyncio.create_task(send_signal_close_notification(
                             signal_id, pair, signal_type, pips, visibility
@@ -681,7 +732,7 @@ class SignalLifecycleController:
                         }
                     return None
             
-            # CHECK TP LEVELS
+            # ===== PRIORITY 2: CHECK TP LEVELS =====
             tp_target, exit_reason, new_state = self.get_next_tp_target(signal)
             
             if tp_target:
@@ -689,24 +740,37 @@ class SignalLifecycleController:
                     current_price, tp_target, signal_type, last_price
                 )
                 
+                # TRACE: Log exact TP evaluation
+                if sig_type == "sell":
+                    logger.info(
+                        f"[TRACE] {signal_id} | TP CHECK: "
+                        f"price({current_price}) <= tp({tp_target}) + eps({eps}) = {tp_target + eps} "
+                        f"→ {current_price <= tp_target + eps} → {'TRIGGERED' if tp_triggered else 'waiting'}"
+                    )
+                else:
+                    logger.info(
+                        f"[TRACE] {signal_id} | TP CHECK: "
+                        f"price({current_price}) >= tp({tp_target}) - eps({eps}) = {tp_target - eps} "
+                        f"→ {current_price >= tp_target - eps} → {'TRIGGERED' if tp_triggered else 'waiting'}"
+                    )
+                
                 if tp_triggered:
-                    # GAP PROTECTION: close/advance at DEFINED TP, not gapped price
                     logger.info(
                         f"[Engine] TP TRIGGERED for {signal_id}: "
-                        f"market={current_price}, target={tp_exit_price} (gap_protected={tp_exit_price != current_price})"
+                        f"market={current_price}, target={tp_exit_price} "
+                        f"(gap_protected={tp_exit_price != current_price}) "
+                        f"→ new_state={new_state}"
                     )
                     
-                    # Determine TP level
                     tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(new_state, 1)
                     
-                    # If TP3 or no more TPs, close the signal
-                    if new_state == "closed" or new_state == "tp3":
-                        # Close at TP
+                    if new_state == "closed":
+                        # Single-TP or final TP → close immediately
                         success = await self.close_signal(
                             signal_id, current_state, tp_exit_price, exit_reason, signal, price_context
                         )
                         if success:
-                            pips = calculate_signal_pips(entry, tp_exit_price, signal_type, pair)
+                            pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
                             visibility = SignalVisibility(signal.get("visibility", "free"))
                             asyncio.create_task(send_signal_close_notification(
                                 signal_id, pair, signal_type, pips, visibility
@@ -935,10 +999,12 @@ async def run_price_automation():
         logger.warning(f"[Engine] Could not clear stale pause: {e}")
 
     logger.info("=" * 60)
-    logger.info("[Engine] Signal Auto-Engine v3.1 STARTED (FAULT-TOLERANT)")
-    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s | Cache TTL: 3s")
-    logger.info(f"[Engine] Execution buffer: {DeterministicPriceTrigger.BUFFER}")
-    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, SELF-RECOVERING")
+    logger.info("[Engine] Signal Auto-Engine v4.0 STARTED (AUDITED)")
+    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s")
+    logger.info(f"[Engine] PRICE_EPSILON: {DeterministicPriceTrigger.PRICE_EPSILON} (Entry+TP only, NOT SL)")
+    logger.info("[Engine] Mode: ABSOLUTE THRESHOLD, GAP-PROTECTED, SELF-RECOVERING")
+    logger.info("[Engine] Price fetch: ALWAYS FRESH (cache bypassed for engine)")
+    logger.info("[Engine] Entry rules: BUY=limit(price<=entry+eps), SELL=limit(price>=entry-eps)")
     logger.info("[Engine] SL failsafe: last-known price cache enabled")
     logger.info("=" * 60)
 
@@ -1023,8 +1089,12 @@ async def run_price_automation():
                 await asyncio.sleep(IDLE_SLEEP)
                 continue
 
-            # --- Fetch live prices with retry on failure ---
+            # --- Fetch live prices — ALWAYS FRESH (no cache) ---
+            import time as _time
+            cycle_start = _time.monotonic()
+            
             price_data = await fetch_live_prices(symbols)
+            price_fresh = True
 
             if price_data:
                 # SUCCESS — update caches, reset error counters
@@ -1045,6 +1115,7 @@ async def run_price_automation():
                 if has_live_trades and _last_known_prices:
                     # FAILSAFE: use last-known prices for SL evaluation
                     price_data = {}
+                    price_fresh = False
                     for sym in symbols:
                         cached = _last_known_prices.get(sym) or _last_known_prices.get(sym.replace("/", ""))
                         if cached:
@@ -1111,7 +1182,8 @@ async def run_price_automation():
 
                 # Process signal through lifecycle controller
                 result = await lifecycle_controller.process_signal(
-                    signal, current_price, price_source, poll_timestamp
+                    signal, current_price, price_source, poll_timestamp,
+                    price_fresh=price_fresh
                 )
 
                 if result:
@@ -1119,9 +1191,12 @@ async def run_price_automation():
                     logger.info(f"[Engine] Action: {result}")
 
             if processed > 0 or skipped > 0:
-                logger.debug(
-                    f"[Engine] Cycle done: {processed} processed, "
-                    f"{actions} actions, {skipped} skipped"
+                cycle_end = _time.monotonic()
+                cycle_duration = round((cycle_end - cycle_start) * 1000, 1)
+                logger.info(
+                    f"[Engine] Cycle: {processed} processed, {actions} actions, "
+                    f"{skipped} skipped | duration={cycle_duration}ms | "
+                    f"fresh={price_fresh} | sleep={ACTIVE_SLEEP}s"
                 )
 
             await asyncio.sleep(ACTIVE_SLEEP)

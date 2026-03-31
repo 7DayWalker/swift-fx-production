@@ -205,6 +205,33 @@ def _normalize_symbol(symbol: str) -> str:
 # PUBLIC API
 # ===================================================================
 
+async def get_price_fresh(symbol: str) -> dict:
+    """
+    Fetch price directly from provider, BYPASSING the TTL cache.
+    Used by the signal engine to guarantee fresh data every tick.
+    
+    Still updates the cache for other consumers (HTTP API, etc.).
+    """
+    normalized = _normalize_symbol(symbol)
+
+    provider = SYMBOL_PROVIDERS.get(normalized)
+    if not provider:
+        raise ValueError(
+            f"Unsupported symbol: {symbol}. "
+            f"Available: {', '.join(SYMBOL_PROVIDERS.keys())}"
+        )
+
+    result = await provider()
+    if not result:
+        raise RuntimeError(
+            f"Failed to fetch fresh price for {normalized}: all providers returned None"
+        )
+
+    # Update cache for non-engine consumers
+    _set_cache(normalized, result)
+    return {k: v for k, v in result.items() if k != "_ts"}
+
+
 async def get_price(symbol: str) -> dict:
     """
     Fetch the current price for a given symbol.

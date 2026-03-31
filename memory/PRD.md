@@ -12,15 +12,16 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
-### Signal Engine v3.1 — Critical Execution Accuracy (Verified — Mar 31 2026)
-- **52/52 unit+integration tests passed** (`tests/test_signal_engine_v3.py`)
-- **Absolute threshold checks**: No crossing detection. Every tick evaluated independently
-- **SL priority**: Stop Loss always checked FIRST, NO 0.5 buffer, immediate breach trigger
-- **Single-TP handling**: If tp2/tp3 are null, hitting tp1 closes trade immediately as profit
-- **Gap protection**: Price gaps still trigger at DEFINED level, not gapped market price
-- **Cache TTL**: 3 seconds (verified)
-- **Engine timing**: 1s active ticks, 10s idle sleep
-- **Live verification**: Engine unpaused, TwelveData fetching, SL triggered correctly on live signal
+### Signal Engine v4.0 — FULL AUDIT (Verified — Mar 31 2026)
+- **132/132 tests passed** across 3 test suites
+- **ROOT CAUSE #1 FIXED (CRITICAL)**: Entry trigger was INVERTED. BUY used `>=` (wrong) → fixed to `<=` (buy limit). SELL used `<=` (wrong) → fixed to `>=` (sell limit). This caused pending orders to never trigger.
+- **ROOT CAUSE #2 FIXED (CRITICAL)**: Engine used 3s TTL cache with 1s polling — 2/3 ticks checked stale data. Fixed: engine now ALWAYS calls `get_price_fresh()`, bypassing cache entirely.
+- **ROOT CAUSE #3 FIXED**: Added [TRACE] level logging for every signal on every cycle with exact comparison evaluation
+- **PRICE_EPSILON = 0.5**: Applied ONLY to Entry and TP. SL has ZERO tolerance.
+- **Entry rules (v4.0)**: BUY = `price <= entry + eps` (buy limit). SELL = `price >= entry - eps` (sell limit).
+- **All 8 real-market scenarios verified**: SL breach, gap protection, single-TP closure, entry oscillation, TP reversal capture, high volatility spikes
+- **Cycle timing logged**: duration_ms, fresh/cached flag, sleep duration
+- Test report: `/app/test_reports/iteration_24.json`
 
 ### Engine Fault-Tolerance & Auto-Recovery (Verified — Mar 31 2026)
 - **75/75 tests passed** (reliability + execution combined)
