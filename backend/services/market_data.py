@@ -5,7 +5,7 @@ Architecture:
   get_price(symbol) → symbol router → provider chain → normalized response
 
 Supported assets (initial):
-  - XAUUSD (Gold): Metals-API → GoldAPI → TwelveData
+  - XAUUSD (Gold): TwelveData (primary) → Metals-API → GoldAPI
 
 Adding new symbols:
   1. Add a provider function (_get_<asset>_price)
@@ -23,11 +23,11 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Environment-based API keys (no defaults — fail fast if missing at call time)
+# Environment-based API keys — read once at module load, never hardcoded
 # ---------------------------------------------------------------------------
+TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY", "")
 METALS_API_KEY = os.environ.get("METALS_API_KEY", "")
 GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
-TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY", "")
 
 # ---------------------------------------------------------------------------
 # In-memory price cache — keyed by symbol, TTL = 5 seconds
@@ -49,9 +49,6 @@ def _set_cache(symbol: str, data: dict) -> dict:
     return data
 
 
-# ---------------------------------------------------------------------------
-# Normalized response builder
-# ---------------------------------------------------------------------------
 def _make_response(symbol: str, price: float, source: str) -> dict:
     return {
         "symbol": symbol,
@@ -61,14 +58,60 @@ def _make_response(symbol: str, price: float, source: str) -> dict:
     }
 
 
+def _is_real_key(key: str) -> bool:
+    """Check if an API key is configured and not a placeholder."""
+    return bool(key) and key not in ("test_key", "")
+
+
 # ===================================================================
-# GOLD PRICE PROVIDERS  (Metals-API → GoldAPI → TwelveData)
+# GOLD PRICE PROVIDERS  (TwelveData → Metals-API → GoldAPI)
 # ===================================================================
 
+async def _gold_twelvedata(client: httpx.AsyncClient) -> Optional[dict]:
+    """PRIMARY: TwelveData — returns price as string, must convert to float."""
+    if not _is_real_key(TWELVEDATA_KEY):
+        logger.debug("[MarketData] TwelveData key not configured, skipping")
+        return None
+    try:
+        resp = await client.get(
+            "https://api.twelvedata.com/price",
+            params={"symbol": "XAU/USD", "apikey": TWELVEDATA_KEY},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if "price" in data:
+                try:
+                    price = float(data["price"])
+                except (ValueError, TypeError):
+                    logger.warning(f"[MarketData] TwelveData: cannot parse price: {data['price']}")
+                    return None
+                if price > 0:
+                    logger.info(f"[MarketData] TwelveData OK: XAUUSD = {price}")
+                    return _make_response("XAUUSD", round(price, 2), "twelvedata")
+                else:
+                    logger.warning("[MarketData] TwelveData: price <= 0")
+            elif data.get("code") == 429:
+                logger.warning("[MarketData] TwelveData: rate limited (429)")
+            elif data.get("status") == "error":
+                logger.warning(f"[MarketData] TwelveData API error: {data.get('message', 'unknown')}")
+            else:
+                logger.warning(f"[MarketData] TwelveData: unexpected response: {str(data)[:200]}")
+        elif resp.status_code == 429:
+            logger.warning("[MarketData] TwelveData: HTTP 429 rate limited")
+        elif resp.status_code == 401:
+            logger.warning("[MarketData] TwelveData: HTTP 401 invalid key")
+        else:
+            logger.warning(f"[MarketData] TwelveData: HTTP {resp.status_code}")
+    except httpx.TimeoutException:
+        logger.warning("[MarketData] TwelveData: request timed out")
+    except Exception as e:
+        logger.warning(f"[MarketData] TwelveData exception: {e}")
+    return None
+
+
 async def _gold_metals_api(client: httpx.AsyncClient) -> Optional[dict]:
-    """PRIMARY: Metals-API  —  returns USD per ounce of gold."""
-    if not METALS_API_KEY or METALS_API_KEY == "test_key":
-        logger.debug("[MarketData] Metals-API key not configured, skipping")
+    """FALLBACK: Metals-API — returns USD per ounce of gold."""
+    if not _is_real_key(METALS_API_KEY):
         return None
     try:
         resp = await client.get(
@@ -80,7 +123,8 @@ async def _gold_metals_api(client: httpx.AsyncClient) -> Optional[dict]:
             if data.get("success"):
                 rate = data.get("rates", {}).get("XAU")
                 if rate and float(rate) > 0:
-                    price = 1.0 / float(rate)  # Convert rate (USD→XAU) to XAUUSD
+                    price = 1.0 / float(rate)
+                    logger.info(f"[MarketData] Metals-API OK: XAUUSD = {round(price, 2)}")
                     return _make_response("XAUUSD", round(price, 2), "metals-api")
             else:
                 err = data.get("error", {})
@@ -93,9 +137,8 @@ async def _gold_metals_api(client: httpx.AsyncClient) -> Optional[dict]:
 
 
 async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
-    """FALLBACK: GoldAPI  —  returns price directly."""
-    if not GOLDAPI_KEY or GOLDAPI_KEY == "test_key":
-        logger.debug("[MarketData] GoldAPI key not configured, skipping")
+    """BACKUP: GoldAPI — returns price directly."""
+    if not _is_real_key(GOLDAPI_KEY):
         return None
     try:
         resp = await client.get(
@@ -106,9 +149,8 @@ async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
             data = resp.json()
             price = data.get("price")
             if price and float(price) > 0:
+                logger.info(f"[MarketData] GoldAPI OK: XAUUSD = {float(price)}")
                 return _make_response("XAUUSD", float(price), "goldapi")
-        elif resp.status_code == 401:
-            logger.warning("[MarketData] GoldAPI: invalid or expired key")
         elif resp.status_code == 429:
             logger.warning("[MarketData] GoldAPI: rate limited")
         else:
@@ -118,100 +160,55 @@ async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
     return None
 
 
-async def _gold_twelvedata(client: httpx.AsyncClient) -> Optional[dict]:
-    """BACKUP: TwelveData  —  returns price as string."""
-    if not TWELVEDATA_KEY or TWELVEDATA_KEY == "test_key":
-        logger.debug("[MarketData] TwelveData key not configured, skipping")
-        return None
-    try:
-        resp = await client.get(
-            "https://api.twelvedata.com/price",
-            params={"symbol": "XAU/USD", "apikey": TWELVEDATA_KEY},
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if "price" in data:
-                price = float(data["price"])
-                if price > 0:
-                    return _make_response("XAUUSD", round(price, 2), "twelvedata")
-            elif data.get("code") == 429:
-                logger.warning("[MarketData] TwelveData: rate limited")
-            else:
-                logger.warning(f"[MarketData] TwelveData error: {data.get('message', data)}")
-        else:
-            logger.warning(f"[MarketData] TwelveData HTTP {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"[MarketData] TwelveData exception: {e}")
-    return None
-
-
 async def _get_gold_price() -> Optional[dict]:
     """
-    Fetch XAUUSD price using the 3-provider fallback chain:
-      Metals-API → GoldAPI → TwelveData
+    Fetch XAUUSD price using the provider chain:
+      TwelveData (primary) → Metals-API (fallback) → GoldAPI (backup)
     Returns normalized dict or None if all providers fail.
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
-        # 1. Primary
-        result = await _gold_metals_api(client)
-        if result:
-            return result
-
-        # 2. Fallback
-        result = await _gold_goldapi(client)
-        if result:
-            return result
-
-        # 3. Backup
         result = await _gold_twelvedata(client)
         if result:
             return result
 
-    logger.error("[MarketData] XAUUSD: ALL providers failed")
+        result = await _gold_metals_api(client)
+        if result:
+            return result
+
+        result = await _gold_goldapi(client)
+        if result:
+            return result
+
+    logger.error("[MarketData] XAUUSD: ALL configured providers failed")
     return None
 
 
 # ===================================================================
-# SYMBOL PROVIDER REGISTRY  — add new assets here
+# SYMBOL PROVIDER REGISTRY
 # ===================================================================
-# Maps normalized symbol → async provider function
-# Each function returns Optional[dict] in the standard format
-
 SYMBOL_PROVIDERS: dict[str, callable] = {
     "XAUUSD": _get_gold_price,
-    # Future:
-    # "EURUSD": _get_forex_price_eurusd,
-    # "GBPUSD": _get_forex_price_gbpusd,
-    # "BTCUSD": _get_crypto_price_btcusd,
 }
 
-# Symbol aliases (handle both "XAU/USD" and "XAUUSD" formats)
 SYMBOL_ALIASES: dict[str, str] = {
     "XAU/USD": "XAUUSD",
     "GOLD":    "XAUUSD",
-    # Future:
-    # "EUR/USD": "EURUSD",
-    # "GBP/USD": "GBPUSD",
-    # "BTC/USD": "BTCUSD",
 }
 
 
 def _normalize_symbol(symbol: str) -> str:
-    """Normalize symbol to canonical form (e.g., XAU/USD → XAUUSD)."""
     upper = symbol.upper().strip()
     return SYMBOL_ALIASES.get(upper, upper)
 
 
 # ===================================================================
-# PUBLIC API — main entry point
+# PUBLIC API
 # ===================================================================
 
 async def get_price(symbol: str) -> dict:
     """
     Fetch the current price for a given symbol.
-
     Uses in-memory cache (5s TTL) to prevent excessive API calls.
-    Routes to the correct provider based on symbol.
 
     Returns:
         {"symbol": str, "price": float, "source": str, "timestamp": datetime}
@@ -222,12 +219,10 @@ async def get_price(symbol: str) -> dict:
     """
     normalized = _normalize_symbol(symbol)
 
-    # Check cache first
     cached = _get_cached(normalized)
     if cached:
         return {k: v for k, v in cached.items() if k != "_ts"}
 
-    # Route to provider
     provider = SYMBOL_PROVIDERS.get(normalized)
     if not provider:
         raise ValueError(
@@ -241,16 +236,12 @@ async def get_price(symbol: str) -> dict:
             f"Failed to fetch price for {normalized}: all providers returned None"
         )
 
-    # Cache and return (strip internal timestamp key)
     _set_cache(normalized, result)
     return {k: v for k, v in result.items() if k != "_ts"}
 
 
 async def get_prices(symbols: list[str]) -> dict[str, dict]:
-    """
-    Batch-fetch prices for multiple symbols.
-    Returns dict keyed by normalized symbol. Symbols that fail are omitted.
-    """
+    """Batch-fetch prices for multiple symbols. Failed symbols are omitted."""
     results = {}
     for sym in symbols:
         try:
@@ -262,5 +253,4 @@ async def get_prices(symbols: list[str]) -> dict[str, dict]:
 
 
 def get_supported_symbols() -> list[str]:
-    """Return list of symbols with configured providers."""
     return list(SYMBOL_PROVIDERS.keys())

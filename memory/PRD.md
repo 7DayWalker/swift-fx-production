@@ -15,14 +15,16 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 ### Multi-Asset Market Data Service + Signal Engine (Completed — Mar 2026)
 - Created `services/market_data.py` — multi-asset price service with:
   - `get_price(symbol)` main entry point with symbol routing
-  - 3-provider fallback chain for XAUUSD: Metals-API → GoldAPI → TwelveData
+  - Provider priority: TwelveData (primary) → Metals-API (fallback) → GoldAPI (backup)
+  - Conditional provider usage: only calls providers with valid API keys
   - In-memory TTL cache (5s per symbol)
   - Symbol aliases (XAU/USD, GOLD → XAUUSD)
   - Extensible `SYMBOL_PROVIDERS` registry for future assets
+  - Robust error handling: rate limits, invalid keys, timeouts, parse errors
 - Created `api/routes/market.py` — `GET /api/market/price` and `GET /api/market/symbols`
 - Updated `services/signal_engine.py` to use `market_data.get_price()` for gold symbols
 - Signal lifecycle: pending → active → tp1 → tp2 → tp3 → closed, with SL priority
-- **API keys are placeholder (test_key)** — swap in `.env` when ready
+- **TwelveData key configured and live** — XAUUSD fetching at ~$4,575
 
 ### Backend Auth Regression (Completed — Mar 2026)
 - Fixed 30+ missing import bugs across 10 route files after monolith refactoring
@@ -83,7 +85,7 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## Environment Variables (Market Data)
 ```
-METALS_API_KEY=<from metals-api.com>
-GOLDAPI_KEY=<from goldapi.io>
-TWELVEDATA_KEY=<from twelvedata.com>
+TWELVEDATA_KEY=<from twelvedata.com>  ← CONFIGURED AND LIVE
+METALS_API_KEY=<from metals-api.com>  ← optional fallback
+GOLDAPI_KEY=<from goldapi.io>         ← optional backup
 ```
