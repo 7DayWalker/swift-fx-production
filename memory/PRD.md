@@ -17,7 +17,7 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
   - `get_price(symbol)` main entry point with symbol routing
   - Provider priority: TwelveData (primary) → Metals-API (fallback) → GoldAPI (backup)
   - Conditional provider usage: only calls providers with valid API keys
-  - In-memory TTL cache (5s per symbol)
+  - In-memory TTL cache (10s per symbol)
   - Symbol aliases (XAU/USD, GOLD → XAUUSD)
   - Extensible `SYMBOL_PROVIDERS` registry for future assets
   - Robust error handling: rate limits, invalid keys, timeouts, parse errors

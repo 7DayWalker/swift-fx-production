@@ -261,7 +261,15 @@ class DeterministicPriceTrigger:
     - If price gaps through SL/TP/Entry between polls, we still trigger
     - But we use the DEFINED level price for execution, not the gapped price
     - This ensures deterministic, auditable results
+    
+    EXECUTION BUFFER (0.5):
+    - Applied to all trigger comparisons to compensate for minor price
+      differences between data provider and broker feed
+    - BUY:  entry/TP trigger at price >= level - BUFFER, SL at price <= level + BUFFER
+    - SELL: entry/TP trigger at price <= level + BUFFER, SL at price >= level - BUFFER
     """
+    
+    BUFFER = 0.5  # Execution precision buffer (in price units)
     
     @staticmethod
     def check_sl_triggered(
@@ -276,34 +284,33 @@ class DeterministicPriceTrigger:
         Returns (triggered: bool, execution_price: float)
         - execution_price is ALWAYS the defined SL, not the gapped price
         
-        RULES:
-        - SELL: SL triggers when price rises TO or THROUGH SL
-        - BUY: SL triggers when price falls TO or THROUGH SL
+        RULES (with buffer):
+        - SELL: SL triggers when price rises TO or THROUGH (SL - BUFFER)
+        - BUY: SL triggers when price falls TO or THROUGH (SL + BUFFER)
         """
         if not stop_loss or not current_price:
             return (False, None)
         
+        buf = DeterministicPriceTrigger.BUFFER
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL SL: triggered when price RISES to or above SL
+            # SELL SL: triggered when price RISES to or above (SL - BUFFER)
+            threshold = stop_loss - buf
             if last_price is not None:
-                # Crossing detection: was below SL, now at or above (or gapped through)
-                triggered = last_price < stop_loss and current_price >= stop_loss
+                triggered = last_price < threshold and current_price >= threshold
             else:
-                triggered = current_price >= stop_loss
+                triggered = current_price >= threshold
             
-            # GAP PROTECTION: Always use defined SL, not gapped price
             return (triggered, stop_loss if triggered else None)
         else:
-            # BUY SL: triggered when price FALLS to or below SL
+            # BUY SL: triggered when price FALLS to or below (SL + BUFFER)
+            threshold = stop_loss + buf
             if last_price is not None:
-                # Crossing detection: was above SL, now at or below (or gapped through)
-                triggered = last_price > stop_loss and current_price <= stop_loss
+                triggered = last_price > threshold and current_price <= threshold
             else:
-                triggered = current_price <= stop_loss
+                triggered = current_price <= threshold
             
-            # GAP PROTECTION: Always use defined SL, not gapped price
             return (triggered, stop_loss if triggered else None)
     
     @staticmethod
@@ -319,34 +326,33 @@ class DeterministicPriceTrigger:
         Returns (triggered: bool, execution_price: float)
         - execution_price is ALWAYS the defined TP, not the gapped price
         
-        RULES:
-        - SELL: TP triggers when price falls TO or THROUGH TP
-        - BUY: TP triggers when price rises TO or THROUGH TP
+        RULES (with buffer):
+        - SELL: TP triggers when price falls TO or THROUGH (TP + BUFFER)
+        - BUY: TP triggers when price rises TO or THROUGH (TP - BUFFER)
         """
         if not take_profit or not current_price:
             return (False, None)
         
+        buf = DeterministicPriceTrigger.BUFFER
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL TP: triggered when price FALLS to or below TP
+            # SELL TP: triggered when price FALLS to or below (TP + BUFFER)
+            threshold = take_profit + buf
             if last_price is not None:
-                # Crossing detection: was above TP, now at or below (or gapped through)
-                triggered = last_price > take_profit and current_price <= take_profit
+                triggered = last_price > threshold and current_price <= threshold
             else:
-                triggered = current_price <= take_profit
+                triggered = current_price <= threshold
             
-            # GAP PROTECTION: Always use defined TP, not gapped price
             return (triggered, take_profit if triggered else None)
         else:
-            # BUY TP: triggered when price RISES to or above TP
+            # BUY TP: triggered when price RISES to or above (TP - BUFFER)
+            threshold = take_profit - buf
             if last_price is not None:
-                # Crossing detection: was below TP, now at or above (or gapped through)
-                triggered = last_price < take_profit and current_price >= take_profit
+                triggered = last_price < threshold and current_price >= threshold
             else:
-                triggered = current_price >= take_profit
+                triggered = current_price >= threshold
             
-            # GAP PROTECTION: Always use defined TP, not gapped price
             return (triggered, take_profit if triggered else None)
     
     @staticmethod
@@ -362,39 +368,33 @@ class DeterministicPriceTrigger:
         Returns (triggered: bool, activation_price: float)
         - activation_price is ALWAYS the defined entry, not the gapped price
         
-        RULES:
-        - SELL Pending: Entry triggers when price rises TO or THROUGH entry (sell high)
-        - BUY Pending: Entry triggers when price falls TO or THROUGH entry (buy low)
-        
-        GAP PROTECTION:
-        - If price gaps across entry (e.g., 4220 → 4200 for entry 4211)
-        - We activate at 4211, NOT at 4200
-        - This keeps signal math clean and deterministic
+        RULES (with buffer):
+        - SELL Pending: Entry triggers when price rises TO or THROUGH (entry - BUFFER)
+        - BUY Pending: Entry triggers when price falls TO or THROUGH (entry + BUFFER)
         """
         if not entry_price or not current_price:
             return (False, None)
         
+        buf = DeterministicPriceTrigger.BUFFER
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL entry: we want to sell high - price must rise TO entry
+            # SELL entry: price must rise TO (entry - BUFFER)
+            threshold = entry_price - buf
             if last_price is not None:
-                # Crossing: was below entry, now at or above (or gapped through)
-                triggered = last_price < entry_price and current_price >= entry_price
+                triggered = last_price < threshold and current_price >= threshold
             else:
-                triggered = current_price >= entry_price
+                triggered = current_price >= threshold
             
-            # GAP PROTECTION: Always use defined entry, not gapped price
             return (triggered, entry_price if triggered else None)
         else:
-            # BUY entry: we want to buy low - price must fall TO entry
+            # BUY entry: price must fall TO (entry + BUFFER)
+            threshold = entry_price + buf
             if last_price is not None:
-                # Crossing: was above entry, now at or below (or gapped through)
-                triggered = last_price > entry_price and current_price <= entry_price
+                triggered = last_price > threshold and current_price <= threshold
             else:
-                triggered = current_price <= entry_price
+                triggered = current_price <= threshold
             
-            # GAP PROTECTION: Always use defined entry, not gapped price
             return (triggered, entry_price if triggered else None)
 
 
@@ -916,10 +916,14 @@ async def run_price_automation():
     engine_state.price_automation_running = True
     lifecycle_controller = SignalLifecycleController(db)
     
+    IDLE_SLEEP = 10  # Sleep when no active/pending signals (saves API calls)
+    ACTIVE_SLEEP = 1  # Fast polling when signals are live
+    
     logger.info("=" * 60)
-    logger.info("[Engine] Signal Auto-Engine v3.0 STARTED")
-    logger.info(f"[Engine] Poll interval: {PRICE_POLL_INTERVAL}s (configurable via SIGNAL_POLL_INTERVAL env)")
-    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, AUDITABLE")
+    logger.info("[Engine] Signal Auto-Engine v3.1 STARTED")
+    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s | Cache TTL: 10s")
+    logger.info(f"[Engine] Execution buffer: {DeterministicPriceTrigger.BUFFER}")
+    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, BUFFERED, AUDITABLE")
     logger.info("[Engine] Visibility rules ACTIVE: Free/Premium/VIP")
     logger.info("=" * 60)
     
@@ -936,21 +940,19 @@ async def run_price_automation():
             
             # Load current config
             config = await get_engine_config()
-            poll_interval = config.get("poll_interval", PRICE_POLL_INTERVAL)
-            
             # Log poll cycle
             logger.debug(f"[Engine] Poll cycle started at {poll_timestamp.isoformat()}")
             
             # Check if engine is enabled
             if not config.get("enabled", True):
                 logger.info("[Engine] Engine is DISABLED. Sleeping...")
-                await asyncio.sleep(poll_interval)
+                await asyncio.sleep(IDLE_SLEEP)
                 continue
             
             # Check if engine is paused (maintenance mode)
             if config.get("paused", False):
                 logger.info("[Engine] Engine is PAUSED. Sleeping...")
-                await asyncio.sleep(poll_interval)
+                await asyncio.sleep(IDLE_SLEEP)
                 continue
             
             # Check error threshold
@@ -959,7 +961,7 @@ async def run_price_automation():
                 config["paused"] = True
                 config["pause_reason"] = f"Auto-paused after {consecutive_errors} consecutive errors"
                 await save_engine_config(config)
-                await asyncio.sleep(poll_interval)
+                await asyncio.sleep(IDLE_SLEEP)
                 continue
             
             # === MAIN PROCESSING ===
@@ -971,14 +973,16 @@ async def run_price_automation():
             }).limit(500).to_list(500)
             
             if not active_signals:
-                await asyncio.sleep(poll_interval)
+                # No active signals — idle mode, save API calls
+                logger.debug("[Engine] No active/pending signals — idle sleep")
+                await asyncio.sleep(IDLE_SLEEP)
                 continue
             
             # Extract unique symbols
             symbols = list(set(s.get("pair", "").upper() for s in active_signals if s.get("pair")))
             
             if not symbols:
-                await asyncio.sleep(poll_interval)
+                await asyncio.sleep(IDLE_SLEEP)
                 continue
             
             # Fetch live prices (returns dict with price AND source)
@@ -987,7 +991,7 @@ async def run_price_automation():
             if not price_data:
                 consecutive_errors += 1
                 logger.warning(f"[Engine] No prices fetched - SKIPPING this cycle (error {consecutive_errors})")
-                await asyncio.sleep(poll_interval)
+                await asyncio.sleep(ACTIVE_SLEEP)
                 continue
             
             # Reset error count on successful price fetch
@@ -1017,6 +1021,15 @@ async def run_price_automation():
                 
                 processed += 1
                 
+                # Per-signal debug log: symbol, price, entry, difference
+                entry = signal.get("entry")
+                if entry:
+                    diff = round(current_price - entry, 2)
+                    logger.debug(
+                        f"[Engine] {pair} | price={current_price} entry={entry} "
+                        f"diff={diff:+.2f} state={signal.get('state')} src={price_source}"
+                    )
+                
                 # Process signal through lifecycle controller WITH PRICE CONTEXT
                 result = await lifecycle_controller.process_signal(
                     signal,
@@ -1031,10 +1044,10 @@ async def run_price_automation():
             
             if processed > 0 or skipped > 0:
                 logger.debug(
-                    f"[Engine] Poll complete: processed={processed}, actions={actions}, skipped={skipped}"
+                    f"[Engine] Cycle done: {processed} signals, {actions} actions, {skipped} skipped"
                 )
             
-            await asyncio.sleep(poll_interval)
+            await asyncio.sleep(ACTIVE_SLEEP)
             
         except asyncio.CancelledError:
             logger.info("[Engine] Engine task cancelled")
@@ -1044,7 +1057,7 @@ async def run_price_automation():
             logger.error(f"[Engine] Error in main loop: {e} (error {consecutive_errors})")
             import traceback
             traceback.print_exc()
-            await asyncio.sleep(poll_interval)  # Use poll interval for retry
+            await asyncio.sleep(ACTIVE_SLEEP)
     
     # Release lock on shutdown
     if engine_lock_id:
