@@ -18,6 +18,7 @@ from core.dependencies import get_current_user, require_auth, require_admin
 from core.config import EMERGENT_LLM_KEY
 from models.schemas import User
 from services.subscription import get_effective_subscription
+from supabase_auth import fetch_profile
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,12 @@
+{
+  "iteration": 20,
+  "timestamp": "2026-03-30T23:15:00Z",
+  "test_type": "backend_auth_regression",
+  "description": "Auth regression testing after monolith-to-modular refactoring - fixed 30+ missing imports across 10 route files",
+  "total_tests": 25,
+  "passed": 25,
+  "failed": 0,
+  "bugs_fixed": 12,
+  "results_summary": "All 25 endpoints pass: 6 public (200), 5 auth (200), 8 admin (200), 6 unauthorized rejection (401/200-by-design)",
+  "retest_needed": false
+}

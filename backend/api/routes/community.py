@@ -1,6 +1,7 @@
 """
 api/routes/community.py — Community posts and comments.
 """
+import base64
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from core.database import db
 from core.dependencies import get_current_user, require_auth
 from models.schemas import User, PostCreate, CommentCreate
+from models.enums import UserRole
 from supabase_auth import fetch_profile
 
 logger = logging.getLogger(__name__)

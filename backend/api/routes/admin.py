@@ -14,28 +14,27 @@ from pydantic import BaseModel, Field, EmailStr
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.database import db
-from core.dependencies import get_current_user, require_auth, require_admin, require_super_admin, require_permission
+from core.dependencies import get_current_user, require_auth, require_admin, require_super_admin
+from core.config import ADMIN_PERMISSIONS
+import core.engine_state as engine_state
 from models.enums import UserRole, AdminRole
 from services.auth import is_super_admin, is_protected_super_admin, has_permission
 from services.admin import log_admin_action, create_admin_notification
-from services.subscription import get_effective_subscription, get_active_override
+from services.subscription import get_effective_subscription, get_active_override, check_subscription_active, get_ai_weekly_limit
+from services.signal_engine import (
+    get_engine_config, save_engine_config, run_price_automation,
+    DeterministicPriceTrigger, calculate_signal_pips_with_trace,
+)
 from supabase_auth import (
-    create_auth_user, fetch_profile, update_profile,
-    list_profiles as supabase_get_all_users, delete_auth_user,
-    list_auth_users, fetch_profile_by_email, update_profile as update_profile_fields,
+    create_auth_user, fetch_profile, update_profile, list_profiles,
+    count_profiles, delete_auth_user, delete_profile,
+    list_auth_users, fetch_profile_by_email, get_auth_user_email,
 )
 from models.schemas import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
-
-# Reference to signal engine (set by main.py at startup)
-signal_engine = None
-
-def set_signal_engine(engine):
-    global signal_engine
-    signal_engine = engine
 
 @router.get("/admin/users")
 async def get_all_users(admin: User = Depends(require_admin)):
@@ -376,7 +375,7 @@ async def get_automation_status():
     
     return {
         "mode": "AUTO" if config.get("enabled") and not config.get("paused") else "PAUSED" if config.get("paused") else "DISABLED",
-        "auto_engine_running": price_automation_running,
+        "auto_engine_running": engine_state.price_automation_running,
         "enabled": config.get("enabled", True),
         "paused": config.get("paused", False),
         "pause_reason": config.get("pause_reason"),
@@ -447,9 +446,7 @@ async def admin_health_check(admin: User = Depends(require_admin)):
 @router.post("/admin/automation/start")
 async def start_automation_engine(admin: User = Depends(require_admin)):
     """Start the signal automation engine (Admin only)"""
-    global price_automation_running, engine_task
-    
-    if price_automation_running:
+    if engine_state.price_automation_running:
         return {"success": False, "message": "Engine is already running"}
     
     config = await get_engine_config()
@@ -459,8 +456,8 @@ async def start_automation_engine(admin: User = Depends(require_admin)):
     config["error_count"] = 0
     await save_engine_config(config)
     
-    price_automation_running = True
-    engine_task = asyncio.create_task(run_price_automation())
+    engine_state.price_automation_running = True
+    engine_state.engine_task = asyncio.create_task(run_price_automation())
     
     logger.info(f"[Admin] Engine started by {admin.user_id}")
     return {"success": True, "message": "Signal engine started"}
@@ -469,21 +466,19 @@ async def start_automation_engine(admin: User = Depends(require_admin)):
 @router.post("/admin/automation/stop")
 async def stop_automation_engine(admin: User = Depends(require_admin)):
     """Stop the signal automation engine (Admin only)"""
-    global price_automation_running, engine_task
-    
-    if not price_automation_running:
+    if not engine_state.price_automation_running:
         return {"success": False, "message": "Engine is not running"}
     
     config = await get_engine_config()
     config["enabled"] = False
     await save_engine_config(config)
     
-    price_automation_running = False
+    engine_state.price_automation_running = False
     
-    if engine_task:
-        engine_task.cancel()
+    if engine_state.engine_task:
+        engine_state.engine_task.cancel()
         try:
-            await engine_task
+            await engine_state.engine_task
         except asyncio.CancelledError:
             pass
     
@@ -509,8 +504,6 @@ async def pause_automation_engine(
 @router.post("/admin/automation/resume")
 async def resume_automation_engine(admin: User = Depends(require_admin)):
     """Resume the signal automation engine (Admin only)"""
-    global price_automation_running, engine_task
-    
     config = await get_engine_config()
     config["paused"] = False
     config["pause_reason"] = None
@@ -518,9 +511,9 @@ async def resume_automation_engine(admin: User = Depends(require_admin)):
     await save_engine_config(config)
     
     # Start the engine if it's not running
-    if not price_automation_running and config.get("enabled", True):
-        price_automation_running = True
-        engine_task = asyncio.create_task(run_price_automation())
+    if not engine_state.price_automation_running and config.get("enabled", True):
+        engine_state.price_automation_running = True
+        engine_state.engine_task = asyncio.create_task(run_price_automation())
     
     logger.info(f"[Admin] Engine resumed by {admin.user_id}")
     return {"success": True, "message": "Signal engine resumed"}

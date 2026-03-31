@@ -16,6 +16,12 @@ import httpx
 import jwt
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi.responses import JSONResponse
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from cryptography.hazmat.primitives import hashes
+from cryptography.exceptions import InvalidSignature as CryptoInvalidSignature
 
 from core.database import db
 from core.dependencies import get_current_user, require_auth, require_admin
@@ -25,9 +31,10 @@ from core.config import (
     GOOGLE_PACKAGE_NAME, GOOGLE_SERVICE_ACCOUNT_JSON, get_plan_from_product_id,
     IAP_PRODUCT_IDS, IAP_PRODUCTS_BY_TIER,
 )
-from services.subscription import get_effective_subscription, get_active_override
-from supabase_auth import fetch_profile, update_profile
+from services.subscription import get_effective_subscription, get_active_override, get_ai_weekly_limit
+from supabase_auth import fetch_profile, update_profile, count_profiles
 from models.schemas import User, DeviceTokenRegister
+from api.routes.referral import on_user_subscription_change
 
 logger = logging.getLogger(__name__)
 

@@ -13,9 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.database import db
 from core.dependencies import require_auth, require_admin, get_current_user
 from models.schemas import User
-from models.enums import AccountStatus
+from models.enums import AccountStatus, AdminRole, TicketStatus
 from services.subscription import get_effective_subscription
-from supabase_auth import fetch_profile, update_profile
+from services.admin import log_admin_action, create_admin_notification
+from services.auth import is_protected_super_admin
+from supabase_auth import fetch_profile, update_profile, update_auth_user
 
 logger = logging.getLogger(__name__)
 

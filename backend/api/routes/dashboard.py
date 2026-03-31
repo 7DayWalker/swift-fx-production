@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends
 
 from core.database import db
 from core.dependencies import require_auth, get_current_user
+from models.enums import UserRole, SignalVisibility
 from models.schemas import User
 from services.subscription import get_effective_subscription
+from api.routes.signals import can_access_signal
 
 router = APIRouter(prefix="/api")
 

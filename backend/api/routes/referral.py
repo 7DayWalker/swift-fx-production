@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.database import db
 from core.dependencies import require_auth, require_admin
 from models.schemas import User
-from models.enums import ReferralStatus, RewardStatus
+from models.enums import ReferralStatus, RewardStatus, AdminRole, UserRole
 from services.subscription import get_effective_subscription
+from services.admin import log_admin_action
+from supabase_auth import fetch_profile, list_profiles, update_profile
 
 logger = logging.getLogger(__name__)
 

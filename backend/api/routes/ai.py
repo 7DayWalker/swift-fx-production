@@ -3,6 +3,7 @@ api/routes/ai.py — AI chart analysis, usage, history, sharing.
 """
 import os
 import json
+import base64
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -15,7 +16,7 @@ from core.database import db
 from core.dependencies import get_current_user, require_auth
 from core.config import EMERGENT_LLM_KEY
 from services.subscription import get_effective_subscription, get_ai_weekly_limit
-from supabase_auth import fetch_profile
+from supabase_auth import fetch_profile, update_profile
 from models.schemas import User
 
 logger = logging.getLogger(__name__)

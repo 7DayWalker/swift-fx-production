@@ -3,6 +3,7 @@ api/routes/signals.py — Signal CRUD and admin signal management routes.
 """
 import logging
 import uuid
+import httpx
 from datetime import datetime, timezone
 from typing import Optional, List, Any
 
@@ -11,14 +12,16 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from core.database import db
 from core.dependencies import get_current_user, require_auth, require_admin
+from core.config import get_instrument_info
 from models.enums import (
     UserRole, SignalVisibility, SignalStatus, SignalState, SignalType,
     VALID_STATE_TRANSITIONS, is_valid_transition, is_signal_closed,
 )
 from services.subscription import get_effective_subscription, can_access_visibility, get_subscription_level
+from services.signal_engine import calculate_signal_pips
+from services.auth import has_permission
 from services.admin import log_admin_action, create_admin_notification
-from core.config import get_instrument_info
-from supabase_auth import fetch_profile
+from supabase_auth import fetch_profile, SUPABASE_URL, SUPABASE_SERVICE_KEY
 from models.schemas import User, SignalCreate, Signal, SignalUpdate
 
 logger = logging.getLogger(__name__)
@@ -929,10 +932,23 @@ async def send_signal_notification(signal_id: str, pair: str, signal_type: Signa
             logger.info("No user IDs found in device tokens")
             return
         
-        # Batch fetch profiles from Supabase
+        # Batch fetch profiles from Supabase via REST API
         try:
-            profiles_response = await supabase.from_("profiles").select("id, notification_preferences").in_("id", user_ids).execute()
-            profiles_map = {p["id"]: p for p in (profiles_response.data or [])}
+            ids_param = ",".join(user_ids)
+            async with httpx.AsyncClient(timeout=10) as _client:
+                r = await _client.get(
+                    f"{SUPABASE_URL}/rest/v1/profiles",
+                    headers={
+                        "apikey": SUPABASE_SERVICE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                    },
+                    params={
+                        "select": "id,notification_preferences",
+                        "id": f"in.({ids_param})",
+                    },
+                )
+                profiles_data = r.json() if r.status_code == 200 else []
+            profiles_map = {p["id"]: p for p in profiles_data}
         except Exception as e:
             logger.warning(f"Failed to batch fetch profiles: {e}, falling back to no filtering")
             profiles_map = {}
@@ -1011,10 +1027,23 @@ async def send_signal_close_notification(signal_id: str, pair: str, signal_type:
             logger.info("No user IDs found in device tokens for close notification")
             return
         
-        # Batch fetch profiles from Supabase
+        # Batch fetch profiles from Supabase via REST API
         try:
-            profiles_response = await supabase.from_("profiles").select("id, notification_preferences").in_("id", user_ids).execute()
-            profiles_map = {p["id"]: p for p in (profiles_response.data or [])}
+            ids_param = ",".join(user_ids)
+            async with httpx.AsyncClient(timeout=10) as _client:
+                r = await _client.get(
+                    f"{SUPABASE_URL}/rest/v1/profiles",
+                    headers={
+                        "apikey": SUPABASE_SERVICE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                    },
+                    params={
+                        "select": "id,notification_preferences",
+                        "id": f"in.({ids_param})",
+                    },
+                )
+                profiles_data = r.json() if r.status_code == 200 else []
+            profiles_map = {p["id"]: p for p in profiles_data}
         except Exception as e:
             logger.warning(f"Failed to batch fetch profiles for close notification: {e}, falling back to no filtering")
             profiles_map = {}

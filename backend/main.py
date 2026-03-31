@@ -68,16 +68,7 @@ app.include_router(dashboard.router)
 from services.signal_engine import (
     get_engine_config, run_price_automation,
 )
-
-price_automation_running = False
-engine_task = None
-
-# Give admin routes access to the engine state
-import api.routes.admin as admin_module
-admin_module.set_signal_engine({
-    'get_running': lambda: price_automation_running,
-    'get_task': lambda: engine_task,
-})
+import core.engine_state as engine_state
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
@@ -127,8 +118,6 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Initializes indexes, signal engine, super admin accounts, and default data."""
-    global price_automation_running, engine_task
-
     logger.info("=" * 60)
     logger.info("[Startup] Swift FX Backend Starting...")
     logger.info("=" * 60)
@@ -158,8 +147,8 @@ async def startup_event():
     config = await get_engine_config()
     if config.get("enabled", True) and not config.get("paused", False):
         logger.info("[Startup] Starting Signal Auto-Engine...")
-        price_automation_running = True
-        engine_task = asyncio.create_task(run_price_automation())
+        engine_state.price_automation_running = True
+        engine_state.engine_task = asyncio.create_task(run_price_automation())
         logger.info("[Startup] Signal Auto-Engine task created")
     else:
         logger.info("[Startup] Signal Auto-Engine is DISABLED or PAUSED")
@@ -193,14 +182,12 @@ async def initialize_super_admins():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Gracefully stop the signal engine on shutdown"""
-    global price_automation_running, engine_task
-
     logger.info("[Shutdown] Stopping Signal Auto-Engine...")
-    price_automation_running = False
-    if engine_task:
-        engine_task.cancel()
+    engine_state.price_automation_running = False
+    if engine_state.engine_task:
+        engine_state.engine_task.cancel()
         try:
-            await engine_task
+            await engine_state.engine_task
         except asyncio.CancelledError:
             pass
     client.close()

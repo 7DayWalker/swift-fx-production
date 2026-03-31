@@ -5,21 +5,27 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## Core Architecture
 - **Frontend**: React Native (Expo Router), deployed via EAS
-- **Backend**: FastAPI monolith (`server.py` ~9000 lines)
+- **Backend**: FastAPI modular architecture (`main.py` + `api/routes/` + `core/` + `services/` + `models/`)
 - **Auth/Profiles**: Supabase (Postgres)
 - **Data**: MongoDB (signals, posts, logs, portfolios)
 - **LLM**: OpenAI GPT-4o via `emergentintegrations`
 
 ## What's Been Implemented
 
+### Backend Modular Refactoring (Completed — Mar 2026)
+- Split 9000+ line `server.py` into modular architecture: `main.py`, 12 route files, `core/`, `services/`, `models/`
+- Fixed 30+ missing import bugs across 10 route files during auth regression testing
+- Created `core/engine_state.py` for shared signal engine state between main.py and admin routes
+- Replaced broken supabase Python client calls with httpx REST calls in signals.py
+- All 25 endpoints verified: 6 public, 5 auth, 8 admin, 6 unauthorized rejection
+- `server.py` remains as thin proxy (`from main import app`) for backward compatibility
+
 ### AdMob Monetization System (Completed — Feb 2026)
-- **AdBanner** integrated as fixed-bottom component on 7 screens: Dashboard, Signals, AI Analyzer, More/Settings, Academy, Calendar, News
-- **Interstitial ads** (frequency-gated: 4 actions + 2-min cooldown) on Signals (pull-to-refresh) and AI Analyzer (after analysis completes)
-- **Rewarded ads** on Academy ("Watch Ad to Preview" unlocks locked content for free users)
-- **Subscription gating**: All ads return `null` for `premium`, `vip`, and `admin` users — ad-free experience guaranteed
-- **Platform-safe**: `.web.tsx` stubs prevent `react-native-google-mobile-ads` from crashing web bundler; `adManager.ts` uses hardcoded Google test IDs (no native SDK import at module level)
-- **UX rules followed**: Banners fixed at bottom (no scroll), no layout shifts, interstitials only after meaningful completed actions
-- Removed deprecated `MockAdBanner` component
+- **AdBanner** integrated as fixed-bottom component on 7 screens
+- **Interstitial ads** (frequency-gated) on Signals and AI Analyzer
+- **Rewarded ads** on Academy
+- **Subscription gating**: All ads return `null` for premium/vip/admin users
+- **Platform-safe**: `.web.tsx` stubs prevent web bundler crashes
 
 ### Previously Completed
 - Community Feed DB Migration (MongoDB)
@@ -44,12 +50,31 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - Push notifications on new signal creation
 - Leaderboard of top shared AI analyses
 
-### P3
-- Refactor `server.py` (9000+ lines) into modular FastAPI routers
-
 ## Key Technical Notes
-- AdMob uses Google well-known TEST IDs — swap to production IDs before App Store submission
-- `react-native-google-mobile-ads` is native-only; web preview always shows null for ads
-- Ad frequency gate: `adManager.ts` tracks action count + cooldown timer
-- All frontend API calls must use centralized `api.ts` client
-- Backend `requirements.txt` first line must be `--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`
+- Supabase auth tokens verified via JWKS endpoint
+- MongoDB `_id` excluded from all API responses
+- `ADMIN_PERMISSIONS` dict controls fine-grained RBAC
+- Signal engine state shared via `core/engine_state.py` module singleton
+- All routes use `/api` prefix for Kubernetes ingress routing
+
+## Backend Architecture
+```
+/app/backend/
+├── main.py                (FastAPI app init, CORS, DB indexes, router includes)
+├── server.py              (Thin proxy: `from main import app`)
+├── supabase_auth.py       (Auth helpers - JWT, profiles, user management)
+├── api/routes/            (12 route files: admin, signals, ai, subscriptions, etc.)
+├── core/
+│   ├── config.py          (All config constants and env vars)
+│   ├── database.py        (MongoDB connection singleton)
+│   ├── dependencies.py    (get_current_user, require_admin, require_super_admin)
+│   └── engine_state.py    (Shared mutable state for signal engine)
+├── models/
+│   ├── enums.py           (UserRole, SignalVisibility, SignalState, etc.)
+│   └── schemas.py         (Pydantic models)
+└── services/
+    ├── auth.py            (RBAC helpers: is_super_admin, has_permission)
+    ├── admin.py           (Audit logging, notifications)
+    ├── subscription.py    (Tier resolution, override checks)
+    └── signal_engine.py   (Signal lifecycle, price automation)
+```

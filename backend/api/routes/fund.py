@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from enum import Enum
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field, EmailStr
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,7 @@ from models.schemas import (
 )
 from models.enums import FundApplicationStatus, InvestorAccountStatus, WithdrawalStatus, AdminRole
 from services.subscription import get_effective_subscription
+from services.auth import has_permission
 from services.admin import log_admin_action, create_admin_notification
 from supabase_auth import fetch_profile
 

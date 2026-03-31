@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, List
 from enum import Enum
+from urllib.parse import quote
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,7 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.database import db
 from core.dependencies import require_auth, require_admin, get_current_user
 from models.schemas import User
-from services.admin import create_admin_notification
+from services.admin import create_admin_notification, log_admin_action
+from supabase_auth import fetch_profile
 from models.enums import AdminRole
 
 logger = logging.getLogger(__name__)
