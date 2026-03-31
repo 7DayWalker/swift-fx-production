@@ -276,25 +276,17 @@ async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
 async def _get_gold_price() -> Optional[dict]:
     """
     Fetch XAUUSD price using strict provider priority:
-      1. TwelveData (primary — execution accuracy)
-      2. Finnhub (fallback — requires premium for gold)
-      3. Alpha Vantage (last resort — requires premium for spot gold)
-      4. Gold-API.com (FREE — no key required, live spot gold)
-      5. Metals-API (bonus, if key configured)
-      6. GoldAPI.io (bonus, if key configured)
+      1. TwelveData  (primary — execution accuracy)
+      2. gold-api.com (main fallback — FREE, live spot gold)
+      3. Metals-API   (future premium fallback, if key configured)
+      4. GoldAPI.io   (future backup, if key configured)
+      5. Finnhub      (low priority — free tier lacks gold support)
+      6. Alpha Vantage (low priority — free tier rate-limited)
     
     Each provider has a 2-second timeout. No retries within same cycle.
     """
     async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
         result = await _gold_twelvedata(client)
-        if result:
-            return result
-
-        result = await _gold_finnhub(client)
-        if result:
-            return result
-
-        result = await _gold_alphavantage(client)
         if result:
             return result
 
@@ -307,6 +299,14 @@ async def _get_gold_price() -> Optional[dict]:
             return result
 
         result = await _gold_goldapi(client)
+        if result:
+            return result
+
+        result = await _gold_finnhub(client)
+        if result:
+            return result
+
+        result = await _gold_alphavantage(client)
         if result:
             return result
 
