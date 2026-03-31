@@ -12,6 +12,14 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
+### Adaptive Polling (Verified — Mar 31 2026)
+- **153/153 tests passed** across 4 test suites
+- `get_polling_interval()`: Computes distance to entry/SL/TP for each signal. Any distance <= 1.0 → FAST(1s), else SLOW(8s).
+- **87% API call reduction**: From ~60/min to ~7.5/min (within TwelveData free tier)
+- **Rate-limit failsafe**: 30s forced slow mode after any 429 response
+- **Live verified**: 8s gaps between API calls in production logs
+- Test report: `/app/test_reports/iteration_25.json`
+
 ### Signal Engine v4.0 — FULL AUDIT (Verified — Mar 31 2026)
 - **132/132 tests passed** across 3 test suites
 - **ROOT CAUSE #1 FIXED (CRITICAL)**: Entry trigger was INVERTED. BUY used `>=` (wrong) → fixed to `<=` (buy limit). SELL used `<=` (wrong) → fixed to `>=` (sell limit). This caused pending orders to never trigger.

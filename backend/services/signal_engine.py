@@ -912,7 +912,75 @@ async def release_engine_lock(lock_id: str):
 
 
 # ==============================================================================
-# ERROR CLASSIFICATION — only critical errors count toward recovery threshold
+# ADAPTIVE POLLING — reduce API calls, preserve precision near triggers
+# ==============================================================================
+
+NEAR_THRESHOLD = 1.0   # Distance (in price units) considered "near" for XAUUSD
+FAST_POLL = 1           # seconds — when price is near a trigger
+SLOW_POLL = 8           # seconds — when price is far from all triggers
+RATE_LIMIT_COOLDOWN = 30  # seconds to force slow mode after 429
+
+
+def get_polling_interval(
+    signals: list[dict],
+    price_map: dict,
+) -> tuple[int, str, list[str]]:
+    """
+    Determine optimal polling interval based on proximity to triggers.
+
+    Returns:
+        (interval_seconds, mode_label, debug_reasons)
+
+    Rules:
+        - If ANY signal has price within NEAR_THRESHOLD of entry/SL/TP → FAST (1s)
+        - Otherwise → SLOW (8s)
+    """
+    reasons: list[str] = []
+
+    for sig in signals:
+        pair = sig.get("pair", "").upper()
+        price_info = price_map.get(pair) or price_map.get(pair.replace("/", ""))
+        if not price_info:
+            continue
+
+        price = price_info["price"]
+        sid = sig.get("signal_id", "?")[:12]
+        state = sig.get("state", "?")
+
+        # Pending → check entry distance
+        if state == "pending":
+            entry = sig.get("entry")
+            if entry:
+                d = abs(price - entry)
+                reasons.append(f"{sid} entry_dist={d:.2f}")
+                if d <= NEAR_THRESHOLD:
+                    return (FAST_POLL, "FAST", reasons)
+
+        # Active/TPx → check SL and next TP distance
+        if state in ("active", "tp1", "tp2", "tp3"):
+            sl = sig.get("stop_loss")
+            if sl:
+                d_sl = abs(price - sl)
+                reasons.append(f"{sid} sl_dist={d_sl:.2f}")
+                if d_sl <= NEAR_THRESHOLD:
+                    return (FAST_POLL, "FAST", reasons)
+
+            # Check the relevant TP level for current state
+            tp_key = {
+                "active": "tp1",
+                "tp1": "tp2",
+                "tp2": "tp3",
+            }.get(state)
+            tp_val = sig.get(tp_key) if tp_key else None
+            if tp_val:
+                d_tp = abs(price - tp_val)
+                reasons.append(f"{sid} tp_dist={d_tp:.2f}")
+                if d_tp <= NEAR_THRESHOLD:
+                    return (FAST_POLL, "FAST", reasons)
+
+    return (SLOW_POLL, "SLOW", reasons)
+
+
 # ==============================================================================
 
 def _classify_error(error: Exception) -> str:
@@ -999,19 +1067,20 @@ async def run_price_automation():
         logger.warning(f"[Engine] Could not clear stale pause: {e}")
 
     logger.info("=" * 60)
-    logger.info("[Engine] Signal Auto-Engine v4.0 STARTED (AUDITED)")
-    logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s")
-    logger.info(f"[Engine] PRICE_EPSILON: {DeterministicPriceTrigger.PRICE_EPSILON} (Entry+TP only, NOT SL)")
+    logger.info("[Engine] Signal Auto-Engine v4.1 STARTED (ADAPTIVE POLLING)")
+    logger.info(f"[Engine] Fast poll: {FAST_POLL}s | Slow poll: {SLOW_POLL}s | Idle: {IDLE_SLEEP}s")
+    logger.info(f"[Engine] NEAR_THRESHOLD: {NEAR_THRESHOLD} | PRICE_EPSILON: {DeterministicPriceTrigger.PRICE_EPSILON}")
     logger.info("[Engine] Mode: ABSOLUTE THRESHOLD, GAP-PROTECTED, SELF-RECOVERING")
-    logger.info("[Engine] Price fetch: ALWAYS FRESH (cache bypassed for engine)")
-    logger.info("[Engine] Entry rules: BUY=limit(price<=entry+eps), SELL=limit(price>=entry-eps)")
-    logger.info("[Engine] SL failsafe: last-known price cache enabled")
+    logger.info("[Engine] Polling: FAST(1s) near triggers, SLOW(8s) when far")
+    logger.info("[Engine] Rate-limit failsafe: 30s cooldown on 429")
+    logger.info("[Engine] Entry: BUY=limit(price<=entry+eps), SELL=limit(price>=entry-eps)")
     logger.info("=" * 60)
 
     critical_errors = 0        # Only CRITICAL errors counted here
     transient_streak = 0       # Transient errors in a row (for backoff)
     total_transient = 0        # Lifetime transient count (diagnostic only)
     recovery_backoff_round = 0 # How many times we've hit the recovery backoff
+    rate_limit_until = 0.0     # monotonic timestamp until which we force slow mode
 
     while engine_state.price_automation_running:
         poll_timestamp = datetime.now(timezone.utc)
@@ -1112,6 +1181,12 @@ async def run_price_automation():
                 transient_streak += 1
                 total_transient += 1
 
+                # Rate-limit failsafe: force SLOW mode for 30s
+                rate_limit_until = _time.monotonic() + RATE_LIMIT_COOLDOWN
+                logger.warning(
+                    f"[Engine] Rate limit hit — forcing SLOW mode for {RATE_LIMIT_COOLDOWN}s"
+                )
+
                 if has_live_trades and _last_known_prices:
                     # FAILSAFE: use last-known prices for SL evaluation
                     price_data = {}
@@ -1150,7 +1225,8 @@ async def run_price_automation():
                         f"[Engine] API failed (streak={transient_streak}). "
                         f"No live trades. Skipping cycle."
                     )
-                    await asyncio.sleep(ACTIVE_SLEEP)
+                    # Use SLOW_POLL during rate-limit cooldown
+                    await asyncio.sleep(SLOW_POLL)
                     continue
 
             # --- Process each signal ---
@@ -1193,13 +1269,28 @@ async def run_price_automation():
             if processed > 0 or skipped > 0:
                 cycle_end = _time.monotonic()
                 cycle_duration = round((cycle_end - cycle_start) * 1000, 1)
+
+                # Adaptive polling: determine next sleep interval
+                if _time.monotonic() < rate_limit_until:
+                    poll_interval = SLOW_POLL
+                    poll_mode = "SLOW (rate-limit cooldown)"
+                    poll_reasons = []
+                else:
+                    poll_interval, poll_mode, poll_reasons = get_polling_interval(
+                        active_signals, price_data
+                    )
+
                 logger.info(
                     f"[Engine] Cycle: {processed} processed, {actions} actions, "
-                    f"{skipped} skipped | duration={cycle_duration}ms | "
-                    f"fresh={price_fresh} | sleep={ACTIVE_SLEEP}s"
+                    f"{skipped} skipped | {cycle_duration}ms | "
+                    f"fresh={price_fresh} | mode={poll_mode} ({poll_interval}s)"
                 )
+                if poll_reasons:
+                    logger.info(f"[Engine] Distances: {' | '.join(poll_reasons)}")
 
-            await asyncio.sleep(ACTIVE_SLEEP)
+                await asyncio.sleep(poll_interval)
+            else:
+                await asyncio.sleep(SLOW_POLL)
 
         except asyncio.CancelledError:
             logger.info("[Engine] Engine task cancelled")
