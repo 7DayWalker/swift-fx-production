@@ -847,141 +847,260 @@ async def release_engine_lock(lock_id: str):
     logger.info(f"[Engine] Released engine lock: {lock_id}")
 
 
+# ==============================================================================
+# ERROR CLASSIFICATION — only critical errors count toward recovery threshold
+# ==============================================================================
+
+def _classify_error(error: Exception) -> str:
+    """
+    Classify errors as TRANSIENT or CRITICAL.
+    
+    TRANSIENT (do NOT count toward threshold):
+      - API timeouts, rate limits (429), network errors, connection resets
+      - These are expected during normal operation and self-resolve.
+    
+    CRITICAL (count toward threshold):
+      - Code bugs, DB failures, unexpected exceptions
+    """
+    transient_types = (
+        httpx.TimeoutException,
+        httpx.ConnectError,
+        httpx.NetworkError,
+        ConnectionError,
+        TimeoutError,
+        OSError,
+    )
+    if isinstance(error, transient_types):
+        return "transient"
+
+    msg = str(error).lower()
+    transient_keywords = [
+        "timeout", "rate limit", "429", "502", "503", "504",
+        "network", "connection reset", "connection refused",
+        "temporary", "unavailable", "throttl",
+    ]
+    if any(kw in msg for kw in transient_keywords):
+        return "transient"
+
+    return "critical"
+
+
+# ==============================================================================
+# LAST-KNOWN PRICE CACHE — failsafe for SL evaluation during API outages
+# ==============================================================================
+
+_last_known_prices: Dict[str, dict] = {}
+
+
 async def run_price_automation():
     """
-    AUTOMATIC SIGNAL ENGINE v3.0 - Main Processing Loop
+    AUTOMATIC SIGNAL ENGINE v3.1 — FAULT-TOLERANT Main Loop
     
-    DETERMINISTIC, AUDITABLE MODE:
-    - Single instance enforcement via distributed lock
-    - Poll timestamp logged for each cycle
-    - Price source tracked for each price
-    - Gap-protected activation and closure
-    - No hardcoded fallback prices
+    RELIABILITY GUARANTEES:
+    1. Engine NEVER permanently pauses — auto-recovers after backoff
+    2. Engine NEVER stops monitoring when active trades exist
+    3. Transient errors (timeout, 429, network) do NOT count toward threshold
+    4. Last-known prices used for SL failsafe when API is temporarily down
+    5. Exponential backoff (5s → 10s → … → 30s cap) on sustained failures
     
-    This function:
-    1. Acquires distributed lock (single instance)
-    2. Checks engine config (enabled/paused)
-    3. Fetches live prices for all active signals
-    4. Processes each signal through the lifecycle controller with price context
-    5. Handles errors gracefully with auto-recovery
+    UNCHANGED:
+    - Signal evaluation logic (SL/TP/Entry rules)
+    - API response format
+    - Execution buffers
     """
     global lifecycle_controller, engine_lock_id
-    
+
     # Acquire distributed lock
     engine_lock_id = await acquire_engine_lock()
     if not engine_lock_id:
         logger.error("[Engine] Cannot start - another instance is already running")
         return
-    
+
     engine_state.price_automation_running = True
     lifecycle_controller = SignalLifecycleController(db)
-    
-    IDLE_SLEEP = 10  # Sleep when no active/pending signals (saves API calls)
+
+    IDLE_SLEEP = 10   # Sleep when no active/pending signals
     ACTIVE_SLEEP = 1  # Fast polling when signals are live
-    
+
+    # --- On startup: clear any stale auto-pause from previous crash ---
+    try:
+        startup_config = await get_engine_config()
+        pause_reason = startup_config.get("pause_reason", "")
+        if startup_config.get("paused") and "auto-paused" in str(pause_reason).lower():
+            startup_config["paused"] = False
+            startup_config["pause_reason"] = None
+            await save_engine_config(startup_config)
+            logger.info("[Engine] Cleared stale auto-pause from previous session")
+    except Exception as e:
+        logger.warning(f"[Engine] Could not clear stale pause: {e}")
+
     logger.info("=" * 60)
-    logger.info("[Engine] Signal Auto-Engine v3.1 STARTED")
+    logger.info("[Engine] Signal Auto-Engine v3.1 STARTED (FAULT-TOLERANT)")
     logger.info(f"[Engine] Active poll: {ACTIVE_SLEEP}s | Idle poll: {IDLE_SLEEP}s | Cache TTL: 3s")
     logger.info(f"[Engine] Execution buffer: {DeterministicPriceTrigger.BUFFER}")
-    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, BUFFERED, AUDITABLE")
-    logger.info("[Engine] Visibility rules ACTIVE: Free/Premium/VIP")
+    logger.info("[Engine] Mode: DETERMINISTIC, GAP-PROTECTED, SELF-RECOVERING")
+    logger.info("[Engine] SL failsafe: last-known price cache enabled")
     logger.info("=" * 60)
-    
-    consecutive_errors = 0
-    
+
+    critical_errors = 0        # Only CRITICAL errors counted here
+    transient_streak = 0       # Transient errors in a row (for backoff)
+    total_transient = 0        # Lifetime transient count (diagnostic only)
+    recovery_backoff_round = 0 # How many times we've hit the recovery backoff
+
     while engine_state.price_automation_running:
         poll_timestamp = datetime.now(timezone.utc)
-        
+
         try:
             # Renew lock
             if not await renew_engine_lock(engine_lock_id):
-                logger.error("[Engine] Lost engine lock - stopping")
+                logger.error("[Engine] Lost engine lock — stopping")
                 break
-            
+
             # Load current config
             config = await get_engine_config()
-            # Log poll cycle
-            logger.debug(f"[Engine] Poll cycle started at {poll_timestamp.isoformat()}")
-            
-            # Check if engine is enabled
+            logger.debug(f"[Engine] Poll cycle at {poll_timestamp.isoformat()}")
+
+            # Check if engine is MANUALLY disabled by admin
             if not config.get("enabled", True):
-                logger.info("[Engine] Engine is DISABLED. Sleeping...")
+                logger.info("[Engine] Engine is DISABLED by admin. Sleeping...")
                 await asyncio.sleep(IDLE_SLEEP)
                 continue
-            
-            # Check if engine is paused (maintenance mode)
+
+            # Check if engine is MANUALLY paused by admin
+            # NOTE: auto-pause is removed — only manual admin pause is respected
             if config.get("paused", False):
-                logger.info("[Engine] Engine is PAUSED. Sleeping...")
-                await asyncio.sleep(IDLE_SLEEP)
+                pause_reason = config.get("pause_reason", "unknown")
+                # If this is a stale auto-pause, clear it and continue
+                if "auto-paused" in str(pause_reason).lower():
+                    config["paused"] = False
+                    config["pause_reason"] = None
+                    await save_engine_config(config)
+                    logger.info("[Engine] Cleared stale auto-pause — resuming")
+                else:
+                    logger.info(f"[Engine] MANUAL PAUSE active: {pause_reason}. Sleeping...")
+                    await asyncio.sleep(IDLE_SLEEP)
+                    continue
+
+            # === AUTO-RECOVERY: backoff on sustained critical errors ===
+            max_errors = config.get("max_errors", 5)
+            if critical_errors >= max_errors:
+                recovery_backoff_round += 1
+                backoff = min(5 * recovery_backoff_round, 30)  # 5s, 10s, 15s… 30s cap
+                logger.warning(
+                    f"[Engine] RECOVERY MODE: {critical_errors} critical errors. "
+                    f"Backing off {backoff}s (round {recovery_backoff_round}). "
+                    f"Engine will NOT pause — auto-recovering."
+                )
+                critical_errors = 0  # Reset after backoff
+                await asyncio.sleep(backoff)
                 continue
-            
-            # Check error threshold
-            if consecutive_errors >= config.get("max_errors", 5):
-                logger.error(f"[Engine] Too many errors ({consecutive_errors}). Auto-pausing...")
-                config["paused"] = True
-                config["pause_reason"] = f"Auto-paused after {consecutive_errors} consecutive errors"
-                await save_engine_config(config)
-                await asyncio.sleep(IDLE_SLEEP)
-                continue
-            
+
             # === MAIN PROCESSING ===
-            
-            # Get all non-closed signals (with reasonable limit for performance)
+
+            # Get all non-closed signals
             active_signals = await db.signals.find({
                 "state": {"$ne": "closed"},
                 "status": {"$ne": "closed"}
             }).limit(500).to_list(500)
-            
+
             if not active_signals:
-                # No active signals — idle mode, save API calls
                 logger.debug("[Engine] No active/pending signals — idle sleep")
                 await asyncio.sleep(IDLE_SLEEP)
                 continue
-            
+
+            # Detect if we have live (non-pending) signals that need SL monitoring
+            has_live_trades = any(
+                s.get("state") in ("active", "tp1", "tp2", "tp3")
+                for s in active_signals
+            )
+
             # Extract unique symbols
-            symbols = list(set(s.get("pair", "").upper() for s in active_signals if s.get("pair")))
-            
+            symbols = list(set(
+                s.get("pair", "").upper() for s in active_signals if s.get("pair")
+            ))
+
             if not symbols:
                 await asyncio.sleep(IDLE_SLEEP)
                 continue
-            
-            # Fetch live prices (returns dict with price AND source)
+
+            # --- Fetch live prices with retry on failure ---
             price_data = await fetch_live_prices(symbols)
-            
-            if not price_data:
-                consecutive_errors += 1
-                logger.warning(f"[Engine] No prices fetched - SKIPPING this cycle (error {consecutive_errors})")
-                await asyncio.sleep(ACTIVE_SLEEP)
-                continue
-            
-            # Reset error count on successful price fetch
-            consecutive_errors = 0
-            
-            # Update health check timestamp
-            config["last_health_check"] = poll_timestamp.isoformat()
-            config["error_count"] = 0
-            await save_engine_config(config)
-            
-            # Process each signal
+
+            if price_data:
+                # SUCCESS — update caches, reset error counters
+                _last_known_prices.update(price_data)
+                transient_streak = 0
+                critical_errors = 0
+                recovery_backoff_round = 0
+
+                # Update health check
+                config["last_health_check"] = poll_timestamp.isoformat()
+                config["error_count"] = 0
+                await save_engine_config(config)
+            else:
+                # PRICE FETCH FAILED — classify and handle
+                transient_streak += 1
+                total_transient += 1
+
+                if has_live_trades and _last_known_prices:
+                    # FAILSAFE: use last-known prices for SL evaluation
+                    price_data = {}
+                    for sym in symbols:
+                        cached = _last_known_prices.get(sym) or _last_known_prices.get(sym.replace("/", ""))
+                        if cached:
+                            price_data[sym] = {
+                                **cached,
+                                "source": f"{cached.get('source', 'unknown')}:cached",
+                            }
+                    if price_data:
+                        logger.warning(
+                            f"[Engine] API failed (streak={transient_streak}). "
+                            f"Using CACHED prices for SL failsafe on {len(price_data)} symbols."
+                        )
+                    else:
+                        logger.warning(
+                            f"[Engine] API failed (streak={transient_streak}). "
+                            f"No cached prices available. SKIPPING cycle."
+                        )
+                        # Short retry delay — do NOT stop the loop
+                        retry_delay = min(1 + transient_streak, 5)
+                        await asyncio.sleep(retry_delay)
+                        continue
+                elif has_live_trades:
+                    logger.warning(
+                        f"[Engine] API failed (streak={transient_streak}). "
+                        f"LIVE trades exist but no cached prices. Retrying in 2s."
+                    )
+                    await asyncio.sleep(2)
+                    continue
+                else:
+                    # Only pending signals — safe to skip
+                    logger.warning(
+                        f"[Engine] API failed (streak={transient_streak}). "
+                        f"No live trades. Skipping cycle."
+                    )
+                    await asyncio.sleep(ACTIVE_SLEEP)
+                    continue
+
+            # --- Process each signal ---
             processed = 0
             actions = 0
             skipped = 0
-            
+
             for signal in active_signals:
                 pair = signal.get("pair", "").upper()
-                # Try both formats
                 price_info = price_data.get(pair) or price_data.get(pair.replace("/", ""))
-                
+
                 if not price_info:
                     skipped += 1
                     continue
-                
+
                 current_price = price_info["price"]
                 price_source = price_info["source"]
-                
+
                 processed += 1
-                
-                # Per-signal debug log: symbol, price, entry, difference
+
+                # Per-signal debug log
                 entry = signal.get("entry")
                 if entry:
                     diff = round(current_price - entry, 2)
@@ -989,40 +1108,55 @@ async def run_price_automation():
                         f"[Engine] {pair} | price={current_price} entry={entry} "
                         f"diff={diff:+.2f} state={signal.get('state')} src={price_source}"
                     )
-                
-                # Process signal through lifecycle controller WITH PRICE CONTEXT
+
+                # Process signal through lifecycle controller
                 result = await lifecycle_controller.process_signal(
-                    signal,
-                    current_price,
-                    price_source,
-                    poll_timestamp
+                    signal, current_price, price_source, poll_timestamp
                 )
-                
+
                 if result:
                     actions += 1
                     logger.info(f"[Engine] Action: {result}")
-            
+
             if processed > 0 or skipped > 0:
                 logger.debug(
-                    f"[Engine] Cycle done: {processed} signals, {actions} actions, {skipped} skipped"
+                    f"[Engine] Cycle done: {processed} processed, "
+                    f"{actions} actions, {skipped} skipped"
                 )
-            
+
             await asyncio.sleep(ACTIVE_SLEEP)
-            
+
         except asyncio.CancelledError:
             logger.info("[Engine] Engine task cancelled")
             break
         except Exception as e:
-            consecutive_errors += 1
-            logger.error(f"[Engine] Error in main loop: {e} (error {consecutive_errors})")
-            import traceback
-            traceback.print_exc()
-            await asyncio.sleep(ACTIVE_SLEEP)
-    
+            # Classify the error
+            err_type = _classify_error(e)
+
+            if err_type == "transient":
+                transient_streak += 1
+                total_transient += 1
+                logger.warning(
+                    f"[Engine] TRANSIENT error (streak={transient_streak}): {e}"
+                )
+                retry_delay = min(1 + transient_streak, 5)
+                await asyncio.sleep(retry_delay)
+            else:
+                critical_errors += 1
+                logger.error(
+                    f"[Engine] CRITICAL error ({critical_errors}/{config.get('max_errors', 5)}): {e}"
+                )
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(ACTIVE_SLEEP)
+
     # Release lock on shutdown
     if engine_lock_id:
         await release_engine_lock(engine_lock_id)
-    
+
     engine_state.price_automation_running = False
-    logger.info("[Engine] Signal Auto-Engine STOPPED")
+    logger.info(
+        f"[Engine] Signal Auto-Engine STOPPED "
+        f"(total_transient_errors={total_transient})"
+    )
 

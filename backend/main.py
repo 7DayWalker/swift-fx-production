@@ -147,6 +147,15 @@ async def startup_event():
 
     # Signal engine
     config = await get_engine_config()
+
+    # Clear stale auto-pauses from previous crash/error cascade
+    if config.get("paused") and "auto-paused" in str(config.get("pause_reason", "")).lower():
+        logger.info("[Startup] Clearing stale auto-pause from previous session")
+        config["paused"] = False
+        config["pause_reason"] = None
+        from services.signal_engine import save_engine_config
+        await save_engine_config(config)
+
     if config.get("enabled", True) and not config.get("paused", False):
         logger.info("[Startup] Starting Signal Auto-Engine...")
         engine_state.price_automation_running = True

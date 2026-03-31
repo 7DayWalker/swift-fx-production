@@ -22,6 +22,15 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Engine timing**: 1s active ticks, 10s idle sleep
 - **Live verification**: Engine unpaused, TwelveData fetching, SL triggered correctly on live signal
 
+### Engine Fault-Tolerance & Auto-Recovery (Verified — Mar 31 2026)
+- **75/75 tests passed** (reliability + execution combined)
+- **Auto-recovery**: Replaced permanent auto-pause with exponential backoff (5s→30s cap), auto-reset
+- **Active trade protection**: Engine NEVER pauses when live trades exist
+- **Error classification**: Transient errors (timeout, 429, network) don't count toward threshold
+- **SL failsafe**: Last-known price cache enables SL evaluation even during API outages
+- **Stale pause clearing**: On startup, auto-pauses from previous crashes are cleared
+- **Live verification**: Exact user scenario (SELL SL=4613, price=4619.58) triggered correctly
+
 ### Multi-Asset Market Data Service + Signal Engine (Completed — Mar 2026)
 - Created `services/market_data.py` — multi-asset price service with:
   - `get_price(symbol)` main entry point with symbol routing

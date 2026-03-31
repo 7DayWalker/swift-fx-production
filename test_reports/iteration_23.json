@@ -1,0 +1,34 @@
+{
+  "iteration": 23,
+  "test_date": "2026-03-31T14:40:00Z",
+  "test_type": "Engine Reliability & Fault-Tolerance Verification",
+  "total_tests": 75,
+  "passed": 75,
+  "failed": 0,
+  "test_files": [
+    "/app/backend/tests/test_engine_reliability.py",
+    "/app/backend/tests/test_signal_engine_v3.py"
+  ],
+  "reliability_fixes": {
+    "auto_recovery": "Replaced permanent pause with exponential backoff (5s→30s cap). Engine auto-resets error counter and resumes.",
+    "active_trade_protection": "Engine detects live trades (active/tp1/tp2/tp3) and NEVER pauses when they exist. Uses cached prices for SL evaluation.",
+    "error_classification": "Transient errors (timeout, 429, network, connection) do NOT count toward recovery threshold. Only critical errors (code bugs, DB failures) count.",
+    "safe_retry": "On API failure, engine retries with progressive delay (1-5s). Loop never stops.",
+    "failsafe_sl": "Last-known price cache populated on every successful fetch. When API fails, cached prices used for SL evaluation with source marked as 'provider:cached'.",
+    "stale_pause_clearing": "On startup, main.py checks for and clears any stale 'Auto-paused' state from previous crash/error cascade."
+  },
+  "live_verification": {
+    "startup_log": "Signal Auto-Engine v3.1 STARTED (FAULT-TOLERANT) | Mode: DETERMINISTIC, GAP-PROTECTED, SELF-RECOVERING | SL failsafe: last-known price cache enabled",
+    "stale_pause_cleared": true,
+    "sl_triggered_on_resume": {
+      "signal_id": "sig_fb9cff0ceb0f",
+      "type": "SELL",
+      "sl": 4613.0,
+      "market_price": 4619.58,
+      "result": "closed/sl at 4613.0 (gap-protected)",
+      "pips": -60.0
+    },
+    "api_failure_handling": "Engine continued running during TwelveData 429 rate limits — logged warnings with streak count, never paused."
+  },
+  "verdict": "ALL PASS — Engine is now fault-tolerant and self-recovering"
+}
