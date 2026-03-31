@@ -263,10 +263,13 @@ class DeterministicPriceTrigger:
     - This ensures deterministic, auditable results
     
     EXECUTION BUFFER (0.5):
-    - Applied to all trigger comparisons to compensate for minor price
-      differences between data provider and broker feed
-    - BUY:  entry/TP trigger at price >= level - BUFFER, SL at price <= level + BUFFER
-    - SELL: entry/TP trigger at price <= level + BUFFER, SL at price >= level - BUFFER
+    - Applied to ENTRY and TP comparisons only
+    - NOT applied to STOP LOSS (SL must trigger exactly at the defined level)
+    - Compensates for minor price differences between data provider and broker
+    
+    IMPORTANT: No crossing detection. Every tick is evaluated independently
+    against the threshold. This prevents missed triggers when last_price is
+    stale or when price gaps through a level between polls.
     """
     
     BUFFER = 0.5  # Execution precision buffer (in price units)
@@ -279,39 +282,22 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Stop Loss is triggered.
+        Check if Stop Loss is triggered. NO BUFFER — must be 100% reliable.
         
-        Returns (triggered: bool, execution_price: float)
-        - execution_price is ALWAYS the defined SL, not the gapped price
-        
-        RULES (with buffer):
-        - SELL: SL triggers when price rises TO or THROUGH (SL - BUFFER)
-        - BUY: SL triggers when price falls TO or THROUGH (SL + BUFFER)
+        BUY:  SL triggers when price <= stop_loss
+        SELL: SL triggers when price >= stop_loss
         """
         if not stop_loss or not current_price:
             return (False, None)
         
-        buf = DeterministicPriceTrigger.BUFFER
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL SL: triggered when price RISES to or above (SL - BUFFER)
-            threshold = stop_loss - buf
-            if last_price is not None:
-                triggered = last_price < threshold and current_price >= threshold
-            else:
-                triggered = current_price >= threshold
-            
-            return (triggered, stop_loss if triggered else None)
+            triggered = current_price >= stop_loss
         else:
-            # BUY SL: triggered when price FALLS to or below (SL + BUFFER)
-            threshold = stop_loss + buf
-            if last_price is not None:
-                triggered = last_price > threshold and current_price <= threshold
-            else:
-                triggered = current_price <= threshold
-            
-            return (triggered, stop_loss if triggered else None)
+            triggered = current_price <= stop_loss
+        
+        return (triggered, stop_loss if triggered else None)
     
     @staticmethod
     def check_tp_triggered(
@@ -321,14 +307,10 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Take Profit is triggered.
+        Check if Take Profit is triggered. BUFFER applied for precision.
         
-        Returns (triggered: bool, execution_price: float)
-        - execution_price is ALWAYS the defined TP, not the gapped price
-        
-        RULES (with buffer):
-        - SELL: TP triggers when price falls TO or THROUGH (TP + BUFFER)
-        - BUY: TP triggers when price rises TO or THROUGH (TP - BUFFER)
+        BUY:  TP triggers when price >= TP - BUFFER
+        SELL: TP triggers when price <= TP + BUFFER
         """
         if not take_profit or not current_price:
             return (False, None)
@@ -337,23 +319,11 @@ class DeterministicPriceTrigger:
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL TP: triggered when price FALLS to or below (TP + BUFFER)
-            threshold = take_profit + buf
-            if last_price is not None:
-                triggered = last_price > threshold and current_price <= threshold
-            else:
-                triggered = current_price <= threshold
-            
-            return (triggered, take_profit if triggered else None)
+            triggered = current_price <= take_profit + buf
         else:
-            # BUY TP: triggered when price RISES to or above (TP - BUFFER)
-            threshold = take_profit - buf
-            if last_price is not None:
-                triggered = last_price < threshold and current_price >= threshold
-            else:
-                triggered = current_price >= threshold
-            
-            return (triggered, take_profit if triggered else None)
+            triggered = current_price >= take_profit - buf
+        
+        return (triggered, take_profit if triggered else None)
     
     @staticmethod
     def check_entry_triggered(
@@ -363,14 +333,10 @@ class DeterministicPriceTrigger:
         last_price: Optional[float] = None
     ) -> tuple:
         """
-        Check if Entry price is reached for pending signals.
+        Check if Entry price is reached for pending signals. BUFFER applied.
         
-        Returns (triggered: bool, activation_price: float)
-        - activation_price is ALWAYS the defined entry, not the gapped price
-        
-        RULES (with buffer):
-        - SELL Pending: Entry triggers when price rises TO or THROUGH (entry - BUFFER)
-        - BUY Pending: Entry triggers when price falls TO or THROUGH (entry + BUFFER)
+        BUY:  Entry triggers when price >= entry - BUFFER
+        SELL: Entry triggers when price <= entry + BUFFER
         """
         if not entry_price or not current_price:
             return (False, None)
@@ -379,23 +345,11 @@ class DeterministicPriceTrigger:
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL entry: price must rise TO (entry - BUFFER)
-            threshold = entry_price - buf
-            if last_price is not None:
-                triggered = last_price < threshold and current_price >= threshold
-            else:
-                triggered = current_price >= threshold
-            
-            return (triggered, entry_price if triggered else None)
+            triggered = current_price <= entry_price + buf
         else:
-            # BUY entry: price must fall TO (entry + BUFFER)
-            threshold = entry_price + buf
-            if last_price is not None:
-                triggered = last_price > threshold and current_price <= threshold
-            else:
-                triggered = current_price <= threshold
-            
-            return (triggered, entry_price if triggered else None)
+            triggered = current_price >= entry_price - buf
+        
+        return (triggered, entry_price if triggered else None)
 
 
 # Legacy alias for backward compatibility
@@ -434,24 +388,37 @@ class SignalLifecycleController:
         """
         Get the next TP target based on current state.
         Returns (tp_price, exit_reason, new_state)
+        
+        SINGLE-TP FIX: If only tp1 exists (tp2/tp3 are null),
+        hitting tp1 closes the trade immediately as PROFIT.
         """
         state = self.get_current_state(signal)
+        tp1 = signal.get("tp1")
+        tp2 = signal.get("tp2")
+        tp3 = signal.get("tp3")
         
         if state == "active":
-            return (signal.get("tp1"), ExitReason.TP1, "tp1")
+            if tp1:
+                # Single-TP signal: tp1 exists but tp2/tp3 don't → close on tp1
+                if not tp2 and not tp3:
+                    return (tp1, ExitReason.TP1, "closed")
+                # Multi-TP signal: advance to tp1 state
+                return (tp1, ExitReason.TP1, "tp1")
+            return (None, None, None)
         elif state == "tp1":
-            tp2 = signal.get("tp2")
             if tp2:
+                # Check if this is the last TP
+                if not tp3:
+                    return (tp2, ExitReason.TP2, "closed")
                 return (tp2, ExitReason.TP2, "tp2")
-            return (None, None, None)  # No TP2, stay in tp1
+            return (None, None, None)
         elif state == "tp2":
-            tp3 = signal.get("tp3")
             if tp3:
-                return (tp3, ExitReason.TP3, "tp3")
-            return (None, None, None)  # No TP3, stay in tp2
+                return (tp3, ExitReason.TP3, "closed")
+            return (None, None, None)
         elif state == "tp3":
-            # TP3 hit means we should close
-            return (signal.get("tp3"), ExitReason.TP3, "closed")
+            # TP3 hit means close
+            return (tp3 or tp2 or tp1, ExitReason.TP3, "closed")
         
         return (None, None, None)
     

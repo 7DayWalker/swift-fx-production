@@ -33,7 +33,7 @@ GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
 # In-memory price cache — keyed by symbol, TTL = 5 seconds
 # ---------------------------------------------------------------------------
 _price_cache: dict[str, dict] = {}
-CACHE_TTL_SECONDS = 10
+CACHE_TTL_SECONDS = 3
 
 
 def _get_cached(symbol: str) -> Optional[dict]:
