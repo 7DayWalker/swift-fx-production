@@ -12,69 +12,78 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
+### Multi-Asset Market Data Service + Signal Engine (Completed — Mar 2026)
+- Created `services/market_data.py` — multi-asset price service with:
+  - `get_price(symbol)` main entry point with symbol routing
+  - 3-provider fallback chain for XAUUSD: Metals-API → GoldAPI → TwelveData
+  - In-memory TTL cache (5s per symbol)
+  - Symbol aliases (XAU/USD, GOLD → XAUUSD)
+  - Extensible `SYMBOL_PROVIDERS` registry for future assets
+- Created `api/routes/market.py` — `GET /api/market/price` and `GET /api/market/symbols`
+- Updated `services/signal_engine.py` to use `market_data.get_price()` for gold symbols
+- Signal lifecycle: pending → active → tp1 → tp2 → tp3 → closed, with SL priority
+- **API keys are placeholder (test_key)** — swap in `.env` when ready
+
+### Backend Auth Regression (Completed — Mar 2026)
+- Fixed 30+ missing import bugs across 10 route files after monolith refactoring
+- Created `core/engine_state.py` for shared signal engine state
+- All 25 endpoints verified (auth, admin, RBAC, public)
+
 ### Backend Modular Refactoring (Completed — Mar 2026)
-- Split 9000+ line `server.py` into modular architecture: `main.py`, 12 route files, `core/`, `services/`, `models/`
-- Fixed 30+ missing import bugs across 10 route files during auth regression testing
-- Created `core/engine_state.py` for shared signal engine state between main.py and admin routes
-- Replaced broken supabase Python client calls with httpx REST calls in signals.py
-- All 25 endpoints verified: 6 public, 5 auth, 8 admin, 6 unauthorized rejection
-- `server.py` remains as thin proxy (`from main import app`) for backward compatibility
+- Split 9000+ line `server.py` into modular architecture
+- `server.py` remains as thin proxy (`from main import app`)
 
 ### AdMob Monetization System (Completed — Feb 2026)
-- **AdBanner** integrated as fixed-bottom component on 7 screens
-- **Interstitial ads** (frequency-gated) on Signals and AI Analyzer
-- **Rewarded ads** on Academy
-- **Subscription gating**: All ads return `null` for premium/vip/admin users
-- **Platform-safe**: `.web.tsx` stubs prevent web bundler crashes
+- Fixed-bottom AdBanner, interstitial after meaningful actions, rewarded in Academy
+- Subscription gating: ads hidden for premium/vip/admin
 
 ### Previously Completed
-- Community Feed DB Migration (MongoDB)
-- Fund Management Sync (auto-create investor portfolios)
-- API Client Standardization (centralized `api.ts`)
-- OAuth Deep Linking Fix (`swiftfx://auth`)
-- Backend Deployment Fix (Railway + emergentintegrations)
-- EAS & Firebase Config
-- Admin Subscription Override System (grant/revoke/audit)
-- Admin Read-Only View for overrides
-- Trading Pairs feature
+- Community Feed, Fund Management, API Client Standardization
+- OAuth Deep Linking, Admin Subscription Override System
+- Trading Pairs feature, RBAC system
 
 ## Prioritized Backlog
 
+### P0 (Immediate)
+- Replace `test_key` API keys with real ones for market data providers (user action)
+
 ### P1
 - End-to-End IAP testing on physical devices
-- Verify AdMob ads render correctly on native iOS/Android builds (requires EAS build)
+- Verify AdMob ads render on native iOS/Android builds
 
 ### P2
-- Reliable alternative Gold price API
+- Add more symbols to market data service (EURUSD, GBPUSD, BTCUSD)
+- Reliable alternative Gold price API exploration
 - Smart push reminders for streak-at-risk users
 - Push notifications on new signal creation
 - Leaderboard of top shared AI analyses
 
-## Key Technical Notes
-- Supabase auth tokens verified via JWKS endpoint
-- MongoDB `_id` excluded from all API responses
-- `ADMIN_PERMISSIONS` dict controls fine-grained RBAC
-- Signal engine state shared via `core/engine_state.py` module singleton
-- All routes use `/api` prefix for Kubernetes ingress routing
-
 ## Backend Architecture
 ```
 /app/backend/
-├── main.py                (FastAPI app init, CORS, DB indexes, router includes)
-├── server.py              (Thin proxy: `from main import app`)
-├── supabase_auth.py       (Auth helpers - JWT, profiles, user management)
-├── api/routes/            (12 route files: admin, signals, ai, subscriptions, etc.)
+├── main.py
+├── server.py              (Thin proxy)
+├── supabase_auth.py
+├── api/routes/
+│   ├── admin.py, ai.py, academy.py, calendar.py
+│   ├── community.py, dashboard.py, fund.py
+│   ├── market.py          (NEW — market price endpoints)
+│   ├── referral.py, settings.py, signals.py
+│   ├── subscriptions.py, support.py
 ├── core/
-│   ├── config.py          (All config constants and env vars)
-│   ├── database.py        (MongoDB connection singleton)
-│   ├── dependencies.py    (get_current_user, require_admin, require_super_admin)
-│   └── engine_state.py    (Shared mutable state for signal engine)
+│   ├── config.py, database.py, dependencies.py
+│   └── engine_state.py    (Shared engine state)
 ├── models/
-│   ├── enums.py           (UserRole, SignalVisibility, SignalState, etc.)
-│   └── schemas.py         (Pydantic models)
+│   ├── enums.py, schemas.py
 └── services/
-    ├── auth.py            (RBAC helpers: is_super_admin, has_permission)
-    ├── admin.py           (Audit logging, notifications)
-    ├── subscription.py    (Tier resolution, override checks)
-    └── signal_engine.py   (Signal lifecycle, price automation)
+    ├── auth.py, admin.py, subscription.py
+    ├── market_data.py      (NEW — multi-asset price service)
+    └── signal_engine.py    (Updated — uses market_data)
+```
+
+## Environment Variables (Market Data)
+```
+METALS_API_KEY=<from metals-api.com>
+GOLDAPI_KEY=<from goldapi.io>
+TWELVEDATA_KEY=<from twelvedata.com>
 ```
