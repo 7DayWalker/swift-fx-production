@@ -3,19 +3,34 @@ services/signal_engine.py — Signal lifecycle engine (price polling, auto TP/SL
 This is the background task engine, NOT HTTP routes.
 """
 import os
+import uuid
 import asyncio
 import logging
 from enum import Enum
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 
 import httpx
 
 from core.database import db
 from core.config import PRICE_POLL_INTERVAL, SYMBOL_MAP, get_instrument_info
-from models.enums import SignalState
+from models.enums import SignalState, SignalVisibility, SignalType
+
+import core.engine_state as engine_state
 
 logger = logging.getLogger(__name__)
+
+
+# Lazy-import wrappers for notification functions (defined in api.routes.signals)
+# to avoid circular dependency: signal_engine → signals → signal_engine
+async def send_signal_notification(signal_id, pair, signal_type, visibility):
+    from api.routes.signals import send_signal_notification as _notify
+    await _notify(signal_id, pair, signal_type, visibility)
+
+
+async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility):
+    from api.routes.signals import send_signal_close_notification as _notify_close
+    await _notify_close(signal_id, pair, signal_type, pips, visibility)
 
 # ==============================================================================
 # SIGNAL LIFECYCLE ENGINE v3.0 - DETERMINISTIC AUDITABLE MODE
@@ -55,97 +70,58 @@ logger = logging.getLogger(__name__)
 #
 # ==============================================================================
 
-import asyncio
-from contextlib import asynccontextmanager
-
-# Price feed configuration - CONFIGURABLE VIA ENVIRONMENT
-PRICE_POLL_INTERVAL = int(os.environ.get('SIGNAL_POLL_INTERVAL', '5'))  # Default 5 seconds
-price_automation_running = False
-
-# Symbol mapping for different price APIs
-SYMBOL_MAP = {
-    # Forex pairs
-    "EUR/USD": {"type": "forex", "symbol": "EURUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "EURUSD": {"type": "forex", "symbol": "EURUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "GBP/USD": {"type": "forex", "symbol": "GBPUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "GBPUSD": {"type": "forex", "symbol": "GBPUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "USD/JPY": {"type": "forex", "symbol": "USDJPY", "pip_multiplier": 100, "pip_size": 0.01},
-    "USDJPY": {"type": "forex", "symbol": "USDJPY", "pip_multiplier": 100, "pip_size": 0.01},
-    "GBP/JPY": {"type": "forex", "symbol": "GBPJPY", "pip_multiplier": 100, "pip_size": 0.01},
-    "GBPJPY": {"type": "forex", "symbol": "GBPJPY", "pip_multiplier": 100, "pip_size": 0.01},
-    "AUD/USD": {"type": "forex", "symbol": "AUDUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "AUDUSD": {"type": "forex", "symbol": "AUDUSD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "USD/CAD": {"type": "forex", "symbol": "USDCAD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "USDCAD": {"type": "forex", "symbol": "USDCAD", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "USD/CHF": {"type": "forex", "symbol": "USDCHF", "pip_multiplier": 10000, "pip_size": 0.0001},
-    "USDCHF": {"type": "forex", "symbol": "USDCHF", "pip_multiplier": 10000, "pip_size": 0.0001},
-    # Gold - pip = $0.10
-    "XAU/USD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
-    "XAUUSD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
-    # Crypto - pip = $1.00
-    "BTC/USD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
-    "BTCUSD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
-    "ETH/USD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
-    "ETHUSD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
-}
-
-
-def get_instrument_info(pair: str) -> dict:
-    """Get pip multiplier and pip size for an instrument"""
-    pair_upper = pair.upper().replace("/", "")
-    mapping = SYMBOL_MAP.get(pair) or SYMBOL_MAP.get(pair_upper)
-    
-    if mapping:
-        return {
-            "pip_multiplier": mapping["pip_multiplier"],
-            "pip_size": mapping["pip_size"]
-        }
-    
-    # Fallback based on pair characteristics
-    if "JPY" in pair_upper:
-        return {"pip_multiplier": 100, "pip_size": 0.01}
-    elif "XAU" in pair_upper or "GOLD" in pair_upper:
-        return {"pip_multiplier": 10, "pip_size": 0.1}
-    elif "BTC" in pair_upper or "ETH" in pair_upper:
-        return {"pip_multiplier": 1, "pip_size": 1.0}
-    else:
-        return {"pip_multiplier": 10000, "pip_size": 0.0001}
-
 
 async def fetch_live_prices(symbols: List[str]) -> Dict[str, dict]:
     """
-    Fetch live prices from multiple free APIs.
+    Fetch live prices using the multi-asset market data service.
     
     Returns dict with price AND source for each symbol:
     {
-        "XAUUSD": {"price": 2650.50, "source": "goldapi.io"},
+        "XAUUSD": {"price": 2650.50, "source": "metals-api"},
         "EURUSD": {"price": 1.0850, "source": "frankfurter.app"}
     }
     
     CRITICAL: NO HARDCODED FALLBACK PRICES.
     If API fails, symbol is omitted from results.
     """
+    from services.market_data import get_price, _normalize_symbol, SYMBOL_PROVIDERS
+    
     prices = {}
     
-    # Group symbols by type
+    # Group symbols by type for efficient fetching
     forex_symbols = []
     crypto_symbols = []
-    gold_symbols = []
+    market_data_symbols = []  # Symbols handled by market_data service
     
     for symbol in symbols:
         normalized = symbol.replace("/", "").upper()
         mapping = SYMBOL_MAP.get(symbol) or SYMBOL_MAP.get(normalized)
-        if mapping:
-            if mapping["type"] == "forex":
-                forex_symbols.append((symbol, mapping["symbol"]))
-            elif mapping["type"] == "gold":
-                gold_symbols.append((symbol, mapping["symbol"]))
-            elif mapping["type"] == "crypto":
-                crypto_symbols.append((symbol, mapping["symbol"]))
+        if not mapping:
+            continue
+        
+        # Check if the market_data service supports this symbol
+        md_normalized = _normalize_symbol(symbol)
+        if md_normalized in SYMBOL_PROVIDERS:
+            market_data_symbols.append((symbol, md_normalized))
+        elif mapping["type"] == "forex":
+            forex_symbols.append((symbol, mapping["symbol"]))
+        elif mapping["type"] == "crypto":
+            crypto_symbols.append((symbol, mapping["symbol"]))
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        # Fetch forex from frankfurter.app (free, no API key needed)
-        if forex_symbols:
+    # Fetch from market_data service (handles caching + multi-provider fallback)
+    for orig_symbol, md_symbol in market_data_symbols:
+        try:
+            result = await get_price(md_symbol)
+            prices[orig_symbol] = {
+                "price": result["price"],
+                "source": result["source"],
+            }
+        except Exception as e:
+            logger.warning(f"[PriceFetch] {orig_symbol} via market_data FAILED: {e}")
+    
+    # Fetch remaining forex from frankfurter.app (free, no API key needed)
+    if forex_symbols:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             for orig_symbol, api_symbol in forex_symbols:
                 base = api_symbol[:3]
                 quote_ccy = api_symbol[3:]
@@ -163,53 +139,10 @@ async def fetch_live_prices(symbols: List[str]) -> Dict[str, dict]:
                             }
                 except Exception as e:
                     logger.warning(f"[PriceFetch] Forex {orig_symbol} FAILED: {e}")
-        
-        # Fetch gold - NO HARDCODED FALLBACK
-        if gold_symbols:
-            for orig_symbol, api_symbol in gold_symbols:
-                price_fetched = False
-                
-                # Primary: goldapi.io
-                try:
-                    resp = await client.get(
-                        "https://www.goldapi.io/api/XAU/USD",
-                        headers={"x-access-token": "goldapi-free"}
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        price = data.get("price")
-                        if price:
-                            prices[orig_symbol] = {
-                                "price": float(price),
-                                "source": "goldapi.io"
-                            }
-                            price_fetched = True
-                except Exception as e:
-                    logger.warning(f"[PriceFetch] Gold primary API failed: {e}")
-                
-                # Fallback: CoinGecko PAX Gold
-                if not price_fetched:
-                    try:
-                        resp = await client.get(
-                            "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd"
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            if "pax-gold" in data and "usd" in data["pax-gold"]:
-                                prices[orig_symbol] = {
-                                    "price": float(data["pax-gold"]["usd"]),
-                                    "source": "coingecko-paxgold"
-                                }
-                                price_fetched = True
-                    except Exception as e:
-                        logger.warning(f"[PriceFetch] Gold fallback API failed: {e}")
-                
-                # CRITICAL: NO HARDCODED FALLBACK - skip symbol if all APIs fail
-                if not price_fetched:
-                    logger.error(f"[PriceFetch] {orig_symbol} SKIPPED - all price sources failed")
-        
-        # Fetch crypto from CoinGecko (free, no API key)
-        if crypto_symbols:
+    
+    # Fetch remaining crypto from CoinGecko (free, no API key)
+    if crypto_symbols:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 ids = ",".join([s[1] for s in crypto_symbols])
                 resp = await client.get(
@@ -873,8 +806,6 @@ ENGINE_CONFIG_DEFAULTS = {
 }
 
 # Global engine state
-price_automation_running = False
-engine_task = None
 lifecycle_controller = None
 engine_lock_id = None  # For single instance enforcement
 
@@ -974,7 +905,7 @@ async def run_price_automation():
     4. Processes each signal through the lifecycle controller with price context
     5. Handles errors gracefully with auto-recovery
     """
-    global price_automation_running, lifecycle_controller, engine_lock_id
+    global lifecycle_controller, engine_lock_id
     
     # Acquire distributed lock
     engine_lock_id = await acquire_engine_lock()
@@ -982,7 +913,7 @@ async def run_price_automation():
         logger.error("[Engine] Cannot start - another instance is already running")
         return
     
-    price_automation_running = True
+    engine_state.price_automation_running = True
     lifecycle_controller = SignalLifecycleController(db)
     
     logger.info("=" * 60)
@@ -994,7 +925,7 @@ async def run_price_automation():
     
     consecutive_errors = 0
     
-    while price_automation_running:
+    while engine_state.price_automation_running:
         poll_timestamp = datetime.now(timezone.utc)
         
         try:
@@ -1119,6 +1050,6 @@ async def run_price_automation():
     if engine_lock_id:
         await release_engine_lock(engine_lock_id)
     
-    price_automation_running = False
+    engine_state.price_automation_running = False
     logger.info("[Engine] Signal Auto-Engine STOPPED")
 
