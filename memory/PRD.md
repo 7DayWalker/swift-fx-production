@@ -80,10 +80,19 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - OAuth Deep Linking, Admin Subscription Override System
 - Trading Pairs feature, RBAC system
 
+### 5 Frontend Production Bug Fixes (Verified — Apr 2 2026)
+- **OAuth Login Stuck**: Simplified `app/auth.tsx` — regex URL parsing (no `new URL()` crash on custom schemes), `resolved` flag prevents double nav, 10s hard timeout guarantees redirect
+- **App Freeze on Reopen**: `AuthContext.tsx` bootstrap races `getSession()` against 5s timeout — if Supabase hangs, `isLoading` still becomes false
+- **Logout Not Working**: State cleared FIRST (`setUser(null)`, `setToken(null)`) before `signOut()` in try/catch — even if signOut throws, user is logged out locally
+- **Signal Duplication**: Added `useRef`-based synchronous submission lock in `(admin)/signals.tsx` — blocks re-entry before React state update propagates
+- **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
+- Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
+
 ## Prioritized Backlog
 
 ### P0 (Immediate)
-- Signal Engine v3.1 execution accuracy — VERIFIED (52/52 tests pass)
+- ~~Signal Engine v3.1 execution accuracy — VERIFIED (52/52 tests pass)~~
+- ~~5 Frontend Production Bug Fixes — VERIFIED (8/8 tests pass, Apr 2 2026)~~
 
 ### P1
 - End-to-End IAP testing on physical devices
