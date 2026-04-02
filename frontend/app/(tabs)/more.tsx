@@ -67,7 +67,6 @@ export default function MoreScreen() {
   const confirmLogout = async () => {
     setShowLogoutModal(false);
     await logout();
-    router.replace('/(auth)/login');
   };
 
   const menuItems = [

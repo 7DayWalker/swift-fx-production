@@ -2,19 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { supabase } from '../services/supabase';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-
-/**
- * Bridge for passing the OAuth callback URL from openAuthSessionAsync
- * (which consumes the deep link) to auth.tsx (which handles session exchange).
- */
-let _pendingOAuthCallbackUrl: string | null = null;
-export const getPendingOAuthCallbackUrl = (): string | null => {
-  const url = _pendingOAuthCallbackUrl;
-  _pendingOAuthCallbackUrl = null;
-  return url;
-};
 
 interface User {
   user_id: string;
@@ -35,7 +25,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
-  signInWithProvider: (provider: OAuthProvider) => Promise<void>;
+  signInWithProvider: (provider: OAuthProvider) => Promise<User | void>;
   register: (name: string, email: string, password: string, referralCode?: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -43,13 +33,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Map a Supabase auth user + profile row → our app User object */
+/** Map a Supabase auth user + profile row -> our app User object */
 const buildUser = (
   sbUser: SupabaseUser,
   profile: { name?: string; role?: string; admin_role?: string } | null,
 ): User => {
   const profileRole = profile?.role ?? 'free';
-  // Both admin and super_admin get admin privileges and VIP access
   const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
 
   return {
@@ -100,20 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const bootstrap = async () => {
-      console.log('[Auth] bootstrap START');
       try {
-        // Race getSession against a 5s timeout to prevent app freeze on reopen
-        const sessionResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<{ data: { session: null } }>((resolve) =>
-            setTimeout(() => {
-              console.warn('[Auth] getSession timed out after 5s');
-              resolve({ data: { session: null } });
-            }, 5000)
-          ),
-        ]);
-        const session = sessionResult.data.session;
-        console.log('[Auth] getSession resolved — session:', !!session);
+        const { data: { session } } = await supabase.auth.getSession();
         if (session && mounted) {
           await fetchProfile(session.user, session.access_token);
         }
@@ -129,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[Auth] onAuthStateChange:', event);
         if (session && mounted) {
           await fetchProfile(session.user, session.access_token);
         } else if (mounted) {
@@ -155,9 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return appUser;
   };
 
-  const signInWithProvider = async (provider: OAuthProvider): Promise<void> => {
+  const signInWithProvider = async (provider: OAuthProvider): Promise<User | void> => {
     if (Platform.OS === 'web') {
-      // Web: standard redirect flow — Supabase handles the callback via detectSessionInUrl
       if (typeof window === 'undefined') {
         throw new Error('OAuth sign-in not available during SSR');
       }
@@ -167,11 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { redirectTo },
       });
       if (error) throw error;
-      // Page redirects; onAuthStateChange picks up session on return
       return;
     }
 
-    // Native (iOS / Android): open in-app browser, redirect to swiftfx://auth
+    // Native (iOS / Android): open in-app browser, exchange code, return user
     const redirectTo = 'swiftfx://auth';
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -183,14 +157,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
-      // Store the callback URL — session exchange happens in auth.tsx only
-      _pendingOAuthCallbackUrl = result.url;
-      return;
+      // Extract code using Expo's built-in URL parser (no regex, no hacks)
+      const { queryParams } = Linking.parse(result.url);
+      const code = queryParams?.code;
+      if (typeof code === 'string') {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
+
+        // Session established — fetch profile so caller can navigate immediately
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          return await fetchProfile(session.user, session.access_token);
+        }
+        throw new Error('Session not found after code exchange');
+      }
+      throw new Error('No authorization code in callback URL');
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
       throw new Error('Authentication cancelled');
     }
+
+    throw new Error('Authentication failed');
   };
 
   const register = async (
@@ -206,7 +194,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) throw new Error(error.message);
 
-    // If email confirmation is required, session will be null
     if (!data.session) {
       throw new Error('Account created! Please check your email to verify, then log in.');
     }
@@ -219,15 +206,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    // Clear local state FIRST so the app never shows stale user data,
-    // even if signOut() throws (network error, corrupt token, etc.)
-    setUser(null);
-    setToken(null);
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.error('[Auth] signOut error (local state already cleared):', err);
+      console.error('[Auth] signOut error:', err);
     }
+    setUser(null);
+    setToken(null);
+    router.replace('/(auth)/login');
   };
 
   const refreshUser = async () => {

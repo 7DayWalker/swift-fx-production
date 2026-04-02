@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
@@ -41,12 +42,11 @@ const getPairCategory = (pair: string): { label: string; color: string } => {
 };
 
 const getDashboardAge = (createdAt: string): string => {
-  const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  try {
+    return formatDistanceToNow(new Date(createdAt), { addSuffix: true });
+  } catch {
+    return 'recently';
+  }
 };
 
 const getDashboardState = (state: string): { label: string; color: string } => {
@@ -164,7 +164,7 @@ export default function DashboardScreen() {
 
         {/* Performance Stats - REACTIVE from SignalContext */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Performance</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Performance</Text>
           <View style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Text style={[styles.statValue, { color: theme.text }]}>{formatWinRate(winRate)}%</Text>

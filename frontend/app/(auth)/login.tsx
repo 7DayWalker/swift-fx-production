@@ -62,16 +62,18 @@ export default function LoginScreen() {
   const handleOAuthLogin = async (provider: 'apple' | 'google') => {
     setOauthLoading(provider);
     try {
-      await signInWithProvider(provider);
+      const userData = await signInWithProvider(provider);
       // On web, the page redirects so this code won't execute.
-      // On native, openAuthSessionAsync stored the callback URL —
-      // route to /auth which handles session exchange in one place.
-      if (Platform.OS !== 'web') {
-        router.replace('/auth');
+      // On native, session is already established — navigate based on user role.
+      if (Platform.OS !== 'web' && userData) {
+        if (userData.is_admin) {
+          router.replace('/(admin)/dashboard');
+        } else {
+          router.replace('/(tabs)/dashboard');
+        }
       }
     } catch (error: any) {
       const msg = error.message || 'Something went wrong';
-      // Don't show error for intentional cancellation
       if (msg !== 'Authentication cancelled') {
         if (Platform.OS === 'web') {
           window.alert(msg);

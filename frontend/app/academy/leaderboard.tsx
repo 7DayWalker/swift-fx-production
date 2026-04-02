@@ -28,9 +28,11 @@ export default function LeaderboardScreen() {
   const fetchLeaderboard = useCallback(async () => {
     try {
       const { data } = await api.get('/academy/leaderboard');
-      setLeaderboard(data.leaderboard || []);
-      setMyRank(data.my_rank);
-      setMyXp(data.my_xp || 0);
+      if (data) {
+        setLeaderboard(data.leaderboard || []);
+        setMyRank(data.my_rank ?? null);
+        setMyXp(data.my_xp || 0);
+      }
     } catch { }
     setLoading(false);
   }, []);

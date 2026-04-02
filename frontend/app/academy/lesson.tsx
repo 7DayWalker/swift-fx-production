@@ -622,8 +622,10 @@ export default function LessonScreen() {
   const fetchProgress = useCallback(async () => {
     try {
       const { data } = await api.get('/academy/progress');
-      const done = data.by_course?.[courseId] || [];
-      setCompletedLessons(new Set(done.map((id: number | string) => Number(id))));
+      if (data) {
+        const done = data.by_course?.[courseId] || [];
+        setCompletedLessons(new Set(done.map((id: number | string) => Number(id))));
+      }
     } catch {}
     setLoading(false);
   }, [courseId]);
