@@ -2,11 +2,12 @@
 services/market_data.py — Multi-provider market data service with fallback chain.
 
 Provider priority (strict order):
-  1. TwelveData  → PRIMARY (execution accuracy)
-  2. Finnhub     → FALLBACK (high rate limit)
-  3. Alpha Vantage → LAST RESORT
-  4. Metals-API  → bonus (if key configured)
-  5. GoldAPI     → bonus (if key configured)
+  1. gold-api.com → PRIMARY (free, no key, stable for testing)
+  2. TwelveData   → SECONDARY (rate-limited on free tier)
+  3. Metals-API   → bonus (if key configured)
+  4. GoldAPI      → bonus (if key configured)
+  5. Finnhub      → low priority (free tier lacks gold)
+  6. Alpha Vantage → low priority (free tier rate-limited)
 
 Adding new symbols:
   1. Add provider functions per symbol
@@ -276,21 +277,21 @@ async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
 async def _get_gold_price() -> Optional[dict]:
     """
     Fetch XAUUSD price using strict provider priority:
-      1. TwelveData  (primary — execution accuracy)
-      2. gold-api.com (main fallback — FREE, live spot gold)
-      3. Metals-API   (future premium fallback, if key configured)
-      4. GoldAPI.io   (future backup, if key configured)
-      5. Finnhub      (low priority — free tier lacks gold support)
-      6. Alpha Vantage (low priority — free tier rate-limited)
+      1. gold-api.com  (primary — FREE, stable, no rate-limit issues)
+      2. TwelveData    (secondary — rate-limited on free tier)
+      3. Metals-API    (if key configured)
+      4. GoldAPI.io    (if key configured)
+      5. Finnhub       (low priority — free tier lacks gold support)
+      6. Alpha Vantage  (low priority — free tier rate-limited)
     
     Each provider has a 2-second timeout. No retries within same cycle.
     """
     async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
-        result = await _gold_twelvedata(client)
+        result = await _gold_free_api(client)
         if result:
             return result
 
-        result = await _gold_free_api(client)
+        result = await _gold_twelvedata(client)
         if result:
             return result
 

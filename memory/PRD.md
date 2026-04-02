@@ -12,10 +12,10 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
-### Multi-Provider Market Data Fallback (Verified — Mar 31 2026)
-- **Provider chain**: TwelveData → Finnhub → Alpha Vantage → gold-api.com → Metals-API → GoldAPI.io
-- **Live verified**: TwelveData(429) → Finnhub(403) → AlphaVantage(rate-limited) → gold-api.com(SUCCESS at $4,690.8)
-- **Gold-api.com**: Free, no key required, live spot gold — serves as working fallback when paid providers are rate-limited
+### Multi-Provider Market Data Fallback (Updated — Apr 2 2026)
+- **Provider chain**: gold-api.com → TwelveData → Metals-API → GoldAPI.io → Finnhub → Alpha Vantage
+- **gold-api.com promoted to PRIMARY**: Free, no key required, stable — eliminates TwelveData 429 rate-limit noise during testing
+- **TwelveData demoted to SECONDARY**: Still available as fallback when gold-api.com is down
 - **Env config**: `FINNHUB_API_KEY` and `ALPHA_VANTAGE_API_KEY` added with preview fallback values
 - **Note**: Finnhub free tier doesn't support gold. Alpha Vantage free tier doesn't support spot XAU. Both will auto-activate when upgraded to paid tiers.
 - Test report: `/app/test_reports/iteration_25.json`
