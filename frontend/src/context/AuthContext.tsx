@@ -100,19 +100,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const bootstrap = async () => {
-      console.log('[Auth] bootstrap START — isLoading: true');
+      console.log('[Auth] bootstrap START');
       try {
-        console.log('[Auth] calling supabase.auth.getSession()...');
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('[Auth] getSession returned — session:', !!session);
+        // Race getSession against a 5s timeout to prevent app freeze on reopen
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<{ data: { session: null } }>((resolve) =>
+            setTimeout(() => {
+              console.warn('[Auth] getSession timed out after 5s');
+              resolve({ data: { session: null } });
+            }, 5000)
+          ),
+        ]);
+        const session = sessionResult.data.session;
+        console.log('[Auth] getSession resolved — session:', !!session);
         if (session && mounted) {
-          console.log('[Auth] fetching profile for user:', session.user.id);
           await fetchProfile(session.user, session.access_token);
         }
       } catch (err) {
         console.error('[Auth] bootstrap error:', err);
       } finally {
-        console.log('[Auth] bootstrap FINALLY — setting isLoading=false, mounted:', mounted);
         if (mounted) setIsLoading(false);
       }
     };
@@ -212,9 +219,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    // Clear local state FIRST so the app never shows stale user data,
+    // even if signOut() throws (network error, corrupt token, etc.)
     setUser(null);
     setToken(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('[Auth] signOut error (local state already cleared):', err);
+    }
   };
 
   const refreshUser = async () => {

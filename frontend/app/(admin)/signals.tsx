@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -97,6 +97,7 @@ export default function SignalManagement() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const isSubmittingRef = useRef(false);
 
   // Create form state - INCLUDES STATUS SELECTION
   const [formData, setFormData] = useState({
@@ -214,11 +215,16 @@ export default function SignalManagement() {
 
   // ========== CREATE SIGNAL (WITH STATUS CHOICE) ==========
   const handleCreateSignal = async () => {
+    // Synchronous ref guard: prevents double-tap before React state updates
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     console.log("=== HANDLE CREATE SIGNAL CALLED ===");
     
     if (!formData.entry || !formData.stop_loss || !formData.tp1) {
       console.log("=== VALIDATION FAILED ===", { entry: formData.entry, stop_loss: formData.stop_loss, tp1: formData.tp1 });
       showAlert('Error', 'Please fill in Entry, Stop Loss, and TP1');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -265,6 +271,7 @@ export default function SignalManagement() {
       showAlert('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 

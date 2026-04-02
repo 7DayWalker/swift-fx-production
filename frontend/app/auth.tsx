@@ -21,74 +21,66 @@ export default function AuthCallbackScreen() {
 
   useEffect(() => {
     let mounted = true;
+    let resolved = false;
+
+    const navigate = (target: string) => {
+      if (!mounted || resolved) return;
+      resolved = true;
+      router.replace(target as any);
+    };
+
+    // Hard timeout: if nothing resolves in 10s, redirect to login
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        console.warn('[AuthCallback] Timed out after 10s — redirecting to login');
+        navigate('/(auth)/login');
+      }
+    }, 10000);
 
     const handleOAuthCallback = async () => {
       try {
-        // 1. Check bridge from openAuthSessionAsync (login.tsx flow)
-        // 2. Fall back to deep link URL (external browser flow)
         const url = getPendingOAuthCallbackUrl() || (await Linking.getInitialURL());
         console.log('[AuthCallback] URL received:', url);
 
-        if (!url) {
-          // No callback URL at all — check if a session already exists
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            console.log('[AuthCallback] Existing session found, redirecting');
-            if (mounted) router.replace('/(tabs)/dashboard');
-            return;
-          }
-          throw new Error('No callback URL received');
-        }
+        if (url) {
+          // Safe code extraction via regex (works with custom scheme URLs like swiftfx://)
+          const codeMatch = url.match(/[?&]code=([^&#]+)/);
+          const code = codeMatch ? decodeURIComponent(codeMatch[1]) : null;
 
-        // PKCE flow: extract code from query params using URL API
-        const parsed = new URL(url);
-        const code = parsed.searchParams.get('code');
-
-        if (code) {
-          console.log('[AuthCallback] PKCE code found, exchanging for session');
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-        } else {
-          // Implicit flow: tokens in hash fragment
-          const hashPart = url.split('#')[1];
-          if (hashPart) {
-            const params = new URLSearchParams(hashPart);
-            const access_token = params.get('access_token');
-            const refresh_token = params.get('refresh_token');
-
-            if (access_token && refresh_token) {
-              console.log('[AuthCallback] Implicit tokens found, setting session');
-              const { error } = await supabase.auth.setSession({
-                access_token,
-                refresh_token,
-              });
-              if (error) throw error;
-            } else {
-              throw new Error('No auth tokens found in callback URL');
-            }
+          if (code) {
+            console.log('[AuthCallback] PKCE code found, exchanging...');
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
           } else {
-            // Last resort: session may already exist from auto-detection
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-              throw new Error('No auth code or tokens in callback URL');
+            // Implicit flow: tokens in hash fragment
+            const hashPart = url.split('#')[1];
+            if (hashPart) {
+              const params = new URLSearchParams(hashPart);
+              const access_token = params.get('access_token');
+              const refresh_token = params.get('refresh_token');
+              if (access_token && refresh_token) {
+                console.log('[AuthCallback] Implicit tokens found, setting session');
+                const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+                if (error) throw error;
+              }
             }
-            console.log('[AuthCallback] Session already exists from auto-detection');
           }
         }
 
-        // Session established — onAuthStateChange in AuthContext updates user state
-        if (mounted) {
-          console.log('[AuthCallback] Success — redirecting to dashboard');
-          router.replace('/(tabs)/dashboard');
+        // Verify session exists (regardless of how we got here)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[AuthCallback] Session confirmed — redirecting to dashboard');
+          navigate('/(tabs)/dashboard');
+        } else {
+          throw new Error('No session established after OAuth callback');
         }
       } catch (err: any) {
         console.error('[AuthCallback] Error:', err.message || err);
-        if (mounted) {
+        if (mounted && !resolved) {
           setStatus('error');
           setErrorMsg(err.message || 'Authentication failed');
-          setTimeout(() => {
-            if (mounted) router.replace('/(auth)/login');
-          }, 2000);
+          setTimeout(() => navigate('/(auth)/login'), 2000);
         }
       }
     };
@@ -97,6 +89,7 @@ export default function AuthCallbackScreen() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
     };
   }, [router]);
 

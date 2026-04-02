@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { format } from 'date-fns';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme } from '../src/context/ThemeContext';
 import api from '../src/services/api';
@@ -70,11 +71,21 @@ interface HistoryResponse {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getPipsValue = (s: Signal) => s.final_pips ?? s.result_pips ?? 0;
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatDate = (dateString: string) => {
+  try {
+    return format(new Date(dateString), 'MMM d, yyyy');
+  } catch {
+    return dateString;
+  }
+};
 
-const formatDateShort = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const formatDateShort = (dateString: string) => {
+  try {
+    return format(new Date(dateString), 'MMM d');
+  } catch {
+    return dateString;
+  }
+};
 
 // ─── Mini Bar Chart ──────────────────────────────────────────────────────────
 const MiniBarChart = ({ data, theme }: { data: MonthlyPerf[]; theme: any }) => {

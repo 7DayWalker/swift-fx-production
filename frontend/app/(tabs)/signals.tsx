@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -43,13 +44,11 @@ interface Signal {
 // ─── Signal card helpers ─────────────────────────────────────────────────────
 
 const getSignalAge = (createdAt: string): string => {
-  const diffMs = Date.now() - new Date(createdAt).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just posted';
-  if (mins < 60) return `Posted ${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `Posted ${hrs}h ago`;
-  return `Posted ${Math.floor(hrs / 24)}d ago`;
+  try {
+    return `Posted ${formatDistanceToNow(new Date(createdAt))} ago`;
+  } catch {
+    return 'Recently posted';
+  }
 };
 
 const calcConfidence = (rr?: number, entry?: number, sl?: number, tp1?: number): number => {
