@@ -88,11 +88,23 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
 - Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
 
+### 7 Frontend Architectural Fixes (Verified — Apr 2 2026)
+- **Auth Callback Rewrite**: `app/auth.tsx` simplified to cold-launch deep link handler using `Linking.getInitialURL()` + `Linking.parse()` — no regex/timeout hacks
+- **Auth Session Lifecycle**: `AuthContext.tsx` blocks rendering until `getSession()` resolves via `isLoading` state — splash screen waits, then navigates
+- **API Client Enforcement**: All 26 files use `@/services/api` axios instance with `EXPO_PUBLIC_BACKEND_URL/api` baseURL + Supabase token interceptor. Only raw `fetch()` is for external RSS feeds.
+- **Signal Creation Guard**: `useRef` isSubmittingRef lock prevents double-submission (lines 100, 219-220, 227, 274 in admin signals)
+- **Academy Crash Protection**: `Promise.all` with `.catch(() => ({ data: null }))` fallbacks — page renders even when API calls fail
+- **Dashboard Stats Consistency**: Admin dashboard shows global stats (total_users, signals, etc.), user dashboard shows personal signal context via SignalContext
+- **Timestamp Consistency**: `date-fns` `formatDistanceToNow` used in user dashboard, consistent human-readable timestamps
+- Test report: `/app/test_reports/iteration_27.json` — 7/7 tests pass (100%)
+
 ## Prioritized Backlog
 
 ### P0 (Immediate)
 - ~~Signal Engine v3.1 execution accuracy — VERIFIED (52/52 tests pass)~~
 - ~~5 Frontend Production Bug Fixes — VERIFIED (8/8 tests pass, Apr 2 2026)~~
+- ~~7 Frontend Architectural Fixes — VERIFIED (7/7 tests pass, Apr 2 2026)~~
+- **Supabase Dashboard Config** (USER ACTION): Set Site URL to HTTPS domain in Supabase Dashboard → Auth → URL Configuration
 
 ### P1
 - End-to-End IAP testing on physical devices
