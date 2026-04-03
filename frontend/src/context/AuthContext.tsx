@@ -103,14 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     bootstrap();
 
-    // Listen for auth state changes (login, logout, token refresh)
+    // Listen for auth state changes — drives UI immediately on login/logout/token refresh
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[Auth] onAuthStateChange:', event, '| session:', !!session);
         if (session && mounted) {
           await fetchProfile(session.user, session.access_token);
+          // Ensure isLoading is false once we have a session (handles cold-launch race)
+          if (mounted) setIsLoading(false);
         } else if (mounted) {
           setUser(null);
           setToken(null);
+          setIsLoading(false);
         }
       },
     );
@@ -222,15 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    // Clear local state FIRST so the user appears logged out immediately,
-    // even if supabase.auth.signOut() hangs or fails on mobile.
-    setUser(null);
-    setToken(null);
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.error('[Auth] signOut error (state already cleared):', err);
+      console.error('[Auth] signOut error:', err);
     }
+    setUser(null);
+    setToken(null);
     router.replace('/(auth)/login');
   };
 

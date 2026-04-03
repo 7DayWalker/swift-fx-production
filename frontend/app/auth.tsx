@@ -5,15 +5,12 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../src/services/supabase';
 
-// Dismiss lingering browser session on cold launch via deep link.
 WebBrowser.maybeCompleteAuthSession();
 
 /**
  * Cold-launch deep link handler.
- *
- * This screen is reached ONLY when the app is opened from an external
- * deep link (swiftfx://auth?code=xxx). The normal OAuth flow
- * (openAuthSessionAsync) handles exchange directly in signInWithProvider.
+ * Reached when app opens from swiftfx://auth?code=xxx or swiftfx://auth#access_token=xxx.
+ * Sets session, verifies it, then navigates. Includes a hard timeout escape.
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -22,21 +19,32 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     let mounted = true;
 
+    // Hard timeout: if we're still on this screen after 5s, force navigate
+    const escapeTimer = setTimeout(() => {
+      if (!mounted) return;
+      console.log('[AuthCallback] Escape timeout — forcing navigation');
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (mounted) {
+          router.replace(session ? '/(tabs)' : '/(auth)/login');
+        }
+      }).catch(() => {
+        if (mounted) router.replace('/(auth)/login');
+      });
+    }, 5000);
+
     const handleDeepLink = async () => {
       try {
         const url = await Linking.getInitialURL();
 
         if (url) {
-          console.log('AUTH CALLBACK URL:', url);
+          console.log('[AuthCallback] URL:', url);
           const { queryParams } = Linking.parse(url);
           const code = queryParams?.code;
 
           if (typeof code === 'string') {
-            // PKCE flow: ?code=XXXX
             const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
             if (exchangeError) throw exchangeError;
           } else if (url.includes('#access_token')) {
-            // Implicit flow: #access_token=XXXX&refresh_token=XXXX
             const hash = url.split('#')[1];
             const params = new URLSearchParams(hash);
             const access_token = params.get('access_token');
@@ -50,12 +58,14 @@ export default function AuthCallbackScreen() {
           }
         }
 
-        // Check if we have a valid session
+        // Verify session is established
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('[AuthCallback] Session exists:', !!session);
 
         if (mounted) {
+          clearTimeout(escapeTimer);
           if (session) {
-            router.replace('/(tabs)/dashboard');
+            router.replace('/(tabs)');
           } else {
             router.replace('/(auth)/login');
           }
@@ -63,16 +73,23 @@ export default function AuthCallbackScreen() {
       } catch (err: any) {
         console.error('[AuthCallback] Error:', err.message || err);
         if (mounted) {
+          clearTimeout(escapeTimer);
           setError(err.message || 'Authentication failed');
-          router.replace('/(auth)/login');
+          // Brief pause so error is visible, then redirect
+          setTimeout(() => {
+            if (mounted) router.replace('/(auth)/login');
+          }, 1500);
         }
       }
     };
 
     handleDeepLink();
 
-    return () => { mounted = false; };
-  }, [router]);
+    return () => {
+      mounted = false;
+      clearTimeout(escapeTimer);
+    };
+  }, []);
 
   return (
     <View style={styles.container}>

@@ -697,7 +697,25 @@ export default function LessonScreen() {
     );
   }
 
-  const lessons = courseContent.lessons;
+  const lessons = Array.isArray(courseContent.lessons) ? courseContent.lessons : [];
+  if (lessons.length === 0) {
+    return (
+      <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <View style={[s.header, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity style={[s.backBtn, { backgroundColor: theme.surface }]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[s.headerTitle, { color: theme.text }]}>Course</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={s.lockedWrap}>
+          <Ionicons name="book-outline" size={48} color={color} />
+          <Text style={[s.lockedTitle, { color: theme.text }]}>No Lessons Available</Text>
+          <Text style={[s.lockedSub, { color: theme.textSecondary }]}>Check back soon for new content</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   const isLessonUnlocked = (idx: number) => {
     if (idx === 0) return true;
     const prevLesson = lessons[idx - 1];
