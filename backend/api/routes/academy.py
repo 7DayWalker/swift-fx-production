@@ -397,28 +397,31 @@ async def _run_batch_content_generation():
 @router.get("/academy/progress")
 async def get_academy_progress(current_user: User = Depends(require_auth)):
     col = db["academy_progress"]
-    records = await col.find(
-        {"user_id": current_user.user_id, "completed": True},
-        {"_id": 0, "course_id": 1, "lesson_id": 1, "score": 1, "completed_at": 1},
-    ).to_list(length=500)
+    try:
+        records = await col.find(
+            {"user_id": current_user.user_id, "completed": True},
+            {"_id": 0, "course_id": 1, "lesson_id": 1, "score": 1, "completed_at": 1},
+        ).to_list(length=500)
+    except Exception as e:
+        logger.error(f"[Academy] progress query failed for {current_user.user_id}: {e}")
+        records = []
 
-    completed_lessons = len(records)
-    courses_done = set()
+    completed_lessons = len(records) if isinstance(records, list) else 0
     by_course: dict = {}
-    for r in records:
-        cid = r["course_id"]
-        by_course.setdefault(cid, []).append(r["lesson_id"])
+    for r in (records or []):
+        cid = r.get("course_id")
+        if cid:
+            by_course.setdefault(cid, []).append(r.get("lesson_id"))
 
-    # Total lessons across all known courses (static count)
-    total_lessons = 150  # Approximate across all courses
+    total_lessons = 150
 
     return {
         "completed_lessons": completed_lessons,
         "total_lessons": total_lessons,
         "progress_pct": round(completed_lessons / total_lessons * 100, 1) if total_lessons > 0 else 0,
-        "completed_courses": len(courses_done),
+        "completed_courses": len(by_course),
         "by_course": by_course,
-        "records": records,
+        "records": records if isinstance(records, list) else [],
     }
 
 

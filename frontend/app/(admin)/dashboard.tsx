@@ -188,6 +188,7 @@ export default function AdminDashboard() {
         </View>
 
         {/* Stats Cards */}
+        <Text style={{ color: '#8A8D98', fontSize: 12, marginBottom: 8, marginHorizontal: 16 }}>Platform-wide statistics (all users)</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <View style={[styles.statIconContainer, { backgroundColor: 'rgba(0, 212, 170, 0.15)' }]}>

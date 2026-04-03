@@ -187,6 +187,7 @@ export default function DashboardScreen() {
         {/* Performance Stats - REACTIVE from SignalContext */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Performance</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 8, marginHorizontal: 16 }}>Personal stats based on your followed signals</Text>
           <View style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Text style={[styles.statValue, { color: theme.text }]}>{formatWinRate(winRate)}%</Text>

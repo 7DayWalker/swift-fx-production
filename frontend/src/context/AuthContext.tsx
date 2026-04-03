@@ -248,15 +248,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    console.log('[Auth] LOGOUT TRIGGERED');
     try {
       await supabase.auth.signOut();
+      console.log('[Auth] signOut completed');
     } catch (e) {
       console.log('[Auth] Logout error:', e);
     }
-    // Immediate state clear — onAuthStateChange SIGNED_OUT also fires as backup
     setUser(null);
     setToken(null);
     setIsLoading(false);
+    console.log('[Auth] State cleared: user=null, token=null');
   };
 
   const refreshUser = async () => {
