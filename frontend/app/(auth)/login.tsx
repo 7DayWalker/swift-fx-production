@@ -46,12 +46,8 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const userData = await login(email, password);
-      if (userData.is_admin) {
-        router.replace('/(admin)/dashboard');
-      } else {
-        router.replace('/(tabs)/dashboard');
-      }
+      await login(email, password);
+      // Navigation handled by _layout.tsx reacting to auth state change
     } catch (error: any) {
       const msg = error.message || 'Invalid credentials';
       if (Platform.OS === 'web') {
@@ -67,16 +63,8 @@ export default function LoginScreen() {
   const handleOAuthLogin = async (provider: 'apple' | 'google') => {
     setOauthLoading(provider);
     try {
-      const userData = await signInWithProvider(provider);
-      // On web, the page redirects so this code won't execute.
-      // On native, session is already established — navigate based on user role.
-      if (Platform.OS !== 'web' && userData) {
-        if (userData.is_admin) {
-          router.replace('/(admin)/dashboard');
-        } else {
-          router.replace('/(tabs)/dashboard');
-        }
-      }
+      await signInWithProvider(provider);
+      // Navigation handled by _layout.tsx reacting to auth state change
     } catch (error: any) {
       const msg = error.message || 'Something went wrong';
       if (msg !== 'Authentication cancelled') {

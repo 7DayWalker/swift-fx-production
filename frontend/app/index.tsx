@@ -1,34 +1,13 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
+/**
+ * Splash / Loading screen.
+ * Shown while AuthContext resolves getSession().
+ * Navigation is handled entirely by _layout.tsx watching auth state.
+ */
 export default function SplashScreen() {
-  const { user, isLoading, isAdmin } = useAuth();
-  const router = useRouter();
-
-  console.log('[Splash] RENDER — isLoading:', isLoading, 'user:', !!user, 'isAdmin:', isAdmin);
-
-  useEffect(() => {
-    console.log('[Splash] useEffect — isLoading:', isLoading, 'user:', !!user, 'isAdmin:', isAdmin);
-    if (!isLoading) {
-      console.log('[Splash] isLoading is FALSE — navigating now');
-      // Navigate immediately once auth state is resolved
-      if (user) {
-        if (isAdmin) {
-          router.replace('/(admin)/dashboard');
-        } else {
-          router.replace('/(tabs)/dashboard');
-        }
-      } else {
-        router.replace('/(auth)/login');
-      }
-    } else {
-      console.log('[Splash] isLoading is TRUE — waiting for auth bootstrap');
-    }
-  }, [isLoading, user, isAdmin]);
-
   return (
     <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
       <View style={styles.logoContainer}>

@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
 import { supabase } from '../services/supabase';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -231,9 +230,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('[Auth] signOut error:', err);
     }
+    // State clear is a safety net. onAuthStateChange SIGNED_OUT event
+    // will also fire and set user=null, which triggers _layout.tsx to navigate.
     setUser(null);
     setToken(null);
-    router.replace('/(auth)/login');
   };
 
   const refreshUser = async () => {

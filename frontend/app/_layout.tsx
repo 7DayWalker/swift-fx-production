@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
@@ -15,14 +16,32 @@ import { initDeepLinkListener } from '../src/services/referralService';
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
-  const { user } = useAuth();
-  
+  const { user, isLoading, isAdmin } = useAuth();
+  const hasNavigated = useRef(false);
+
+  // ── SINGLE source of navigation truth ──
+  // Watches auth state. Navigates once when state resolves, and again on any change.
+  useEffect(() => {
+    if (isLoading) return; // Wait for bootstrap
+
+    if (user) {
+      const target = isAdmin ? '/(admin)/dashboard' : '/(tabs)/dashboard';
+      console.log('[Layout] Auth state → user logged in → navigating to', target);
+      router.replace(target);
+      hasNavigated.current = true;
+    } else {
+      // Only navigate to login if we've resolved auth (not on first render)
+      console.log('[Layout] Auth state → no user → navigating to login');
+      router.replace('/(auth)/login');
+      hasNavigated.current = true;
+    }
+  }, [isLoading, user, isAdmin]);
+
   // Initialize push notifications when user is logged in
   useEffect(() => {
     if (user) {
       NotificationService.initialize();
     }
-    
     return () => {
       NotificationService.cleanup();
     };
@@ -33,7 +52,6 @@ function RootLayoutContent() {
     const cleanup = initDeepLinkListener((code) => {
       console.log('[App] Referral code detected from deep link:', code);
     });
-    
     return cleanup;
   }, []);
   
