@@ -232,17 +232,17 @@ export default function AcademyScreen() {
           </View>
           <View style={styles.progressStats}>
             <View style={styles.progressStat}>
-              <Text style={[styles.progressStatValue, { color: '#00D4AA' }]}>{progress.completed_lessons}</Text>
+              <Text style={[styles.progressStatValue, { color: '#00D4AA' }]}>{typeof progress?.completed_lessons === 'number' ? progress.completed_lessons : 0}</Text>
               <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Completed</Text>
             </View>
             <View style={[styles.progressDivider, { backgroundColor: theme.border }]} />
             <View style={styles.progressStat}>
-              <Text style={[styles.progressStatValue, { color: theme.text }]}>{progress.total_lessons}</Text>
+              <Text style={[styles.progressStatValue, { color: theme.text }]}>{typeof progress?.total_lessons === 'number' ? progress.total_lessons : 0}</Text>
               <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Total</Text>
             </View>
             <View style={[styles.progressDivider, { backgroundColor: theme.border }]} />
             <View style={styles.progressStat}>
-              <Text style={[styles.progressStatValue, { color: '#FFD700' }]}>{progress.progress_pct}%</Text>
+              <Text style={[styles.progressStatValue, { color: '#FFD700' }]}>{typeof progress?.progress_pct === 'number' ? progress.progress_pct : 0}%</Text>
               <Text style={[styles.progressStatLabel, { color: theme.textSecondary }]}>Progress</Text>
             </View>
           </View>

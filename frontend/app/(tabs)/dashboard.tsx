@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
@@ -68,15 +68,28 @@ export default function DashboardScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
 
-  // Deferred admin redirect — runs exactly ONCE after enrichProfile sets is_admin
+  // Admin redirect guard — skipped when admin explicitly chose "View User App"
   const hasRedirected = useRef(false);
+  const [forceUserView, setForceUserView] = useState(false);
+
   useEffect(() => {
-    if (user?.is_admin === true && hasRedirected.current === false) {
+    if (params.forceUserView === 'true') {
+      setForceUserView(true);
+    }
+  }, [params.forceUserView]);
+
+  useEffect(() => {
+    if (
+      user?.is_admin === true &&
+      hasRedirected.current === false &&
+      forceUserView === false
+    ) {
       hasRedirected.current = true;
       router.replace('/(admin)/dashboard');
     }
-  }, [user?.is_admin]);
+  }, [user?.is_admin, forceUserView]);
   
   // SINGLE SOURCE OF TRUTH: Use SignalContext directly for all real-time data
   const { 

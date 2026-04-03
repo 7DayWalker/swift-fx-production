@@ -339,7 +339,7 @@ export default function AdminDashboard() {
         {/* Go to User App */}
         <TouchableOpacity
           style={styles.userAppButton}
-          onPress={() => router.push('/(tabs)/dashboard')}
+          onPress={() => router.push({ pathname: '/(tabs)/dashboard', params: { forceUserView: 'true' } })}
         >
           <Ionicons name="phone-portrait-outline" size={20} color="#00D4AA" />
           <Text style={styles.userAppButtonText}>View User App</Text>
