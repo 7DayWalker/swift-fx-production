@@ -257,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // Force clear persisted session — signOut() alone doesn't reliably clear AsyncStorage on native
     try {
-      await supabase.auth.setSession({ access_token: '', refresh_token: '' });
+      await supabase.auth.setSession(null as any);
     } catch (_) {}
     setUser(null);
     setToken(null);
