@@ -158,22 +158,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (result.type === 'success' && result.url) {
       console.log('AUTH CALLBACK URL:', result.url);
-      // Extract code using Expo's built-in URL parser (no regex, no hacks)
       const { queryParams } = Linking.parse(result.url);
       console.log('AUTH PARSED PARAMS:', JSON.stringify(queryParams));
       const code = queryParams?.code;
+
       if (typeof code === 'string') {
+        // PKCE flow: ?code=XXXX
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) throw exchangeError;
-
-        // Session established — fetch profile so caller can navigate immediately
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          return await fetchProfile(session.user, session.access_token);
-        }
-        throw new Error('Session not found after code exchange');
+      } else if (result.url.includes('#access_token')) {
+        // Implicit flow: #access_token=XXXX&refresh_token=XXXX
+        const hash = result.url.split('#')[1];
+        const params = new URLSearchParams(hash);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+        if (!access_token) throw new Error('No access token in callback URL');
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token: refresh_token || '',
+        });
+        if (sessionError) throw sessionError;
+      } else {
+        throw new Error('No authorization code or token in callback URL');
       }
-      throw new Error('No authorization code in callback URL');
+
+      // Session established — fetch profile so caller can navigate immediately
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        return await fetchProfile(session.user, session.access_token);
+      }
+      throw new Error('Session not found after authentication');
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {

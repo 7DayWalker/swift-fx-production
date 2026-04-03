@@ -88,8 +88,11 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
 - Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
 
-### 6 Production Stabilization Fixes (Verified — Apr 3 2026)
-- **OAuth (Native)**: Added `WebBrowser.maybeCompleteAuthSession()` at module level in `login.tsx` and `auth.tsx` — required to dismiss in-app browser after OAuth redirect on iOS/Android
+### OAuth Callback Fix (Apr 3 2026)
+- **Root cause**: Supabase returns tokens via hash fragment (`#access_token=...`) in implicit flow, but code only handled PKCE flow (`?code=...`)
+- **Fix**: Both `AuthContext.tsx` (in-app OAuth) and `auth.tsx` (cold-launch deep link) now handle BOTH flows: `?code=` → `exchangeCodeForSession()`, `#access_token=` → `setSession()`
+- **Removed**: Hard `throw` when `?code` missing — was the production error "No authorization code in callback URL"
+- **Diagnostic logs**: `console.log('AUTH CALLBACK URL:', ...)` left in place for native APK debugging
 - **Auth Lifecycle**: Logout now clears local state (`setUser(null)`, `setToken(null)`) BEFORE calling `supabase.auth.signOut()` — deterministic even if signOut hangs
 - **API Consistency**: Verified all 26+ files use `@/services/api` axios instance. Only 1 raw `fetch()` exists for external RSS feeds — correct behavior.
 - **Academy Crash (Role-Based)**: All 3 academy screens (`index.tsx`, `[category].tsx`, `lesson.tsx`) now validate data shape (`typeof completed_lessons === 'number'`, `typeof data.by_course === 'object'`, `Array.isArray(done)`) before setting state — prevents crash when backend returns error objects or restricted data for non-admin users

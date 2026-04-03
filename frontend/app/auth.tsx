@@ -27,12 +27,26 @@ export default function AuthCallbackScreen() {
         const url = await Linking.getInitialURL();
 
         if (url) {
+          console.log('AUTH CALLBACK URL:', url);
           const { queryParams } = Linking.parse(url);
           const code = queryParams?.code;
 
           if (typeof code === 'string') {
+            // PKCE flow: ?code=XXXX
             const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
             if (exchangeError) throw exchangeError;
+          } else if (url.includes('#access_token')) {
+            // Implicit flow: #access_token=XXXX&refresh_token=XXXX
+            const hash = url.split('#')[1];
+            const params = new URLSearchParams(hash);
+            const access_token = params.get('access_token');
+            const refresh_token = params.get('refresh_token');
+            if (!access_token) throw new Error('No access token in callback URL');
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token: refresh_token || '',
+            });
+            if (sessionError) throw sessionError;
           }
         }
 
