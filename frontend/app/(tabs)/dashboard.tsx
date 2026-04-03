@@ -69,9 +69,11 @@ export default function DashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Deferred admin redirect — runs AFTER enrichProfile sets is_admin
+  // Deferred admin redirect — runs exactly ONCE after enrichProfile sets is_admin
+  const hasRedirected = useRef(false);
   useEffect(() => {
-    if (user?.is_admin) {
+    if (user?.is_admin && !hasRedirected.current) {
+      hasRedirected.current = true;
       router.replace('/(admin)/dashboard');
     }
   }, [user?.is_admin]);
