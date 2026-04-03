@@ -206,13 +206,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Clear local state FIRST so the user appears logged out immediately,
+    // even if supabase.auth.signOut() hangs or fails on mobile.
+    setUser(null);
+    setToken(null);
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.error('[Auth] signOut error:', err);
+      console.error('[Auth] signOut error (state already cleared):', err);
     }
-    setUser(null);
-    setToken(null);
     router.replace('/(auth)/login');
   };
 

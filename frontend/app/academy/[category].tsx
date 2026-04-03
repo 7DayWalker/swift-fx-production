@@ -56,7 +56,9 @@ export default function CourseListScreen() {
   const fetchProgress = useCallback(async () => {
     try {
       const { data } = await api.get('/academy/progress');
-      if (data) setProgress(data);
+      if (data && data.by_course && typeof data.by_course === 'object') {
+        setProgress(data);
+      }
     } catch {}
     setLoading(false);
   }, []);

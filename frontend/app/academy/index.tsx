@@ -169,13 +169,30 @@ export default function AcademyScreen() {
         api.get('/academy/progress').catch(() => ({ data: null })),
         api.get('/academy/streak-status').catch(() => ({ data: null })),
       ]);
-      if (progRes.data) {
-        setProgress(progRes.data);
+      // Validate shape before setting — backend may return error objects or restricted data for non-admin users
+      const p = progRes.data;
+      if (p && typeof p.completed_lessons === 'number' && typeof p.total_lessons === 'number') {
+        setProgress({
+          completed_lessons: p.completed_lessons,
+          total_lessons: p.total_lessons,
+          progress_pct: typeof p.progress_pct === 'number' ? p.progress_pct : 0,
+        });
         Animated.timing(animatedWidth, {
-          toValue: progRes.data.progress_pct, duration: 800, useNativeDriver: false,
+          toValue: typeof p.progress_pct === 'number' ? p.progress_pct : 0,
+          duration: 800, useNativeDriver: false,
         }).start();
       }
-      if (streakRes.data) setStreak(streakRes.data);
+      const s = streakRes.data;
+      if (s && typeof s.current_streak === 'number') {
+        setStreak({
+          current_streak: s.current_streak ?? 0,
+          longest_streak: s.longest_streak ?? 0,
+          active_today: s.active_today ?? false,
+          streak_at_risk: s.streak_at_risk ?? false,
+          has_streak_shield: s.has_streak_shield ?? false,
+          shield_available: s.shield_available ?? false,
+        });
+      }
     } catch {}
   }, []);
 

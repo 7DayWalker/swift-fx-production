@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../src/services/supabase';
+
+// Dismiss lingering browser session on cold launch via deep link.
+WebBrowser.maybeCompleteAuthSession();
 
 /**
  * Cold-launch deep link handler.
