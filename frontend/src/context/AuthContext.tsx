@@ -157,8 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
+      console.log('AUTH CALLBACK URL:', result.url);
       // Extract code using Expo's built-in URL parser (no regex, no hacks)
       const { queryParams } = Linking.parse(result.url);
+      console.log('AUTH PARSED PARAMS:', JSON.stringify(queryParams));
       const code = queryParams?.code;
       if (typeof code === 'string') {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
