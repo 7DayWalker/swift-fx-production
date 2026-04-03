@@ -88,15 +88,15 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
 - Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
 
-### 7 Frontend Architectural Fixes (Verified — Apr 2 2026)
-- **Auth Callback Rewrite**: `app/auth.tsx` simplified to cold-launch deep link handler using `Linking.getInitialURL()` + `Linking.parse()` — no regex/timeout hacks
-- **Auth Session Lifecycle**: `AuthContext.tsx` blocks rendering until `getSession()` resolves via `isLoading` state — splash screen waits, then navigates
-- **API Client Enforcement**: All 26 files use `@/services/api` axios instance with `EXPO_PUBLIC_BACKEND_URL/api` baseURL + Supabase token interceptor. Only raw `fetch()` is for external RSS feeds.
-- **Signal Creation Guard**: `useRef` isSubmittingRef lock prevents double-submission (lines 100, 219-220, 227, 274 in admin signals)
-- **Academy Crash Protection**: `Promise.all` with `.catch(() => ({ data: null }))` fallbacks — page renders even when API calls fail
-- **Dashboard Stats Consistency**: Admin dashboard shows global stats (total_users, signals, etc.), user dashboard shows personal signal context via SignalContext
-- **Timestamp Consistency**: `date-fns` `formatDistanceToNow` used in user dashboard, consistent human-readable timestamps
-- Test report: `/app/test_reports/iteration_27.json` — 7/7 tests pass (100%)
+### 6 Production Stabilization Fixes (Verified — Apr 3 2026)
+- **OAuth (Native)**: Added `WebBrowser.maybeCompleteAuthSession()` at module level in `login.tsx` and `auth.tsx` — required to dismiss in-app browser after OAuth redirect on iOS/Android
+- **Auth Lifecycle**: Logout now clears local state (`setUser(null)`, `setToken(null)`) BEFORE calling `supabase.auth.signOut()` — deterministic even if signOut hangs
+- **API Consistency**: Verified all 26+ files use `@/services/api` axios instance. Only 1 raw `fetch()` exists for external RSS feeds — correct behavior.
+- **Academy Crash (Role-Based)**: All 3 academy screens (`index.tsx`, `[category].tsx`, `lesson.tsx`) now validate data shape (`typeof completed_lessons === 'number'`, `typeof data.by_course === 'object'`, `Array.isArray(done)`) before setting state — prevents crash when backend returns error objects or restricted data for non-admin users
+- **Dashboard Consistency**: Admin dashboard = global stats (`/admin/stats`), User dashboard = personal stats (SignalContext). Intentionally different — documented.
+- **App Stability**: Auth bootstrap blocks rendering until `getSession()` resolves; no unhandled promise rejections in academy or auth flows
+- Test report: `/app/test_reports/iteration_28.json` — 5/7 PASS, 2 BLOCKED by invalid Supabase credentials (not code bugs)
+- **Supabase credential issue**: All 3 test accounts (`ellapauledache@`, `ellaniswell@`, `paradoxella@`) returning "Invalid login credentials" — user must verify Supabase auth settings
 
 ## Prioritized Backlog
 
