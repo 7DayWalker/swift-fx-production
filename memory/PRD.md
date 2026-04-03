@@ -88,13 +88,15 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
 - Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
 
-### Post-Auth Lifecycle & Navigation Fixes (Verified — Apr 3 2026)
-- **auth.tsx rewritten**: 5s hard escape timeout guarantees "Completing sign in..." NEVER blocks forever. Handles both PKCE (`?code=`) and implicit (`#access_token=`) flows.
-- **Splash navigation**: Removed 1.5s `setTimeout` delay — navigates IMMEDIATELY when `isLoading` becomes false.
-- **onAuthStateChange**: Now explicitly calls `setIsLoading(false)` after `fetchProfile` — handles cold-launch race where bootstrap and session-set compete.
-- **Logout order**: `signOut()` (try/catch) → `setUser(null)` → `setToken(null)` → `router.replace('/(auth)/login')`
-- **Academy deep guard**: `lesson.tsx` validates `Array.isArray(courseContent.lessons)` with empty fallback + "No Lessons Available" UI.
-- Test report: `/app/test_reports/iteration_29.json` — 7/7 tests pass (100%)
+### State-Driven Navigation Architecture (Verified — Apr 3 2026)
+- **Single navigation source**: `_layout.tsx` useEffect watches `[isLoading, user, isAdmin]` — the ONLY place `router.replace` exists for auth routing
+- **auth.tsx**: Pure session handler — processes URL, calls `exchangeCodeForSession` or `setSession`. Zero navigation, zero timeouts.
+- **AuthContext logout**: Calls `signOut()` → clears state. `onAuthStateChange(SIGNED_OUT)` fires → layout detects `user=null` → navigates to login.
+- **login.tsx**: Handlers call `login()` / `signInWithProvider()` only. State change drives navigation.
+- **index.tsx**: Pure splash screen. No useAuth, no useRouter, no navigation logic.
+- **Removed**: ALL `setTimeout` navigation, ALL `router.replace` from auth files, ALL fallback chains
+- Test report: `/app/test_reports/iteration_30.json` — 8/8 tests pass (100%)
+- **Academy deep guard**: `lesson.tsx` validates `Array.isArray(courseContent.lessons)` with "No Lessons Available" fallback UI.
 - **Auth Lifecycle**: Logout now clears local state (`setUser(null)`, `setToken(null)`) BEFORE calling `supabase.auth.signOut()` — deterministic even if signOut hangs
 - **API Consistency**: Verified all 26+ files use `@/services/api` axios instance. Only 1 raw `fetch()` exists for external RSS feeds — correct behavior.
 - **Academy Crash (Role-Based)**: All 3 academy screens (`index.tsx`, `[category].tsx`, `lesson.tsx`) now validate data shape (`typeof completed_lessons === 'number'`, `typeof data.by_course === 'object'`, `Array.isArray(done)`) before setting state — prevents crash when backend returns error objects or restricted data for non-admin users
