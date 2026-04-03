@@ -68,6 +68,13 @@ export default function DashboardScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // Deferred admin redirect — runs AFTER enrichProfile sets is_admin
+  useEffect(() => {
+    if (user?.is_admin) {
+      router.replace('/(admin)/dashboard');
+    }
+  }, [user?.is_admin]);
   
   // SINGLE SOURCE OF TRUTH: Use SignalContext directly for all real-time data
   const { 
