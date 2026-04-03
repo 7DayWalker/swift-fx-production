@@ -16,23 +16,19 @@ import { initDeepLinkListener } from '../src/services/referralService';
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading } = useAuth();
 
   // ── SINGLE source of navigation truth ──
-  // Watches auth state. Routes based on user presence only.
-  // Admin detection happens via background profile enrichment.
+  // Routes based on user presence only. No admin check here.
   useEffect(() => {
     if (isLoading) return;
 
     if (user) {
-      const target = isAdmin ? '/(admin)/dashboard' : '/(tabs)/dashboard';
-      console.log('[Layout] Auth state → user logged in → navigating to', target);
-      router.replace(target);
+      router.replace('/(tabs)/dashboard');
     } else {
-      console.log('[Layout] Auth state → no user → navigating to login');
       router.replace('/(auth)/login');
     }
-  }, [isLoading, user, isAdmin]);
+  }, [isLoading, user]);
 
   // Initialize push notifications when user is logged in
   useEffect(() => {

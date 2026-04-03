@@ -88,20 +88,13 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - **Timestamp Inconsistency**: Replaced raw Date math with `date-fns` v4 (`formatDistanceToNow` in signals tab, `format` in signal-history)
 - Test report: `/app/test_reports/iteration_26.json` — 8/8 tests pass
 
-### Immediate Auth State Sync Architecture (Verified — Apr 3 2026)
-- **Root cause fixed**: Previous `onAuthStateChange` called `await fetchProfile()` (Supabase DB query) — blocked `setUser`, UI never updated after OAuth
-- **New pattern**: `setUser(buildUserFromSession(session.user))` — IMMEDIATE, synchronous, no API call
-- **Background enrichment**: `enrichProfile()` runs AFTER state update, not awaited — loads admin role, name from profiles table without blocking UI
-- **Logout**: `signOut()` → `setUser(null)` → `setToken(null)` → `setIsLoading(false)`. No navigation — `_layout.tsx` reacts.
-- **Navigation**: ONLY in `_layout.tsx` useEffect `[isLoading, user, isAdmin]`
-- Test report: `/app/test_reports/iteration_31.json` — 9/9 tests pass (100%)
-- **Auth Lifecycle**: Logout now clears local state (`setUser(null)`, `setToken(null)`) BEFORE calling `supabase.auth.signOut()` — deterministic even if signOut hangs
-- **API Consistency**: Verified all 26+ files use `@/services/api` axios instance. Only 1 raw `fetch()` exists for external RSS feeds — correct behavior.
-- **Academy Crash (Role-Based)**: All 3 academy screens (`index.tsx`, `[category].tsx`, `lesson.tsx`) now validate data shape (`typeof completed_lessons === 'number'`, `typeof data.by_course === 'object'`, `Array.isArray(done)`) before setting state — prevents crash when backend returns error objects or restricted data for non-admin users
-- **Dashboard Consistency**: Admin dashboard = global stats (`/admin/stats`), User dashboard = personal stats (SignalContext). Intentionally different — documented.
-- **App Stability**: Auth bootstrap blocks rendering until `getSession()` resolves; no unhandled promise rejections in academy or auth flows
-- Test report: `/app/test_reports/iteration_28.json` — 5/7 PASS, 2 BLOCKED by invalid Supabase credentials (not code bugs)
-- **Supabase credential issue**: All 3 test accounts (`ellapauledache@`, `ellaniswell@`, `paradoxella@`) returning "Invalid login credentials" — user must verify Supabase auth settings
+### Final Auth & Navigation Architecture (Verified — Apr 3 2026)
+- **Immediate state sync**: `setUser(buildUserFromSession(session.user))` — synchronous, no API call. `enrichProfile()` in background.
+- **Root navigation**: `_layout.tsx` useEffect `[isLoading, user]` — sole source of navigation. No `isAdmin` in deps (removed).
+- **OAuth code exchange**: `exchangeCodeForSession(result.url)` — passes full callback URL
+- **Logout**: `signOut()` → `setUser(null)` → `setToken(null)` → `setIsLoading(false)`. No manual navigation.
+- **Academy guards**: `Array.isArray`, `typeof` validation, empty state fallbacks on all 3 screens
+- Test reports: iterations 27-31 — all architecture tests PASS
 
 ## Prioritized Backlog
 

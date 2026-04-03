@@ -191,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const code = queryParams?.code;
 
       if (typeof code === 'string') {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
         if (exchangeError) throw exchangeError;
       } else if (result.url.includes('#access_token')) {
         const hash = result.url.split('#')[1];

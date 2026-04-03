@@ -27,7 +27,7 @@ export default function AuthCallbackScreen() {
         const code = queryParams?.code;
 
         if (typeof code === 'string') {
-          const { error: e } = await supabase.auth.exchangeCodeForSession(code);
+          const { error: e } = await supabase.auth.exchangeCodeForSession(url);
           if (e) throw e;
         } else if (url.includes('#access_token')) {
           const hash = url.split('#')[1];
