@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -71,25 +71,19 @@ export default function DashboardScreen() {
   const params = useLocalSearchParams();
 
   // Admin redirect guard — skipped when admin explicitly chose "View User App"
+  // Read params synchronously to avoid race condition between state updates
   const hasRedirected = useRef(false);
-  const [forceUserView, setForceUserView] = useState(false);
-
-  useEffect(() => {
-    if (params.forceUserView === 'true') {
-      setForceUserView(true);
-    }
-  }, [params.forceUserView]);
 
   useEffect(() => {
     if (
       user?.is_admin === true &&
       hasRedirected.current === false &&
-      forceUserView === false
+      params.forceUserView !== 'true'
     ) {
       hasRedirected.current = true;
       router.replace('/(admin)/dashboard');
     }
-  }, [user?.is_admin, forceUserView]);
+  }, [user?.is_admin, params.forceUserView]);
   
   // SINGLE SOURCE OF TRUTH: Use SignalContext directly for all real-time data
   const { 

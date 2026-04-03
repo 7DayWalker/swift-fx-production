@@ -31,30 +31,34 @@ export function useInterstitialAd() {
   useEffect(() => {
     if (Platform.OS === 'web' || !isFree || !InterstitialAd || !AdEventType) return;
 
-    const ad = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
-      requestNonPersonalizedAdsOnly: true,
-    });
+    try {
+      const ad = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
+        requestNonPersonalizedAdsOnly: true,
+      });
 
-    const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
-      isLoadedRef.current = true;
-    });
-    const closedUnsub = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      // Reload for next time
-      isLoadedRef.current = false;
+      const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
+        isLoadedRef.current = true;
+      });
+      const closedUnsub = ad.addAdEventListener(AdEventType.CLOSED, () => {
+        isLoadedRef.current = false;
+        try { ad.load(); } catch {}
+      });
+      const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
+        isLoadedRef.current = false;
+      });
+
+      adRef.current = ad;
       ad.load();
-    });
-    const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
-      isLoadedRef.current = false;
-    });
 
-    adRef.current = ad;
-    ad.load();
-
-    return () => {
-      loadedUnsub();
-      closedUnsub();
-      errorUnsub();
-    };
+      return () => {
+        loadedUnsub();
+        closedUnsub();
+        errorUnsub();
+      };
+    } catch (e) {
+      console.warn('[Ads] Failed to initialize interstitial ad:', e);
+      return undefined;
+    }
   }, [isFree]);
 
   /**

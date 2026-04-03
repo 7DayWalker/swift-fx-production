@@ -35,44 +35,47 @@ export function useRewardedAd() {
   useEffect(() => {
     if (Platform.OS === 'web' || !isFree || !RewardedAd || !AdEventType || !RewardedAdEventType) return;
 
-    const ad = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
-      requestNonPersonalizedAdsOnly: true,
-    });
+    try {
+      const ad = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
+        requestNonPersonalizedAdsOnly: true,
+      });
 
-    const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
-      isLoadedRef.current = true;
-    });
-    const earnedUnsub = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
-      resolverRef.current?.(true);
-      resolverRef.current = null;
-    });
-    const closedUnsub = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      // If user closed without earning reward
-      if (resolverRef.current) {
-        resolverRef.current(false);
+      const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
+        isLoadedRef.current = true;
+      });
+      const earnedUnsub = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+        resolverRef.current?.(true);
         resolverRef.current = null;
-      }
-      // Reload for next time
-      isLoadedRef.current = false;
+      });
+      const closedUnsub = ad.addAdEventListener(AdEventType.CLOSED, () => {
+        if (resolverRef.current) {
+          resolverRef.current(false);
+          resolverRef.current = null;
+        }
+        isLoadedRef.current = false;
+        try { ad.load(); } catch {}
+      });
+      const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
+        isLoadedRef.current = false;
+        if (resolverRef.current) {
+          resolverRef.current(false);
+          resolverRef.current = null;
+        }
+      });
+
+      adRef.current = ad;
       ad.load();
-    });
-    const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
-      isLoadedRef.current = false;
-      if (resolverRef.current) {
-        resolverRef.current(false);
-        resolverRef.current = null;
-      }
-    });
 
-    adRef.current = ad;
-    ad.load();
-
-    return () => {
-      loadedUnsub();
-      earnedUnsub();
-      closedUnsub();
-      errorUnsub();
-    };
+      return () => {
+        loadedUnsub();
+        earnedUnsub();
+        closedUnsub();
+        errorUnsub();
+      };
+    } catch (e) {
+      console.warn('[Ads] Failed to initialize rewarded ad:', e);
+      return undefined;
+    }
   }, [isFree]);
 
   /**

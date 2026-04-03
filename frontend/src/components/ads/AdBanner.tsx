@@ -39,16 +39,21 @@ export const AdBanner: React.FC<AdBannerProps> = ({ bottomOffset = 0 }) => {
   // Hide if ad failed to load
   if (adError) return null;
 
-  return (
-    <View style={[styles.container, { marginBottom: bottomOffset }]}>
-      <BannerAd
-        unitId={AD_UNITS.BANNER}
-        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-        onAdFailedToLoad={() => setAdError(true)}
-      />
-    </View>
-  );
+  try {
+    return (
+      <View style={[styles.container, { marginBottom: bottomOffset }]}>
+        <BannerAd
+          unitId={AD_UNITS.BANNER}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          onAdFailedToLoad={() => setAdError(true)}
+        />
+      </View>
+    );
+  } catch (e) {
+    console.warn('[Ads] BannerAd render error:', e);
+    return null;
+  }
 };
 
 const styles = StyleSheet.create({

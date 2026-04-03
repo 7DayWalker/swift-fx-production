@@ -1,0 +1,112 @@
+{
+  "iteration": 32,
+  "test_date": "2026-04-03T23:50:00Z",
+  "test_type": "Frontend P0 Bug Fixes Verification - Code Review & Partial UI Testing",
+  "summary": "Unable to complete full E2E testing due to invalid login credentials (ellapauledache@gmail.com / Grace1992@). Supabase returns 'Invalid login credentials' error. Code review confirms all 3 P0 bug fixes are correctly implemented. Frontend loads without errors.",
+  "credential_issue": {
+    "status": "BLOCKED",
+    "error": "Invalid login credentials",
+    "provided_credentials": "ellapauledache@gmail.com / Grace1992@",
+    "note": "Same credentials worked in previous iterations (27, 26). Password may have been changed or user deleted from Supabase."
+  },
+  "code_review_verification": {
+    "bug_1_admin_redirect_loop": {
+      "status": "CODE VERIFIED",
+      "file": "app/(tabs)/dashboard.tsx",
+      "lines": "73-87",
+      "fix_description": "Admin redirect guard now reads params.forceUserView directly (synchronously) instead of through async useState. Uses useRef(hasRedirected) to prevent multiple redirects.",
+      "key_code": "params.forceUserView !== 'true' checked synchronously in useEffect",
+      "admin_dashboard_button": "app/(admin)/dashboard.tsx line 343 passes { forceUserView: 'true' } param correctly"
+    },
+    "bug_2_logout_not_working": {
+      "status": "CODE VERIFIED",
+      "file": "app/(tabs)/more.tsx",
+      "lines": "11, 49-71",
+      "fix_description": "Alert import added from react-native. handleLogout uses Platform.OS check - web shows modal, native uses Alert.alert.",
+      "key_code": "import { Alert } from 'react-native' at line 11"
+    },
+    "bug_3_academy_crash": {
+      "status": "CODE VERIFIED",
+      "files": [
+        "src/components/ads/useRewardedAd.ts (lines 37-73)",
+        "src/components/ads/useInterstitialAd.ts (lines 31-61)",
+        "src/components/ads/AdBanner.tsx (lines 42-51)"
+      ],
+      "fix_description": "All ad SDK initialization wrapped in try/catch blocks. Module-level require() also wrapped in try/catch.",
+      "key_code": "try { const ad = RewardedAd.createForAdRequest(...) } catch (e) { console.warn(...) }"
+    }
+  },
+  "frontend_verification": {
+    "app_loads": "PASS - Login page renders correctly",
+    "no_js_errors": "PASS - No JavaScript errors in console",
+    "form_elements": "PASS - Email, Password inputs and Sign In button present",
+    "auth_flow": "BLOCKED - Cannot test due to invalid credentials"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Login with provided credentials",
+        "issue": "Supabase returns 'Invalid login credentials' for ellapauledache@gmail.com",
+        "affected_selectors": [],
+        "priority": "BLOCKER"
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Console warnings (pre-existing, not bugs)",
+        "issues": [
+          "'shadow*' style props are deprecated. Use 'boxShadow'",
+          "[expo-notifications] Listening to push token changes is not yet fully supported on web"
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Verify/update test credentials in Supabase - ellapauledache@gmail.com password may have changed",
+    "Alternative: Create a new test admin user in Supabase for testing",
+    "Once credentials are fixed, re-run E2E tests for all 3 bugs"
+  ],
+  "critical_code_review_comments": [
+    "Bug 1 Fix: params.forceUserView is now read synchronously in useEffect dependency array - correct fix for race condition",
+    "Bug 2 Fix: Alert import added correctly - logout will work on native with Alert.alert()",
+    "Bug 3 Fix: All ad SDK calls wrapped in try/catch - prevents crashes when SDK not available on native",
+    "All fixes follow React Native best practices and are syntactically correct",
+    "Frontend compiles and bundles without errors (verified via expo logs)"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "PARTIAL - Code review 100%, E2E blocked by credentials"
+  },
+  "test_credentials": "INVALID - ellapauledache@gmail.com / Grace1992@ returns 'Invalid login credentials'",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Login credentials (ellapauledache@gmail.com / Grace1992@) are no longer valid in Supabase. All 3 P0 bug fixes have been code-reviewed and verified correct. Need valid admin credentials to complete E2E testing. Previous iterations (27, 26) used same credentials successfully - password may have been changed.",
+  "bugs_tested": {
+    "bug_1": {
+      "name": "Admin → User dashboard routing loop",
+      "code_verified": true,
+      "e2e_tested": false,
+      "reason": "Cannot login to test"
+    },
+    "bug_2": {
+      "name": "Native logout not working in More screen",
+      "code_verified": true,
+      "e2e_tested": false,
+      "reason": "Cannot login to test"
+    },
+    "bug_3": {
+      "name": "Academy crashing for normal users",
+      "code_verified": true,
+      "e2e_tested": false,
+      "reason": "Cannot login to test"
+    }
+  }
+}
