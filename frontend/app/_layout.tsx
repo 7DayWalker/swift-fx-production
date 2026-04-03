@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,23 +17,20 @@ import { initDeepLinkListener } from '../src/services/referralService';
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
   const { user, isLoading, isAdmin } = useAuth();
-  const hasNavigated = useRef(false);
 
   // ── SINGLE source of navigation truth ──
-  // Watches auth state. Navigates once when state resolves, and again on any change.
+  // Watches auth state. Routes based on user presence only.
+  // Admin detection happens via background profile enrichment.
   useEffect(() => {
-    if (isLoading) return; // Wait for bootstrap
+    if (isLoading) return;
 
     if (user) {
       const target = isAdmin ? '/(admin)/dashboard' : '/(tabs)/dashboard';
       console.log('[Layout] Auth state → user logged in → navigating to', target);
       router.replace(target);
-      hasNavigated.current = true;
     } else {
-      // Only navigate to login if we've resolved auth (not on first render)
       console.log('[Layout] Auth state → no user → navigating to login');
       router.replace('/(auth)/login');
-      hasNavigated.current = true;
     }
   }, [isLoading, user, isAdmin]);
 

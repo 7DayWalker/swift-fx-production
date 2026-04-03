@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
-import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   user_id: string;
@@ -32,8 +32,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Map a Supabase auth user + profile row -> our app User object */
-const buildUser = (
+/** Build a minimal User immediately from Supabase session (no API call) */
+const buildUserFromSession = (sbUser: SupabaseUser): User => ({
+  user_id: sbUser.id,
+  name: sbUser.user_metadata?.name || sbUser.email || '',
+  email: sbUser.email || '',
+  role: 'free',
+  is_admin: false,
+});
+
+/** Enrich User with profile data from Supabase profiles table */
+const enrichWithProfile = (
   sbUser: SupabaseUser,
   profile: { name?: string; role?: string; admin_role?: string } | null,
 ): User => {
@@ -57,8 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = user?.is_admin === true;
 
-  // Fetch the user profile from the profiles table
-  const fetchProfile = useCallback(async (sbUser: SupabaseUser, accessToken: string) => {
+  // Background profile enrichment — NEVER blocks UI
+  const enrichProfile = useCallback(async (sbUser: SupabaseUser, accessToken: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -67,50 +76,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.warn('[Auth] Profile fetch error (may be new user):', error.message);
+        console.warn('[Auth] Profile fetch error:', error.message);
+        return;
       }
 
-      const appUser = buildUser(sbUser, profile);
-      setUser(appUser);
+      const enrichedUser = enrichWithProfile(sbUser, profile);
+      setUser(enrichedUser);
       setToken(accessToken);
-      return appUser;
     } catch (err) {
-      console.error('[Auth] fetchProfile failed:', err);
-      const appUser = buildUser(sbUser, null);
-      setUser(appUser);
-      setToken(accessToken);
-      return appUser;
+      console.error('[Auth] enrichProfile failed:', err);
     }
   }, []);
 
-  // Bootstrap: restore session from storage on mount
+  // ── Auth initialization ──
+  // Rule: setUser IMMEDIATELY from session. Profile enrichment is background-only.
   useEffect(() => {
     let mounted = true;
 
-    const bootstrap = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && mounted) {
-          await fetchProfile(session.user, session.access_token);
-        }
-      } catch (err) {
-        console.error('[Auth] bootstrap error:', err);
-      } finally {
-        if (mounted) setIsLoading(false);
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (session) {
+        // Set user IMMEDIATELY so UI reacts
+        setUser(buildUserFromSession(session.user));
+        setToken(session.access_token);
+        setIsLoading(false);
+
+        // Enrich with profile data in background (for admin detection, name, etc.)
+        enrichProfile(session.user, session.access_token);
+      } else {
+        setUser(null);
+        setToken(null);
+        setIsLoading(false);
       }
     };
 
-    bootstrap();
+    init();
 
-    // Listen for auth state changes — drives UI immediately on login/logout/token refresh
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Auth] onAuthStateChange:', event, '| session:', !!session);
-        if (session && mounted) {
-          await fetchProfile(session.user, session.access_token);
-          // Ensure isLoading is false once we have a session (handles cold-launch race)
-          if (mounted) setIsLoading(false);
-        } else if (mounted) {
+    // Auth state listener — fires on login, logout, token refresh
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('[Auth] AUTH EVENT:', event);
+
+        if (!mounted) return;
+
+        if (session) {
+          // IMMEDIATE state update — no async blocking
+          setUser(buildUserFromSession(session.user));
+          setToken(session.access_token);
+          setIsLoading(false);
+
+          // Background enrichment
+          enrichProfile(session.user, session.access_token);
+        } else {
           setUser(null);
           setToken(null);
           setIsLoading(false);
@@ -120,18 +140,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [enrichProfile]);
 
-  // ---- Auth actions ----
+  // ── Auth actions ──
 
   const login = async (email: string, password: string): Promise<User> => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
 
-    const appUser = await fetchProfile(data.user, data.session.access_token);
-    return appUser;
+    // Set immediately — onAuthStateChange also fires but this is synchronous feedback
+    const immediateUser = buildUserFromSession(data.user);
+    setUser(immediateUser);
+    setToken(data.session.access_token);
+
+    // Enrich in background
+    enrichProfile(data.user, data.session.access_token);
+    return immediateUser;
   };
 
   const signInWithProvider = async (provider: OAuthProvider): Promise<User | void> => {
@@ -148,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Native (iOS / Android): open in-app browser, exchange code, return user
+    // Native: open in-app browser, exchange code
     const redirectTo = 'swiftfx://auth';
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -160,17 +186,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
-      console.log('AUTH CALLBACK URL:', result.url);
+      console.log('[Auth] OAuth callback URL:', result.url);
       const { queryParams } = Linking.parse(result.url);
-      console.log('AUTH PARSED PARAMS:', JSON.stringify(queryParams));
       const code = queryParams?.code;
 
       if (typeof code === 'string') {
-        // PKCE flow: ?code=XXXX
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) throw exchangeError;
       } else if (result.url.includes('#access_token')) {
-        // Implicit flow: #access_token=XXXX&refresh_token=XXXX
         const hash = result.url.split('#')[1];
         const params = new URLSearchParams(hash);
         const access_token = params.get('access_token');
@@ -185,12 +208,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('No authorization code or token in callback URL');
       }
 
-      // Session established — fetch profile so caller can navigate immediately
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        return await fetchProfile(session.user, session.access_token);
-      }
-      throw new Error('Session not found after authentication');
+      // onAuthStateChange will fire and set user. No need to do it here.
+      return;
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
@@ -220,26 +239,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Small delay for the trigger to create the profile row
     await new Promise((r) => setTimeout(r, 600));
 
-    const appUser = await fetchProfile(data.user!, data.session.access_token);
-    return appUser;
+    const immediateUser = buildUserFromSession(data.user!);
+    setUser(immediateUser);
+    setToken(data.session.access_token);
+
+    enrichProfile(data.user!, data.session.access_token);
+    return immediateUser;
   };
 
   const logout = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (err) {
-      console.error('[Auth] signOut error:', err);
+    } catch (e) {
+      console.log('[Auth] Logout error:', e);
     }
-    // State clear is a safety net. onAuthStateChange SIGNED_OUT event
-    // will also fire and set user=null, which triggers _layout.tsx to navigate.
+    // Immediate state clear — onAuthStateChange SIGNED_OUT also fires as backup
     setUser(null);
     setToken(null);
+    setIsLoading(false);
   };
 
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      await fetchProfile(session.user, session.access_token);
+      await enrichProfile(session.user, session.access_token);
     }
   };
 
