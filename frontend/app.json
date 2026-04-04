@@ -8,12 +8,16 @@
     "scheme": "swiftfx",
     "userInterfaceStyle": "automatic",
     "owner": "7daywalker",
+
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
       "fallbackToCacheTimeout": 0
     },
-    "runtimeVersion": "1.0.4",
+
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
 
     "ios": {
       "supportsTablet": true,
@@ -25,19 +29,15 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": [
-              "swiftfx"
-            ]
+            "CFBundleURLSchemes": ["swiftfx"]
           }
         ],
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "buildNumber": "3"
+      }
     },
 
     "android": {
       "package": "com.swiftfx.signals",
-      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -49,18 +49,10 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            {
-              "scheme": "swiftfx"
-            },
-            {
-              "scheme": "https",
-              "host": "swiftfx.app"
-            }
+            { "scheme": "swiftfx" },
+            { "scheme": "https", "host": "swiftfx.app" }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
