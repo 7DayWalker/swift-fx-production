@@ -7,11 +7,13 @@
     "base": {
       "distribution": "store"
     },
+
     "development": {
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal"
     },
+
     "preview": {
       "extends": "base",
       "distribution": "internal",
@@ -19,10 +21,18 @@
         "buildType": "apk"
       }
     },
+
     "production": {
       "extends": "base",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "autoIncrement": "versionCode"
+      }
     },
+
     "production-apk": {
       "extends": "production",
       "distribution": "internal",
@@ -31,6 +41,7 @@
       }
     }
   },
+
   "submit": {
     "production": {}
   }
