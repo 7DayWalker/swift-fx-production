@@ -509,7 +509,7 @@ export default function SubscriptionScreen() {
           <Text style={[styles.supportText, { color: theme.textSecondary }]}>
             Contact support for special offers, or any questions about your subscription.
           </Text>
-          <TouchableOpacity style={[styles.supportButton, { backgroundColor: `${theme.primary}15` }]}>
+          <TouchableOpacity style={[styles.supportButton, { backgroundColor: `${theme.primary}15` }]} onPress={() => Linking.openURL('mailto:support@swiftfx.online')}>
             <Ionicons name="mail-outline" size={18} color={theme.primary} />
             <Text style={[styles.supportButtonText, { color: theme.primary }]}>Contact Support</Text>
           </TouchableOpacity>
