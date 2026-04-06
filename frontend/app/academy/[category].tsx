@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useRewardedAd } from '../../src/components/ads';
 import api from '../../src/services/api';
 import {
   BEGINNER_COURSES, INTERMEDIATE_COURSES, ADVANCED_COURSES, CourseContent,
@@ -44,13 +45,36 @@ export default function CourseListScreen() {
   const courses = getCourses(category || 'beginner');
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
+  const isFree = userTier === 'free';
+  const { showRewardedAd } = useRewardedAd(isFree);
+  const [adUnlocked, setAdUnlocked] = useState(false);
+  const [adLoading, setAdLoading] = useState(false);
+
   const hasAccess = () => {
     if (isAdminPrivilege) return true;
+    if (adUnlocked) return true;
     const req = meta.requiredRole;
     if (req === 'free') return true;
     if (req === 'premium') return userTier === 'premium' || userTier === 'vip';
     if (req === 'vip') return userTier === 'vip';
     return false;
+  };
+
+  const handleWatchAdToUnlock = async () => {
+    setAdLoading(true);
+    try {
+      const rewarded = await showRewardedAd();
+      if (rewarded) {
+        setAdUnlocked(true);
+        Alert.alert('Unlocked!', `You now have temporary access to ${meta.title} courses for this session.`);
+      } else {
+        Alert.alert('Ad Not Available', 'Please try again in a moment.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to load the ad. Please try again.');
+    } finally {
+      setAdLoading(false);
+    }
   };
 
   const fetchProgress = useCallback(async () => {
@@ -85,6 +109,18 @@ export default function CourseListScreen() {
           </Text>
           <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: meta.color }]} onPress={() => router.push('/subscription')}>
             <Text style={styles.upgradeBtnText}>View Plans</Text>
+          </TouchableOpacity>
+          <Text style={[styles.lockedDivider, { color: theme.textSecondary }]}>or</Text>
+          <TouchableOpacity
+            style={[styles.watchAdBtn, { borderColor: meta.color }]}
+            onPress={handleWatchAdToUnlock}
+            disabled={adLoading}
+            data-testid="watch-ad-unlock-btn"
+          >
+            <Ionicons name="play-circle-outline" size={18} color={meta.color} style={{ marginRight: 6 }} />
+            <Text style={[styles.watchAdBtnText, { color: meta.color }]}>
+              {adLoading ? 'Loading Ad...' : 'Watch Ad to Unlock'}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -205,6 +241,9 @@ const styles = StyleSheet.create({
   lockedSubtext: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   upgradeBtn: { paddingHorizontal: 28, paddingVertical: 12, borderRadius: 8 },
   upgradeBtnText: { fontSize: 14, fontWeight: 'bold', color: '#0A0E17' },
+  lockedDivider: { fontSize: 13, marginVertical: 12 },
+  watchAdBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, borderWidth: 1.5 },
+  watchAdBtnText: { fontSize: 14, fontWeight: '600' },
   skeletonWrap: { gap: 10 },
   skeleton: { height: 90, borderRadius: 14 },
 });

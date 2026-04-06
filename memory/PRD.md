@@ -12,36 +12,40 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
-### 4 Production Bug Fixes (Apr 4 2026)
-- **AI Analyzer "Analyze Another Chart" crash**: Fixed `ReferenceError: PAIRS is not defined` — `startNewAnalysis()` in `ai.tsx` referenced `PAIRS[0]` instead of `PRIORITY_PAIRS[0]`
-- **Subscription "Contact Support" button**: Added missing `onPress` handler with `Linking.openURL('mailto:support@swiftfx.online')` to the Contact Support button in `subscription.tsx`
-- **Settings version/build outdated**: Updated hardcoded values from `1.0.0`/`2025.01` to `1.0.4`/`2026.04` in `settings.tsx`
-- **More screen footer version**: Updated from `Swift FX Signals v1.0.0` to `Swift FX Signals v1.0.4` in `more.tsx`
+### AdMob Native + Reward Ads & IAP Dependency (Apr 6 2026)
+- **`react-native-iap` installed** (v14.7.20) — Apple IAP is now build-ready for EAS
+- **NativeAdCard component** — Created `NativeAdCard.tsx` (native) + `NativeAdCard.web.tsx` (web stub). Uses `react-native-google-mobile-ads` NativeAdView, wrapped in try/catch for crash safety. Returns null on web or failure.
+- **Native Ads in News feed** — Inserted every 4th news article via `React.Fragment`
+- **Native Ads in Calendar feed** — Inserted between every 2nd date group
+- **Academy Reward Ad Unlock** — Added "Watch Ad to Unlock" button on locked category screens (`[category].tsx`). Uses `useRewardedAd` hook. Grants temporary session-based access after watching a rewarded ad.
+- **Native ad test unit ID** added to `adManager.ts`
 
-### 3 Native P0 Bug Fixes (Apr 4 2026 - earlier session)
-- **Admin → User Dashboard Loop**: Fixed race condition in `(tabs)/dashboard.tsx` — redirect guard now reads `params.forceUserView` directly (synchronously) instead of through async `useState`
-- **Native Logout Not Working**: Added missing `Alert` import in `(tabs)/more.tsx`
-- **Academy Crash for Normal Users**: Wrapped all AdMob SDK calls in try/catch in `useRewardedAd.ts`, `useInterstitialAd.ts`, and `AdBanner.tsx`
+### 4 Production Bug Fixes (Apr 4 2026)
+- **AI Analyzer "Analyze Another Chart" crash**: Fixed `PAIRS[0]` → `PRIORITY_PAIRS[0]`
+- **Contact Support button**: Added `Linking.openURL('mailto:support@swiftfx.online')`
+- **Version numbers**: Settings (1.0.4 / 2026.04) and More footer (v1.0.4)
+
+### 3 Native P0 Bug Fixes (Apr 4 2026) — USER CONFIRMED WORKING
+- Admin → User Dashboard Loop, Native Logout, Academy Crash for Normal Users
 
 ### Previously Completed
 - Auth Callback Rewrite (PKCE + implicit flow), Auth Session Lifecycle Fix
 - Market Data Provider Priority (gold-api.com primary)
 - Adaptive Polling (87% API call reduction)
-- Signal Engine v4.0 (132/132 tests), Fault-Tolerance & Auto-Recovery
+- Signal Engine v4.0, Fault-Tolerance & Auto-Recovery
 - Community Feed, Fund Management, API Client Standardization
 - OAuth Deep Linking, Admin Subscription Override System
-- Trading Pairs, RBAC system, AdMob Monetization
+- Trading Pairs, RBAC system, AdMob Banner Monetization
 - Backend Modular Refactoring
 
 ## Prioritized Backlog
 
 ### P0 (Immediate)
-- All current P0s resolved
+- All P0s resolved
 
 ### P1
-- End-to-End IAP testing on physical devices
-- Verify AdMob ads render on native iOS/Android builds
-- Verify 3 Native P0 bug fixes from earlier session on EAS build
+- End-to-End IAP testing on physical devices (Apple IAP dependency now installed)
+- Google Play Console access needed for Android IAP
 
 ### P2
 - Add more symbols to market data service (EURUSD, GBPUSD, BTCUSD)
@@ -49,9 +53,14 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - Push notifications on new signal creation
 - Leaderboard of top shared AI analyses
 
-## Environment Variables (Market Data)
-```
-TWELVEDATA_KEY=<from twelvedata.com>
-METALS_API_KEY=<from metals-api.com>
-GOLDAPI_KEY=<from goldapi.io>
-```
+## Key Files Changed (This Session)
+- `/app/frontend/src/services/adManager.ts` — NATIVE ad unit ID
+- `/app/frontend/src/components/ads/NativeAdCard.tsx` — Native ad component
+- `/app/frontend/src/components/ads/NativeAdCard.web.tsx` — Web stub
+- `/app/frontend/src/components/ads/index.ts` — NativeAdCard export
+- `/app/frontend/app/news/index.tsx` — Native ads every 4 items
+- `/app/frontend/app/calendar/index.tsx` — Native ads between date groups
+- `/app/frontend/app/academy/[category].tsx` — Reward ad unlock
+- `/app/frontend/eas.json` — Updated to user's config
+- `/app/frontend/app.json` — Updated to user's config
+- `/app/frontend/package.json` — react-native-iap added
