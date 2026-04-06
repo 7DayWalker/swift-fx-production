@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
-import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
+import { AdBanner, NativeAdCard, AD_BANNER_HEIGHT } from '../../src/components/ads';
 
 // News item type
 interface NewsItem {
@@ -294,66 +294,69 @@ export default function MarketNewsScreen() {
             />
           }
         >
-          {filteredNews.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.newsCard, dynamicStyles.card]}
-              onPress={() => navigateToDetail(item)}
-              activeOpacity={0.7}
-            >
-              {/* Image + Content Row */}
-              <View style={styles.newsCardContent}>
-                {/* Text Content */}
-                <View style={styles.newsCardText}>
-                  {/* Category Badge */}
-                  <View style={styles.newsCardTop}>
-                    <View style={[styles.categoryBadge, { backgroundColor: `${getCategoryColor(item.category)}20` }]}>
-                      <Ionicons
-                        name={getCategoryIcon(item.category) as any}
-                        size={10}
-                        color={getCategoryColor(item.category)}
-                      />
-                      <Text style={[styles.categoryText, { color: getCategoryColor(item.category) }]}>
-                        {item.category}
+          {filteredNews.map((item, index) => (
+            <React.Fragment key={item.id}>
+              <TouchableOpacity
+                style={[styles.newsCard, dynamicStyles.card]}
+                onPress={() => navigateToDetail(item)}
+                activeOpacity={0.7}
+              >
+                {/* Image + Content Row */}
+                <View style={styles.newsCardContent}>
+                  {/* Text Content */}
+                  <View style={styles.newsCardText}>
+                    {/* Category Badge */}
+                    <View style={styles.newsCardTop}>
+                      <View style={[styles.categoryBadge, { backgroundColor: `${getCategoryColor(item.category)}20` }]}>
+                        <Ionicons
+                          name={getCategoryIcon(item.category) as any}
+                          size={10}
+                          color={getCategoryColor(item.category)}
+                        />
+                        <Text style={[styles.categoryText, { color: getCategoryColor(item.category) }]}>
+                          {item.category}
+                        </Text>
+                      </View>
+                      <Text style={[styles.newsTime, dynamicStyles.textSecondary]}>
+                        {getRelativeTime(item.pubDate)}
                       </Text>
                     </View>
-                    <Text style={[styles.newsTime, dynamicStyles.textSecondary]}>
-                      {getRelativeTime(item.pubDate)}
+
+                    {/* Title */}
+                    <Text style={[styles.newsTitle, dynamicStyles.text]} numberOfLines={item.thumbnail ? 2 : 3}>
+                      {item.title}
                     </Text>
+
+                    {/* Footer */}
+                    <View style={styles.newsFooter}>
+                      <Text style={[styles.newsSource, dynamicStyles.textSecondary]}>
+                        {item.source}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={14} color={theme.textSecondary} />
+                    </View>
                   </View>
 
-                  {/* Title */}
-                  <Text style={[styles.newsTitle, dynamicStyles.text]} numberOfLines={item.thumbnail ? 2 : 3}>
-                    {item.title}
-                  </Text>
-
-                  {/* Footer */}
-                  <View style={styles.newsFooter}>
-                    <Text style={[styles.newsSource, dynamicStyles.textSecondary]}>
-                      {item.source}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={14} color={theme.textSecondary} />
-                  </View>
-                </View>
-
-                {/* Thumbnail Image */}
-                {item.thumbnail ? (
-                  <Image
-                    source={{ uri: item.thumbnail }}
-                    style={styles.newsThumbnail}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.newsPlaceholder, { backgroundColor: `${getCategoryColor(item.category)}15` }]}>
-                    <Ionicons
-                      name={getCategoryIcon(item.category) as any}
-                      size={28}
-                      color={getCategoryColor(item.category)}
+                  {/* Thumbnail Image */}
+                  {item.thumbnail ? (
+                    <Image
+                      source={{ uri: item.thumbnail }}
+                      style={styles.newsThumbnail}
+                      resizeMode="cover"
                     />
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.newsPlaceholder, { backgroundColor: `${getCategoryColor(item.category)}15` }]}>
+                      <Ionicons
+                        name={getCategoryIcon(item.category) as any}
+                        size={28}
+                        color={getCategoryColor(item.category)}
+                      />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+              {/* Native ad every 4 items */}
+              {(index + 1) % 4 === 0 && <NativeAdCard />}
+            </React.Fragment>
           ))}
 
           {/* Disclaimer */}

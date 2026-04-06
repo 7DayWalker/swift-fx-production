@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
-import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
+import { AdBanner, NativeAdCard, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import {
   isCalendarNotificationEnabled,
   setCalendarNotificationEnabled,
@@ -448,21 +448,22 @@ export default function EconomicCalendarScreen() {
             />
           }
         >
-          {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => (
-            <View key={dateKey} style={styles.dateGroup}>
-              {/* Date Header */}
-              <View style={styles.dateHeader}>
-                <View style={[styles.dateBadge, { backgroundColor: `${theme.primary}20` }]}>
-                  <Ionicons name="calendar" size={14} color={theme.primary} />
-                  <Text style={[styles.dateText, { color: theme.primary }]}>{dateKey}</Text>
+          {Object.entries(groupedEvents).map(([dateKey, dateEvents], groupIndex) => (
+            <React.Fragment key={dateKey}>
+              <View style={styles.dateGroup}>
+                {/* Date Header */}
+                <View style={styles.dateHeader}>
+                  <View style={[styles.dateBadge, { backgroundColor: `${theme.primary}20` }]}>
+                    <Ionicons name="calendar" size={14} color={theme.primary} />
+                    <Text style={[styles.dateText, { color: theme.primary }]}>{dateKey}</Text>
+                  </View>
+                  <Text style={[styles.eventCount, dynamicStyles.textSecondary]}>
+                    {dateEvents.length} event{dateEvents.length !== 1 ? 's' : ''}
+                  </Text>
                 </View>
-                <Text style={[styles.eventCount, dynamicStyles.textSecondary]}>
-                  {dateEvents.length} event{dateEvents.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
 
-              {/* Events for this date */}
-              {dateEvents.map((event) => (
+                {/* Events for this date */}
+                {dateEvents.map((event) => (
                 <TouchableOpacity
                   key={event.id}
                   style={[styles.eventCard, dynamicStyles.card, dynamicStyles.border]}
@@ -536,7 +537,10 @@ export default function EconomicCalendarScreen() {
                   </View>
                 </TouchableOpacity>
               ))}
-            </View>
+              </View>
+              {/* Native ad between date groups — every 2nd group */}
+              {(groupIndex + 1) % 2 === 0 && <NativeAdCard />}
+            </React.Fragment>
           ))}
 
           {/* Footer Disclaimer */}

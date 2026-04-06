@@ -24,6 +24,11 @@ export const AD_UNITS = {
     ios: 'ca-app-pub-3940256099942544/1712485313',
     default: 'test-rewarded',
   }),
+  NATIVE: Platform.select({
+    android: 'ca-app-pub-3940256099942544/2247696110',
+    ios: 'ca-app-pub-3940256099942544/3986624511',
+    default: 'test-native',
+  }),
 };
 
 // ─── Interstitial Frequency Gate ────────────────────────────────────────────
