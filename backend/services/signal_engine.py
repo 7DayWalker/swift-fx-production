@@ -523,16 +523,52 @@ class SignalLifecycleController:
         signal_id: str,
         current_state: str,
         new_state: str,
-        tp_hit: int
+        tp_hit: int,
+        signal: Optional[dict] = None
     ) -> bool:
-        """Advance signal to next TP state (e.g., active → tp1)"""
+        """
+        Advance signal to next TP state (e.g., active → tp1).
+        
+        TRAILING SL LOGIC (critical risk management):
+          TP1 hit → SL moves to entry price (breakeven)
+          TP2 hit → SL moves to TP1 price
+          TP3 hit → signal closes (handled elsewhere)
+        
+        This ensures a trade that already hit TP1 can NEVER close at a loss.
+        """
+        update_doc = {
+            "state": new_state,
+            "status": "active",
+            "tp_hit": tp_hit
+        }
+        
+        # Trail the stop loss based on which TP was just hit
+        if signal:
+            entry = signal.get("entry_price_actual") or signal.get("entry")
+            tp1 = signal.get("tp1")
+            original_sl = signal.get("stop_loss")
+            
+            if tp_hit == 1 and entry:
+                # TP1 hit → move SL to entry (breakeven)
+                update_doc["stop_loss"] = entry
+                update_doc["original_stop_loss"] = original_sl
+                logger.info(
+                    f"[Engine] Signal {signal_id}: TRAILING SL → entry (breakeven) "
+                    f"SL {original_sl} → {entry}"
+                )
+            elif tp_hit == 2 and tp1:
+                # TP2 hit → move SL to TP1 level (lock in TP1 profit)
+                update_doc["stop_loss"] = tp1
+                if not signal.get("original_stop_loss"):
+                    update_doc["original_stop_loss"] = original_sl
+                logger.info(
+                    f"[Engine] Signal {signal_id}: TRAILING SL → TP1 "
+                    f"SL {signal.get('stop_loss')} → {tp1}"
+                )
+        
         result = await self.db.signals.update_one(
             {"signal_id": signal_id, "state": current_state},
-            {"$set": {
-                "state": new_state,
-                "status": "active",  # Still active until closed
-                "tp_hit": tp_hit
-            }}
+            {"$set": update_doc}
         )
         
         if result.modified_count > 0:
@@ -792,15 +828,32 @@ class SignalLifecycleController:
                                 "gap_protected": tp_exit_price != current_price
                             }
                     else:
-                        # Advance to next TP state
-                        success = await self.advance_tp_state(signal_id, current_state, new_state, tp_level)
+                        # Advance to next TP state (with trailing SL)
+                        success = await self.advance_tp_state(
+                            signal_id, current_state, new_state, tp_level, signal=signal
+                        )
                         if success:
-                            # Send TP hit notification for intermediate TPs
+                            # Send TP hit notification with trailing SL info
                             running_pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
+                            
+                            # Determine what the SL was trailed to for the notification
+                            if tp_level == 1:
+                                trail_msg = f"SL moved to entry ({entry_actual})"
+                            elif tp_level == 2:
+                                tp1_price = signal.get("tp1")
+                                trail_msg = f"SL moved to TP1 ({tp1_price})"
+                            else:
+                                trail_msg = ""
+                            
                             asyncio.create_task(send_tp_hit_notification(
                                 signal_id, pair, signal_type, tp_level, running_pips
                             ))
-                            return {"action": "tp_hit", "level": tp_level, "signal_id": signal_id}
+                            return {
+                                "action": "tp_hit",
+                                "level": tp_level,
+                                "signal_id": signal_id,
+                                "trailing_sl": trail_msg,
+                            }
         
         return None
 

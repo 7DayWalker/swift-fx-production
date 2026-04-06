@@ -265,11 +265,20 @@ async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, fina
 
 
 async def notify_tp_hit(signal_id: str, pair: str, signal_type: str, tp_level: int, running_pips: Optional[float] = None):
-    """Notify all users that an intermediate TP level was hit."""
+    """Notify all users that an intermediate TP level was hit, with trailing SL info."""
     pips_part = f" \u2022 +{running_pips:.1f} pips" if running_pips else ""
+    
+    # Include trailing SL action in the notification body
+    if tp_level == 1:
+        trail_info = " \u2022 SL moved to entry"
+    elif tp_level == 2:
+        trail_info = " \u2022 SL moved to TP1"
+    else:
+        trail_info = ""
+    
     await send_notification(
         title=f"TP{tp_level} Hit!",
-        body=f"{pair} \u2022 {signal_type.upper()}{pips_part}",
+        body=f"{pair} \u2022 {signal_type.upper()}{pips_part}{trail_info}",
         data={"signalId": signal_id, "type": "tp_hit", "level": tp_level},
         preference_key="signals",
     )

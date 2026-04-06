@@ -12,67 +12,65 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
+### Trailing Stop Loss — Critical Trading Logic Fix (Apr 6 2026)
+- **Root cause**: `advance_tp_state()` updated TP state but did NOT trail the stop loss, allowing a -130 pip loss after TP1 was already hit
+- **Fix**: `advance_tp_state()` now trails SL automatically:
+  - TP1 hit → SL moves to entry price (breakeven)
+  - TP2 hit → SL moves to TP1 price (locks in TP1 profit)
+- **`original_stop_loss`** preserved in MongoDB for display/audit
+- **Push notifications** now include trailing info: "TP1 Hit! XAUUSD • BUY • +22 pips • SL moved to entry"
+- **Test report**: 12/12 backend tests passed (iteration_34)
+
 ### Push Notification Flow Completion (Apr 6 2026)
-- **Fixed projectId**: `notificationService.ts` now uses correct EAS project ID `056e4b17-a0b2-46ff-a7ed-f3ad1efce01b`
-- **Centralized push service**: Created `/app/backend/services/push_notifications.py` — single source of truth for all push sending via Expo Push API
-- **Invalid token cleanup**: `DeviceNotRegistered` responses from Expo automatically mark tokens inactive in MongoDB
-- **TP hit notifications**: Signal engine now sends "TP1 Hit!" / "TP2 Hit!" push notifications for intermediate take-profit levels (previously silent)
-- **Engine config check**: `send_notifications` flag in engine config is now respected before any notification is sent
-- **User preference checking**: Per-category notification preferences (`signals`, `fund_updates`, etc.) are checked before sending
-- **Code consolidation**: Removed ~160 lines of duplicate push notification code from `signals.py`, replaced with 3-line delegations to centralized service
-- **Test report**: 17/17 backend tests passed (iteration_33)
+- Fixed projectId to EAS project ID `056e4b17-a0b2-46ff-a7ed-f3ad1efce01b`
+- Centralized push service (`services/push_notifications.py`)
+- Invalid token cleanup, engine config check, per-category preference filtering
+- TP hit notifications with trailing SL info
+- Test report: 17/17 tests passed (iteration_33)
 
 ### AdMob Native + Reward Ads & IAP Dependency (Apr 6 2026)
-- `react-native-iap` (v14.7.20) installed — Apple IAP is build-ready
-- NativeAdCard component created for in-feed native ads
-- Native Ads integrated into News feed (every 4th article) and Calendar feed (every 2nd date group)
-- Academy Reward Ad Unlock — "Watch Ad to Unlock" button on locked category screens
+- `react-native-iap` (v14.7.20) installed
+- NativeAdCard component for News (every 4th article) and Calendar (every 2nd date group)
+- Academy Reward Ad Unlock on locked category screens
 
 ### 4 Production Bug Fixes (Apr 4 2026)
-- AI Analyzer "Analyze Another Chart" crash (`PAIRS[0]` → `PRIORITY_PAIRS[0]`)
-- Contact Support button (`Linking.openURL('mailto:support@swiftfx.online')`)
-- Version numbers (1.0.4 / 2026.04)
+- AI Analyzer crash, Contact Support button, Version numbers
 
-### 3 Native P0 Bug Fixes (Apr 4 2026) — USER CONFIRMED WORKING
-- Admin → User Dashboard Loop, Native Logout, Academy Crash for Normal Users
+### 3 Native P0 Bug Fixes (Apr 4 2026) — USER CONFIRMED
+- Admin → User Dashboard Loop, Native Logout, Academy Crash
 
 ### Previously Completed
-- Auth Callback Rewrite, Auth Session Lifecycle Fix, Market Data Provider Priority
-- Adaptive Polling, Signal Engine v4.0, Fault-Tolerance & Auto-Recovery
-- Community Feed, Fund Management, Admin Subscription Override
-- Trading Pairs, RBAC, AdMob Banner Monetization, Backend Modular Refactoring
+- Auth, Market Data, Adaptive Polling, Signal Engine v4.0, Fault-Tolerance
+- Community Feed, Fund Management, Admin RBAC, AdMob Banners, Backend Refactoring
+
+## Signal Engine Trailing SL Architecture
+```
+process_signal() — each poll cycle:
+  1. Read signal fresh from MongoDB (includes current stop_loss)
+  2. Check SL: price vs signal.stop_loss (may be trailed)
+  3. Check TP levels
+  4. If TP1 hit → advance_tp_state(signal=signal):
+     - state: active → tp1
+     - stop_loss: original → entry (breakeven)
+     - original_stop_loss: preserved
+  5. If TP2 hit → advance_tp_state(signal=signal):
+     - state: tp1 → tp2
+     - stop_loss: entry → TP1
+  6. If TP3 hit → close signal
+  7. After TP1: worst case = breakeven (0 pips)
+  8. After TP2: worst case = TP1 profit locked in
+```
 
 ## Prioritized Backlog
 
 ### P0 — All resolved
 
 ### P1
-- End-to-End Apple IAP testing on physical devices (`react-native-iap` now installed)
-- Google Play Console access needed for Android IAP
-- iOS APNs setup via `eas credentials` for push notifications on iOS
+- End-to-End Apple IAP testing on physical devices
+- iOS APNs setup via `eas credentials`
+- Google Play Console access for Android IAP
 
 ### P2
-- Add more symbols to market data service (EURUSD, GBPUSD, BTCUSD)
+- Add more symbols (EURUSD, GBPUSD, BTCUSD)
 - Smart push reminders for streak-at-risk users
-- Push notifications on new signal creation — DONE (auto-triggers on entry hit)
 - Leaderboard of top shared AI analyses
-
-## Push Notification Architecture
-```
-Frontend (notificationService.ts)
-  → registerForPushNotifications() → getExpoPushTokenAsync(projectId)
-  → POST /api/notifications/register-token → MongoDB device_tokens
-  
-Signal Engine (signal_engine.py)
-  → Entry triggered → send_signal_notification() → notify_new_signal()
-  → TP1/TP2 hit   → send_tp_hit_notification() → notify_tp_hit()
-  → SL/TP3 close  → send_signal_close_notification() → notify_signal_closed()
-  
-Centralized Service (push_notifications.py)
-  → Check engine config (send_notifications flag)
-  → Fetch active tokens from MongoDB
-  → Batch fetch user preferences from Supabase
-  → Filter by per-category preference
-  → Send via Expo Push API (batches of 100)
-  → Mark DeviceNotRegistered tokens as inactive
-```
