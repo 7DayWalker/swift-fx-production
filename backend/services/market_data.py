@@ -316,15 +316,122 @@ async def _get_gold_price() -> Optional[dict]:
 
 
 # ===================================================================
+# FOREX PAIRS via TwelveData + Finnhub fallback
+# ===================================================================
+
+async def _get_forex_twelvedata(pair_slash: str, symbol_out: str) -> Optional[dict]:
+    """Fetch forex pair from TwelveData. pair_slash like 'EUR/USD'."""
+    if not TWELVEDATA_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+            r = await client.get(
+                "https://api.twelvedata.com/price",
+                params={"symbol": pair_slash, "apikey": TWELVEDATA_KEY},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                price = data.get("price")
+                if price:
+                    return _make_response(symbol_out, round(float(price), 5), "twelvedata")
+    except Exception as e:
+        logger.warning(f"[TwelveData] {symbol_out} failed: {e}")
+    return None
+
+
+async def _get_forex_finnhub(oanda_symbol: str, symbol_out: str) -> Optional[dict]:
+    """Fetch forex pair from Finnhub. oanda_symbol like 'OANDA:EUR_USD'."""
+    try:
+        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+            r = await client.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": oanda_symbol, "token": FINNHUB_KEY},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                price = data.get("c")
+                if price and float(price) > 0:
+                    return _make_response(symbol_out, round(float(price), 5), "finnhub")
+    except Exception as e:
+        logger.warning(f"[Finnhub] {symbol_out} failed: {e}")
+    return None
+
+
+async def _get_eurusd_price() -> Optional[dict]:
+    """Fetch EURUSD using TwelveData → Finnhub fallback."""
+    result = await _get_forex_twelvedata("EUR/USD", "EURUSD")
+    if result:
+        return result
+    result = await _get_forex_finnhub("OANDA:EUR_USD", "EURUSD")
+    if result:
+        return result
+    logger.error("[PROVIDER] ALL PROVIDERS FAILED for EURUSD")
+    return None
+
+
+async def _get_gbpusd_price() -> Optional[dict]:
+    """Fetch GBPUSD using TwelveData → Finnhub fallback."""
+    result = await _get_forex_twelvedata("GBP/USD", "GBPUSD")
+    if result:
+        return result
+    result = await _get_forex_finnhub("OANDA:GBP_USD", "GBPUSD")
+    if result:
+        return result
+    logger.error("[PROVIDER] ALL PROVIDERS FAILED for GBPUSD")
+    return None
+
+
+# ===================================================================
+# BTCUSD via CoinGecko (free, no key) + TwelveData fallback
+# ===================================================================
+
+async def _get_btcusd_coingecko() -> Optional[dict]:
+    """Fetch BTCUSD from CoinGecko (free, no API key needed)."""
+    try:
+        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+            r = await client.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "bitcoin", "vs_currencies": "usd"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                price = data.get("bitcoin", {}).get("usd")
+                if price:
+                    return _make_response("BTCUSD", round(float(price), 2), "coingecko")
+    except Exception as e:
+        logger.warning(f"[CoinGecko] BTCUSD failed: {e}")
+    return None
+
+
+async def _get_btcusd_price() -> Optional[dict]:
+    """Fetch BTCUSD using CoinGecko → TwelveData fallback."""
+    result = await _get_btcusd_coingecko()
+    if result:
+        return result
+    result = await _get_forex_twelvedata("BTC/USD", "BTCUSD")
+    if result:
+        return result
+    logger.error("[PROVIDER] ALL PROVIDERS FAILED for BTCUSD")
+    return None
+
+
+# ===================================================================
 # SYMBOL PROVIDER REGISTRY
 # ===================================================================
 SYMBOL_PROVIDERS: dict[str, callable] = {
     "XAUUSD": _get_gold_price,
+    "EURUSD": _get_eurusd_price,
+    "GBPUSD": _get_gbpusd_price,
+    "BTCUSD": _get_btcusd_price,
 }
 
 SYMBOL_ALIASES: dict[str, str] = {
     "XAU/USD": "XAUUSD",
     "GOLD":    "XAUUSD",
+    "EUR/USD": "EURUSD",
+    "GBP/USD": "GBPUSD",
+    "BTC/USD": "BTCUSD",
+    "BITCOIN": "BTCUSD",
 }
 
 

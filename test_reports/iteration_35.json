@@ -1,0 +1,75 @@
+{
+  "iteration": 35,
+  "test_date": "2026-04-06T03:52:00Z",
+  "test_type": "P2 Features - Market Data Symbols + Streak Reminders",
+  "summary": "All 17 P2 feature tests PASSED. Verified: (1) New market symbols EURUSD, GBPUSD, BTCUSD return valid prices with correct providers, (2) XAUUSD regression test passed, (3) All symbol aliases work correctly, (4) Invalid symbol returns 400, (5) Streak reminder background task started, (6) Signal engine v4.1 started cleanly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "market_symbols_all_four": "PASS - GET /api/market/symbols returns [XAUUSD, EURUSD, GBPUSD, BTCUSD]",
+    "eurusd_price": "PASS - Returns valid price with source 'twelvedata'",
+    "gbpusd_price": "PASS - Returns valid price with source 'twelvedata'",
+    "btcusd_price": "PASS - Returns valid price with source 'coingecko'",
+    "xauusd_regression": "PASS - Still works with source 'gold-api.com'",
+    "alias_eur_usd": "PASS - EUR/USD resolves to EURUSD",
+    "alias_bitcoin": "PASS - BITCOIN resolves to BTCUSD",
+    "alias_gold": "PASS - GOLD resolves to XAUUSD",
+    "alias_btc_usd": "PASS - BTC/USD resolves to BTCUSD",
+    "alias_gbp_usd": "PASS - GBP/USD resolves to GBPUSD",
+    "invalid_symbol_400": "PASS - Invalid symbol returns 400 with proper error",
+    "missing_symbol_422": "PASS - Missing symbol returns 422 validation error",
+    "streak_reminders_import": "PASS - services.streak_reminders module loads correctly",
+    "streak_reminder_async": "PASS - streak_reminder_loop is async function",
+    "streak_reminder_interval": "PASS - Reminder interval is 6 hours (21600s)",
+    "automation_status": "PASS - GET /api/automation/status returns engine running",
+    "health_check": "PASS - GET /api/health returns healthy"
+  },
+  "log_verification": {
+    "streak_reminder_startup": "CONFIRMED - '[StreakReminder] Background task started (interval=6h)' in backend logs",
+    "signal_engine_startup": "CONFIRMED - '[Engine] Signal Auto-Engine v4.1 STARTED (ADAPTIVE POLLING)' in backend logs",
+    "streak_reminder_execution": "CONFIRMED - '[StreakReminder] No active tokens for at-risk users' (ran successfully, no users to notify)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_p2_market_streak.py",
+    "/app/test_reports/pytest/pytest_p2_market_streak.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Market data service correctly implements multi-provider fallback chain",
+    "EURUSD/GBPUSD use TwelveData → Finnhub fallback",
+    "BTCUSD uses CoinGecko → TwelveData fallback",
+    "XAUUSD uses gold-api.com → TwelveData → Metals-API → GoldAPI → Finnhub → AlphaVantage",
+    "Symbol aliases properly registered in SYMBOL_ALIASES dict",
+    "Streak reminder background task started on app startup via asyncio.create_task()",
+    "Streak reminder queries academy_streaks collection for users with current_streak > 0 and last_activity_date != today"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_p2_market_streak.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "N/A (backend-only testing)"
+  },
+  "test_credentials": "N/A - no auth required for market data tests",
+  "seed_data_creation": "None - tests use live market data APIs",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P2 features verified: EURUSD, GBPUSD, BTCUSD market symbols working with correct providers. Streak reminder background task running every 6h. All symbol aliases working. Signal engine v4.1 running.",
+  "verified_features": {
+    "eurusd_twelvedata": true,
+    "gbpusd_twelvedata": true,
+    "btcusd_coingecko": true,
+    "xauusd_gold_api": true,
+    "symbol_aliases": true,
+    "invalid_symbol_error": true,
+    "streak_reminder_startup": true,
+    "signal_engine_v4_1": true
+  }
+}
