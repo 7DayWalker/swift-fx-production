@@ -78,7 +78,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     // Get Expo Push Token
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'tradersignals', // Using the tunnel subdomain as project ID
+      projectId: '056e4b17-a0b2-46ff-a7ed-f3ad1efce01b',
     });
 
     console.log('Expo Push Token:', tokenData.data);
