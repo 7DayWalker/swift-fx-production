@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="14" time="0.374" timestamp="2026-04-06T03:34:04.794496+00:00" hostname="agent-env-7c8a5255-302f-430e-92ff-aaa8fc8f7e01"><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_advance_tp_state_accepts_signal_parameter" time="0.167" /><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_tp1_hit_trails_sl_to_entry" time="0.008" /><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_tp2_hit_trails_sl_to_tp1" time="0.001"><failure message="RuntimeError: Event loop is closed">tests/test_trailing_sl_logic.py:157: in test_tp2_hit_trails_sl_to_tp1
+    await db.signals.delete_many({"signal_id": signal_id})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:74: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_full_trailing_sl_scenario" time="0.001"><failure message="RuntimeError: Event loop is closed">tests/test_trailing_sl_logic.py:216: in test_full_trailing_sl_scenario
+    await db.signals.delete_many({"signal_id": signal_id})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:74: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_original_stop_loss_preserved_on_first_trail" time="0.001"><failure message="RuntimeError: Event loop is closed">tests/test_trailing_sl_logic.py:286: in test_original_stop_loss_preserved_on_first_trail
+    await db.signals.delete_many({"signal_id": signal_id})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:74: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase><testcase classname="tests.test_trailing_sl_logic.TestTrailingSLLogic" name="test_no_trailing_without_signal_parameter" time="0.001"><failure message="RuntimeError: Event loop is closed">tests/test_trailing_sl_logic.py:333: in test_no_trailing_without_signal_parameter
+    await db.signals.delete_many({"signal_id": signal_id})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:74: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase><testcase classname="tests.test_trailing_sl_logic.TestPushNotificationTrailingSLInfo" name="test_notify_tp_hit_includes_trailing_sl_for_tp1" time="0.002" /><testcase classname="tests.test_trailing_sl_logic.TestPushNotificationTrailingSLInfo" name="test_notify_tp_hit_includes_trailing_sl_for_tp2" time="0.001" /><testcase classname="tests.test_trailing_sl_logic.TestPushNotificationTrailingSLInfo" name="test_notify_tp_hit_no_trailing_info_for_tp3" time="0.001" /><testcase classname="tests.test_trailing_sl_logic.TestSignalEngineImportsAndStarts" name="test_signal_engine_imports_without_errors" time="0.000" /><testcase classname="tests.test_trailing_sl_logic.TestSignalEngineImportsAndStarts" name="test_advance_tp_state_method_exists" time="0.000" /><testcase classname="tests.test_trailing_sl_logic.TestSignalEngineImportsAndStarts" name="test_push_notifications_imports_without_errors" time="0.000" /><testcase classname="tests.test_trailing_sl_logic.TestProcessSignalPassesSignalToAdvanceTP" name="test_process_signal_tp_hit_passes_signal" time="0.003" /><testcase classname="tests.test_trailing_sl_logic.TestProcessSignalPassesSignalToAdvanceTP" name="test_process_signal_returns_trailing_sl_info" time="0.003" /></testsuite></testsuites>
