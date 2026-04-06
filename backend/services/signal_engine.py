@@ -21,16 +21,24 @@ import core.engine_state as engine_state
 logger = logging.getLogger(__name__)
 
 
-# Lazy-import wrappers for notification functions (defined in api.routes.signals)
-# to avoid circular dependency: signal_engine → signals → signal_engine
+# Lazy-import wrappers for notification functions
+# Using centralized push_notifications service
 async def send_signal_notification(signal_id, pair, signal_type, visibility):
-    from api.routes.signals import send_signal_notification as _notify
-    await _notify(signal_id, pair, signal_type, visibility)
+    from services.push_notifications import notify_new_signal
+    sig_type = signal_type.value if hasattr(signal_type, 'value') else str(signal_type)
+    await notify_new_signal(signal_id, pair, sig_type)
 
 
 async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility):
-    from api.routes.signals import send_signal_close_notification as _notify_close
-    await _notify_close(signal_id, pair, signal_type, pips, visibility)
+    from services.push_notifications import notify_signal_closed
+    sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
+    await notify_signal_closed(signal_id, pair, sig_type, pips)
+
+
+async def send_tp_hit_notification(signal_id, pair, signal_type, tp_level, running_pips=None):
+    from services.push_notifications import notify_tp_hit
+    sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
+    await notify_tp_hit(signal_id, pair, sig_type, tp_level, running_pips)
 
 # ==============================================================================
 # SIGNAL LIFECYCLE ENGINE v4.0 - AUDITED ABSOLUTE THRESHOLD ENGINE
@@ -787,6 +795,11 @@ class SignalLifecycleController:
                         # Advance to next TP state
                         success = await self.advance_tp_state(signal_id, current_state, new_state, tp_level)
                         if success:
+                            # Send TP hit notification for intermediate TPs
+                            running_pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
+                            asyncio.create_task(send_tp_hit_notification(
+                                signal_id, pair, signal_type, tp_level, running_pips
+                            ))
                             return {"action": "tp_hit", "level": tp_level, "signal_id": signal_id}
         
         return None
@@ -891,7 +904,7 @@ async def acquire_engine_lock() -> Optional[str]:
         logger.info(f"[Engine] Acquired engine lock: {lock_id}")
         return lock_id
     
-    logger.warning(f"[Engine] Failed to acquire lock - another instance is running")
+    logger.warning("[Engine] Failed to acquire lock - another instance is running")
     return None
 
 
