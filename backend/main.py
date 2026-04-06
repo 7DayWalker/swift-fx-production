@@ -166,6 +166,10 @@ async def startup_event():
         if config.get("paused"):
             logger.info(f"[Startup] Pause reason: {config.get('pause_reason', 'No reason specified')}")
 
+    # Start streak reminder background task
+    from services.streak_reminders import streak_reminder_loop
+    asyncio.create_task(streak_reminder_loop())
+
     logger.info("[Startup] Startup complete")
 
 
