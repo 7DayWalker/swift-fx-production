@@ -12,40 +12,61 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
-### Community Image Upload + Logout Modal Fix (Apr 7 2026)
-- **Community image upload**: `createPost()` was never appending the selected image to FormData. Fixed: now appends image as `{uri, type, name}` for React Native multipart upload.
-- **Logout modal on native**: Replaced `Alert.alert()` (grey system popup) with the styled `<Modal>` component on all platforms. Removed unused `Alert` import.
+### Push Notification Fix — Android Channel + Token Registration (Apr 7 2026)
+- **Root cause 1**: No Android notification channel — Android 8+ silently drops notifications without one
+- **Root cause 2**: Token registration was failing silently — no retry, no logging
+- **Fixes**:
+  - Added `Notifications.setNotificationChannelAsync('default', { importance: MAX })` for Android
+  - Added 2s auth delay before token registration
+  - Added 3-attempt retry with backoff for `registerTokenWithBackend()`
+  - Token saved to AsyncStorage as backup
+  - Backend logs token registrations: `[Notifications] Token registered: user=xxx platform=android`
+- **Note**: `SUPABASE_SERVICE_KEY` still needed in backend `.env` for notification preference enforcement
+
+### Community Image Upload + Logout Modal (Apr 7 2026)
+- Fixed FormData not sending images, styled modal on all platforms
 
 ### 3 Signal Bug Fixes (Apr 7 2026)
-- TP1 pips on breakeven close, TP hit messages on card, actual timestamps
-- 10/10 tests passed (iteration_36)
+- TP1 pips on breakeven close, TP hit messages, actual timestamps
 
 ### P2: Market Data + Streak Reminders (Apr 6 2026)
-- EURUSD, GBPUSD, BTCUSD added
-- Background streak reminder task (every 6h)
-- 17/17 tests passed (iteration_35)
+- EURUSD, GBPUSD, BTCUSD + background streak reminder task
 
 ### Trailing Stop Loss (Apr 6 2026)
-- TP1→SL=entry, TP2→SL=TP1 — 12/12 tests (iteration_34)
+- TP1→SL=entry, TP2→SL=TP1
 
 ### Push Notification System (Apr 6 2026)
-- Centralized service, token cleanup — 17/17 tests (iteration_33)
+- Centralized service, token cleanup
 
 ### Previous Fixes (Apr 4 2026)
-- 4 production bug fixes + 3 native P0 fixes (all confirmed)
-- AdMob native/reward ads, IAP dependency
+- 7 production/native bug fixes, AdMob, IAP dependency
 
-### Earlier Work
-- Auth, Market Data, Adaptive Polling, Signal Engine v4.0
-- Community Feed, Fund Management, Admin RBAC, Backend Refactoring
+## Push Notification Flow (Complete)
+```
+App Launch → _layout.tsx useEffect (user logged in)
+  → NotificationService.initialize()
+    → 2s delay (auth session ready)
+    → registerForPushNotifications()
+      → Permissions request
+      → getExpoPushTokenAsync(projectId: EAS_PROJECT_ID)
+      → Android: setNotificationChannelAsync('default', importance=MAX)
+    → registerTokenWithBackendRetry() [3 attempts, 2s/4s/6s backoff]
+      → POST /api/notifications/register-token
+      → MongoDB: device_tokens.upsert({user_id, token, platform, is_active})
+    → setupNotificationListeners()
+
+Signal Events → push_notifications.py
+  → Fetch active tokens from MongoDB
+  → Filter by user preferences
+  → POST to Expo Push API (batches of 100)
+  → Mark DeviceNotRegistered tokens inactive
+```
 
 ## Prioritized Backlog
-
 ### P0 — All resolved
 ### P1
-- End-to-End Apple IAP testing on physical devices
+- Test push notifications on native EAS build (rebuild needed for channel fix)
+- End-to-End Apple IAP testing
 - iOS APNs setup via `eas credentials`
-- Google Play Console access for Android IAP
-
 ### P2
 - Leaderboard of top shared AI analyses
