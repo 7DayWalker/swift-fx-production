@@ -8,7 +8,6 @@ import {
   Switch,
   Modal,
   Platform,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,22 +46,7 @@ export default function MoreScreen() {
   };
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      setShowLogoutModal(true);
-    } else {
-      Alert.alert(
-        'Logout',
-        'Are you sure you want to logout?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Logout',
-            style: 'destructive',
-            onPress: confirmLogout,
-          },
-        ]
-      );
-    }
+    setShowLogoutModal(true);
   };
 
   const confirmLogout = async () => {
