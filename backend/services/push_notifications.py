@@ -97,11 +97,14 @@ async def _send_expo_push_batch(messages: List[dict]) -> List[str]:
                     }
                 )
 
+            response_json = response.json()
+            logger.info(f"Expo push API response (batch {i//BATCH_SIZE}): {response_json}")
+
             if response.status_code != 200:
                 logger.error(f"Expo push API returned {response.status_code}: {response.text[:200]}")
                 continue
 
-            data = response.json().get("data", [])
+            data = response_json.get("data", [])
             for idx, ticket in enumerate(data):
                 status = ticket.get("status")
                 if status == "ok":
@@ -223,6 +226,8 @@ async def send_notification(
                 "body": body,
                 "data": data,
                 "sound": "default",
+                "priority": "high",
+                "channelId": "default",
             })
 
         if not messages:
