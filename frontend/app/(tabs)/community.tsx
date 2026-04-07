@@ -103,6 +103,15 @@ export default function CommunityScreen() {
       formData.append('content', newPostContent.trim());
       formData.append('post_type', newPostType);
 
+      // Append image if selected
+      if (newPostImage) {
+        formData.append('image', {
+          uri: newPostImage,
+          type: 'image/jpeg',
+          name: 'post_image.jpg',
+        } as any);
+      }
+
       await api.post('/community/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

@@ -12,33 +12,28 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 
 ## What's Been Implemented
 
-### P2: Market Data — 3 New Symbols (Apr 6 2026)
-- **EURUSD**: TwelveData (primary) → Finnhub (fallback)
-- **GBPUSD**: TwelveData (primary) → Finnhub (fallback)
-- **BTCUSD**: CoinGecko (primary, free/no key) → TwelveData (fallback)
-- **XAUUSD**: Unchanged (gold-api.com primary)
-- **Aliases**: `EUR/USD`, `GBP/USD`, `BTC/USD`, `BITCOIN`, `GOLD`, `XAU/USD`
-- Test report: 17/17 passed (iteration_35)
+### Community Image Upload + Logout Modal Fix (Apr 7 2026)
+- **Community image upload**: `createPost()` was never appending the selected image to FormData. Fixed: now appends image as `{uri, type, name}` for React Native multipart upload.
+- **Logout modal on native**: Replaced `Alert.alert()` (grey system popup) with the styled `<Modal>` component on all platforms. Removed unused `Alert` import.
 
-### P2: Smart Streak Reminders (Apr 6 2026)
-- Background task (`streak_reminders.py`) starts on app startup, runs every 6 hours
-- Queries `academy_streaks` for users with active streaks who haven't been active today
-- Sends push notification: "Your streak is at risk! You have a X-day streak. Complete a lesson today to keep it alive!"
-- Max one reminder per user per day (tracked via `last_reminder_date`)
-- Uses centralized `push_notifications.py` service (respects preferences)
+### 3 Signal Bug Fixes (Apr 7 2026)
+- TP1 pips on breakeven close, TP hit messages on card, actual timestamps
+- 10/10 tests passed (iteration_36)
+
+### P2: Market Data + Streak Reminders (Apr 6 2026)
+- EURUSD, GBPUSD, BTCUSD added
+- Background streak reminder task (every 6h)
+- 17/17 tests passed (iteration_35)
 
 ### Trailing Stop Loss (Apr 6 2026)
-- TP1 hit → SL moves to entry (breakeven)
-- TP2 hit → SL moves to TP1 (locks profit)
-- 12/12 tests passed (iteration_34)
+- TP1→SL=entry, TP2→SL=TP1 — 12/12 tests (iteration_34)
 
 ### Push Notification System (Apr 6 2026)
-- Centralized service, invalid token cleanup, engine config check
-- 17/17 tests passed (iteration_33)
+- Centralized service, token cleanup — 17/17 tests (iteration_33)
 
-### Previous Session Fixes (Apr 4 2026)
-- 4 production bug fixes + 3 native P0 bug fixes (all confirmed)
-- AdMob native ads, reward ads, IAP dependency
+### Previous Fixes (Apr 4 2026)
+- 4 production bug fixes + 3 native P0 fixes (all confirmed)
+- AdMob native/reward ads, IAP dependency
 
 ### Earlier Work
 - Auth, Market Data, Adaptive Polling, Signal Engine v4.0
@@ -53,15 +48,4 @@ A full-stack trading signals application (Expo React Native + FastAPI + MongoDB 
 - Google Play Console access for Android IAP
 
 ### P2
-- ~~Add more symbols~~ DONE
-- ~~Smart push reminders~~ DONE
 - Leaderboard of top shared AI analyses
-
-## Market Data Architecture
-```
-SYMBOL_PROVIDERS:
-  XAUUSD → gold-api.com → TwelveData → Metals-API → GoldAPI → Finnhub → AlphaVantage
-  EURUSD → TwelveData → Finnhub
-  GBPUSD → TwelveData → Finnhub
-  BTCUSD → CoinGecko → TwelveData
-```

@@ -460,8 +460,23 @@ class SignalLifecycleController:
         signal_type = signal.get("signal_type", "buy")
         pair = signal.get("pair", "")
         
+        # If closing at SL/manual AFTER TPs were hit, use the highest TP price
+        # for pip calculation (the signal result = highest TP achieved, not breakeven)
+        pip_exit_price = exit_price
+        if exit_reason in ["sl", ExitReason.SL, "manual", ExitReason.MANUAL]:
+            existing_tp = signal.get("tp_hit", 0)
+            if existing_tp >= 1:
+                tp_prices = {1: signal.get("tp1"), 2: signal.get("tp2"), 3: signal.get("tp3")}
+                tp_price = tp_prices.get(existing_tp)
+                if tp_price:
+                    pip_exit_price = tp_price
+                    logger.info(
+                        f"[Engine] Signal {signal_id}: Closed at SL after TP{existing_tp} hit. "
+                        f"Using TP{existing_tp} price ({tp_price}) for pip calc instead of SL ({exit_price})"
+                    )
+        
         # Calculate pips with FULL AUDIT TRACE
-        pip_result = calculate_signal_pips_with_trace(entry_price, exit_price, signal_type, pair)
+        pip_result = calculate_signal_pips_with_trace(entry_price, pip_exit_price, signal_type, pair)
         
         # Determine tp_hit from exit_reason
         tp_hit_map = {
@@ -542,6 +557,9 @@ class SignalLifecycleController:
             "tp_hit": tp_hit
         }
         
+        # Build TP message for display on signal card
+        tp_message = None
+        
         # Trail the stop loss based on which TP was just hit
         if signal:
             entry = signal.get("entry_price_actual") or signal.get("entry")
@@ -552,6 +570,7 @@ class SignalLifecycleController:
                 # TP1 hit → move SL to entry (breakeven)
                 update_doc["stop_loss"] = entry
                 update_doc["original_stop_loss"] = original_sl
+                tp_message = f"TP1 Hit - SL moved to entry ({entry})"
                 logger.info(
                     f"[Engine] Signal {signal_id}: TRAILING SL → entry (breakeven) "
                     f"SL {original_sl} → {entry}"
@@ -561,14 +580,28 @@ class SignalLifecycleController:
                 update_doc["stop_loss"] = tp1
                 if not signal.get("original_stop_loss"):
                     update_doc["original_stop_loss"] = original_sl
+                tp_message = f"TP2 Hit - SL moved to TP1 ({tp1})"
                 logger.info(
                     f"[Engine] Signal {signal_id}: TRAILING SL → TP1 "
                     f"SL {signal.get('stop_loss')} → {tp1}"
                 )
         
+        # Use $set for state fields + $push for tp_messages array
+        push_doc = {}
+        if tp_message:
+            push_doc["tp_messages"] = {
+                "message": tp_message,
+                "level": tp_hit,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        
+        update_ops: dict = {"$set": update_doc}
+        if push_doc:
+            update_ops["$push"] = push_doc
+        
         result = await self.db.signals.update_one(
             {"signal_id": signal_id, "state": current_state},
-            {"$set": update_doc}
+            update_ops
         )
         
         if result.modified_count > 0:
