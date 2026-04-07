@@ -12,7 +12,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -39,13 +38,25 @@ interface Signal {
   locked?: boolean;
   final_pips?: number;
   result_pips?: number;
+  tp_messages?: Array<{ message: string; level: number; timestamp: string }>;
 }
 
 // ─── Signal card helpers ─────────────────────────────────────────────────────
 
 const getSignalAge = (createdAt: string): string => {
   try {
-    return `Posted ${formatDistanceToNow(new Date(createdAt))} ago`;
+    const date = new Date(createdAt);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (isToday) return `Today at ${time}`;
+    if (isYesterday) return `Yesterday at ${time}`;
+    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`;
   } catch {
     return 'Recently posted';
   }
@@ -243,17 +254,29 @@ const SignalCard = ({ item, theme }: CardProps) => {
                 {item.tp2 && (
                   <View style={[cardStyles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 2 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
                     <Text style={[cardStyles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 2 && { color: theme.success }]}>
-                      TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' ✓' : ''}
+                      TP2: {item.tp2}{(item.tp_hit || 0) >= 2 ? ' \u2713' : ''}
                     </Text>
                   </View>
                 )}
                 {item.tp3 && (
                   <View style={[cardStyles.tpTag, { borderColor: theme.border }, (item.tp_hit || 0) >= 3 && { backgroundColor: `${theme.success}20`, borderColor: theme.success }]}>
                     <Text style={[cardStyles.tpTagText, { color: theme.textSecondary }, (item.tp_hit || 0) >= 3 && { color: theme.success }]}>
-                      TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' ✓' : ''}
+                      TP3: {item.tp3}{(item.tp_hit || 0) >= 3 ? ' \u2713' : ''}
                     </Text>
                   </View>
                 )}
+              </View>
+            )}
+
+            {/* ── TP Hit Messages (trailing SL updates) ── */}
+            {Array.isArray(item.tp_messages) && item.tp_messages.length > 0 && (
+              <View style={cardStyles.tpMessagesWrap}>
+                {item.tp_messages.map((msg, idx) => (
+                  <View key={idx} style={[cardStyles.tpMsgRow, { backgroundColor: `${theme.success}12` }]}>
+                    <Ionicons name="checkmark-circle" size={13} color={theme.success} />
+                    <Text style={[cardStyles.tpMsgText, { color: theme.success }]}>{msg.message}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -342,6 +365,9 @@ const cardStyles = StyleSheet.create({
   tpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   tpTag: { backgroundColor: 'rgba(138,141,152,0.12)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 7, borderWidth: 1 },
   tpTagText: { fontSize: 11, fontWeight: '600' },
+  tpMessagesWrap: { marginTop: 8 },
+  tpMsgRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, marginBottom: 4, gap: 5 },
+  tpMsgText: { fontSize: 11, fontWeight: '600' },
   // Result
   resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 10, marginTop: 2, borderTopWidth: 0.5 },
   resultLabel: { fontSize: 12, marginRight: 8, opacity: 0.7 },
