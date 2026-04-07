@@ -5,7 +5,7 @@
  * Returns a promise that resolves true (reward earned) or false (dismissed/error).
  * No-ops silently on web.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { AD_UNITS } from '../../services/adManager';
@@ -25,8 +25,8 @@ if (Platform.OS !== 'web') {
 export function useRewardedAd() {
   const { status } = useSubscription();
   const adRef = useRef<any>(null);
-  const isLoadedRef = useRef(false);
   const resolverRef = useRef<((earned: boolean) => void) | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const tier = status?.capability_tier || status?.subscription || 'free';
   const isFree = tier === 'free';
@@ -41,7 +41,7 @@ export function useRewardedAd() {
       });
 
       const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
-        isLoadedRef.current = true;
+        setIsLoaded(true);
       });
       const earnedUnsub = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
         resolverRef.current?.(true);
@@ -52,11 +52,11 @@ export function useRewardedAd() {
           resolverRef.current(false);
           resolverRef.current = null;
         }
-        isLoadedRef.current = false;
+        setIsLoaded(false);
         try { ad.load(); } catch {}
       });
       const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
-        isLoadedRef.current = false;
+        setIsLoaded(false);
         if (resolverRef.current) {
           resolverRef.current(false);
           resolverRef.current = null;
@@ -86,7 +86,7 @@ export function useRewardedAd() {
   const showRewardedAd = useCallback((): Promise<boolean> => {
     if (!isFree || Platform.OS === 'web') return Promise.resolve(true); // non-free skip ads
 
-    if (!isLoadedRef.current || !adRef.current) {
+    if (!isLoaded || !adRef.current) {
       return Promise.resolve(false); // ad not ready
     }
 
@@ -94,9 +94,9 @@ export function useRewardedAd() {
       resolverRef.current = resolve;
       adRef.current.show();
     });
-  }, [isFree]);
+  }, [isFree, isLoaded]);
 
-  const isAdReady = isLoadedRef.current && isFree && Platform.OS !== 'web';
+  const isAdReady = isLoaded && isFree && Platform.OS !== 'web';
 
   return { showRewardedAd, isAdReady };
 }

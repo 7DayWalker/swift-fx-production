@@ -32,8 +32,8 @@ export const AD_UNITS = {
 };
 
 // ─── Interstitial Frequency Gate ────────────────────────────────────────────
-const INTERSTITIAL_ACTION_THRESHOLD = 4; // show every N meaningful actions
-const INTERSTITIAL_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes minimum gap
+const INTERSTITIAL_ACTION_THRESHOLD = 1; // show after every meaningful action
+const INTERSTITIAL_COOLDOWN_MS = 0; // no cooldown — show after every action
 
 let _actionCount = 0;
 let _lastInterstitialTime = 0;
