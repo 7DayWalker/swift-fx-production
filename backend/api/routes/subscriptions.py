@@ -99,6 +99,7 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
         }},
         upsert=True
     )
+    logger.info(f"[Notifications] Token registered: user={current_user.user_id[:12]}... platform={token_data.platform} token={token_data.token[:30]}...")
     return {"message": "Token registered successfully"}
 
 @router.put("/notifications/preferences")

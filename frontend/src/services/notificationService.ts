@@ -8,6 +8,7 @@ import { api } from './api';
 const NOTIFICATION_ENABLED_KEY = '@notification_enabled';
 const CALENDAR_NOTIFICATION_KEY = '@calendar_notification_enabled';
 const CALENDAR_NOTIFICATION_MINUTES_KEY = '@calendar_notification_minutes';
+const PUSH_TOKEN_KEY = '@push_token';
 
 // Notification subscriptions
 let responseListener: Notifications.Subscription | null = null;
@@ -22,6 +23,17 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Android 8+ requires a notification channel — without this, notifications are silently dropped
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Swift FX Signals',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#00D4AA',
+  });
+}
+
 /**
  * Initialize push notifications
  * - Request permissions
@@ -33,20 +45,28 @@ export async function initializeNotifications(): Promise<void> {
     // Check if notifications are enabled in user settings
     const isEnabled = await isNotificationEnabled();
     if (!isEnabled) {
-      console.log('Push notifications disabled by user');
+      console.log('[Notifications] Disabled by user setting');
       return;
     }
+
+    // Small delay to ensure auth session is fully established
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Request permissions and get token
     const token = await registerForPushNotifications();
     if (token) {
-      await registerTokenWithBackend(token);
+      // Save token locally as backup
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+      // Register with backend (with retry)
+      await registerTokenWithBackendRetry(token);
+    } else {
+      console.log('[Notifications] No push token obtained');
     }
 
     // Set up notification tap handler
     setupNotificationListeners();
   } catch (error) {
-    console.error('Failed to initialize notifications:', error);
+    console.error('[Notifications] Init failed:', error);
   }
 }
 
@@ -101,9 +121,30 @@ export async function registerTokenWithBackend(token: string): Promise<void> {
       platform,
     });
     
-    console.log('Push token registered with backend');
-  } catch (error) {
-    console.error('Failed to register token with backend:', error);
+    console.log('[Notifications] Token registered with backend');
+  } catch (error: any) {
+    console.error('[Notifications] Token registration failed:', error?.response?.status, error?.message);
+    throw error; // Re-throw so retry can catch it
+  }
+}
+
+/**
+ * Register token with retry (3 attempts with backoff)
+ */
+async function registerTokenWithBackendRetry(token: string): Promise<void> {
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await registerTokenWithBackend(token);
+      return; // Success
+    } catch (error) {
+      if (attempt < maxRetries) {
+        console.log(`[Notifications] Retry ${attempt}/${maxRetries} in ${attempt * 2}s...`);
+        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+      } else {
+        console.error('[Notifications] All registration attempts failed');
+      }
+    }
   }
 }
 
