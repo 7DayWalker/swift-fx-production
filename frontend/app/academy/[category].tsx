@@ -46,7 +46,7 @@ export default function CourseListScreen() {
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
   const isFree = userTier === 'free';
-  const { showRewardedAd } = useRewardedAd(isFree);
+  const { showRewardedAd, isAdReady, adFailed, retryLoadAd } = useRewardedAd();
   const [adUnlocked, setAdUnlocked] = useState(false);
   const [adLoading, setAdLoading] = useState(false);
 
@@ -61,6 +61,10 @@ export default function CourseListScreen() {
   };
 
   const handleWatchAdToUnlock = async () => {
+    if (adFailed) {
+      retryLoadAd();
+      return;
+    }
     setAdLoading(true);
     try {
       const rewarded = await showRewardedAd();
@@ -112,14 +116,19 @@ export default function CourseListScreen() {
           </TouchableOpacity>
           <Text style={[styles.lockedDivider, { color: theme.textSecondary }]}>or</Text>
           <TouchableOpacity
-            style={[styles.watchAdBtn, { borderColor: meta.color }]}
+            style={[styles.watchAdBtn, { borderColor: meta.color }, (!isAdReady && !adLoading && !adFailed) && { opacity: 0.5 }]}
             onPress={handleWatchAdToUnlock}
-            disabled={adLoading}
+            disabled={adLoading || (!isAdReady && !adFailed)}
             data-testid="watch-ad-unlock-btn"
           >
-            <Ionicons name="play-circle-outline" size={18} color={meta.color} style={{ marginRight: 6 }} />
+            <Ionicons
+              name={adFailed ? 'refresh-outline' : 'play-circle-outline'}
+              size={18}
+              color={meta.color}
+              style={{ marginRight: 6 }}
+            />
             <Text style={[styles.watchAdBtnText, { color: meta.color }]}>
-              {adLoading ? 'Loading Ad...' : 'Watch Ad to Unlock'}
+              {adLoading ? 'Loading Ad...' : adFailed ? 'Tap to Retry Loading Ad' : isAdReady ? 'Watch Ad to Unlock' : 'Ad Loading...'}
             </Text>
           </TouchableOpacity>
         </View>

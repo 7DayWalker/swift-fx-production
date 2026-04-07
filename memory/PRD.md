@@ -1,72 +1,70 @@
-# Swift FX Signals — Product Requirements Document
+# Swift FX — Product Requirements Document
 
 ## Original Problem Statement
-A full-stack trading signals application (Expo React Native + FastAPI + MongoDB + Supabase) with tiered subscriptions, AI chart analysis, academy, community feed, fund management, and admin dashboard.
+A React Native (Expo) mobile trading signals app with AI analysis, community feed, academy, and admin dashboard. Users subscribe (free/premium/VIP) to access tiered features. Revenue is generated through in-app purchases and Google AdMob ads (Banner, Interstitial, Native, Rewarded).
 
-## Core Architecture
-- **Frontend**: React Native (Expo Router), deployed via EAS
-- **Backend**: FastAPI modular architecture
-- **Auth/Profiles**: Supabase (Postgres)
-- **Data**: MongoDB
-- **LLM**: OpenAI GPT-4o via `emergentintegrations`
+## Tech Stack
+- **Frontend**: Expo (React Native) with expo-router
+- **Backend**: FastAPI (monolith `server.py`)
+- **Database**: MongoDB (signals, analyses, logs) + Supabase/Postgres (auth, profiles)
+- **Ads**: `react-native-google-mobile-ads` v16
+- **Notifications**: Expo Push API
+- **IAP**: `react-native-iap` v14.7.20
+
+## Core Features (Implemented)
+- Trading Signals with Trailing Stop Loss logic
+- AI Chart Analyzer (OpenAI GPT-4o)
+- Community Feed with image uploads
+- Academy (Beginner/Intermediate/Advanced courses)
+- Admin Dashboard (ADMIN + SUPER_ADMIN roles)
+- Subscription Override System (admin-granted tiers)
+- Push Notifications (new signals, TP hits, signal close)
+- AdMob Integration (Banner, Interstitial, Native, Rewarded)
+- Trading Pairs (custom pair picker)
 
 ## What's Been Implemented
 
-### Push Notification Fix — Android Channel + Token Registration (Apr 7 2026)
-- **Root cause 1**: No Android notification channel — Android 8+ silently drops notifications without one
-- **Root cause 2**: Token registration was failing silently — no retry, no logging
-- **Fixes**:
-  - Added `Notifications.setNotificationChannelAsync('default', { importance: MAX })` for Android
-  - Added 2s auth delay before token registration
-  - Added 3-attempt retry with backoff for `registerTokenWithBackend()`
-  - Token saved to AsyncStorage as backup
-  - Backend logs token registrations: `[Notifications] Token registered: user=xxx platform=android`
-- **Note**: `SUPABASE_SERVICE_KEY` still needed in backend `.env` for notification preference enforcement
+### Session (April 7, 2026) — Ad Bug Fixes + Retry Enhancement
+- **Fix 1: Interstitial Ad** — Changed `INTERSTITIAL_ACTION_THRESHOLD` from 4 to 1 and `INTERSTITIAL_COOLDOWN_MS` from 120000 to 0 in `adManager.ts`. Interstitial now shows after every AI analysis for free users.
+- **Fix 2: Native Ads** — Rewrote `NativeAdCard.tsx` to use the correct Promise-based API (`NativeAd.createForAdRequest().then(setNativeAd)`) instead of the broken imperative `.load()` pattern. Now renders actual ad data from resolved NativeAd object.
+- **Fix 3: Rewarded Ad** — Converted `useRewardedAd.ts` from ref-based (`useRef`) to state-based (`useState`) ad load tracking. This triggers re-renders when the ad loads, allowing the "Watch Ad to Unlock" button in Academy to properly reflect ad readiness state. Button is now disabled with "Ad Loading..." text until the ad is ready.
+- **Enhancement: Rewarded Ad Retry** — Added `adFailed` state and `retryLoadAd()` function to `useRewardedAd` hook. When the ad fails to load, the Academy button switches to a "Tap to Retry Loading Ad" state with a refresh icon, letting users retry instead of being stuck on "Ad Loading..." indefinitely.
 
-### Community Image Upload + Logout Modal (Apr 7 2026)
-- Fixed FormData not sending images, styled modal on all platforms
-
-### 3 Signal Bug Fixes (Apr 7 2026)
-- TP1 pips on breakeven close, TP hit messages, actual timestamps
-
-### P2: Market Data + Streak Reminders (Apr 6 2026)
-- EURUSD, GBPUSD, BTCUSD + background streak reminder task
-
-### Trailing Stop Loss (Apr 6 2026)
-- TP1→SL=entry, TP2→SL=TP1
-
-### Push Notification System (Apr 6 2026)
-- Centralized service, token cleanup
-
-### Previous Fixes (Apr 4 2026)
-- 7 production/native bug fixes, AdMob, IAP dependency
-
-## Push Notification Flow (Complete)
-```
-App Launch → _layout.tsx useEffect (user logged in)
-  → NotificationService.initialize()
-    → 2s delay (auth session ready)
-    → registerForPushNotifications()
-      → Permissions request
-      → getExpoPushTokenAsync(projectId: EAS_PROJECT_ID)
-      → Android: setNotificationChannelAsync('default', importance=MAX)
-    → registerTokenWithBackendRetry() [3 attempts, 2s/4s/6s backoff]
-      → POST /api/notifications/register-token
-      → MongoDB: device_tokens.upsert({user_id, token, platform, is_active})
-    → setupNotificationListeners()
-
-Signal Events → push_notifications.py
-  → Fetch active tokens from MongoDB
-  → Filter by user preferences
-  → POST to Expo Push API (batches of 100)
-  → Mark DeviceNotRegistered tokens inactive
-```
+### Previous Sessions
+- Push Notifications (backend + frontend)
+- Trailing Stop Loss (SL moves to entry on TP1, SL to TP1 on TP2)
+- Community image upload fix
+- Styled logout modal
+- Signal timestamp formatting
+- Streak Reminders background task
+- Admin Subscription Override System (grant/revoke/audit logs)
+- Admin Read-Only View for regular admins
+- User list role display fix
+- EAS build config (auto-increment versions, AdMob IDs)
 
 ## Prioritized Backlog
-### P0 — All resolved
-### P1
-- Test push notifications on native EAS build (rebuild needed for channel fix)
-- End-to-End Apple IAP testing
-- iOS APNs setup via `eas credentials`
-### P2
-- Leaderboard of top shared AI analyses
+
+### P1 (High Priority)
+- End-to-End IAP testing on physical devices (Apple)
+- Add `SUPABASE_SERVICE_KEY` to production `.env` for notification preferences
+
+### P2 (Medium Priority)
+- Implement a leaderboard/feed of top shared AI analyses
+- Reliable alternative Gold price API (current sources rate-limited)
+- Push notifications on new signal creation with confidence score
+- Real-time polling for Admin Health widget
+
+### P3 (Low Priority / Refactoring)
+- **Refactor `server.py`** — file exceeds 8,500 lines, must be split into domain-specific modules using FastAPI `APIRouter`
+
+## Key Files
+- `/app/frontend/src/services/adManager.ts` — Ad unit IDs and frequency gate
+- `/app/frontend/src/components/ads/` — AdBanner, NativeAdCard, useInterstitialAd, useRewardedAd (+ web stubs)
+- `/app/frontend/app/(tabs)/ai.tsx` — AI Analyzer screen
+- `/app/frontend/app/news/index.tsx` — Market News feed
+- `/app/frontend/app/academy/[category].tsx` — Academy course list
+- `/app/backend/server.py` — Monolith backend
+
+## Known Issues
+- Expo/ngrok tunnel instability (frequent 502 errors, requires service restarts)
+- Native ad testing requires EAS native builds (web preview uses no-op stubs)

@@ -3,9 +3,10 @@
  *
  * Only for free users. The caller must explicitly trigger showRewardedAd().
  * Returns a promise that resolves true (reward earned) or false (dismissed/error).
+ * Exposes adFailed + retryLoadAd for retry UX when the initial load fails.
  * No-ops silently on web.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { AD_UNITS } from '../../services/adManager';
@@ -25,15 +26,19 @@ if (Platform.OS !== 'web') {
 export function useRewardedAd() {
   const { status } = useSubscription();
   const adRef = useRef<any>(null);
-  const isLoadedRef = useRef(false);
   const resolverRef = useRef<((earned: boolean) => void) | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [adFailed, setAdFailed] = useState(false);
 
   const tier = status?.capability_tier || status?.subscription || 'free';
   const isFree = tier === 'free';
 
-  // Preload ad on mount
-  useEffect(() => {
+  const initAd = useCallback(() => {
     if (Platform.OS === 'web' || !isFree || !RewardedAd || !AdEventType || !RewardedAdEventType) return;
+
+    // Reset states for a fresh attempt
+    setIsLoaded(false);
+    setAdFailed(false);
 
     try {
       const ad = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
@@ -41,7 +46,8 @@ export function useRewardedAd() {
       });
 
       const loadedUnsub = ad.addAdEventListener(AdEventType.LOADED, () => {
-        isLoadedRef.current = true;
+        setIsLoaded(true);
+        setAdFailed(false);
       });
       const earnedUnsub = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
         resolverRef.current?.(true);
@@ -52,11 +58,12 @@ export function useRewardedAd() {
           resolverRef.current(false);
           resolverRef.current = null;
         }
-        isLoadedRef.current = false;
+        setIsLoaded(false);
         try { ad.load(); } catch {}
       });
       const errorUnsub = ad.addAdEventListener(AdEventType.ERROR, () => {
-        isLoadedRef.current = false;
+        setIsLoaded(false);
+        setAdFailed(true);
         if (resolverRef.current) {
           resolverRef.current(false);
           resolverRef.current = null;
@@ -74,9 +81,27 @@ export function useRewardedAd() {
       };
     } catch (e) {
       console.warn('[Ads] Failed to initialize rewarded ad:', e);
+      setAdFailed(true);
       return undefined;
     }
   }, [isFree]);
+
+  // Preload ad on mount
+  useEffect(() => {
+    const cleanup = initAd();
+    return cleanup;
+  }, [initAd]);
+
+  /** Retry loading after a failure */
+  const retryLoadAd = useCallback(() => {
+    if (adRef.current) {
+      setAdFailed(false);
+      setIsLoaded(false);
+      try { adRef.current.load(); } catch { setAdFailed(true); }
+    } else {
+      initAd();
+    }
+  }, [initAd]);
 
   /**
    * Show the rewarded ad. Returns a promise:
@@ -86,7 +111,7 @@ export function useRewardedAd() {
   const showRewardedAd = useCallback((): Promise<boolean> => {
     if (!isFree || Platform.OS === 'web') return Promise.resolve(true); // non-free skip ads
 
-    if (!isLoadedRef.current || !adRef.current) {
+    if (!isLoaded || !adRef.current) {
       return Promise.resolve(false); // ad not ready
     }
 
@@ -94,9 +119,9 @@ export function useRewardedAd() {
       resolverRef.current = resolve;
       adRef.current.show();
     });
-  }, [isFree]);
+  }, [isFree, isLoaded]);
 
-  const isAdReady = isLoadedRef.current && isFree && Platform.OS !== 'web';
+  const isAdReady = isLoaded && isFree && Platform.OS !== 'web';
 
-  return { showRewardedAd, isAdReady };
+  return { showRewardedAd, isAdReady, adFailed, retryLoadAd };
 }

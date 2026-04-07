@@ -1,27 +1,27 @@
 /**
  * NativeAdCard — renders an in-feed native ad blending with content.
  *
- * Uses react-native-google-mobile-ads NativeAdView on native.
+ * Uses react-native-google-mobile-ads NativeAd (Promise-based API) on native.
  * Gracefully returns null if SDK unavailable or ad fails.
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { AD_UNITS } from '../../services/adManager';
 
-let NativeAd: any = null;
+let NativeAdClass: any = null;
 let NativeAdView: any = null;
 let NativeAsset: any = null;
+let NativeAssetType: any = null;
 let NativeMediaView: any = null;
-let NativeAdEventType: any = null;
 
 if (Platform.OS !== 'web') {
   try {
     const mobileAds = require('react-native-google-mobile-ads');
-    NativeAd = mobileAds.NativeAd;
+    NativeAdClass = mobileAds.NativeAd;
     NativeAdView = mobileAds.NativeAdView;
     NativeAsset = mobileAds.NativeAsset;
+    NativeAssetType = mobileAds.NativeAssetType;
     NativeMediaView = mobileAds.NativeMediaView;
-    NativeAdEventType = mobileAds.NativeAdEventType;
   } catch {}
 }
 
@@ -29,75 +29,91 @@ interface NativeAdCardProps {
   style?: any;
 }
 
-/**
- * Fallback card when native ad SDK is not available or ad hasn't loaded.
- * Returns null — no placeholder shown.
- */
 function NativeAdCardInner({ style }: NativeAdCardProps) {
-  const [adLoaded, setAdLoaded] = useState(false);
+  const [nativeAd, setNativeAd] = useState<any>(null);
   const [adError, setAdError] = useState(false);
-  const nativeAdRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!NativeAd || !AD_UNITS.NATIVE) return;
+    if (!NativeAdClass || !AD_UNITS.NATIVE) return;
 
-    try {
-      const ad = NativeAd.createForAdRequest(AD_UNITS.NATIVE, {
-        requestNonPersonalizedAdsOnly: true,
+    let destroyed = false;
+
+    NativeAdClass.createForAdRequest(AD_UNITS.NATIVE, {
+      requestNonPersonalizedAdsOnly: true,
+    })
+      .then((ad: any) => {
+        if (!destroyed) setNativeAd(ad);
+      })
+      .catch((err: any) => {
+        console.warn('[Ads] NativeAd load failed:', err);
+        if (!destroyed) setAdError(true);
       });
 
-      if (NativeAdEventType) {
-        ad.addAdEventListener(NativeAdEventType?.LOADED || 'loaded', () => {
-          setAdLoaded(true);
-        });
-        ad.addAdEventListener(NativeAdEventType?.ERROR || 'error', () => {
-          setAdError(true);
-        });
+    return () => {
+      destroyed = true;
+      if (nativeAd?.destroy) {
+        try { nativeAd.destroy(); } catch {}
       }
-
-      nativeAdRef.current = ad;
-      ad.load();
-
-      return () => {
-        try { ad.destroy?.(); } catch {}
-      };
-    } catch (e) {
-      console.warn('[Ads] NativeAd init failed:', e);
-      setAdError(true);
-    }
+    };
   }, []);
 
-  // If SDK not available or error, render nothing
-  if (!NativeAd || !NativeAdView || adError || !adLoaded) return null;
+  // Cleanup ad on unmount if it loaded after initial effect
+  useEffect(() => {
+    return () => {
+      if (nativeAd?.destroy) {
+        try { nativeAd.destroy(); } catch {}
+      }
+    };
+  }, [nativeAd]);
+
+  if (!NativeAdClass || !NativeAdView || adError || !nativeAd) return null;
 
   try {
     return (
       <View style={[styles.container, style]} data-testid="native-ad-card">
-        <NativeAdView nativeAd={nativeAdRef.current} style={styles.adView}>
+        <NativeAdView nativeAd={nativeAd} style={styles.adView}>
           <View style={styles.adContent}>
+            {/* Ad attribution badge */}
             <View style={styles.adHeader}>
               <View style={styles.adBadge}>
                 <Text style={styles.adBadgeText}>Ad</Text>
               </View>
             </View>
-            {NativeAsset && (
+
+            {/* Icon + Headline row */}
+            {NativeAsset && NativeAssetType && (
               <>
-                <NativeAsset assetType="headline">
-                  <Text style={styles.headline} numberOfLines={2} />
-                </NativeAsset>
-                <NativeAsset assetType="body">
-                  <Text style={styles.body} numberOfLines={2} />
-                </NativeAsset>
-                <NativeAsset assetType="callToAction">
-                  <View style={styles.ctaButton}>
-                    <Text style={styles.ctaText} />
-                  </View>
-                </NativeAsset>
+                {nativeAd.headline ? (
+                  <NativeAsset assetType={NativeAssetType.HEADLINE}>
+                    <Text style={styles.headline} numberOfLines={2}>
+                      {nativeAd.headline}
+                    </Text>
+                  </NativeAsset>
+                ) : null}
+
+                {nativeAd.body ? (
+                  <NativeAsset assetType={NativeAssetType.BODY}>
+                    <Text style={styles.body} numberOfLines={2}>
+                      {nativeAd.body}
+                    </Text>
+                  </NativeAsset>
+                ) : null}
               </>
             )}
+
+            {/* Media */}
             {NativeMediaView && (
-              <NativeMediaView style={styles.mediaView} />
+              <NativeMediaView style={styles.mediaView} resizeMode="cover" />
             )}
+
+            {/* CTA */}
+            {NativeAsset && NativeAssetType && nativeAd.callToAction ? (
+              <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
+                <Text style={styles.ctaText}>
+                  {nativeAd.callToAction}
+                </Text>
+              </NativeAsset>
+            ) : null}
           </View>
         </NativeAdView>
       </View>
@@ -165,16 +181,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#0A0E17',
   },
-  ctaButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
   ctaText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0A0E17',
+    backgroundColor: '#00D4AA',
+    borderRadius: 10,
+    overflow: 'hidden',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    textAlign: 'center',
   },
 });

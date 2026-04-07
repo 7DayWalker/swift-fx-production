@@ -1,0 +1,76 @@
+{
+  "summary": "Code review validation of AdMob bug fixes for React Native (Expo) trading app. All three ad-related bugs have been correctly fixed in the codebase. Web preview loads successfully, backend API returns 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "code_review_validation": {
+    "bug_1_interstitial_ad_threshold": {
+      "status": "FIXED",
+      "file": "/app/frontend/src/services/adManager.ts",
+      "changes_verified": [
+        "INTERSTITIAL_ACTION_THRESHOLD = 1 (line 35) - shows after every action",
+        "INTERSTITIAL_COOLDOWN_MS = 0 (line 36) - no cooldown between ads"
+      ],
+      "integration_verified": "useInterstitialAd.ts recordAndMaybeShow() correctly calls recordAction() and shouldShowInterstitial()"
+    },
+    "bug_2_native_ads_news_feed": {
+      "status": "FIXED",
+      "file": "/app/frontend/src/components/ads/NativeAdCard.tsx",
+      "changes_verified": [
+        "Uses Promise-based API: NativeAdClass.createForAdRequest().then(setNativeAd)",
+        "Renders actual ad data: nativeAd.headline, nativeAd.body, nativeAd.callToAction",
+        "Proper cleanup with destroyed flag and nativeAd.destroy()"
+      ],
+      "web_stub_verified": "NativeAdCard.web.tsx returns null"
+    },
+    "bug_3_watch_ad_unlock_button": {
+      "status": "FIXED",
+      "file": "/app/frontend/src/components/ads/useRewardedAd.ts",
+      "changes_verified": [
+        "Uses useState(false) for isLoaded tracking (line 29) - triggers re-renders",
+        "Returns isAdReady = isLoaded && isFree && Platform.OS !== 'web' (line 99)"
+      ],
+      "academy_integration_verified": [
+        "useRewardedAd() called without isFree parameter (line 49)",
+        "Watch Ad button disabled when !isAdReady (lines 114-124)",
+        "Button shows proper states: 'Loading Ad...', 'Watch Ad to Unlock', 'Ad Loading...'"
+      ],
+      "web_stub_verified": "useRewardedAd.web.ts returns isAdReady: false"
+    }
+  },
+  "web_preview_test": {
+    "url": "https://rbac-audit-logs.preview.emergentagent.com",
+    "status": "PASS",
+    "login_page_accessible": true,
+    "no_console_errors": true
+  },
+  "backend_api_test": {
+    "endpoint": "GET /api/signals",
+    "status": 200,
+    "result": "PASS"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All ad-related fixes are correctly implemented",
+    "Promise-based NativeAd API pattern is correct for react-native-google-mobile-ads v16",
+    "useState for isLoaded in useRewardedAd ensures proper re-renders when ad loads",
+    "Web stubs correctly return null/no-op to prevent errors on web platform",
+    "Note: These fixes only work on native (iOS/Android) EAS builds - web stubs are no-ops"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Ad-related bug fixes validated via code review. All three bugs (interstitial threshold, native ads Promise API, rewarded ad state management) are correctly implemented. These are AdMob fixes that only work on native builds - web stubs return null/no-op. Testing on actual native devices required for full validation."
+}
