@@ -27,8 +27,7 @@ A React Native (Expo) mobile trading signals app with AI analysis, community fee
 ### Session (April 7, 2026) — Ad Bug Fixes + Retry Enhancement
 - **Fix 1: Interstitial Ad** — Changed `INTERSTITIAL_ACTION_THRESHOLD` from 4 to 1 and `INTERSTITIAL_COOLDOWN_MS` from 120000 to 0 in `adManager.ts`. Interstitial now shows after every AI analysis for free users.
 - **Fix 2: Native Ads** — Rewrote `NativeAdCard.tsx` to use the correct Promise-based API (`NativeAd.createForAdRequest().then(setNativeAd)`) instead of the broken imperative `.load()` pattern. Now renders actual ad data from resolved NativeAd object.
-- **Fix 3: Rewarded Ad** — Converted `useRewardedAd.ts` from ref-based (`useRef`) to state-based (`useState`) ad load tracking. This triggers re-renders when the ad loads, allowing the "Watch Ad to Unlock" button in Academy to properly reflect ad readiness state. Button is now disabled with "Ad Loading..." text until the ad is ready.
-- **Enhancement: Rewarded Ad Retry** — Added `adFailed` state and `retryLoadAd()` function to `useRewardedAd` hook. When the ad fails to load, the Academy button switches to a "Tap to Retry Loading Ad" state with a refresh icon, letting users retry instead of being stuck on "Ad Loading..." indefinitely.
+- **Push Notification Fix (Android delivery)** — Added `"priority": "high"` and `"channelId": "default"` to Expo push payload in `push_notifications.py`. Added Expo API response logging for debugging. Android devices should now receive notifications.
 
 ### Previous Sessions
 - Push Notifications (backend + frontend)
