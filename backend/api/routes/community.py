@@ -21,7 +21,19 @@ router = APIRouter(prefix="/api/community")
 
 @router.get("/posts")
 async def get_posts(current_user: Optional[User] = Depends(get_current_user)):
-    posts = await db.posts.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    pipeline = [
+        {"$sort": {"created_at": -1}},
+        {"$limit": 100},
+        {"$lookup": {
+            "from": "comments",
+            "localField": "post_id",
+            "foreignField": "post_id",
+            "as": "_comments"
+        }},
+        {"$addFields": {"comment_count": {"$size": "$_comments"}}},
+        {"$project": {"_id": 0, "_comments": 0}}
+    ]
+    posts = await db.posts.aggregate(pipeline).to_list(100)
     return posts
 
 @router.post("/posts")

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,15 @@ import {
   RefreshControl,
   ActivityIndicator,
   Animated,
+  Linking,
+  Modal,
+  FlatList,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
@@ -21,9 +26,11 @@ import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { UpgradeBanner, LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
+import { PAIR_CATEGORIES } from '../../src/constants/tradingPairs';
 
-// Static data that doesn't need real-time updates
-const WATCHLIST = [
+const WATCHLIST_STORAGE_KEY = 'swiftfx_watchlist';
+
+const DEFAULT_WATCHLIST = [
   { pair: 'EUR/USD', category: 'forex' },
   { pair: 'GBP/USD', category: 'forex' },
   { pair: 'XAU/USD', category: 'gold' },
@@ -31,14 +38,22 @@ const WATCHLIST = [
   { pair: 'ETH/USD', category: 'crypto' },
 ];
 
-// ─── Dashboard signal card helpers ──────────────────────────────────────────
-
-const getPairCategory = (pair: string): { label: string; color: string } => {
+const getPairCategoryInfo = (pair: string): { label: string; color: string } => {
   const p = pair.toUpperCase();
-  if (p.includes('XAU') || p.includes('XAG') || p.includes('GOLD')) return { label: 'GOLD', color: '#FFD700' };
-  if (p.includes('BTC') || p.includes('ETH') || p.includes('USDT') || p.includes('SOL')) return { label: 'CRYPTO', color: '#A855F7' };
+  if (p.includes('XAU') || p.includes('XAG') || p.includes('XPT') || p.includes('XPD')) return { label: 'METALS', color: '#FFD700' };
+  if (p.includes('BTC') || p.includes('ETH') || p.includes('SOL') || p.includes('BNB') || p.includes('XRP') || p.includes('ADA') || p.includes('DOGE')) return { label: 'CRYPTO', color: '#F7931A' };
+  if (['US30', 'US100', 'SPX500', 'GER40', 'UK100', 'JP225', 'HK50'].some(idx => p.includes(idx))) return { label: 'INDEX', color: '#6366F1' };
   return { label: 'FOREX', color: '#00D4AA' };
 };
+
+const getTradingViewUrl = (pair: string): string => {
+  const symbol = pair.replace('/', '');
+  return `https://www.tradingview.com/chart/?symbol=${symbol}`;
+};
+
+// ─── Dashboard signal card helpers ──────────────────────────────────────────
+
+const getPairCategory = (pair: string): { label: string; color: string } => getPairCategoryInfo(pair);
 
 const getDashboardAge = (createdAt: string): string => {
   try {
@@ -105,6 +120,40 @@ export default function DashboardScreen() {
     lastUpdated
   } = useSignals();
   
+  // ─── Watchlist state (persisted to AsyncStorage) ────────────
+  const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
+  const [showWatchlistPicker, setShowWatchlistPicker] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(WATCHLIST_STORAGE_KEY).then(stored => {
+      if (stored) {
+        try { setWatchlist(JSON.parse(stored)); } catch {}
+      }
+    });
+  }, []);
+
+  const saveWatchlist = useCallback((newList: typeof DEFAULT_WATCHLIST) => {
+    setWatchlist(newList);
+    AsyncStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(newList));
+  }, []);
+
+  const addPairToWatchlist = useCallback((pair: string) => {
+    if (watchlist.some(w => w.pair === pair)) return;
+    const cat = getPairCategoryInfo(pair);
+    saveWatchlist([...watchlist, { pair, category: cat.label.toLowerCase() }]);
+  }, [watchlist, saveWatchlist]);
+
+  const removePairFromWatchlist = useCallback((pair: string) => {
+    Alert.alert('Remove', `Remove ${pair} from watchlist?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => saveWatchlist(watchlist.filter(w => w.pair !== pair)) },
+    ]);
+  }, [watchlist, saveWatchlist]);
+
+  const openTradingViewChart = useCallback((pair: string) => {
+    Linking.openURL(getTradingViewUrl(pair));
+  }, []);
+
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
   
@@ -132,15 +181,6 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     await refreshAll();
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'forex': return '#00D4AA';
-      case 'gold': return '#FFD700';
-      case 'crypto': return '#F7931A';
-      default: return '#8A8D98';
-    }
   };
   
   // Get recent signals from context (first 5 active signals)
@@ -208,19 +248,41 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Watchlist - Static data */}
+        {/* Watchlist — clickable pairs, editable */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Watchlist</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Watchlist</Text>
+            <TouchableOpacity
+              onPress={() => setShowWatchlistPicker(true)}
+              style={[styles.addPairBtn, { backgroundColor: `${theme.primary}18` }]}
+              data-testid="add-pair-btn"
+            >
+              <Ionicons name="add" size={18} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.watchlistScroll}>
-            {WATCHLIST.map((item, index) => (
-              <View key={index} style={[styles.watchlistItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(item.category) }]} />
-                <Text style={[styles.watchlistPair, { color: theme.text }]}>{item.pair}</Text>
-                <Text style={[styles.watchlistCategory, { color: getCategoryColor(item.category) }]}>
-                  {item.category.toUpperCase()}
-                </Text>
-              </View>
-            ))}
+            {watchlist.map((item, index) => {
+              const cat = getPairCategoryInfo(item.pair);
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.watchlistItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => openTradingViewChart(item.pair)}
+                  onLongPress={() => removePairFromWatchlist(item.pair)}
+                  activeOpacity={0.7}
+                  data-testid={`watchlist-${item.pair.replace('/', '-')}`}
+                >
+                  <View style={[styles.categoryDot, { backgroundColor: cat.color }]} />
+                  <Text style={[styles.watchlistPair, { color: theme.text }]}>{item.pair}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.watchlistCategory, { color: cat.color }]}>
+                      {cat.label}
+                    </Text>
+                    <Ionicons name="open-outline" size={11} color={theme.textSecondary} style={{ marginLeft: 4 }} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -385,6 +447,60 @@ export default function DashboardScreen() {
 
       {/* Fixed bottom ad banner — free users only */}
       <AdBanner />
+
+      {/* ─── Watchlist Pair Picker Modal ──────────────────────── */}
+      <Modal visible={showWatchlistPicker} animationType="slide" transparent onRequestClose={() => setShowWatchlistPicker(false)}>
+        <View style={modalStyles.overlay}>
+          <View style={[modalStyles.sheet, { backgroundColor: theme.surface }]}>
+            <View style={[modalStyles.header, { borderBottomColor: theme.border }]}>
+              <Text style={[modalStyles.title, { color: theme.text }]}>Add to Watchlist</Text>
+              <TouchableOpacity onPress={() => setShowWatchlistPicker(false)}>
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={PAIR_CATEGORIES}
+              keyExtractor={(item) => item.name}
+              renderItem={({ item: category }) => (
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 }}>
+                    <Ionicons name={category.icon as any} size={16} color={theme.textSecondary} />
+                    <Text style={[modalStyles.catTitle, { color: theme.textSecondary }]}>{category.name}</Text>
+                  </View>
+                  <View style={modalStyles.pairGrid}>
+                    {category.pairs.map(pair => {
+                      const isInWatchlist = watchlist.some(w => w.pair === pair.symbol);
+                      const cat = getPairCategoryInfo(pair.symbol);
+                      return (
+                        <TouchableOpacity
+                          key={pair.symbol}
+                          style={[
+                            modalStyles.pairChip,
+                            { backgroundColor: isInWatchlist ? `${cat.color}20` : theme.background, borderColor: isInWatchlist ? cat.color : theme.border },
+                          ]}
+                          onPress={() => {
+                            if (isInWatchlist) {
+                              saveWatchlist(watchlist.filter(w => w.pair !== pair.symbol));
+                            } else {
+                              addPairToWatchlist(pair.symbol);
+                            }
+                          }}
+                          data-testid={`picker-${pair.symbol.replace('/', '-')}`}
+                        >
+                          {isInWatchlist && <Ionicons name="checkmark-circle" size={14} color={cat.color} style={{ marginRight: 4 }} />}
+                          <Text style={[modalStyles.pairChipText, { color: isInWatchlist ? cat.color : theme.text }]}>
+                            {pair.symbol}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -477,6 +593,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 14,
     letterSpacing: 0.1,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingRight: 4,
+    marginBottom: 4,
+  },
+  addPairBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   seeAllText: {
     fontSize: 13,
@@ -722,4 +852,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
   },
+});
+
+const modalStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '70%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  title: { fontSize: 18, fontWeight: '700' },
+  catTitle: { fontSize: 13, fontWeight: '600', marginLeft: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pairGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pairChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  pairChipText: { fontSize: 13, fontWeight: '600' },
 });
