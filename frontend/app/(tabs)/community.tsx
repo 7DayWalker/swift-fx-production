@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,12 @@ import {
   Modal,
   Image,
   Dimensions,
+  Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
@@ -34,6 +36,7 @@ interface Post {
   post_type: string;
   image?: string | null;
   likes: string[];
+  comment_count?: number;
   created_at: string;
 }
 
@@ -45,6 +48,70 @@ interface Comment {
   created_at: string;
 }
 
+const TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'trending', label: 'Trending' },
+  { key: 'analysis', label: 'Analysis' },
+  { key: 'results', label: 'Results' },
+  { key: 'question', label: 'Questions' },
+];
+
+const getPostTypeColor = (type: string) => {
+  switch (type) {
+    case 'analysis': return '#00D4AA';
+    case 'ai_analysis': return '#6366F1';
+    case 'results': return '#FFD700';
+    case 'question': return '#FF6B6B';
+    default: return '#8A8D98';
+  }
+};
+
+const getPostTypeLabel = (type: string) => {
+  switch (type) {
+    case 'ai_analysis': return 'AI Analysis';
+    case 'analysis': return 'Analysis';
+    case 'results': return 'Results';
+    case 'question': return 'Question';
+    default: return 'General';
+  }
+};
+
+const getPostTypeIcon = (type: string) => {
+  switch (type) {
+    case 'analysis': return 'analytics-outline';
+    case 'ai_analysis': return 'sparkles';
+    case 'results': return 'trophy-outline';
+    case 'question': return 'help-circle-outline';
+    default: return 'chatbubble-outline';
+  }
+};
+
+// Ensure UTC datetime strings from MongoDB are parsed correctly.
+// MongoDB returns naive UTC strings without 'Z', causing JS to treat them as local time.
+const parseUTC = (s: string): Date => {
+  if (!s) return new Date();
+  if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+  return new Date(s + 'Z');
+};
+
+const formatPostDate = (dateStr: string): string => {
+  try {
+    const date = parseUTC(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+};
+
 export default function CommunityScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -52,6 +119,7 @@ export default function CommunityScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostType, setNewPostType] = useState('analysis');
@@ -61,18 +129,35 @@ export default function CommunityScreen() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
-  
-  // Calculate bottom padding for content to avoid tab bar overlap
-  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [loadingComments, setLoadingComments] = useState(false);
-  
-  // Check if user can upload images (premium or vip)
-  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
+  const BOOKMARKS_KEY = 'swiftfx_bookmarks';
+
+  useEffect(() => { fetchPosts(); loadBookmarks(); }, []);
+
+  const loadBookmarks = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+      if (stored) setBookmarkedPosts(new Set(JSON.parse(stored)));
+    } catch {}
+  };
+
+  const toggleBookmark = useCallback(async (postId: string) => {
+    const newBookmarks = new Set(bookmarkedPosts);
+    if (newBookmarks.has(postId)) {
+      newBookmarks.delete(postId);
+    } else {
+      newBookmarks.add(postId);
+    }
+    setBookmarkedPosts(newBookmarks);
+    await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...newBookmarks]));
+  }, [bookmarkedPosts]);
+
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
   const fetchPosts = async () => {
     try {
@@ -91,32 +176,31 @@ export default function CommunityScreen() {
     setRefreshing(false);
   };
 
+  const filteredPosts = useCallback(() => {
+    let filtered = [...posts];
+    if (activeTab === 'trending') {
+      return filtered.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    }
+    if (activeTab !== 'all') {
+      filtered = filtered.filter(p => p.post_type === activeTab || (activeTab === 'analysis' && p.post_type === 'ai_analysis'));
+    }
+    return filtered;
+  }, [posts, activeTab])();
+
   const createPost = async () => {
     if (!newPostContent.trim()) {
       Alert.alert('Error', 'Please enter some content');
       return;
     }
-
     setIsSubmitting(true);
     try {
       const formData = new FormData();
       formData.append('content', newPostContent.trim());
       formData.append('post_type', newPostType);
-
-      // Append image if selected
       if (newPostImage) {
-        formData.append('image', {
-          uri: newPostImage,
-          type: 'image/jpeg',
-          name: 'post_image.jpg',
-        } as any);
+        formData.append('image', { uri: newPostImage, type: 'image/jpeg', name: 'post_image.jpg' } as any);
       }
-
-      await api.post('/community/posts', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      
-      // Reset form
+      await api.post('/community/posts', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setNewPostContent('');
       setNewPostImage(null);
       setNewPostImageBase64(null);
@@ -131,48 +215,34 @@ export default function CommunityScreen() {
 
   const pickPostImage = async () => {
     if (!canUploadImages) {
-      Alert.alert(
-        'Premium Feature',
-        'Image uploads require Premium or VIP subscription',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Premium Feature', 'Image uploads require Premium or VIP subscription', [{ text: 'OK' }]);
       return;
     }
-
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert('Permission Required', 'Please allow access to your photo library');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.7,
       base64: true,
     });
-
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setNewPostImage(asset.uri);
-      if (asset.base64) {
-        setNewPostImageBase64(asset.base64);
-      }
+      if (asset.base64) setNewPostImageBase64(asset.base64);
     }
-  };
-
-  const removePostImage = () => {
-    setNewPostImage(null);
-    setNewPostImageBase64(null);
   };
 
   const toggleLike = async (postId: string) => {
     try {
       const res = await api.post(`/community/posts/${postId}/like`);
-      const { liked, likes_count } = res.data;
+      const { liked } = res.data;
       setPosts(posts.map(post => {
         if (post.post_id === postId) {
-          const userId = user?.id || '';
+          const userId = user?.user_id || user?.id || '';
           const newLikes = liked
             ? [...(post.likes || []), userId]
             : (post.likes || []).filter((id: string) => id !== userId);
@@ -200,105 +270,132 @@ export default function CommunityScreen() {
 
   const addComment = async () => {
     if (!newComment.trim() || !selectedPost) return;
-
     try {
-      const res = await api.post(`/community/posts/${selectedPost.post_id}/comments`, {
-        content: newComment.trim(),
-      });
+      const res = await api.post(`/community/posts/${selectedPost.post_id}/comments`, { content: newComment.trim() });
       setComments([...comments, res.data]);
       setNewComment('');
+      // Update comment count locally
+      setPosts(posts.map(p =>
+        p.post_id === selectedPost.post_id
+          ? { ...p, comment_count: (p.comment_count || 0) + 1 }
+          : p
+      ));
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to add comment');
     }
   };
 
-  const getPostTypeIcon = (type: string) => {
-    switch (type) {
-      case 'analysis': return 'analytics-outline';
-      case 'results': return 'trophy-outline';
-      case 'question': return 'help-circle-outline';
-      default: return 'chatbubble-outline';
-    }
+  const sharePost = async (post: Post) => {
+    try {
+      await Share.share({
+        message: `${post.user_name} on Swift FX:\n\n${post.content.substring(0, 200)}${post.content.length > 200 ? '...' : ''}`,
+      });
+    } catch {}
   };
 
-  const getPostTypeColor = (type: string) => {
-    switch (type) {
-      case 'analysis': return '#00D4AA';
-      case 'results': return '#FFD700';
-      case 'question': return '#FF6B6B';
-      default: return '#8A8D98';
-    }
-  };
-
+  // ─── Post Card ────────────────────────────────────────────────────────────
   const renderPost = ({ item }: { item: Post }) => {
-    const isLiked = item.likes?.includes(user?.user_id || '');
-    
+    const isLiked = item.likes?.includes(user?.user_id || user?.id || '');
+    const likesCount = item.likes?.length || 0;
+    const commentCount = item.comment_count || 0;
+    const hasImage = !!item.image;
+    const typeColor = getPostTypeColor(item.post_type);
+
     return (
-      <View style={[styles.postCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={[styles.postCard, { backgroundColor: theme.surface }]} data-testid={`post-${item.post_id}`}>
+        {/* Author row */}
         <View style={styles.postHeader}>
-          <View style={styles.postAuthor}>
-            <View style={[styles.avatar, { backgroundColor: `${theme.primary}20` }]}>
-              <Text style={[styles.avatarText, { color: theme.primary }]}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
+          <View style={styles.authorRow}>
+            <View style={[styles.avatar, { backgroundColor: `${typeColor}25` }]}>
+              <Text style={[styles.avatarText, { color: typeColor }]}>
+                {item.user_name?.charAt(0)?.toUpperCase()}
+              </Text>
             </View>
-            <View>
-              <Text style={[styles.authorName, { color: theme.text }]}>{item.user_name}</Text>
+            <View style={styles.authorInfo}>
+              <Text style={[styles.authorName, { color: theme.text }]} numberOfLines={1}>
+                {item.user_name}
+              </Text>
               <Text style={[styles.postTime, { color: theme.textSecondary }]}>
-                {new Date(item.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                {formatPostDate(item.created_at)}
               </Text>
             </View>
           </View>
-          <View style={[styles.postTypeBadge, { backgroundColor: `${getPostTypeColor(item.post_type)}20` }]}>
-            <Ionicons name={getPostTypeIcon(item.post_type) as any} size={14} color={getPostTypeColor(item.post_type)} />
-            <Text style={[styles.postTypeText, { color: getPostTypeColor(item.post_type) }]}>
-              {item.post_type?.charAt(0).toUpperCase() + item.post_type?.slice(1)}
+          <View style={[styles.typePill, { backgroundColor: `${typeColor}18` }]}>
+            <Ionicons name={getPostTypeIcon(item.post_type) as any} size={12} color={typeColor} />
+            <Text style={[styles.typePillText, { color: typeColor }]}>
+              {getPostTypeLabel(item.post_type)}
             </Text>
           </View>
         </View>
 
-        <Text style={[styles.postContent, { color: theme.text }]}>{item.content}</Text>
-
-        {/* Post Image */}
-        {item.image && (
-          <TouchableOpacity 
-            style={styles.postImageContainer}
+        {/* Image-first: show image before content text if present */}
+        {hasImage && (
+          <TouchableOpacity
+            activeOpacity={0.9}
             onPress={() => setViewingImage(`data:image/jpeg;base64,${item.image}`)}
+            style={styles.postImageWrap}
           >
             <Image
               source={{ uri: `data:image/jpeg;base64,${item.image}` }}
               style={styles.postImage}
               resizeMode="cover"
             />
-            <View style={styles.imageOverlay}>
-              <Ionicons name="expand-outline" size={20} color="#FFFFFF" />
+            <View style={styles.expandIcon}>
+              <Ionicons name="expand-outline" size={16} color="#FFF" />
             </View>
           </TouchableOpacity>
         )}
 
-        <View style={[styles.postActions, { borderTopColor: theme.border }]}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => toggleLike(item.post_id)}>
+        {/* Content text */}
+        <Text style={[styles.postContent, { color: theme.text }]} numberOfLines={hasImage ? 3 : 8}>
+          {item.content}
+        </Text>
+
+        {/* Engagement bar */}
+        <View style={[styles.engagementBar, { borderTopColor: `${theme.border}80` }]}>
+          <TouchableOpacity
+            style={styles.engageBtn}
+            onPress={() => toggleLike(item.post_id)}
+            data-testid={`like-btn-${item.post_id}`}
+          >
             <Ionicons
-              name={isLiked ? 'heart' : 'heart-outline'}
+              name={isLiked ? 'flame' : 'flame-outline'}
               size={20}
-              color={isLiked ? theme.error : theme.textSecondary}
+              color={isLiked ? '#FF6B35' : theme.textSecondary}
             />
-            <Text style={[styles.actionText, { color: theme.textSecondary }, isLiked && { color: theme.error }]}>
-              {item.likes?.length || 0}
-            </Text>
+            {likesCount > 0 && (
+              <Text style={[styles.engageCount, isLiked ? { color: '#FF6B35' } : { color: theme.textSecondary }]}>
+                {likesCount}
+              </Text>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => openComments(item)}>
+
+          <TouchableOpacity
+            style={styles.engageBtn}
+            onPress={() => openComments(item)}
+            data-testid={`comment-btn-${item.post_id}`}
+          >
             <Ionicons name="chatbubble-outline" size={18} color={theme.textSecondary} />
-            <Text style={[styles.actionText, { color: theme.textSecondary }]}>Comment</Text>
+            {commentCount > 0 && (
+              <Text style={[styles.engageCount, { color: theme.textSecondary }]}>{commentCount}</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.engageBtn} onPress={() => sharePost(item)}>
+            <Ionicons name="share-outline" size={18} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1 }} />
+
+          <TouchableOpacity style={styles.engageBtn} onPress={() => toggleBookmark(item.post_id)} data-testid={`bookmark-btn-${item.post_id}`}>
+            <Ionicons name={bookmarkedPosts.has(item.post_id) ? 'bookmark' : 'bookmark-outline'} size={18} color={bookmarkedPosts.has(item.post_id) ? '#FFD700' : theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
+  // ─── Main Layout ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
@@ -311,83 +408,83 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>Community</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Share insights with fellow traders</Text>
       </View>
 
-      {/* Community Rules Banner */}
-      <View style={[styles.rulesBanner, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}30` }]}>
-        <Ionicons name="information-circle" size={20} color={theme.primary} />
-        <Text style={[styles.rulesText, { color: theme.textSecondary }]}>
-          Be respectful. No financial advice. Share for educational purposes only.
-        </Text>
+      {/* Filter Tabs */}
+      <View style={styles.tabBar}>
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setActiveTab(tab.key)}
+              data-testid={`tab-${tab.key}`}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
+      {/* Feed */}
       <FlatList
-        data={posts}
+        data={filteredPosts}
         renderItem={renderPost}
         keyExtractor={(item) => item.post_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color={theme.textSecondary} />
+            <Ionicons name="chatbubbles-outline" size={48} color={theme.textSecondary} />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>No Posts Yet</Text>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Be the first to share with the community!</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Be the first to share!</Text>
           </View>
         }
       />
 
       {/* Create Post FAB */}
       {user && (
-        <PressableScale style={styles.fab} onPress={() => setShowCreateModal(true)} data-testid="create-post-fab">
-          <Ionicons name="add" size={28} color="#0A0E17" />
+        <PressableScale
+          style={[styles.fab, { bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 16 }]}
+          onPress={() => setShowCreateModal(true)}
+          data-testid="create-post-fab"
+        >
+          <Ionicons name="add" size={26} color="#0A0E17" />
         </PressableScale>
       )}
 
-      {/* Create Post Modal */}
+      {/* ─── Create Post Modal ─────────────────────────────────────── */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => {
-          setShowCreateModal(false);
-          setNewPostImage(null);
-          setNewPostImageBase64(null);
-        }}
+        onRequestClose={() => { setShowCreateModal(false); setNewPostImage(null); setNewPostImageBase64(null); }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalContainer}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Create Post</Text>
-              <TouchableOpacity onPress={() => {
-                setShowCreateModal(false);
-                setNewPostImage(null);
-                setNewPostImageBase64(null);
-              }}>
-                <Ionicons name="close" size={24} color={theme.text} />
+              <Text style={[styles.modalTitle, { color: theme.text }]}>New Post</Text>
+              <TouchableOpacity onPress={() => { setShowCreateModal(false); setNewPostImage(null); setNewPostImageBase64(null); }}>
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.postTypeSelector}>
-              {['analysis', 'results', 'question'].map((type) => (
+            <View style={styles.typeSelector}>
+              {['analysis', 'results', 'question'].map(type => (
                 <TouchableOpacity
                   key={type}
-                  style={[
-                    styles.postTypeOption,
-                    { borderColor: theme.border },
-                    newPostType === type && { backgroundColor: `${getPostTypeColor(type)}20`, borderColor: getPostTypeColor(type) }
-                  ]}
+                  style={[styles.typeChip, newPostType === type && { backgroundColor: `${getPostTypeColor(type)}20`, borderColor: getPostTypeColor(type) }]}
                   onPress={() => setNewPostType(type)}
                 >
-                  <Ionicons name={getPostTypeIcon(type) as any} size={16} color={getPostTypeColor(type)} />
-                  <Text style={[styles.postTypeOptionText, { color: newPostType === type ? getPostTypeColor(type) : theme.textSecondary }]}>
+                  <Ionicons name={getPostTypeIcon(type) as any} size={14} color={getPostTypeColor(type)} />
+                  <Text style={[styles.typeChipText, { color: newPostType === type ? getPostTypeColor(type) : theme.textSecondary }]}>
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -404,73 +501,47 @@ export default function CommunityScreen() {
               onChangeText={setNewPostContent}
             />
 
-            {/* Image Picker Section */}
+            {/* Image section */}
             <View style={styles.imagePickerSection}>
               {newPostImage ? (
                 <View style={[styles.imagePreviewContainer, { borderColor: theme.border }]}>
                   <Image source={{ uri: newPostImage }} style={styles.imagePreview} />
-                  <TouchableOpacity style={styles.removeImageButton} onPress={removePostImage}>
+                  <TouchableOpacity style={styles.removeImageButton} onPress={() => { setNewPostImage(null); setNewPostImageBase64(null); }}>
                     <Ionicons name="close-circle" size={24} color={theme.error} />
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity 
-                  style={[
-                    styles.addImageButton,
-                    { borderColor: theme.border },
-                    !canUploadImages && styles.addImageButtonDisabled
-                  ]} 
+                <TouchableOpacity
+                  style={[styles.addImageButton, { borderColor: canUploadImages ? theme.primary : theme.border }]}
                   onPress={pickPostImage}
                 >
-                  <Ionicons 
-                    name="image-outline" 
-                    size={24} 
-                    color={canUploadImages ? theme.primary : theme.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.addImageText,
-                    { color: canUploadImages ? theme.primary : theme.textSecondary }
-                  ]}>
-                    {canUploadImages ? 'Add Chart/Screenshot' : 'Upgrade to add images'}
+                  <Ionicons name="image-outline" size={22} color={canUploadImages ? theme.primary : theme.textSecondary} />
+                  <Text style={[styles.addImageText, { color: canUploadImages ? theme.primary : theme.textSecondary }]}>
+                    {canUploadImages ? 'Add Chart / Screenshot' : 'Upgrade to add images'}
                   </Text>
-                  {!canUploadImages && (
-                    <Ionicons name="lock-closed" size={14} color={theme.textSecondary} style={{ marginLeft: 4 }} />
-                  )}
                 </TouchableOpacity>
               )}
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting && styles.submitButtonDisabled]}
+              style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting && { opacity: 0.5 }]}
               onPress={createPost}
               disabled={isSubmitting}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#0A0E17" />
-              ) : (
-                <Text style={styles.submitButtonText}>Post</Text>
-              )}
+              {isSubmitting ? <ActivityIndicator color="#0A0E17" /> : <Text style={styles.submitButtonText}>Post</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Comments Modal */}
-      <Modal
-        visible={!!selectedPost}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSelectedPost(null)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalContainer}
-        >
-          <View style={[styles.commentsModalContent, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      {/* ─── Comments Modal ────────────────────────────────────────── */}
+      <Modal visible={!!selectedPost} animationType="slide" transparent onRequestClose={() => setSelectedPost(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={[styles.commentsSheet, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Comments</Text>
               <TouchableOpacity onPress={() => setSelectedPost(null)}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -480,17 +551,24 @@ export default function CommunityScreen() {
               <FlatList
                 data={comments}
                 keyExtractor={(item) => item.comment_id}
-                style={styles.commentsList}
+                style={{ flex: 1 }}
                 ListEmptyComponent={
-                  <Text style={[styles.noComments, { color: theme.textSecondary }]}>No comments yet. Be the first!</Text>
+                  <Text style={[styles.noComments, { color: theme.textSecondary }]}>No comments yet</Text>
                 }
                 renderItem={({ item }) => (
-                  <View style={[styles.commentItem, { borderBottomColor: theme.border }]}>
+                  <View style={[styles.commentItem, { borderBottomColor: `${theme.border}60` }]}>
                     <View style={[styles.commentAvatar, { backgroundColor: `${theme.primary}20` }]}>
-                      <Text style={[styles.commentAvatarText, { color: theme.primary }]}>{item.user_name?.charAt(0)?.toUpperCase()}</Text>
+                      <Text style={[styles.commentAvatarText, { color: theme.primary }]}>
+                        {item.user_name?.charAt(0)?.toUpperCase()}
+                      </Text>
                     </View>
-                    <View style={styles.commentContent}>
-                      <Text style={[styles.commentAuthor, { color: theme.text }]}>{item.user_name}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={[styles.commentAuthor, { color: theme.text }]}>{item.user_name}</Text>
+                        <Text style={[styles.commentTime, { color: theme.textSecondary }]}>
+                          {formatPostDate(item.created_at)}
+                        </Text>
+                      </View>
                       <Text style={[styles.commentText, { color: theme.textSecondary }]}>{item.content}</Text>
                     </View>
                   </View>
@@ -499,7 +577,7 @@ export default function CommunityScreen() {
             )}
 
             {user && (
-              <View style={[styles.commentInputContainer, { borderTopColor: theme.border, backgroundColor: theme.surface }]}>
+              <View style={[styles.commentInputRow, { borderTopColor: theme.border, backgroundColor: theme.surface }]}>
                 <TextInput
                   style={[styles.commentInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
                   placeholder="Add a comment..."
@@ -507,8 +585,8 @@ export default function CommunityScreen() {
                   value={newComment}
                   onChangeText={setNewComment}
                 />
-                <TouchableOpacity style={[styles.sendButton, { backgroundColor: `${theme.primary}15` }]} onPress={addComment}>
-                  <Ionicons name="send" size={20} color={theme.primary} />
+                <TouchableOpacity style={[styles.sendButton, { backgroundColor: `${theme.primary}18` }]} onPress={addComment}>
+                  <Ionicons name="send" size={18} color={theme.primary} />
                 </TouchableOpacity>
               </View>
             )}
@@ -516,26 +594,14 @@ export default function CommunityScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Full Screen Image Viewer */}
-      <Modal
-        visible={!!viewingImage}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setViewingImage(null)}
-      >
-        <View style={styles.imageViewerContainer}>
-          <TouchableOpacity 
-            style={styles.imageViewerClose} 
-            onPress={() => setViewingImage(null)}
-          >
-            <Ionicons name="close" size={28} color="#FFFFFF" />
+      {/* ─── Image Viewer ──────────────────────────────────────────── */}
+      <Modal visible={!!viewingImage} animationType="fade" transparent onRequestClose={() => setViewingImage(null)}>
+        <View style={styles.imageViewer}>
+          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewingImage(null)}>
+            <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
           {viewingImage && (
-            <Image
-              source={{ uri: viewingImage }}
-              style={styles.fullScreenImage}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: viewingImage }} style={styles.fullScreenImage} resizeMode="contain" />
           )}
         </View>
       </Modal>
@@ -543,359 +609,261 @@ export default function CommunityScreen() {
   );
 }
 
+// ─── Styles ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E17',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  rulesBanner: {
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Header
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  title: { fontSize: 24, fontWeight: '700', letterSpacing: -0.3 },
+
+  // Tab bar
+  tabBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.06)',
-    marginHorizontal: 16,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
   },
-  rulesText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#8A8D98',
-    marginLeft: 8,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  postCard: {
+  tab: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
-    padding: 18,
+    backgroundColor: 'transparent',
+  },
+  tabActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A8D98',
+  },
+  tabTextActive: {
+    color: '#0A0E17',
+  },
+
+  // Feed
+  listContent: { paddingHorizontal: 12, paddingTop: 4 },
+
+  // Post card
+  postCard: {
+    borderRadius: 16,
     marginBottom: 10,
-    borderWidth: 1,
+    overflow: 'hidden',
   },
   postHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  postAuthor: {
-    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
+  authorRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#00D4AA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  authorName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  postTime: {
-    fontSize: 12,
-    color: '#8A8D98',
-    marginTop: 2,
-  },
-  postTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  postTypeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  postContent: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  postActions: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#2A2F3E',
-    paddingTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginLeft: 6,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginTop: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8A8D98',
-    marginTop: 8,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 80,
-    right: 20,
-    width: 52,
-    height: 52,
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    backgroundColor: '#00D4AA',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 0,
+    marginRight: 10,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1A1F2E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  commentsModalContent: {
-    backgroundColor: '#1A1F2E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    height: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  postTypeSelector: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  postTypeOption: {
-    flex: 1,
+  avatarText: { fontSize: 15, fontWeight: '700' },
+  authorInfo: { flex: 1 },
+  authorName: { fontSize: 14, fontWeight: '700' },
+  postTime: { fontSize: 11, marginTop: 1 },
+  typePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#2A2F3E',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginLeft: 8,
   },
-  postTypeOptionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  postInput: {
-    backgroundColor: '#0A0E17',
-    borderRadius: 12,
-    padding: 16,
-    color: '#FFFFFF',
-    fontSize: 14,
-    minHeight: 120,
-    textAlignVertical: 'top',
-    marginBottom: 16,
-  },
-  submitButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  commentsList: {
-    flex: 1,
-  },
-  noComments: {
-    fontSize: 14,
-    color: '#8A8D98',
-    textAlign: 'center',
-    marginTop: 40,
-  },
-  commentItem: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#00D4AA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  commentAvatarText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#0A0E17',
-  },
-  commentContent: {
-    flex: 1,
-  },
-  commentAuthor: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  commentText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    lineHeight: 20,
-  },
-  commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#2A2F3E',
-    paddingTop: 16,
-  },
-  commentInput: {
-    flex: 1,
-    backgroundColor: '#0A0E17',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginRight: 12,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 212, 170, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Image styles
-  postImageContainer: {
-    marginTop: 12,
-    borderRadius: 12,
-    overflow: 'hidden',
+  typePillText: { fontSize: 11, fontWeight: '600', marginLeft: 4 },
+
+  // Image-first
+  postImageWrap: {
+    width: '100%',
     position: 'relative',
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 12,
+    height: 240,
   },
-  imageOverlay: {
+  expandIcon: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 14,
+    padding: 5,
+  },
+
+  // Content text
+  postContent: {
+    fontSize: 14,
+    lineHeight: 21,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+
+  // Engagement bar
+  engagementBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    marginTop: 6,
+  },
+  engageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  engageCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+
+  // Empty
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 12 },
+  emptyText: { fontSize: 13, marginTop: 4 },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    right: 16,
+    width: 52,
+    height: 52,
     borderRadius: 16,
-    padding: 6,
+    backgroundColor: '#00D4AA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#00D4AA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
-  imagePickerSection: {
+
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '82%' },
+  commentsSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, height: '70%' },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
   },
-  imagePreviewContainer: {
-    position: 'relative',
+  modalTitle: { fontSize: 18, fontWeight: '700' },
+
+  // Type selector
+  typeSelector: { flexDirection: 'row', marginBottom: 14, gap: 8 },
+  typeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2A2F3E',
+  },
+  typeChipText: { fontSize: 12, fontWeight: '600', marginLeft: 4 },
+
+  // Post input
+  postInput: {
     borderRadius: 12,
-    overflow: 'hidden',
+    padding: 14,
+    fontSize: 14,
+    minHeight: 110,
+    textAlignVertical: 'top',
+    marginBottom: 14,
+    borderWidth: 1,
   },
-  imagePreview: {
-    width: '100%',
-    height: 150,
-    borderRadius: 12,
-  },
+
+  // Image picker
+  imagePickerSection: { marginBottom: 14 },
+  imagePreviewContainer: { position: 'relative', borderRadius: 12, overflow: 'hidden' },
+  imagePreview: { width: '100%', height: 140, borderRadius: 12 },
   removeImageButton: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 12,
   },
   addImageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
     borderWidth: 1,
-    borderColor: '#00D4AA',
     borderStyle: 'dashed',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
   },
-  addImageButtonDisabled: {
-    backgroundColor: 'rgba(138, 141, 152, 0.1)',
-    borderColor: '#8A8D98',
+  addImageText: { marginLeft: 8, fontSize: 13, fontWeight: '500' },
+
+  // Submit
+  submitButton: { borderRadius: 12, padding: 15, alignItems: 'center' },
+  submitButtonText: { fontSize: 15, fontWeight: '700', color: '#0A0E17' },
+
+  // Comments
+  noComments: { fontSize: 14, textAlign: 'center', marginTop: 40 },
+  commentItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
   },
-  addImageText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#00D4AA',
+  commentAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  addImageTextDisabled: {
-    color: '#8A8D98',
+  commentAvatarText: { fontSize: 12, fontWeight: '700' },
+  commentAuthor: { fontSize: 13, fontWeight: '700', marginRight: 8 },
+  commentTime: { fontSize: 11 },
+  commentText: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: 12,
   },
-  imageViewerContainer: {
+  commentInput: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 14,
+    marginRight: 10,
+    borderWidth: 1,
+  },
+  sendButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Image viewer
+  imageViewer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -904,7 +872,7 @@ const styles = StyleSheet.create({
     top: 50,
     right: 20,
     zIndex: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 20,
     padding: 8,
   },
