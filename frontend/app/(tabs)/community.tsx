@@ -19,6 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
@@ -85,9 +86,17 @@ const getPostTypeIcon = (type: string) => {
   }
 };
 
+// Ensure UTC datetime strings from MongoDB are parsed correctly.
+// MongoDB returns naive UTC strings without 'Z', causing JS to treat them as local time.
+const parseUTC = (s: string): Date => {
+  if (!s) return new Date();
+  if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+  return new Date(s + 'Z');
+};
+
 const formatPostDate = (dateStr: string): string => {
   try {
-    const date = new Date(dateStr);
+    const date = parseUTC(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -120,13 +129,35 @@ export default function CommunityScreen() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [loadingComments, setLoadingComments] = useState(false);
+
+  const BOOKMARKS_KEY = 'swiftfx_bookmarks';
+
+  useEffect(() => { fetchPosts(); loadBookmarks(); }, []);
+
+  const loadBookmarks = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
+      if (stored) setBookmarkedPosts(new Set(JSON.parse(stored)));
+    } catch {}
+  };
+
+  const toggleBookmark = useCallback(async (postId: string) => {
+    const newBookmarks = new Set(bookmarkedPosts);
+    if (newBookmarks.has(postId)) {
+      newBookmarks.delete(postId);
+    } else {
+      newBookmarks.add(postId);
+    }
+    setBookmarkedPosts(newBookmarks);
+    await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...newBookmarks]));
+  }, [bookmarkedPosts]);
+
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
-
-  useEffect(() => { fetchPosts(); }, []);
 
   const fetchPosts = async () => {
     try {
@@ -356,8 +387,8 @@ export default function CommunityScreen() {
 
           <View style={{ flex: 1 }} />
 
-          <TouchableOpacity style={styles.engageBtn}>
-            <Ionicons name="bookmark-outline" size={18} color={theme.textSecondary} />
+          <TouchableOpacity style={styles.engageBtn} onPress={() => toggleBookmark(item.post_id)} data-testid={`bookmark-btn-${item.post_id}`}>
+            <Ionicons name={bookmarkedPosts.has(item.post_id) ? 'bookmark' : 'bookmark-outline'} size={18} color={bookmarkedPosts.has(item.post_id) ? '#FFD700' : theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>

@@ -55,9 +55,17 @@ const getTradingViewUrl = (pair: string): string => {
 
 const getPairCategory = (pair: string): { label: string; color: string } => getPairCategoryInfo(pair);
 
+// Ensure UTC datetime strings from MongoDB are parsed correctly.
+// MongoDB returns naive UTC strings without 'Z', causing JS to treat them as local time.
+const parseUTC = (s: string): Date => {
+  if (!s) return new Date();
+  if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+  return new Date(s + 'Z');
+};
+
 const getDashboardAge = (createdAt: string): string => {
   try {
-    const date = new Date(createdAt);
+    const date = parseUTC(createdAt);
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
     const yesterday = new Date(now);
