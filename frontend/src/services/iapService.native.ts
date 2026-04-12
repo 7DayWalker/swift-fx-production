@@ -86,8 +86,17 @@ export async function initIAP(): Promise<boolean> {
     }
 
     // Fetch products from store using official SKUs.
+    console.log('[IAP] Fetching subscriptions with SKUs:', [...SUBSCRIPTION_SKUS]);
     storeProducts = await RNIap.getSubscriptions({ skus: [...SUBSCRIPTION_SKUS] });
     console.log('[IAP] Products loaded:', storeProducts.length);
+    if (storeProducts.length > 0) {
+      storeProducts.forEach((p: any) => {
+        console.log(`[IAP] Product: ${p.productId} | price: ${p.localizedPrice || p.price} | title: ${p.title || 'N/A'}`);
+      });
+    } else {
+      console.warn('[IAP] No products returned from store. Check SKUs match App Store Connect / Google Play Console.');
+      console.warn('[IAP] Expected SKUs:', [...SUBSCRIPTION_SKUS]);
+    }
 
     // Register listeners ONCE.
     registerListeners();

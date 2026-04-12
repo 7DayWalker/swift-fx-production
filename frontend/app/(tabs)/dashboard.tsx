@@ -12,7 +12,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
@@ -43,7 +42,16 @@ const getPairCategory = (pair: string): { label: string; color: string } => {
 
 const getDashboardAge = (createdAt: string): string => {
   try {
-    return formatDistanceToNow(new Date(createdAt), { addSuffix: true });
+    const date = new Date(createdAt);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return `Today at ${time}`;
+    if (isYesterday) return `Yesterday at ${time}`;
+    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`;
   } catch {
     return 'recently';
   }
