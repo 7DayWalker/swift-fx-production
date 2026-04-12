@@ -22,7 +22,7 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user)
     
     # Calculate performance stats using aggregation for efficiency
     pipeline = [
-        {"$match": {"status": "closed"}},
+        {"$match": {"state": "closed"}},
         {"$group": {
             "_id": None,
             "total": {"$sum": 1},

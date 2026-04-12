@@ -203,8 +203,11 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     
     await db.signals.insert_one(signal_doc)
     
-    # Queue push notification with visibility for role-based filtering
-    background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
+    # Queue push notification ONLY if signal starts as active (not pending).
+    # Pending signals get their notification when the engine activates them,
+    # preventing duplicate "New Signal Alert" notifications on Apple.
+    if initial_state == SignalState.ACTIVE:
+        background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
     
     return {"signal_id": signal_id, "message": f"Signal created with state: {initial_state.value}"}
 
@@ -691,6 +694,7 @@ async def full_update_signal(
         current_state = signal.get("state", signal.get("status", "pending"))
         
         update_doc["state"] = new_state
+        update_doc["status"] = get_status_from_state(new_state)
         
         # Set timestamps based on state transitions
         if new_state == "active" and current_state == "pending":
@@ -733,6 +737,7 @@ class SignalStateUpdate(BaseModel):
 async def update_signal_state(
     signal_id: str,
     update_data: SignalStateUpdate,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin)
 ):
     """Admin endpoint to update only the state field of a signal"""
@@ -747,7 +752,10 @@ async def update_signal_state(
     current_state = signal.get("state", signal.get("status", "pending"))
     new_state = update_data.state.value if hasattr(update_data.state, 'value') else update_data.state
     
-    update_doc = {"state": new_state}
+    update_doc = {
+        "state": new_state,
+        "status": get_status_from_state(new_state),
+    }
     
     # Set timestamps and derived fields based on state transitions
     if new_state == "active" and current_state == "pending":
@@ -770,6 +778,18 @@ async def update_signal_state(
                 signal["signal_type"],
                 signal["pair"]
             )
+        
+        # Send close notification
+        final_pips = update_doc.get("final_pips", 0)
+        visibility = SignalVisibility(signal.get("visibility", "free"))
+        background_tasks.add_task(
+            send_signal_close_notification,
+            signal_id,
+            signal["pair"],
+            signal["signal_type"],
+            final_pips,
+            visibility
+        )
     
     result = await db.signals.update_one(
         {"signal_id": signal_id},
@@ -818,7 +838,7 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     user_role = current_user.role if current_user else UserRole.FREE
     
     # Get all closed signals
-    all_closed = await db.signals.find({"status": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(500)
+    all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(500)
     
     # Filter signals based on user's access level
     accessible_signals = []

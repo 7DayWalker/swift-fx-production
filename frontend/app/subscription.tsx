@@ -206,10 +206,20 @@ export default function SubscriptionScreen() {
    * Returns null if store product is not available (triggers loading state in UI).
    */
   const getStorePrice = useCallback((planId: string, cycle: BillingCycle): string | null => {
-    if (!iapInitialized) return null;
+    if (!iapInitialized) {
+      console.log(`[Subscription] getStorePrice(${planId}, ${cycle}): IAP not initialized`);
+      return null;
+    }
     const product = IAPService.getProductByPlan(planId as 'premium' | 'vip', cycle);
-    if (!product) return null;
-    return IAPService.formatProductPrice(product) || null;
+    if (!product) {
+      console.log(`[Subscription] getStorePrice(${planId}, ${cycle}): Product not found in store`);
+      const allProducts = IAPService.getProducts();
+      console.log(`[Subscription] Available products (${allProducts.length}):`, allProducts.map((p: any) => p.productId));
+      return null;
+    }
+    const price = IAPService.formatProductPrice(product) || null;
+    console.log(`[Subscription] getStorePrice(${planId}, ${cycle}): ${price}`);
+    return price;
   }, [iapInitialized]);
 
   /**
