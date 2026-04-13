@@ -26,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme, ThemeType } from '../src/context/ThemeContext';
 import { supabase } from '../src/services/supabase';
+import api from '../src/services/api';
 
 // Types
 interface UserProfile {
@@ -534,6 +535,37 @@ export default function SettingsScreen() {
             )}
           </View>
         )}
+
+        {/* Test Notification */}
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', padding: 14 }}
+            onPress={async () => {
+              try {
+                const res = await api.post('/notifications/test');
+                const data = res.data;
+                if (data.status === 'no_tokens') {
+                  Alert.alert('No Token', data.message);
+                } else {
+                  const results = data.results?.map((r: any) =>
+                    `${r.platform}: ${r.expo_status || r.status}${r.error ? ` (${r.error})` : ''}`
+                  ).join('\n') || 'No details';
+                  Alert.alert('Test Sent', `Tokens: ${data.tokens_found}\n\n${results}\n\nCheck your device for the notification.`);
+                }
+              } catch (error: any) {
+                Alert.alert('Error', error.response?.data?.detail || 'Failed to send test notification');
+              }
+            }}
+            data-testid="send-test-notification-btn"
+          >
+            <Ionicons name="paper-plane-outline" size={20} color={theme.primary} />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: theme.text }}>Send Test Notification</Text>
+              <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>Verify push delivery to your device</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
         {/* Privacy & Legal */}
         <Text style={styles.sectionTitle}>Privacy & Legal</Text>

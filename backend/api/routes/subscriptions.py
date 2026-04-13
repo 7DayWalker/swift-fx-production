@@ -102,6 +102,72 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
     logger.info(f"[Notifications] Token registered: user={current_user.user_id[:12]}... platform={token_data.platform} token={token_data.token[:30]}...")
     return {"message": "Token registered successfully"}
 
+
+@router.post("/notifications/test")
+async def send_test_notification(current_user: User = Depends(require_auth)):
+    """Send a test notification to the current user's registered device(s).
+    Returns diagnostic info about tokens and delivery status."""
+    import httpx as httpx_lib
+    
+    # Find this user's active tokens
+    user_tokens = await db.device_tokens.find(
+        {"user_id": current_user.user_id, "is_active": True},
+        {"_id": 0}
+    ).to_list(10)
+    
+    if not user_tokens:
+        return {"status": "no_tokens", "message": "No active push tokens found for your account. Open the app and allow notifications."}
+    
+    results = []
+    for token_doc in user_tokens:
+        token = token_doc.get("token", "")
+        platform = token_doc.get("platform", "unknown")
+        
+        if not token.startswith("ExponentPushToken"):
+            results.append({"platform": platform, "status": "invalid_token", "token_prefix": token[:20]})
+            continue
+        
+        message = {
+            "to": token,
+            "title": "Test Notification",
+            "body": f"This is a test from Swift FX ({platform})",
+            "data": {"type": "test"},
+            "sound": "default",
+            "priority": "high",
+            "channelId": "default",
+        }
+        if platform == "ios":
+            message["_contentAvailable"] = True
+        
+        try:
+            async with httpx_lib.AsyncClient() as client:
+                response = await client.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=[message],
+                    headers={"Accept": "application/json", "Content-Type": "application/json"},
+                    timeout=10.0,
+                )
+                resp_data = response.json()
+                ticket = resp_data.get("data", [{}])[0] if resp_data.get("data") else {}
+                results.append({
+                    "platform": platform,
+                    "token_prefix": token[:35],
+                    "expo_status": ticket.get("status", "unknown"),
+                    "expo_id": ticket.get("id", ""),
+                    "error": ticket.get("message", "") or ticket.get("details", {}).get("error", ""),
+                    "http_status": response.status_code,
+                })
+        except Exception as e:
+            results.append({"platform": platform, "status": "send_error", "error": str(e)})
+    
+    logger.info(f"[Test Notification] user={current_user.user_id[:12]}... results={results}")
+    return {
+        "status": "sent",
+        "tokens_found": len(user_tokens),
+        "results": results,
+        "message": "Check your device. If no notification arrives within 10 seconds, check the 'error' field in results."
+    }
+
 @router.put("/notifications/preferences")
 async def update_notification_preferences(preferences: Dict[str, bool], current_user: User = Depends(require_auth)):
     await update_profile(current_user.user_id, {"notification_preferences": preferences})

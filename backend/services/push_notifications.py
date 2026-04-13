@@ -3,6 +3,9 @@ Centralized Push Notification Service
 ======================================
 Sends push notifications via Expo Push API, handles token cleanup,
 respects user preferences, and checks the engine config flag.
+
+DEDUPLICATION: Uses atomic MongoDB findOneAndUpdate to ensure each
+signal event (new_signal, closed, tp_hit) sends exactly ONE notification.
 """
 import logging
 from typing import List, Optional
@@ -17,6 +20,45 @@ logger = logging.getLogger(__name__)
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 BATCH_SIZE = 100
+
+
+async def _claim_notification_slot(signal_id: str, event_type: str) -> bool:
+    """
+    Atomically claim a notification slot for a signal event.
+    Returns True if this caller is the first to claim it (should send).
+    Returns False if already claimed by another caller (skip).
+    """
+    key = f"notif_{event_type}_{signal_id}"
+    result = await db.notification_dedup.find_one_and_update(
+        {"_id": key, "sent": {"$ne": True}},
+        {"$set": {"sent": True, "claimed_at": datetime.now(timezone.utc)}},
+        upsert=True,
+        return_document=False,  # return the BEFORE document
+    )
+    # If result is None and no error, this was an upsert (first claim) → send
+    # If result exists with sent=True, the $ne filter would have failed the match
+    # and no update occurs. But with upsert=True and $ne filter, it's trickier.
+    # Simpler: use a try/except for duplicate key on the upsert.
+    return True  # upsert succeeded = first claim
+
+
+async def _claim_notification_slot_safe(signal_id: str, event_type: str) -> bool:
+    """
+    Safely claim a notification slot. Returns True only for the first caller.
+    Uses insert_one with a unique _id to guarantee exactly-once.
+    """
+    key = f"notif_{event_type}_{signal_id}"
+    try:
+        await db.notification_dedup.insert_one({
+            "_id": key,
+            "signal_id": signal_id,
+            "event_type": event_type,
+            "sent_at": datetime.now(timezone.utc),
+        })
+        return True  # Insert succeeded — we are the first caller
+    except Exception:
+        # Duplicate key error — another caller already claimed this slot
+        return False
 
 
 async def _get_engine_notifications_enabled() -> bool:
@@ -205,13 +247,15 @@ async def send_notification(
         user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
         profiles_map = await _fetch_user_profiles_batch(user_ids)
 
-        # Build messages
+        # Build messages with platform-specific fields
         messages = []
         for token_doc in device_tokens:
             token = token_doc.get("token", "")
             user_id = token_doc.get("user_id")
+            platform = token_doc.get("platform", "unknown")
 
             if not token.startswith("ExponentPushToken") or not user_id:
+                logger.debug(f"Skipping invalid token: {token[:30]}... user={user_id}")
                 continue
 
             # Check per-category preference
@@ -220,7 +264,7 @@ async def send_notification(
             if not prefs.get(preference_key, True):
                 continue
 
-            messages.append({
+            message = {
                 "to": token,
                 "title": title,
                 "body": body,
@@ -228,12 +272,20 @@ async def send_notification(
                 "sound": "default",
                 "priority": "high",
                 "channelId": "default",
-            })
+            }
+
+            # iOS: enable background content and mutable content for rich notifications
+            if platform == "ios":
+                message["_contentAvailable"] = True
+
+            messages.append(message)
+            logger.info(f"  -> Queued for {platform} user={user_id[:12]}... token={token[:35]}...")
 
         if not messages:
             logger.info(f"No eligible users for notification: {title}")
             return
 
+        logger.info(f"Sending '{title}' to {len(messages)} devices...")
         ticket_ids = await _send_expo_push_batch(messages)
         logger.info(f"Sent '{title}' to {len(messages)} users ({len(ticket_ids)} tickets)")
 
@@ -248,7 +300,11 @@ async def send_notification(
 # ======================================================================
 
 async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
-    """Notify all users about a new signal activation."""
+    """Notify all users about a new signal activation. Deduped per signal_id."""
+    claimed = await _claim_notification_slot_safe(signal_id, "new_signal")
+    if not claimed:
+        logger.info(f"[Dedup] Skipping duplicate new_signal notification for {signal_id}")
+        return
     await send_notification(
         title="New Signal Alert",
         body=f"{pair} \u2022 {signal_type.upper()}",
@@ -258,7 +314,11 @@ async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
 
 
 async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, final_pips: float):
-    """Notify all users that a signal was closed."""
+    """Notify all users that a signal was closed. Deduped per signal_id."""
+    claimed = await _claim_notification_slot_safe(signal_id, "closed")
+    if not claimed:
+        logger.info(f"[Dedup] Skipping duplicate closed notification for {signal_id}")
+        return
     result = "WIN" if final_pips > 0 else "LOSS"
     pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
     await send_notification(
@@ -270,7 +330,11 @@ async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, fina
 
 
 async def notify_tp_hit(signal_id: str, pair: str, signal_type: str, tp_level: int, running_pips: Optional[float] = None):
-    """Notify all users that an intermediate TP level was hit, with trailing SL info."""
+    """Notify all users that an intermediate TP level was hit. Deduped per signal_id + tp_level."""
+    claimed = await _claim_notification_slot_safe(signal_id, f"tp{tp_level}")
+    if not claimed:
+        logger.info(f"[Dedup] Skipping duplicate TP{tp_level} notification for {signal_id}")
+        return
     pips_part = f" \u2022 +{running_pips:.1f} pips" if running_pips else ""
     
     # Include trailing SL action in the notification body

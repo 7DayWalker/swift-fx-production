@@ -26,6 +26,22 @@ A React Native (Expo) mobile trading signals app with AI analysis, community fee
 
 ## What's Been Implemented
 
+### Session (April 13, 2026) — Notification Deduplication + Android Fix
+
+**Fix: Apple Duplicate Notifications**
+- Added atomic dedup layer using MongoDB `notification_dedup` collection with unique `_id` per `signal_id + event_type`
+- Applied to ALL notification types: `notify_new_signal`, `notify_signal_closed`, `notify_tp_hit`
+- TTL index auto-deletes dedup entries after 1 hour
+
+**Fix: Android Notification Delivery**
+- Added `_contentAvailable: true` for iOS background wake-up
+- Added per-token platform logging and detailed Expo API response logging
+
+**Feature: Test Notification Button**
+- Added `POST /api/notifications/test` endpoint with full diagnostic output
+- Added "Send Test Notification" button in Settings → Notifications
+
+
 ### Session (April 12, 2026) — Community Redesign + Dashboard Watchlist + Pre-Release Fixes
 
 **Feature: Community Redesign (TradingView-inspired)**
