@@ -4,71 +4,59 @@
 A React Native (Expo) mobile trading signals app with FastAPI backend + MongoDB. Features include Supabase Auth, Expo Push Notifications, Google AdMob, Expo In-App Purchases, Community feed, AI Analyzer, and a real-time Signal engine with trailing stop-loss.
 
 ## Current Focus
-Finalizing critical bug fixes before EAS native builds and TestFlight/Play Console rollout.
+Android push notification delivery — root cause identified as Firebase project misconfiguration.
 
 ---
 
-## What's Been Implemented
+## ROOT CAUSE: Android Push Notifications (Apr 14, 2026)
 
-### Core Features (Complete)
-- Signal Engine with trailing stop-loss logic
-- Community feed (TradingView-inspired redesign)
-- Dashboard with clickable Watchlist
-- AI Analyzer
-- Supabase Auth (Email/Password, Apple, Google)
-- Settings page with "Send Test Notification" button
+**Traced via `/api/debug/android-push-trace` endpoint.**
 
-### Ads (Complete)
-- Banner, Native, Interstitial, Rewarded Ads with retry mechanism
+### Evidence Chain
+1. Backend sends push to Expo API → Expo returns `status: ok`, ticket ID assigned ✅
+2. Expo forwards to FCM (Google) → FCM returns **HTTP 403 PERMISSION_DENIED** ❌
+3. Android device receives NOTHING
 
-### Push Notifications (Complete)
-- Backend: Expo Push API integration with signal engine triggers
-- Backend: Atomic deduplication via `notification_dedup` MongoDB collection + TTL index (3600s)
-- Backend: Notification triggers for manual signal closures
-- Backend: `priority: high` and `channelId: default` in push payloads
-- Backend: UNIQUE index on `device_tokens` (`token` + `user_id`)
-- Backend: Cross-user token deduplication in `register-token` endpoint (Apr 14, 2026)
-- Backend: Cleanup endpoint upgraded with Phase 2 cross-user dedup (Apr 14, 2026)
-- Backend: Trace logging (`TRIGGER CALL →`) on all 10 notification trigger sites (Apr 14, 2026)
-- Frontend: Global `Notifications.setNotificationHandler` in `_layout.tsx`
-- Frontend: Android channel `'default'` with `AndroidImportance.MAX`
-- Frontend: Early `requestPermissionsAsync()` call
+### FCM Error (verbatim)
+```
+"code": 403,
+"message": "Permission denied on resource project swift-fx-signals.",
+"status": "PERMISSION_DENIED",
+"reason": "CONSUMER_INVALID",
+"service": "fcm.googleapis.com"
+```
 
-### Root Cause Analysis: iOS 3x Duplicate Notifications (Apr 14, 2026)
-**Root Cause**: Same iOS push token (`ExponentPushToken[cHubU...]`) was registered as active under 3 different user accounts. When `send_notification` sent to ALL active tokens, the same physical device received 3 Expo push messages.
-- **NOT a trigger issue**: The dedup layer (`_claim_notification_slot_safe`) works correctly — each signal event triggers exactly one notification dispatch.
-- **NOT a push_notifications.py issue**: The Expo push logic is correct.
-- **Root cause**: `register-token` endpoint only deactivated tokens for the SAME user+platform, not for OTHER users sharing the same physical token. Multi-account device sharing caused token accumulation.
+### What This Means
+- Token is VALID (Expo accepted it)
+- Token is FRESH (last_seen today)
+- projectId IS present in frontend code
+- Payload structure is correct
+- **The Firebase Cloud Messaging API (V1) is disabled or misconfigured on Firebase project `swift-fx-signals`**
 
-### EAS Configuration (Complete)
-- Remote auto-increment versioning in `eas.json`
-
-### Bug Fixes (Complete)
-- Apple duplicate notifications — cross-user token sharing (root cause found & fixed Apr 14, 2026)
-- Apple duplicate notifications — atomic deduplication (belt-and-suspenders, previously implemented)
-- Timestamps off by 1 hour (Community/Dashboard/Signals)
-- Bookmark button wired to AsyncStorage
-- Closed signals not appearing in Signal History
+### Required Fix (User Action)
+1. Go to https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=swift-fx-signals
+2. **Enable** "Firebase Cloud Messaging API (V1)"
+3. Verify at Firebase Console → Project Settings → Cloud Messaging → server key not disabled
+4. Re-run trace: `POST /api/debug/android-push-trace` → receipt should show `status: ok`
 
 ---
 
-## Pending Verification (By User on Physical Device)
-- Android push notification display (frontend fix in `_layout.tsx`, needs EAS build)
-- Run `/api/debug/cleanup-device-tokens` on PRODUCTION DB to fix existing cross-user token duplicates
-- Open iOS app on admin device to re-register push token (deactivated during cleanup)
-- End-to-End IAP testing on Apple devices
+## iOS 3x Duplicate Fix (Apr 14, 2026) — RESOLVED
+Root cause: Same iOS push token registered under 3 different user accounts.
+Fix: `register-token` deactivates token across all other users. Cleanup endpoint Phase 2 added.
+
+## Completed Features
+- Signal Engine, Community feed, Dashboard, AI Analyzer, Supabase Auth, AdMob
+- EAS remote versioning, notification deduplication, trailing stop-loss
+- Trace logging on all notification trigger sites
+- `ANDROID_PUSH_PAYLOAD` and `ANDROID_TRACE_*` logging
+
+## Diagnostic Endpoints
+- `POST /api/debug/android-push-trace` — Isolated single-device Android push test with full Expo receipt
+- `POST /api/debug/cleanup-device-tokens` — Phase 1+2 token deduplication
 
 ## Upcoming Tasks
-- P1: Complete E2E IAP testing on physical Apple devices
-- P1: Validate notification delivery via EAS native builds
-- P2: Implement reliable alternative Gold price API
-
-## Future/Backlog
-- P2: Leaderboard/feed of top shared AI analyses
-- P3: Refactor `server.py` (8500+ lines monolith)
-- P3: Remove duplicate notification handler/channel setup from `notificationService.ts` (redundant with `_layout.tsx`)
-- P3: Remove unused `_claim_notification_slot` function from `push_notifications.py` (always returns True)
-
-## Architecture Notes
-- `register-token` now deactivates the same token under ALL other users before registering, ensuring a device belongs to exactly one user at a time.
-- Trace logging (`TRIGGER CALL → {event_type} → signal_id=...`) exists on all 10 notification trigger sites for production debugging. Can be removed after confirming fix.
+- P0: Enable FCM API V1 on Firebase project (user action)
+- P1: E2E IAP testing on physical Apple devices
+- P2: Alternative Gold price API
+- P3: Refactor server.py (8500+ lines)

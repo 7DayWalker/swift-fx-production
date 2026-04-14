@@ -247,6 +247,10 @@ async def send_notification(
         user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
         profiles_map = await _fetch_user_profiles_batch(user_ids)
 
+        # Enrich data payload with title/body so Android background handlers
+        # can display the notification even when the app process is killed.
+        enriched_data = {**data, "title": title, "body": body}
+
         # Build messages with platform-specific fields
         messages = []
         for token_doc in device_tokens:
@@ -268,7 +272,7 @@ async def send_notification(
                 "to": token,
                 "title": title,
                 "body": body,
-                "data": data,
+                "data": enriched_data,
                 "sound": "default",
                 "priority": "high",
                 "channelId": "default",
@@ -279,7 +283,11 @@ async def send_notification(
                 message["_contentAvailable"] = True
 
             messages.append(message)
-            logger.info(f"  -> Queued for {platform} user={user_id[:12]}... token={token[:35]}...")
+
+            if platform == "android":
+                logger.info(f"ANDROID_PUSH_PAYLOAD → {message}")
+            else:
+                logger.info(f"  -> Queued for {platform} user={user_id[:12]}... token={token[:35]}...")
 
         if not messages:
             logger.info(f"No eligible users for notification: {title}")

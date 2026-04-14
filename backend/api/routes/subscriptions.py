@@ -268,7 +268,7 @@ async def send_test_notification(current_user: User = Depends(require_auth)):
             "to": token,
             "title": "Test Notification",
             "body": f"This is a test from Swift FX ({platform})",
-            "data": {"type": "test"},
+            "data": {"type": "test", "title": "Test Notification", "body": f"This is a test from Swift FX ({platform})"},
             "sound": "default",
             "priority": "high",
             "channelId": "default",
@@ -304,6 +304,104 @@ async def send_test_notification(current_user: User = Depends(require_auth)):
         "results": results,
         "message": "Check your device. If no notification arrives within 10 seconds, check the 'error' field in results."
     }
+
+
+
+@router.post("/debug/android-push-trace")
+async def android_push_trace():
+    """
+    TEMPORARY DIAGNOSTIC: Send to exactly ONE Android token and log everything.
+    No auth required — this is a one-time trace endpoint.
+    """
+    import httpx as httpx_lib
+
+    # PHASE 1: Pick the freshest Android token (most recent last_seen)
+    android_tokens = await db.device_tokens.find(
+        {"is_active": True, "platform": "android"},
+        {"_id": 0}
+    ).sort("last_seen", -1).to_list(50)
+
+    if not android_tokens:
+        return {"error": "No active Android tokens found"}
+
+    # Use the first (freshest) token
+    target = android_tokens[0]
+    token = target.get("token", "")
+
+    # PHASE 2: Log full token context
+    token_context = {
+        "user_id": target.get("user_id"),
+        "platform": target.get("platform"),
+        "token": token,
+        "created_at": str(target.get("created_at", "MISSING")),
+        "last_seen": str(target.get("last_seen", "MISSING")),
+        "is_active": target.get("is_active"),
+        "registered_at": str(target.get("registered_at", "MISSING")),
+    }
+    logger.warning(f"ANDROID_TRACE_TOKEN_CONTEXT → {token_context}")
+
+    # PHASE 1: Build message — identical structure to signal path
+    message = {
+        "to": token,
+        "title": "Android Trace Test",
+        "body": "Single device trace — if you see this, push works",
+        "data": {"type": "android_trace", "title": "Android Trace Test", "body": "Single device trace"},
+        "sound": "default",
+        "priority": "high",
+        "channelId": "default",
+    }
+    logger.warning(f"ANDROID_TRACE_PAYLOAD → {message}")
+
+    # Send to Expo — log FULL response
+    try:
+        async with httpx_lib.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=[message],
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp_json = response.json()
+            logger.warning(f"ANDROID_TRACE_EXPO_RESPONSE → status={response.status_code} body={resp_json}")
+
+            ticket = resp_json.get("data", [{}])[0] if resp_json.get("data") else {}
+            ticket_id = ticket.get("id", "")
+
+            # If we got a ticket, check receipt immediately after short delay
+            receipt_result = None
+            if ticket_id:
+                import asyncio
+                await asyncio.sleep(3)
+                try:
+                    receipt_resp = await client.post(
+                        "https://exp.host/--/api/v2/push/getReceipts",
+                        json={"ids": [ticket_id]},
+                        headers={
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                        },
+                    )
+                    receipt_result = receipt_resp.json()
+                    logger.warning(f"ANDROID_TRACE_RECEIPT → {receipt_result}")
+                except Exception as e:
+                    receipt_result = {"error": str(e)}
+
+            return {
+                "phase": "ANDROID_PUSH_TRACE",
+                "token_context": token_context,
+                "payload_sent": message,
+                "expo_http_status": response.status_code,
+                "expo_ticket": ticket,
+                "expo_receipt": receipt_result,
+                "total_android_tokens": len(android_tokens),
+                "sent_to": "1 device only (first active Android, sorted by last_seen desc)",
+            }
+    except Exception as e:
+        logger.error(f"ANDROID_TRACE_ERROR → {e}")
+        return {"error": str(e)}
 
 @router.put("/notifications/preferences")
 async def update_notification_preferences(preferences: Dict[str, bool], current_user: User = Depends(require_auth)):
