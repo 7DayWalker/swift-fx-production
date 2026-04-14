@@ -207,6 +207,10 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     # Pending signals get their notification when the engine activates them,
     # preventing duplicate "New Signal Alert" notifications on Apple.
     if initial_state == SignalState.ACTIVE:
+        logger.warning(
+            f"TRIGGER CALL → new_signal → signal_id={signal_id} → "
+            f"source=signals.create_signal → initial_state={initial_state.value}"
+        )
         background_tasks.add_task(send_signal_notification, signal_id, signal_data.pair, signal_data.signal_type, signal_data.visibility)
     
     return {"signal_id": signal_id, "message": f"Signal created with state: {initial_state.value}"}
@@ -302,6 +306,10 @@ async def manual_state_transition(
         
         # Send close notification
         visibility = SignalVisibility(signal.get("visibility", "free"))
+        logger.warning(
+            f"TRIGGER CALL → signal_closed → signal_id={signal_id} → "
+            f"source=signals.state_transition → from_state={current_state}"
+        )
         background_tasks.add_task(
             send_signal_close_notification,
             signal_id,
@@ -448,6 +456,10 @@ async def mark_tp_hit_new(
         
         # Send close notification
         visibility = SignalVisibility(signal.get("visibility", "free"))
+        logger.warning(
+            f"TRIGGER CALL → signal_closed → signal_id={signal_id} → "
+            f"source=signals.mark_tp3_auto_close → tp_level=3"
+        )
         background_tasks.add_task(
             send_signal_close_notification,
             signal_id,
@@ -543,6 +555,10 @@ async def force_close_signal(
     # Send close notification
     if background_tasks:
         visibility = SignalVisibility(signal.get("visibility", "free"))
+        logger.warning(
+            f"TRIGGER CALL → signal_closed → signal_id={signal_id} → "
+            f"source=signals.force_close → from_state={current_state}"
+        )
         background_tasks.add_task(
             send_signal_close_notification,
             signal_id,
@@ -782,6 +798,10 @@ async def update_signal_state(
         # Send close notification
         final_pips = update_doc.get("final_pips", 0)
         visibility = SignalVisibility(signal.get("visibility", "free"))
+        logger.warning(
+            f"TRIGGER CALL → signal_closed → signal_id={signal_id} → "
+            f"source=signals.update_signal_to_closed"
+        )
         background_tasks.add_task(
             send_signal_close_notification,
             signal_id,

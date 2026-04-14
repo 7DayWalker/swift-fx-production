@@ -100,7 +100,27 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
             {"token": token_data.token, "user_id": current_user.user_id},
             {"$set": {"is_active": True, "last_seen": datetime.now(timezone.utc)}}
         )
+        # CRITICAL: Deactivate this token under ALL OTHER user accounts.
+        # A physical device token can only belong to one user at a time.
+        await db.device_tokens.update_many(
+            {"token": token_data.token, "user_id": {"$ne": current_user.user_id}},
+            {"$set": {"is_active": False}}
+        )
         return {"status": "already_registered"}
+
+    # CRITICAL: Deactivate this token under ALL other users first.
+    # When a user logs into a new account on the same device, the device token
+    # must be claimed exclusively by the new user. Otherwise, push notifications
+    # for the same signal are sent N times (once per user_id sharing the token).
+    deactivated = await db.device_tokens.update_many(
+        {"token": token_data.token, "user_id": {"$ne": current_user.user_id}},
+        {"$set": {"is_active": False}}
+    )
+    if deactivated.modified_count > 0:
+        logger.warning(
+            f"[Notifications] Deactivated {deactivated.modified_count} stale registrations "
+            f"for token={token_data.token[:30]}... (now belongs to user={current_user.user_id[:12]}...)"
+        )
 
     # Deactivate any OLD tokens for this user+platform (replace, don't duplicate)
     await db.device_tokens.update_many(
@@ -126,7 +146,11 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
 async def cleanup_device_tokens():
     """One-time cleanup: remove duplicate device tokens and ensure unique index.
     Operates on the PRODUCTION database connected via MONGO_URL.
-    Safe to run once — idempotent."""
+    Safe to run multiple times — idempotent.
+    
+    Phase 1: Remove same-token+same-user duplicates (keep newest).
+    Phase 2: Deactivate same-token cross-user duplicates (keep newest active registration).
+    """
     logger.info("[Cleanup] Starting device_tokens duplicate cleanup on PRODUCTION DB...")
 
     # Fetch all documents
@@ -134,7 +158,7 @@ async def cleanup_device_tokens():
     total = len(all_tokens)
     logger.info(f"[Cleanup] Scanned {total} documents")
 
-    # Group by (token, user_id) — keep first, mark rest for deletion
+    # ── Phase 1: Remove exact (token, user_id) duplicates ──
     seen = set()
     duplicate_ids = []
     for doc in all_tokens:
@@ -145,14 +169,48 @@ async def cleanup_device_tokens():
             seen.add(key)
 
     duplicates_found = len(duplicate_ids)
-    logger.info(f"[Cleanup] Found {duplicates_found} duplicates out of {total} total")
+    logger.info(f"[Cleanup] Phase 1: Found {duplicates_found} exact duplicates out of {total} total")
 
-    # Delete duplicates
     deleted = 0
     if duplicate_ids:
         result = await db.device_tokens.delete_many({"_id": {"$in": duplicate_ids}})
         deleted = result.deleted_count
-        logger.info(f"[Cleanup] Deleted {deleted} duplicate documents")
+        logger.info(f"[Cleanup] Phase 1: Deleted {deleted} duplicate documents")
+
+    # ── Phase 2: Deactivate cross-user token sharing ──
+    # A physical device token should only be active for ONE user at a time.
+    # For each token that appears under multiple user_ids, keep only the
+    # most recently registered one active and deactivate the rest.
+    from collections import defaultdict
+    remaining_docs = await db.device_tokens.find({"is_active": True}).to_list(100000)
+    
+    token_groups = defaultdict(list)
+    for doc in remaining_docs:
+        token = doc.get("token", "")
+        if token:
+            token_groups[token].append(doc)
+    
+    cross_user_deactivated = 0
+    for token, docs in token_groups.items():
+        if len(docs) <= 1:
+            continue
+        # Sort by registration date, newest first
+        docs.sort(key=lambda d: d.get("last_seen") or d.get("created_at") or d.get("registered_at") or datetime.min, reverse=True)
+        # Keep the first (newest), deactivate the rest
+        stale_ids = [d["_id"] for d in docs[1:]]
+        if stale_ids:
+            result = await db.device_tokens.update_many(
+                {"_id": {"$in": stale_ids}},
+                {"$set": {"is_active": False}}
+            )
+            cross_user_deactivated += result.modified_count
+            owner = docs[0].get("user_id", "?")[:12]
+            logger.warning(
+                f"[Cleanup] Phase 2: Token {token[:35]}... → kept active for user={owner}..., "
+                f"deactivated {len(stale_ids)} stale cross-user registrations"
+            )
+    
+    logger.info(f"[Cleanup] Phase 2: Deactivated {cross_user_deactivated} cross-user duplicate tokens")
 
     # Ensure unique index exists
     try:
@@ -168,14 +226,16 @@ async def cleanup_device_tokens():
         logger.info(f"[Cleanup] Index status: {index_status}")
 
     remaining = await db.device_tokens.count_documents({})
-    logger.info(f"[Cleanup] Complete. Remaining documents: {remaining}")
+    remaining_active = await db.device_tokens.count_documents({"is_active": True})
+    logger.info(f"[Cleanup] Complete. Remaining: {remaining} total, {remaining_active} active")
 
     return {
         "database": "PRODUCTION (from MONGO_URL)",
         "scanned": total,
-        "duplicates_found": duplicates_found,
-        "deleted": deleted,
-        "remaining": remaining,
+        "phase1_exact_duplicates_deleted": deleted,
+        "phase2_cross_user_deactivated": cross_user_deactivated,
+        "remaining_total": remaining,
+        "remaining_active": remaining_active,
         "unique_index": index_status,
     }
 

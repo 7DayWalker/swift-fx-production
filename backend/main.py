@@ -133,9 +133,19 @@ async def startup_event():
     await db.signals.create_index("state")
     await db.device_tokens.create_index("user_id")
     await db.device_tokens.create_index("is_active")
+    await db.device_tokens.create_index(
+        [("token", 1), ("user_id", 1)], unique=True, name="token_user_unique"
+    )
     await db.ai_analyses.create_index([("user_id", 1), ("created_at", -1)])
     await db.posts.create_index("created_at")
     await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+    # TTL index: auto-expire notification dedup records after 1 hour
+    try:
+        await db.notification_dedup.create_index(
+            "sent_at", expireAfterSeconds=3600, name="ttl_cleanup"
+        )
+    except Exception:
+        pass  # Index already exists
     logger.info("[Startup] MongoDB indexes ensured")
 
     # Super Admin initialization
