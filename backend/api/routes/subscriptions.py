@@ -122,6 +122,64 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
     return {"message": "Token registered successfully"}
 
 
+@router.post("/debug/cleanup-device-tokens")
+async def cleanup_device_tokens():
+    """One-time cleanup: remove duplicate device tokens and ensure unique index.
+    Operates on the PRODUCTION database connected via MONGO_URL.
+    Safe to run once — idempotent."""
+    logger.info("[Cleanup] Starting device_tokens duplicate cleanup on PRODUCTION DB...")
+
+    # Fetch all documents
+    all_tokens = await db.device_tokens.find({}).to_list(100000)
+    total = len(all_tokens)
+    logger.info(f"[Cleanup] Scanned {total} documents")
+
+    # Group by (token, user_id) — keep first, mark rest for deletion
+    seen = set()
+    duplicate_ids = []
+    for doc in all_tokens:
+        key = f"{doc.get('token', '')}::{doc.get('user_id', '')}"
+        if key in seen:
+            duplicate_ids.append(doc["_id"])
+        else:
+            seen.add(key)
+
+    duplicates_found = len(duplicate_ids)
+    logger.info(f"[Cleanup] Found {duplicates_found} duplicates out of {total} total")
+
+    # Delete duplicates
+    deleted = 0
+    if duplicate_ids:
+        result = await db.device_tokens.delete_many({"_id": {"$in": duplicate_ids}})
+        deleted = result.deleted_count
+        logger.info(f"[Cleanup] Deleted {deleted} duplicate documents")
+
+    # Ensure unique index exists
+    try:
+        await db.device_tokens.create_index(
+            [("token", 1), ("user_id", 1)],
+            unique=True,
+            name="token_user_unique"
+        )
+        index_status = "created"
+        logger.info("[Cleanup] Unique index (token, user_id) ensured")
+    except Exception as e:
+        index_status = f"already_exists_or_error: {str(e)[:100]}"
+        logger.info(f"[Cleanup] Index status: {index_status}")
+
+    remaining = await db.device_tokens.count_documents({})
+    logger.info(f"[Cleanup] Complete. Remaining documents: {remaining}")
+
+    return {
+        "database": "PRODUCTION (from MONGO_URL)",
+        "scanned": total,
+        "duplicates_found": duplicates_found,
+        "deleted": deleted,
+        "remaining": remaining,
+        "unique_index": index_status,
+    }
+
+
 @router.post("/notifications/test")
 async def send_test_notification(current_user: User = Depends(require_auth)):
     """Send a test notification to the current user's registered device(s).
