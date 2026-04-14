@@ -268,7 +268,7 @@ async def send_test_notification(current_user: User = Depends(require_auth)):
             "to": token,
             "title": "Test Notification",
             "body": f"This is a test from Swift FX ({platform})",
-            "data": {"type": "test"},
+            "data": {"type": "test", "title": "Test Notification", "body": f"This is a test from Swift FX ({platform})"},
             "sound": "default",
             "priority": "high",
             "channelId": "default",

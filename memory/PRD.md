@@ -4,71 +4,62 @@
 A React Native (Expo) mobile trading signals app with FastAPI backend + MongoDB. Features include Supabase Auth, Expo Push Notifications, Google AdMob, Expo In-App Purchases, Community feed, AI Analyzer, and a real-time Signal engine with trailing stop-loss.
 
 ## Current Focus
-Finalizing critical bug fixes before EAS native builds and TestFlight/Play Console rollout.
+Finalizing push notification delivery on both iOS and Android before EAS native builds.
 
 ---
 
 ## What's Been Implemented
 
-### Core Features (Complete)
-- Signal Engine with trailing stop-loss logic
-- Community feed (TradingView-inspired redesign)
-- Dashboard with clickable Watchlist
-- AI Analyzer
-- Supabase Auth (Email/Password, Apple, Google)
-- Settings page with "Send Test Notification" button
+### Push Notifications — Full Fix History
 
-### Ads (Complete)
-- Banner, Native, Interstitial, Rewarded Ads with retry mechanism
+#### iOS 3x Duplicate Fix (Apr 14, 2026)
+**Root Cause**: Same iOS push token registered as active under 3 different user accounts. `send_notification` sent 3 Expo messages to the same device token.
+**Fix**: `register-token` endpoint now deactivates the same token across ALL other users. Cleanup endpoint upgraded with Phase 2 cross-user dedup.
 
-### Push Notifications (Complete)
-- Backend: Expo Push API integration with signal engine triggers
-- Backend: Atomic deduplication via `notification_dedup` MongoDB collection + TTL index (3600s)
-- Backend: Notification triggers for manual signal closures
-- Backend: `priority: high` and `channelId: default` in push payloads
-- Backend: UNIQUE index on `device_tokens` (`token` + `user_id`)
-- Backend: Cross-user token deduplication in `register-token` endpoint (Apr 14, 2026)
-- Backend: Cleanup endpoint upgraded with Phase 2 cross-user dedup (Apr 14, 2026)
-- Backend: Trace logging (`TRIGGER CALL →`) on all 10 notification trigger sites (Apr 14, 2026)
-- Frontend: Global `Notifications.setNotificationHandler` in `_layout.tsx`
-- Frontend: Android channel `'default'` with `AndroidImportance.MAX`
-- Frontend: Early `requestPermissionsAsync()` call
+#### Android Notification Display Fix (Apr 14, 2026)
+- Frontend: `_layout.tsx` — global `setNotificationHandler`, `setNotificationChannelAsync('default')`, `requestPermissionsAsync()`
+- Backend: `push_notifications.py` — `data` payload now includes `title` and `body` (mirrors FCM data message requirement for background delivery)
+- Backend: `ANDROID_PUSH_PAYLOAD →` log line for every Android push message (production debugging)
+- Backend: Test notification path (`/notifications/test`) aligned to identical structure as signal path
 
-### Root Cause Analysis: iOS 3x Duplicate Notifications (Apr 14, 2026)
-**Root Cause**: Same iOS push token (`ExponentPushToken[cHubU...]`) was registered as active under 3 different user accounts. When `send_notification` sent to ALL active tokens, the same physical device received 3 Expo push messages.
-- **NOT a trigger issue**: The dedup layer (`_claim_notification_slot_safe`) works correctly — each signal event triggers exactly one notification dispatch.
-- **NOT a push_notifications.py issue**: The Expo push logic is correct.
-- **Root cause**: `register-token` endpoint only deactivated tokens for the SAME user+platform, not for OTHER users sharing the same physical token. Multi-account device sharing caused token accumulation.
+#### Payload Structure (Both Paths Now Identical)
+```json
+{
+  "to": "ExponentPushToken[...]",
+  "title": "...",
+  "body": "...",
+  "data": {"type": "...", "title": "...", "body": "..."},
+  "sound": "default",
+  "priority": "high",
+  "channelId": "default"
+}
+```
+iOS-only addition: `"_contentAvailable": true`
 
-### EAS Configuration (Complete)
-- Remote auto-increment versioning in `eas.json`
-
-### Bug Fixes (Complete)
-- Apple duplicate notifications — cross-user token sharing (root cause found & fixed Apr 14, 2026)
-- Apple duplicate notifications — atomic deduplication (belt-and-suspenders, previously implemented)
-- Timestamps off by 1 hour (Community/Dashboard/Signals)
-- Bookmark button wired to AsyncStorage
-- Closed signals not appearing in Signal History
+### Other Completed Features
+- Signal Engine with trailing stop-loss
+- Community feed (TradingView-inspired), Dashboard with Watchlist
+- AI Analyzer, Supabase Auth, Google AdMob (all ad types)
+- EAS remote auto-increment versioning
+- Atomic notification deduplication (`notification_dedup` collection + TTL index)
+- Device token UNIQUE index + cross-user cleanup
+- Trace logging on all 10 notification trigger sites
 
 ---
 
 ## Pending Verification (By User on Physical Device)
-- Android push notification display (frontend fix in `_layout.tsx`, needs EAS build)
-- Run `/api/debug/cleanup-device-tokens` on PRODUCTION DB to fix existing cross-user token duplicates
-- Open iOS app on admin device to re-register push token (deactivated during cleanup)
+- Android push display after EAS native build
+- Run `/api/debug/cleanup-device-tokens` on PRODUCTION DB
+- Open iOS app on admin device to re-register push token
 - End-to-End IAP testing on Apple devices
 
 ## Upcoming Tasks
 - P1: Complete E2E IAP testing on physical Apple devices
-- P1: Validate notification delivery via EAS native builds
+- P1: Validate Android notification delivery via EAS native build
 - P2: Implement reliable alternative Gold price API
 
 ## Future/Backlog
 - P2: Leaderboard/feed of top shared AI analyses
 - P3: Refactor `server.py` (8500+ lines monolith)
-- P3: Remove duplicate notification handler/channel setup from `notificationService.ts` (redundant with `_layout.tsx`)
-- P3: Remove unused `_claim_notification_slot` function from `push_notifications.py` (always returns True)
-
-## Architecture Notes
-- `register-token` now deactivates the same token under ALL other users before registering, ensuring a device belongs to exactly one user at a time.
-- Trace logging (`TRIGGER CALL → {event_type} → signal_id=...`) exists on all 10 notification trigger sites for production debugging. Can be removed after confirming fix.
+- P3: Remove duplicate notification handler/channel from `notificationService.ts`
+- P3: Remove unused `_claim_notification_slot` from `push_notifications.py`
