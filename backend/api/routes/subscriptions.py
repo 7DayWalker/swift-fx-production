@@ -88,17 +88,36 @@ async def get_plans():
 
 @router.post("/notifications/register-token")
 async def register_device_token(token_data: DeviceTokenRegister, current_user: User = Depends(require_auth)):
-    await db.device_tokens.update_one(
+    # Check if this exact token+user already exists
+    existing = await db.device_tokens.find_one({
+        "token": token_data.token,
+        "user_id": current_user.user_id
+    })
+
+    if existing:
+        # Update last_seen timestamp only
+        await db.device_tokens.update_one(
+            {"token": token_data.token, "user_id": current_user.user_id},
+            {"$set": {"is_active": True, "last_seen": datetime.now(timezone.utc)}}
+        )
+        return {"status": "already_registered"}
+
+    # Deactivate any OLD tokens for this user+platform (replace, don't duplicate)
+    await db.device_tokens.update_many(
         {"user_id": current_user.user_id, "platform": token_data.platform},
-        {"$set": {
-            "user_id": current_user.user_id,
-            "token": token_data.token,
-            "platform": token_data.platform,
-            "is_active": True,
-            "updated_at": datetime.now(timezone.utc)
-        }},
-        upsert=True
+        {"$set": {"is_active": False}}
     )
+
+    # Insert the new token
+    await db.device_tokens.insert_one({
+        "user_id": current_user.user_id,
+        "token": token_data.token,
+        "platform": token_data.platform,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+        "last_seen": datetime.now(timezone.utc),
+    })
+
     logger.info(f"[Notifications] Token registered: user={current_user.user_id[:12]}... platform={token_data.platform} token={token_data.token[:30]}...")
     return {"message": "Token registered successfully"}
 
