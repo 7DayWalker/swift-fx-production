@@ -26,18 +26,39 @@ logger = logging.getLogger(__name__)
 async def send_signal_notification(signal_id, pair, signal_type, visibility):
     from services.push_notifications import notify_new_signal
     sig_type = signal_type.value if hasattr(signal_type, 'value') else str(signal_type)
+    import traceback
+    caller = traceback.extract_stack(limit=3)[0]
+    logger.warning(
+        f"TRIGGER CALL → new_signal → signal_id={signal_id} → "
+        f"source=signal_engine.send_signal_notification → "
+        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
+    )
     await notify_new_signal(signal_id, pair, sig_type)
 
 
 async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility):
     from services.push_notifications import notify_signal_closed
     sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
+    import traceback
+    caller = traceback.extract_stack(limit=3)[0]
+    logger.warning(
+        f"TRIGGER CALL → signal_closed → signal_id={signal_id} → pips={pips} → "
+        f"source=signal_engine.send_signal_close_notification → "
+        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
+    )
     await notify_signal_closed(signal_id, pair, sig_type, pips)
 
 
 async def send_tp_hit_notification(signal_id, pair, signal_type, tp_level, running_pips=None):
     from services.push_notifications import notify_tp_hit
     sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
+    import traceback
+    caller = traceback.extract_stack(limit=3)[0]
+    logger.warning(
+        f"TRIGGER CALL → tp_hit → signal_id={signal_id} → tp_level={tp_level} → "
+        f"source=signal_engine.send_tp_hit_notification → "
+        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
+    )
     await notify_tp_hit(signal_id, pair, sig_type, tp_level, running_pips)
 
 # ==============================================================================
