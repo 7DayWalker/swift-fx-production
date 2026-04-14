@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import { SignalProvider } from '../src/context/SignalContext';
@@ -13,6 +15,26 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationService from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
+
+// ─── GLOBAL notification handler (must run before any notification arrives) ───
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+// ─── Android notification channel (must exist before first push) ───
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'default',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#00D4AA',
+  });
+}
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
@@ -29,6 +51,13 @@ function RootLayoutContent() {
       router.replace('/(auth)/login');
     }
   }, [isLoading, user]);
+
+  // Request notification permissions early (Android needs this before notifications arrive)
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      Notifications.requestPermissionsAsync();
+    }
+  }, []);
 
   // Initialize push notifications when user is logged in
   useEffect(() => {
