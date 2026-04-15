@@ -282,6 +282,12 @@ async def send_notification(
             if platform == "ios":
                 message["_contentAvailable"] = True
 
+            # Android: include large icon for branded notifications
+            if platform == "android":
+                message["android"] = {
+                    "largeIcon": "https://swiftfx.app/logo.png"
+                }
+
             messages.append(message)
 
             if platform == "android":
