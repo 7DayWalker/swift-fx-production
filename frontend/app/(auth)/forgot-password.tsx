@@ -31,7 +31,9 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'swiftfx://auth',
+      });
       if (error) throw error;
       setEmailSent(true);
     } catch (error: any) {

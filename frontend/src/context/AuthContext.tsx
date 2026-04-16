@@ -23,11 +23,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAdmin: boolean;
+  isPasswordRecovery: boolean;
   login: (email: string, password: string) => Promise<User>;
   signInWithProvider: (provider: OAuthProvider) => Promise<User | void>;
   register: (name: string, email: string, password: string, referralCode?: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,8 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const isAdmin = user?.is_admin === true;
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
 
   // Background profile enrichment — NEVER blocks UI
   const enrichProfile = useCallback(async (sbUser: SupabaseUser, accessToken: string) => {
@@ -121,6 +128,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] AUTH EVENT:', event);
 
         if (!mounted) return;
+
+        // Detect password recovery flow — do NOT treat as normal login
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('[Auth] Password recovery detected');
+          setIsPasswordRecovery(true);
+          if (session) {
+            setToken(session.access_token);
+          }
+          setIsLoading(false);
+          return;
+        }
 
         if (session) {
           // IMMEDIATE state update — no async blocking
@@ -274,7 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, isAdmin, login, signInWithProvider, register, logout, refreshUser }}
+      value={{ user, token, isLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery }}
     >
       {children}
     </AuthContext.Provider>

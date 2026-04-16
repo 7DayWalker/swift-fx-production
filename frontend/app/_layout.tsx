@@ -38,19 +38,25 @@ if (Platform.OS === 'android') {
 
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isPasswordRecovery } = useAuth();
 
   // ── SINGLE source of navigation truth ──
   // Routes based on user presence only. No admin check here.
   useEffect(() => {
     if (isLoading) return;
 
+    // Password recovery flow takes priority — route to reset screen
+    if (isPasswordRecovery) {
+      router.replace('/reset-password');
+      return;
+    }
+
     if (user) {
       router.replace('/(tabs)/dashboard');
     } else {
       router.replace('/(auth)/login');
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, isPasswordRecovery]);
 
   // Request notification permissions early (Android needs this before notifications arrive)
   useEffect(() => {
@@ -95,6 +101,7 @@ function RootLayoutContent() {
         <Stack.Screen name="register" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
+        <Stack.Screen name="reset-password" />
       </Stack>
     </>
   );
