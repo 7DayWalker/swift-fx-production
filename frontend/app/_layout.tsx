@@ -41,27 +41,17 @@ function RootLayoutContent() {
   const { user, isLoading, isPasswordRecovery } = useAuth();
 
   // ── SINGLE source of navigation truth ──
-  // Routes based on user presence only. No admin check here.
   useEffect(() => {
-    console.log(`[Layout] Navigation effect — isLoading: ${isLoading}, user: ${user ? user.email : 'null'}, isPasswordRecovery: ${isPasswordRecovery}`);
+    if (isLoading) return;
 
-    if (isLoading) {
-      console.log(`[Layout]   SKIP — still loading`);
-      return;
-    }
-
-    // Password recovery flow takes priority — route to reset screen
     if (isPasswordRecovery) {
-      console.log(`[Layout]   >>> ROUTING to /reset-password (recovery)`);
       router.replace('/reset-password');
       return;
     }
 
     if (user) {
-      console.log(`[Layout]   >>> ROUTING to /(tabs)/dashboard (user logged in)`);
       router.replace('/(tabs)/dashboard');
     } else {
-      console.log(`[Layout]   >>> ROUTING to /(auth)/login (no user)`);
       router.replace('/(auth)/login');
     }
   }, [isLoading, user, isPasswordRecovery]);
