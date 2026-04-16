@@ -108,7 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const init = async () => {
+      console.log('[Auth] init() — calling getSession()...');
       const { data: { session } } = await supabase.auth.getSession();
+      console.log(`[Auth] init() — session: ${session ? 'exists' : 'null'}, mounted: ${mounted}`);
 
       if (!mounted) return;
 
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(buildUserFromSession(session.user));
         setToken(session.access_token);
         setIsLoading(false);
+        console.log('[Auth] init() — user set from session, isLoading=false');
 
         // Enrich with profile data in background (for admin detection, name, etc.)
         enrichProfile(session.user, session.access_token);
@@ -124,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setToken(null);
         setIsLoading(false);
+        console.log('[Auth] init() — no session, user=null, isLoading=false');
       }
     };
 
