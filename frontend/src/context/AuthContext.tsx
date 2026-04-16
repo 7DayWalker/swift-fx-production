@@ -30,6 +30,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   clearPasswordRecovery: () => void;
+  triggerPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,6 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false);
+  }, []);
+
+  const triggerPasswordRecovery = useCallback(() => {
+    console.log('[Auth] Password recovery triggered manually');
+    setIsPasswordRecovery(true);
+    setIsLoading(false);
   }, []);
 
   // Background profile enrichment — NEVER blocks UI
@@ -292,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery }}
+      value={{ user, token, isLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery, triggerPasswordRecovery }}
     >
       {children}
     </AuthContext.Provider>
