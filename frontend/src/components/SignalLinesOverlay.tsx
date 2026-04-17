@@ -104,8 +104,8 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
   return (
     <View style={styles.container} pointerEvents="none">
       {priceAbove && (
-        <View style={styles.rangeIndicatorTop}>
-          <Text style={styles.rangeIndicatorText}>
+        <View style={[styles.rangeIndicatorTop, styles.rangeIndicatorAbove]}>
+          <Text style={[styles.rangeIndicatorText, styles.rangeTextAbove]}>
             {'\u2191'} Price above signal range
           </Text>
         </View>
@@ -136,8 +136,8 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
       })}
 
       {priceBelow && (
-        <View style={styles.rangeIndicatorBottom}>
-          <Text style={styles.rangeIndicatorText}>
+        <View style={[styles.rangeIndicatorBottom, styles.rangeIndicatorBelow]}>
+          <Text style={[styles.rangeIndicatorText, styles.rangeTextBelow]}>
             {'\u2193'} Price below signal range
           </Text>
         </View>
@@ -203,11 +203,21 @@ const styles = StyleSheet.create({
   rangeIndicatorText: {
     fontSize: 10,
     fontWeight: '600',
-    color: 'rgba(138, 141, 152, 0.7)',
-    backgroundColor: 'rgba(10, 14, 23, 0.6)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  rangeIndicatorAbove: {
+    backgroundColor: 'rgba(0, 212, 170, 0.15)',
+  },
+  rangeTextAbove: {
+    color: 'rgba(0, 212, 170, 0.8)',
+  },
+  rangeIndicatorBelow: {
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+  },
+  rangeTextBelow: {
+    color: 'rgba(255, 107, 107, 0.8)',
   },
 });
