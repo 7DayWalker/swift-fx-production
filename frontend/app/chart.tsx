@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useSignals } from '../src/context/SignalContext';
 import SignalOverlay from '../src/components/SignalOverlay';
+import SignalLinesOverlay from '../src/components/SignalLinesOverlay';
 
 export default function ChartScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
@@ -13,6 +14,7 @@ export default function ChartScreen() {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
+  const [linesDismissed, setLinesDismissed] = useState(false);
 
   const { activeSignals } = useSignals();
 
@@ -22,6 +24,7 @@ export default function ChartScreen() {
   // Reset overlay visibility when symbol changes
   useEffect(() => {
     setOverlayDismissed(false);
+    setLinesDismissed(false);
   }, [displaySymbol]);
 
   // Find the best matching signal for this symbol:
@@ -52,6 +55,7 @@ export default function ChartScreen() {
   }, [activeSignals, displaySymbol]);
 
   const showOverlay = matchingSignal && !overlayDismissed;
+  const showLines = matchingSignal && !linesDismissed;
 
   const openInBrowser = () => {
     Linking.openURL(`https://www.tradingview.com/chart/?symbol=${displaySymbol}`);
@@ -111,6 +115,10 @@ export default function ChartScreen() {
               scalesPageToFit
             />
           </>
+        )}
+
+        {showLines && (
+          <SignalLinesOverlay signal={matchingSignal} />
         )}
 
         {showOverlay && (
