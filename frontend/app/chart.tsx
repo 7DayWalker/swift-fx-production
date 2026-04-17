@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,19 +19,46 @@ export default function ChartScreen() {
   const displaySymbol = symbol || 'EURUSD';
   const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${displaySymbol}&interval=60&theme=dark&style=1&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`;
 
-  // Find active signal matching this symbol
+  // Reset overlay visibility when symbol changes
+  useEffect(() => {
+    setOverlayDismissed(false);
+  }, [displaySymbol]);
+
+  // Find the best matching signal for this symbol:
+  //   1. Filter by pair match
+  //   2. Prefer state === 'active'
+  //   3. Fallback to most recent by activated_at or created_at
   const matchingSignal = useMemo(() => {
     const normalized = displaySymbol.toUpperCase();
-    return activeSignals.find((s) => {
-      const signalPair = s.pair.replace('/', '').toUpperCase();
-      return signalPair === normalized;
-    }) || null;
+    const matches = activeSignals.filter((s) => {
+      return s.pair.replace('/', '').toUpperCase() === normalized;
+    });
+
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+
+    // Prefer 'active' state signals
+    const active = matches.filter((s) => s.state === 'active');
+    const pool = active.length > 0 ? active : matches;
+
+    // Sort by most recent timestamp
+    pool.sort((a, b) => {
+      const tsA = a.activated_at || a.created_at || '';
+      const tsB = b.activated_at || b.created_at || '';
+      return tsB.localeCompare(tsA);
+    });
+
+    return pool[0];
   }, [activeSignals, displaySymbol]);
 
   const showOverlay = matchingSignal && !overlayDismissed;
 
   const openInBrowser = () => {
     Linking.openURL(`https://www.tradingview.com/chart/?symbol=${displaySymbol}`);
+  };
+
+  const handleViewSignal = () => {
+    router.push('/(tabs)/signals');
   };
 
   return (
@@ -90,6 +117,7 @@ export default function ChartScreen() {
           <SignalOverlay
             signal={matchingSignal}
             onClose={() => setOverlayDismissed(true)}
+            onViewSignal={handleViewSignal}
           />
         )}
       </View>
