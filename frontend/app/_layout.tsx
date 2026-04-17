@@ -100,6 +100,7 @@ function RootLayoutContent() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
         <Stack.Screen name="reset-password" />
+        <Stack.Screen name="chart" />
       </Stack>
     </>
   );
