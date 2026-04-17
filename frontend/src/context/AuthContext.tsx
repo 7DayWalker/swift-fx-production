@@ -23,11 +23,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAdmin: boolean;
+  isPasswordRecovery: boolean;
   login: (email: string, password: string) => Promise<User>;
   signInWithProvider: (provider: OAuthProvider) => Promise<User | void>;
   register: (name: string, email: string, password: string, referralCode?: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,8 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const isAdmin = user?.is_admin === true;
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
 
   // Background profile enrichment — NEVER blocks UI
   const enrichProfile = useCallback(async (sbUser: SupabaseUser, accessToken: string) => {
@@ -88,23 +95,132 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ── Auth initialization ──
-  // Rule: setUser IMMEDIATELY from session. Profile enrichment is background-only.
+  // ── Auth initialization + global deep link handling ──
+  // isLoading stays TRUE until both deep link check and session init complete.
+  // This blocks _layout.tsx routing and prevents the race condition.
   useEffect(() => {
     let mounted = true;
 
+    /**
+     * Process an auth deep link URL (recovery or OAuth cold-start).
+     * Returns true if the URL was an auth callback and was handled.
+     */
+    const handleAuthDeepLink = async (url: string): Promise<boolean> => {
+      // Only process swiftfx://auth URLs
+      if (!url.includes('swiftfx://auth')) return false;
+
+      console.log('[Auth] Processing auth deep link:', url.substring(0, 120));
+
+      const isRecovery =
+        url.includes('type=recovery') || url.includes('type%3Drecovery');
+      const hasAccessToken = url.includes('#access_token');
+      const parsed = Linking.parse(url);
+      const code =
+        typeof parsed.queryParams?.code === 'string'
+          ? parsed.queryParams.code
+          : null;
+
+      // ── Password recovery ──
+      if (isRecovery && hasAccessToken) {
+        console.log('[Auth] Deep link: password recovery');
+        const hash = url.split('#')[1];
+        const params = new URLSearchParams(hash);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+
+        if (!access_token) {
+          console.error('[Auth] Recovery link missing access_token');
+          return false;
+        }
+
+        // Set recovery flag BEFORE setSession so routing sees it
+        // when onAuthStateChange fires SIGNED_IN
+        if (mounted) setIsPasswordRecovery(true);
+
+        const { error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token: refresh_token || '',
+        });
+
+        if (error) {
+          console.error('[Auth] Recovery setSession error:', error.message);
+          if (mounted) {
+            setIsPasswordRecovery(false);
+            setIsLoading(false);
+          }
+          return true; // We handled it (even if it failed)
+        }
+
+        if (mounted) {
+          setToken(access_token);
+          setIsLoading(false);
+        }
+        console.log('[Auth] Recovery deep link processed successfully');
+        return true;
+      }
+
+      // ── OAuth PKCE (cold-start callback) ──
+      if (code) {
+        console.log('[Auth] Deep link: OAuth PKCE code exchange');
+        const { error } = await supabase.auth.exchangeCodeForSession(url);
+        if (error) {
+          console.error('[Auth] OAuth code exchange error:', error.message);
+        }
+        // onAuthStateChange will set user + isLoading
+        return true;
+      }
+
+      // ── OAuth implicit grant (cold-start callback, non-recovery) ──
+      if (hasAccessToken && !isRecovery) {
+        console.log('[Auth] Deep link: OAuth implicit grant');
+        const hash = url.split('#')[1];
+        const params = new URLSearchParams(hash);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+
+        if (!access_token) return false;
+
+        const { error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token: refresh_token || '',
+        });
+        if (error) {
+          console.error('[Auth] OAuth setSession error:', error.message);
+        }
+        // onAuthStateChange will set user + isLoading
+        return true;
+      }
+
+      return false;
+    };
+
     const init = async () => {
+      // ── Step 1: Check for auth deep link (cold start) ──
+      // This runs BEFORE getSession so we can intercept recovery links
+      // before _layout.tsx tries to route.
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) {
+          console.log('[Auth] Initial URL found:', initialUrl.substring(0, 100));
+          const handled = await handleAuthDeepLink(initialUrl);
+          if (handled) {
+            console.log('[Auth] Deep link handled — skipping normal session init');
+            return; // Deep link was processed, don't do normal init
+          }
+        }
+      } catch (err) {
+        console.error('[Auth] getInitialURL error:', err);
+      }
+
+      // ── Step 2: Normal session init (no deep link or non-auth deep link) ──
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!mounted) return;
 
       if (session) {
-        // Set user IMMEDIATELY so UI reacts
         setUser(buildUserFromSession(session.user));
         setToken(session.access_token);
         setIsLoading(false);
-
-        // Enrich with profile data in background (for admin detection, name, etc.)
         enrichProfile(session.user, session.access_token);
       } else {
         setUser(null);
@@ -115,20 +231,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     init();
 
-    // Auth state listener — fires on login, logout, token refresh
+    // ── Runtime deep link listener (app already running) ──
+    const linkSubscription = Linking.addEventListener('url', async (event) => {
+      if (event.url) {
+        console.log('[Auth] Runtime deep link received:', event.url.substring(0, 100));
+        await handleAuthDeepLink(event.url);
+      }
+    });
+
+    // ── Auth state listener — fires on login, logout, token refresh ──
     const { data: listener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('[Auth] AUTH EVENT:', event);
 
         if (!mounted) return;
 
+        // Detect password recovery (web / Supabase internal detection)
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('[Auth] PASSWORD_RECOVERY event from Supabase');
+          setIsPasswordRecovery(true);
+          if (session) {
+            setToken(session.access_token);
+          }
+          setIsLoading(false);
+          return;
+        }
+
         if (session) {
-          // IMMEDIATE state update — no async blocking
           setUser(buildUserFromSession(session.user));
           setToken(session.access_token);
           setIsLoading(false);
-
-          // Background enrichment
           enrichProfile(session.user, session.access_token);
         } else {
           setUser(null);
@@ -140,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      linkSubscription.remove();
       listener.subscription.unsubscribe();
     };
   }, [enrichProfile]);
@@ -150,12 +283,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
 
-    // Set immediately — onAuthStateChange also fires but this is synchronous feedback
     const immediateUser = buildUserFromSession(data.user);
     setUser(immediateUser);
     setToken(data.session.access_token);
 
-    // Enrich in background
     enrichProfile(data.user, data.session.access_token);
     return immediateUser;
   };
@@ -208,7 +339,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('No authorization code or token in callback URL');
       }
 
-      // onAuthStateChange will fire and set user. No need to do it here.
       return;
     }
 
@@ -236,7 +366,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Account created! Please check your email to verify, then log in.');
     }
 
-    // Small delay for the trigger to create the profile row
     await new Promise((r) => setTimeout(r, 600));
 
     const immediateUser = buildUserFromSession(data.user!);
@@ -255,12 +384,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.log('[Auth] Logout error:', e);
     }
-    // Force clear persisted session — signOut() alone doesn't reliably clear AsyncStorage on native
     try {
       await supabase.auth.setSession(null as any);
     } catch (_) {}
     setUser(null);
     setToken(null);
+    setIsPasswordRecovery(false);
     setIsLoading(false);
     console.log('[Auth] State cleared: user=null, token=null');
   };
@@ -274,7 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, isAdmin, login, signInWithProvider, register, logout, refreshUser }}
+      value={{ user, token, isLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery }}
     >
       {children}
     </AuthContext.Provider>
