@@ -1,18 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { useSignals } from '../src/context/SignalContext';
+import SignalOverlay from '../src/components/SignalOverlay';
 
 export default function ChartScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const router = useRouter();
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [overlayDismissed, setOverlayDismissed] = useState(false);
+
+  const { activeSignals } = useSignals();
 
   const displaySymbol = symbol || 'EURUSD';
   const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${displaySymbol}&interval=60&theme=dark&style=1&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`;
+
+  // Find active signal matching this symbol
+  const matchingSignal = useMemo(() => {
+    const normalized = displaySymbol.toUpperCase();
+    return activeSignals.find((s) => {
+      const signalPair = s.pair.replace('/', '').toUpperCase();
+      return signalPair === normalized;
+    }) || null;
+  }, [activeSignals, displaySymbol]);
+
+  const showOverlay = matchingSignal && !overlayDismissed;
 
   const openInBrowser = () => {
     Linking.openURL(`https://www.tradingview.com/chart/?symbol=${displaySymbol}`);
@@ -38,36 +54,45 @@ export default function ChartScreen() {
         </TouchableOpacity>
       </View>
 
-      {hasError ? (
-        <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={48} color="#8A8D98" />
-          <Text style={styles.errorText}>Failed to load chart</Text>
-          <TouchableOpacity style={styles.fallbackButton} onPress={openInBrowser}>
-            <Ionicons name="open-outline" size={16} color="#0A0E17" />
-            <Text style={styles.fallbackButtonText}>Open in browser</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          {isLoading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#00D4AA" />
-              <Text style={styles.loadingText}>Loading chart...</Text>
-            </View>
-          )}
-          <WebView
-            source={{ uri: chartUrl }}
-            style={styles.webview}
-            onLoadEnd={() => setIsLoading(false)}
-            onError={() => { setHasError(true); setIsLoading(false); }}
-            onHttpError={() => { setHasError(true); setIsLoading(false); }}
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState={false}
-            scalesPageToFit
+      <View style={styles.chartArea}>
+        {hasError ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="cloud-offline-outline" size={48} color="#8A8D98" />
+            <Text style={styles.errorText}>Failed to load chart</Text>
+            <TouchableOpacity style={styles.fallbackButton} onPress={openInBrowser}>
+              <Ionicons name="open-outline" size={16} color="#0A0E17" />
+              <Text style={styles.fallbackButtonText}>Open in browser</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {isLoading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#00D4AA" />
+                <Text style={styles.loadingText}>Loading chart...</Text>
+              </View>
+            )}
+            <WebView
+              source={{ uri: chartUrl }}
+              style={styles.webview}
+              onLoadEnd={() => setIsLoading(false)}
+              onError={() => { setHasError(true); setIsLoading(false); }}
+              onHttpError={() => { setHasError(true); setIsLoading(false); }}
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState={false}
+              scalesPageToFit
+            />
+          </>
+        )}
+
+        {showOverlay && (
+          <SignalOverlay
+            signal={matchingSignal}
+            onClose={() => setOverlayDismissed(true)}
           />
-        </>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -107,6 +132,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1F2E',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  chartArea: {
+    flex: 1,
+    position: 'relative',
   },
   webview: {
     flex: 1,
