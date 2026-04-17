@@ -86,17 +86,9 @@ const getPostTypeIcon = (type: string) => {
   }
 };
 
-// Ensure UTC datetime strings from MongoDB are parsed correctly.
-// MongoDB returns naive UTC strings without 'Z', causing JS to treat them as local time.
-const parseUTC = (s: string): Date => {
-  if (!s) return new Date();
-  if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) return new Date(s);
-  return new Date(s + 'Z');
-};
-
 const formatPostDate = (dateStr: string): string => {
   try {
-    const date = parseUTC(dateStr);
+    const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
