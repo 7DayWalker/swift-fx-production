@@ -45,16 +45,41 @@ export default function SignalLinesOverlay({ signal }: SignalLinesOverlayProps) 
     return result;
   }, [signal]);
 
-  // Compute price range with 15% padding on each side
+  // Compute visible price range with adaptive padding.
+  // Goals:
+  //   - Entry roughly centered vertically (~40-50% from top)
+  //   - Minimum spread so lines never cluster into a thin band
+  //   - Wider padding when SL/TP span is tight relative to entry price
   const { rangeTop, rangeBottom } = useMemo(() => {
     if (lines.length === 0) return { rangeTop: 0, rangeBottom: 0 };
+
     const prices = lines.map((l) => l.price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    const span = max - min || max * 0.01; // fallback if single level
-    const pad = span * 0.15;
-    return { rangeTop: max + pad, rangeBottom: min - pad };
-  }, [lines]);
+    const entry = signal.entry ?? (min + max) / 2;
+    const rawSpan = max - min;
+
+    // Minimum span: 0.4% of entry price — prevents extreme compression
+    // when SL and TP are only a few pips apart
+    const minSpan = entry * 0.004;
+    const span = Math.max(rawSpan, minSpan);
+
+    // Build range around entry so it sits near the vertical center.
+    // Measure how far above / below entry the levels extend.
+    const above = max - entry;
+    const below = entry - min;
+
+    // Make both sides at least as large as the larger side,
+    // then add dynamic padding (30-50% of the used side).
+    // This keeps entry near the middle while giving breathing room.
+    const side = Math.max(above, below, span * 0.5);
+    const padFactor = span < minSpan * 2 ? 0.5 : 0.3; // more padding when tight
+
+    const top = entry + side + side * padFactor;
+    const bottom = entry - side - side * padFactor;
+
+    return { rangeTop: top, rangeBottom: bottom };
+  }, [lines, signal.entry]);
 
   if (lines.length < 2) return null; // need at least entry + one level
 
