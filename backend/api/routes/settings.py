@@ -280,7 +280,7 @@ async def get_notification_preferences(current_user: User = Depends(get_current_
         "support_replies": True,
     }
     
-    prefs = user_doc.get("notification_settings", default_prefs)
+    prefs = user_doc.get("notification_preferences", default_prefs)
     
     # Merge with defaults for any missing keys
     for key, value in default_prefs.items():
@@ -300,7 +300,7 @@ async def update_notification_preferences(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get current preferences
-    current_prefs = user_doc.get("notification_settings", {
+    current_prefs = user_doc.get("notification_preferences", {
         "push_enabled": True,
         "email_enabled": True,
         "signals": True,
@@ -323,7 +323,7 @@ async def update_notification_preferences(
     if update.support_replies is not None:
         current_prefs["support_replies"] = update.support_replies
     
-    await update_profile(current_user.user_id, {"notification_settings": current_prefs})
+    await update_profile(current_user.user_id, {"notification_preferences": current_prefs})
     
     logger.info(f"[Settings] User {current_user.user_id} updated notification preferences")
     
@@ -436,7 +436,7 @@ async def admin_get_user_settings(
     
     return {
         "user": user_doc,
-        "notification_settings": user_doc.get("notification_settings", {}),
+        "notification_settings": user_doc.get("notification_preferences", {}),
         "account_status": user_doc.get("account_status", "active"),
     }
 

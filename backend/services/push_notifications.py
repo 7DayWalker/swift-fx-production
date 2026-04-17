@@ -262,9 +262,13 @@ async def send_notification(
                 logger.debug(f"Skipping invalid token: {token[:30]}... user={user_id}")
                 continue
 
-            # Check per-category preference
+            # Check global push override — if push_enabled is false, skip entirely
             user = profiles_map.get(user_id, {})
             prefs = user.get("notification_preferences", {})
+            if prefs.get("push_enabled") is False:
+                continue
+
+            # Check per-category preference
             if not prefs.get(preference_key, True):
                 continue
 
