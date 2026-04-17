@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { WebView } from 'react-native-webview';
 import { useSignals } from '../src/context/SignalContext';
 import SignalOverlay from '../src/components/SignalOverlay';
 import SignalLinesOverlay from '../src/components/SignalLinesOverlay';
+import api from '../src/services/api';
 
 export default function ChartScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
@@ -15,16 +16,31 @@ export default function ChartScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
   const [linesDismissed, setLinesDismissed] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
 
   const { activeSignals } = useSignals();
 
   const displaySymbol = symbol || 'EURUSD';
   const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${displaySymbol}&interval=60&theme=dark&style=1&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`;
 
-  // Reset overlay visibility when symbol changes
+  // Reset state when symbol changes
   useEffect(() => {
     setOverlayDismissed(false);
     setLinesDismissed(false);
+    setCurrentPrice(null);
+  }, [displaySymbol]);
+
+  // Fetch current market price (fire-and-forget, non-blocking)
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/market/price', { params: { symbol: displaySymbol } })
+      .then((res) => {
+        if (!cancelled && res.data?.price != null) {
+          setCurrentPrice(Number(res.data.price));
+        }
+      })
+      .catch(() => {}); // silently ignore — overlay still works without it
+    return () => { cancelled = true; };
   }, [displaySymbol]);
 
   // Find the best matching signal for this symbol:
@@ -118,7 +134,7 @@ export default function ChartScreen() {
         )}
 
         {showLines && (
-          <SignalLinesOverlay signal={matchingSignal} />
+          <SignalLinesOverlay signal={matchingSignal} currentPrice={currentPrice} />
         )}
 
         {showOverlay && (

@@ -32,9 +32,10 @@ const LABEL_BG: Record<LineKind, string> = {
 
 interface SignalLinesOverlayProps {
   signal: SignalData;
+  currentPrice?: number | null;
 }
 
-export default function SignalLinesOverlay({ signal }: SignalLinesOverlayProps) {
+export default function SignalLinesOverlay({ signal, currentPrice }: SignalLinesOverlayProps) {
   const lines = useMemo(() => {
     const result: PriceLine[] = [];
     if (signal.entry != null) result.push({ price: signal.entry, label: 'Entry', kind: 'entry' });
@@ -93,8 +94,23 @@ export default function SignalLinesOverlay({ signal }: SignalLinesOverlayProps) 
 
   const formatPrice = (v: number) => v.toFixed(v >= 100 ? 2 : 5);
 
+  // Determine if current price is outside the signal's actual level range
+  const signalPrices = lines.map((l) => l.price);
+  const signalMin = Math.min(...signalPrices);
+  const signalMax = Math.max(...signalPrices);
+  const priceAbove = currentPrice != null && currentPrice > signalMax;
+  const priceBelow = currentPrice != null && currentPrice < signalMin;
+
   return (
     <View style={styles.container} pointerEvents="none">
+      {priceAbove && (
+        <View style={styles.rangeIndicatorTop}>
+          <Text style={styles.rangeIndicatorText}>
+            {'\u2191'} Price above signal range
+          </Text>
+        </View>
+      )}
+
       {lines.map((line) => {
         const topPercent = priceToPercent(line.price);
         // Clamp to prevent lines from going off-screen
@@ -118,6 +134,14 @@ export default function SignalLinesOverlay({ signal }: SignalLinesOverlayProps) 
           </View>
         );
       })}
+
+      {priceBelow && (
+        <View style={styles.rangeIndicatorBottom}>
+          <Text style={styles.rangeIndicatorText}>
+            {'\u2193'} Price below signal range
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -160,5 +184,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
+  },
+  rangeIndicatorTop: {
+    position: 'absolute',
+    top: 6,
+    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  rangeIndicatorBottom: {
+    position: 'absolute',
+    bottom: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  rangeIndicatorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(138, 141, 152, 0.7)',
+    backgroundColor: 'rgba(10, 14, 23, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
 });
