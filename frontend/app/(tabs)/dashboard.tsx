@@ -159,8 +159,9 @@ export default function DashboardScreen() {
   }, [watchlist, saveWatchlist]);
 
   const openTradingViewChart = useCallback((pair: string) => {
-    Linking.openURL(getTradingViewUrl(pair));
-  }, []);
+    const symbol = pair.replace('/', '');
+    router.push(`/chart?symbol=${symbol}`);
+  }, [router]);
 
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
