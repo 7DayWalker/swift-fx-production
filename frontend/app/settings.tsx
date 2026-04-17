@@ -119,15 +119,25 @@ export default function SettingsScreen() {
         setEditName(profile.name || '');
       }
       
-      // Notification prefs stored locally (no backend table yet)
-      const storedNotifs = await AsyncStorage.getItem('notification_prefs');
-      if (storedNotifs) {
-        setNotifications(JSON.parse(storedNotifs));
-      } else {
-        setNotifications({
-          push_enabled: true, email_enabled: true, signals: true,
-          fund_updates: true, referral_rewards: true, support_replies: true,
-        });
+      // Fetch notification preferences from backend (source of truth)
+      try {
+        const notifRes = await api.get('/settings/notifications');
+        if (notifRes.data?.preferences) {
+          setNotifications(notifRes.data.preferences);
+          // Cache locally as fallback
+          await AsyncStorage.setItem('notification_prefs', JSON.stringify(notifRes.data.preferences));
+        }
+      } catch (notifErr) {
+        // Fallback to local cache if backend unreachable
+        const storedNotifs = await AsyncStorage.getItem('notification_prefs');
+        if (storedNotifs) {
+          setNotifications(JSON.parse(storedNotifs));
+        } else {
+          setNotifications({
+            push_enabled: true, email_enabled: true, signals: true,
+            fund_updates: true, referral_rewards: true, support_replies: true,
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
@@ -210,7 +220,9 @@ export default function SettingsScreen() {
     setNotifications(updated);
     
     try {
-      // Store notification preferences locally (no backend table)
+      // Persist to backend (Supabase profiles.notification_preferences)
+      await api.put('/settings/notifications', updated);
+      // Update local cache
       await AsyncStorage.setItem('notification_prefs', JSON.stringify(updated));
     } catch (error) {
       // Revert on error
