@@ -46,55 +46,44 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
     return result;
   }, [signal]);
 
-  // Compute visible price range with adaptive padding.
-  // Goals:
-  //   - Entry roughly centered vertically (~40-50% from top)
-  //   - Minimum spread so lines never cluster into a thin band
-  //   - Wider padding when SL/TP span is tight relative to entry price
-  const { rangeTop, rangeBottom } = useMemo(() => {
-    if (lines.length === 0) return { rangeTop: 0, rangeBottom: 0 };
+  // Anchor: live price → fallback to entry
+  const anchor = currentPrice ?? signal.entry ?? 0;
 
-    const prices = lines.map((l) => l.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const entry = signal.entry ?? (min + max) / 2;
-    const rawSpan = max - min;
+  // Compute range anchored on current price.
+  // Find the maximum distance any signal level sits from the anchor,
+  // then pad by 2.5× so lines spread naturally like a real chart scale.
+  const { topPrice, bottomPrice } = useMemo(() => {
+    if (lines.length === 0 || anchor === 0) return { topPrice: 0, bottomPrice: 0 };
 
-    // Minimum span: 0.4% of entry price — prevents extreme compression
-    // when SL and TP are only a few pips apart
-    const minSpan = entry * 0.004;
-    const span = Math.max(rawSpan, minSpan);
+    let maxDist = 0;
+    for (const l of lines) {
+      const d = Math.abs(l.price - anchor);
+      if (d > maxDist) maxDist = d;
+    }
 
-    // Build range around entry so it sits near the vertical center.
-    // Measure how far above / below entry the levels extend.
-    const above = max - entry;
-    const below = entry - min;
+    // Floor: at least 0.15% of anchor so lines never collapse to a single point
+    maxDist = Math.max(maxDist, anchor * 0.0015);
 
-    // Make both sides at least as large as the larger side,
-    // then add dynamic padding (30-50% of the used side).
-    // This keeps entry near the middle while giving breathing room.
-    const side = Math.max(above, below, span * 0.5);
-    const padFactor = span < minSpan * 2 ? 0.5 : 0.3; // more padding when tight
+    const paddedRange = maxDist * 2.5;
+    return {
+      topPrice: anchor + paddedRange,
+      bottomPrice: anchor - paddedRange,
+    };
+  }, [lines, anchor]);
 
-    const top = entry + side + side * padFactor;
-    const bottom = entry - side - side * padFactor;
+  if (lines.length < 2 || topPrice === bottomPrice) return null;
 
-    return { rangeTop: top, rangeBottom: bottom };
-  }, [lines, signal.entry]);
+  const totalRange = topPrice - bottomPrice;
 
-  if (lines.length < 2) return null; // need at least entry + one level
-
-  const totalRange = rangeTop - rangeBottom;
-
-  // Map price → percentage from top (0% = rangeTop, 100% = rangeBottom)
   const priceToPercent = (price: number): number => {
-    if (totalRange === 0) return 50;
-    return ((rangeTop - price) / totalRange) * 100;
+    return ((topPrice - price) / totalRange) * 100;
   };
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
   const formatPrice = (v: number) => v.toFixed(v >= 100 ? 2 : 5);
 
-  // Determine if current price is outside the signal's actual level range
+  // Out-of-range indicators
   const signalPrices = lines.map((l) => l.price);
   const signalMin = Math.min(...signalPrices);
   const signalMax = Math.max(...signalPrices);
@@ -112,21 +101,16 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
       )}
 
       {lines.map((line) => {
-        const topPercent = priceToPercent(line.price);
-        // Clamp to prevent lines from going off-screen
-        const clamped = Math.max(2, Math.min(98, topPercent));
+        const pct = clamp(priceToPercent(line.price), 2, 98);
         const color = LINE_COLORS[line.kind];
         const bgColor = LABEL_BG[line.kind];
 
         return (
           <View
             key={`${line.label}-${line.price}`}
-            style={[styles.lineRow, { top: `${clamped}%` }]}
+            style={[styles.lineRow, { top: `${pct}%` }]}
           >
-            {/* Dashed line */}
             <View style={[styles.line, { borderColor: color }]} />
-
-            {/* Price label on the right */}
             <View style={[styles.label, { backgroundColor: bgColor }]}>
               <Text style={styles.labelKind}>{line.label}</Text>
               <Text style={styles.labelPrice}>{formatPrice(line.price)}</Text>
