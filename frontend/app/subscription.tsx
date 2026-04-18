@@ -48,14 +48,14 @@ export default function SubscriptionScreen() {
   // Initialize IAP on mount (mobile only)
   useEffect(() => {
     const initializeIAP = async () => {
-      if (isIAPAvailable()) {
-        try {
-          const success = await IAPService.initIAP();
-          setIapInitialized(success);
-          console.log('[Subscription] IAP initialized:', success);
-        } catch (error) {
-          console.error('[Subscription] IAP init error:', error);
-        }
+      // Call initIAP() directly — it handles platform checks and module loading internally.
+      // Do NOT gate on isIAPAvailable() here: the module hasn't loaded yet at this point.
+      try {
+        const success = await IAPService.initIAP();
+        setIapInitialized(success);
+        console.log('[Subscription] IAP initialized:', success);
+      } catch (error) {
+        console.error('[Subscription] IAP init error:', error);
       }
     };
     initializeIAP();
