@@ -5,11 +5,15 @@ Creates the app, registers all routers, configures CORS, and handles lifecycle e
 import os
 import logging
 import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
+import json
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 ROOT_DIR = Path(__file__).parent
@@ -32,8 +36,23 @@ from supabase_auth import fetch_profile_by_email, update_profile
 from core.config import PROTECTED_SUPER_ADMINS
 from models.enums import UserRole, AdminRole
 
+# ─── UTC-aware JSON serialization ─────────────────────────────────────────────
+# Ensures ALL datetime objects in API responses include 'Z' suffix.
+# This prevents frontend timezone misinterpretation across regions.
+class UTCJsonEncoder(json.JSONEncoder):
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            if obj.tzinfo is None:
+                obj = obj.replace(tzinfo=timezone.utc)
+            return obj.strftime('%Y-%m-%dT%H:%M:%S.') + f'{obj.microsecond // 1000:03d}Z'
+        return super().default(obj)
+
+class UTCJSONResponse(JSONResponse):
+    def render(self, content: Any) -> bytes:
+        return json.dumps(content, cls=UTCJsonEncoder, ensure_ascii=False).encode('utf-8')
+
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
-app = FastAPI(title="Swift FX Signals API")
+app = FastAPI(title="Swift FX Signals API", default_response_class=UTCJSONResponse)
 
 # ─── Import and register ALL routers ─────────────────────────────────────────
 from api.routes import (

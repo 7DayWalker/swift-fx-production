@@ -89,6 +89,39 @@ export async function initIAP(): Promise<boolean> {
     console.log('[IAP] Fetching subscriptions with SKUs:', [...SUBSCRIPTION_SKUS]);
     storeProducts = await RNIap.getSubscriptions({ skus: [...SUBSCRIPTION_SKUS] });
     console.log('[IAP] Products loaded:', storeProducts.length);
+
+    // If batch returned empty, retry with a single known-good SKU to isolate
+    // whether it's a propagation issue or a connection/config issue.
+    if (storeProducts.length === 0 && Platform.OS === 'android') {
+      console.warn('[IAP] Batch fetch returned 0 products. Retrying with single SKU...');
+      const fallbackSku = 'com.swiftfx.signals.premium.monthly';
+      try {
+        const singleResult = await RNIap.getSubscriptions({ skus: [fallbackSku] });
+        console.log(`[IAP] Single-SKU retry (${fallbackSku}):`, singleResult.length, 'products');
+        if (singleResult.length > 0) {
+          // Single SKU works — fetch remaining one by one
+          console.log('[IAP] Batch failed but single works. Fetching SKUs individually...');
+          const allProducts: any[] = [...singleResult];
+          for (const sku of SUBSCRIPTION_SKUS) {
+            if (sku === fallbackSku) continue;
+            try {
+              const res = await RNIap.getSubscriptions({ skus: [sku] });
+              if (res.length > 0) allProducts.push(...res);
+              else console.warn(`[IAP] SKU not available in store: ${sku}`);
+            } catch (skuErr: any) {
+              console.warn(`[IAP] Failed to fetch SKU ${sku}:`, skuErr.message);
+            }
+          }
+          storeProducts = allProducts;
+          console.log('[IAP] Individual fetch complete:', storeProducts.length, 'products loaded');
+        } else {
+          console.error('[IAP] Single-SKU retry also returned 0. Store may not have products configured for this build.');
+        }
+      } catch (retryErr: any) {
+        console.error('[IAP] Single-SKU retry failed:', retryErr.message);
+      }
+    }
+
     if (storeProducts.length > 0) {
       storeProducts.forEach((p: any) => {
         console.log(`[IAP] Product: ${p.productId} | price: ${p.localizedPrice || p.price} | title: ${p.title || 'N/A'}`);
