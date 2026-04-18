@@ -69,7 +69,7 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
     const ratio = maxDist / anchor;
     const multiplier = ratio < 0.002 ? 3.5 : ratio > 0.01 ? 2.0 : 2.5;
 
-    const paddedRange = maxDist * multiplier;
+    const paddedRange = Math.max(maxDist * multiplier, anchor * 0.002);
     return {
       topPrice: anchor + paddedRange,
       bottomPrice: anchor - paddedRange,
