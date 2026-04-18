@@ -64,7 +64,12 @@ export default function SignalLinesOverlay({ signal, currentPrice }: SignalLines
     // Floor: at least 0.15% of anchor so lines never collapse to a single point
     maxDist = Math.max(maxDist, anchor * 0.0015);
 
-    const paddedRange = maxDist * 2.5;
+    // Adaptive multiplier: tighter signals get more breathing room,
+    // wide signals get less so they don't push lines to edges.
+    const ratio = maxDist / anchor;
+    const multiplier = ratio < 0.002 ? 3.5 : ratio > 0.01 ? 2.0 : 2.5;
+
+    const paddedRange = maxDist * multiplier;
     return {
       topPrice: anchor + paddedRange,
       bottomPrice: anchor - paddedRange,
