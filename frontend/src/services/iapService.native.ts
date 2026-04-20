@@ -79,20 +79,41 @@ export async function initIAP(): Promise<boolean> {
   if (isConnected) return true;
 
   try {
-    console.log('[IAP] Connecting to store...');
-    console.log(`[IAP] Platform: ${Platform.OS}, __DEV__: ${typeof __DEV__ !== 'undefined' ? __DEV__ : 'N/A'}`);
-    await RNIap.initConnection();
+    console.log('[IAP] ──────── INIT START ────────');
+    console.log(`[IAP] Platform: ${Platform.OS}`);
+    console.log(`[IAP] __DEV__: ${typeof __DEV__ !== 'undefined' ? __DEV__ : 'N/A'}`);
+    console.log(`[IAP] RNIap module type: ${typeof RNIap}`);
+    console.log(`[IAP] RNIap.initConnection type: ${typeof RNIap.initConnection}`);
+    console.log(`[IAP] RNIap.getSubscriptions type: ${typeof RNIap.getSubscriptions}`);
+
+    console.log('[IAP] Calling initConnection()...');
+    const connectionResult = await RNIap.initConnection();
     isConnected = true;
-    console.log('[IAP] Store connection SUCCESSFUL');
+    console.log('[IAP] initConnection() RESOLVED:', JSON.stringify(connectionResult));
 
     // Android: flush any stale pending purchases so the store dialog isn't blocked.
     if (Platform.OS === 'android') {
-      try { await RNIap.flushFailedPurchasesCachedAsPendingAndroid(); } catch { /* ignore */ }
+      try {
+        console.log('[IAP] Flushing pending Android purchases...');
+        await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
+        console.log('[IAP] Flush complete');
+      } catch (flushErr: any) {
+        console.warn('[IAP] Flush failed (non-fatal):', flushErr.message);
+      }
     }
 
     // Fetch products from store using official SKUs.
-    console.log('[IAP] Fetching subscriptions with SKUs:', [...SUBSCRIPTION_SKUS]);
-    storeProducts = await RNIap.getSubscriptions({ skus: [...SUBSCRIPTION_SKUS] });
+    const skuList = [...SUBSCRIPTION_SKUS];
+    console.log('[IAP] Calling getSubscriptions() with', skuList.length, 'SKUs:', JSON.stringify(skuList));
+    const rawResponse = await RNIap.getSubscriptions({ skus: skuList });
+    console.log('[IAP] getSubscriptions() RAW response type:', typeof rawResponse, '| isArray:', Array.isArray(rawResponse));
+    console.log('[IAP] getSubscriptions() returned', rawResponse?.length ?? 'null/undefined', 'products');
+    if (rawResponse && rawResponse.length > 0) {
+      console.log('[IAP] First product raw keys:', Object.keys(rawResponse[0]).join(', '));
+    } else {
+      console.warn('[IAP] getSubscriptions() returned EMPTY. Raw value:', JSON.stringify(rawResponse));
+    }
+    storeProducts = rawResponse || [];
     console.log('[IAP] Products loaded:', storeProducts.length);
 
     // If batch returned empty, retry with a single known-good SKU to isolate
@@ -139,9 +160,15 @@ export async function initIAP(): Promise<boolean> {
     // Register listeners ONCE.
     registerListeners();
 
+    console.log('[IAP] ──────── INIT COMPLETE ────────');
+    console.log(`[IAP] Final state: connected=${isConnected}, products=${storeProducts.length}`);
     return true;
   } catch (err: any) {
-    console.error('[IAP] initConnection FAILED:', err.message, '| code:', err.code);
+    console.error('[IAP] ──────── INIT FAILED ────────');
+    console.error('[IAP] Error message:', err.message);
+    console.error('[IAP] Error code:', err.code);
+    console.error('[IAP] Error name:', err.name);
+    console.error('[IAP] Full error:', JSON.stringify(err, null, 2));
     console.error('[IAP] If error is about missing module/bridge: rebuild with "react-native-iap" in app.json plugins');
     isConnected = false;
     return false;
