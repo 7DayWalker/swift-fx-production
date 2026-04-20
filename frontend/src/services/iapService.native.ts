@@ -53,9 +53,12 @@ function tryLoadIAPModule(): boolean {
   if (RNIap !== null) return true;
   try {
     RNIap = require('react-native-iap');
+    console.log('[IAP] Module loaded successfully. Available methods:', Object.keys(RNIap).slice(0, 10).join(', '));
     return true;
-  } catch {
-    console.log('[IAP] react-native-iap not available (Expo Go or dev build without native module)');
+  } catch (err: any) {
+    console.error('[IAP] FAILED to load react-native-iap:', err.message);
+    console.error('[IAP] This usually means the native module is not compiled into the binary.');
+    console.error('[IAP] Ensure "react-native-iap" is in app.json plugins and rebuild with EAS.');
     return false;
   }
 }
@@ -77,8 +80,10 @@ export async function initIAP(): Promise<boolean> {
 
   try {
     console.log('[IAP] Connecting to store...');
+    console.log(`[IAP] Platform: ${Platform.OS}, __DEV__: ${typeof __DEV__ !== 'undefined' ? __DEV__ : 'N/A'}`);
     await RNIap.initConnection();
     isConnected = true;
+    console.log('[IAP] Store connection SUCCESSFUL');
 
     // Android: flush any stale pending purchases so the store dialog isn't blocked.
     if (Platform.OS === 'android') {
@@ -136,7 +141,8 @@ export async function initIAP(): Promise<boolean> {
 
     return true;
   } catch (err: any) {
-    console.error('[IAP] initConnection error:', err.message);
+    console.error('[IAP] initConnection FAILED:', err.message, '| code:', err.code);
+    console.error('[IAP] If error is about missing module/bridge: rebuild with "react-native-iap" in app.json plugins');
     isConnected = false;
     return false;
   }
