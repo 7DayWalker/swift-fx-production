@@ -214,7 +214,7 @@ export default function SubscriptionScreen() {
     if (!product) {
       console.log(`[Subscription] getStorePrice(${planId}, ${cycle}): Product not found in store`);
       const allProducts = IAPService.getProducts();
-      console.log(`[Subscription] Available products (${allProducts.length}):`, allProducts.map((p: any) => p.productId));
+      console.log(`[Subscription] Available products (${allProducts.length}):`, allProducts.map((p: any) => p.id));
       return null;
     }
     const price = IAPService.formatProductPrice(product) || null;

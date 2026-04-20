@@ -91,7 +91,6 @@
           "delayAppMeasurementInit": true
         }
       ],
-      "react-native-iap",
       [
         "expo-build-properties",
         {
