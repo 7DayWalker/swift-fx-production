@@ -1,7 +1,7 @@
 /**
  * Swift FX In-App Purchase Service - NATIVE (iOS/Android)
  *
- * Production IAP implementation using react-native-iap.
+ * Production IAP implementation using react-native-iap v14 (Nitro Modules).
  *
  * RULES:
  * - Backend is the ONLY authority for subscription status.
@@ -11,6 +11,13 @@
  *
  * This file is only resolved on native iOS/Android builds.
  * react-native-iap must be installed via EAS Build (not available in Expo Go).
+ *
+ * v14 API changes (from earlier versions):
+ *   getSubscriptions()    → fetchProducts({ skus, type: 'subs' })
+ *   requestSubscription() → requestPurchase({ type: 'subs', request: { ... } })
+ *   product.productId     → product.id
+ *   product.localizedPrice → product.displayPrice
+ *   flushFailedPurchasesCachedAsPendingAndroid() → removed
  */
 
 import { Platform } from 'react-native';
@@ -53,9 +60,16 @@ function tryLoadIAPModule(): boolean {
   if (RNIap !== null) return true;
   try {
     RNIap = require('react-native-iap');
+    console.log('[IAP] Module loaded. Checking v14 API surface...');
+    console.log(`[IAP]   initConnection: ${typeof RNIap.initConnection}`);
+    console.log(`[IAP]   fetchProducts: ${typeof RNIap.fetchProducts}`);
+    console.log(`[IAP]   requestPurchase: ${typeof RNIap.requestPurchase}`);
+    console.log(`[IAP]   getAvailablePurchases: ${typeof RNIap.getAvailablePurchases}`);
+    console.log(`[IAP]   finishTransaction: ${typeof RNIap.finishTransaction}`);
     return true;
-  } catch {
-    console.log('[IAP] react-native-iap not available (Expo Go or dev build without native module)');
+  } catch (err: any) {
+    console.error('[IAP] FAILED to load react-native-iap:', err.message);
+    console.error('[IAP] Ensure EAS Build includes react-native-iap native module.');
     return false;
   }
 }
@@ -76,46 +90,45 @@ export async function initIAP(): Promise<boolean> {
   if (isConnected) return true;
 
   try {
-    console.log('[IAP] Connecting to store...');
-    await RNIap.initConnection();
+    console.log('[IAP] ──────── INIT START ────────');
+    console.log(`[IAP] Platform: ${Platform.OS}`);
+
+    console.log('[IAP] Calling initConnection()...');
+    const connectionResult = await RNIap.initConnection();
     isConnected = true;
+    console.log('[IAP] initConnection() RESOLVED:', JSON.stringify(connectionResult));
 
-    // Android: flush any stale pending purchases so the store dialog isn't blocked.
-    if (Platform.OS === 'android') {
-      try { await RNIap.flushFailedPurchasesCachedAsPendingAndroid(); } catch { /* ignore */ }
-    }
+    // ── Fetch subscription products via v14 fetchProducts() ──
+    const skuList = [...SUBSCRIPTION_SKUS];
+    console.log('[IAP] Calling fetchProducts({ skus, type: "subs" }) with', skuList.length, 'SKUs');
+    const rawResponse = await RNIap.fetchProducts({ skus: skuList, type: 'subs' });
+    console.log('[IAP] fetchProducts() returned', rawResponse?.length ?? 0, 'products');
 
-    // Fetch products from store using official SKUs.
-    console.log('[IAP] Fetching subscriptions with SKUs:', [...SUBSCRIPTION_SKUS]);
-    storeProducts = await RNIap.getSubscriptions({ skus: [...SUBSCRIPTION_SKUS] });
-    console.log('[IAP] Products loaded:', storeProducts.length);
+    storeProducts = rawResponse || [];
 
-    // If batch returned empty, retry with a single known-good SKU to isolate
-    // whether it's a propagation issue or a connection/config issue.
+    // If batch returned empty on Android, retry one-by-one to isolate propagation issues
     if (storeProducts.length === 0 && Platform.OS === 'android') {
-      console.warn('[IAP] Batch fetch returned 0 products. Retrying with single SKU...');
+      console.warn('[IAP] Batch returned 0 products. Retrying individually...');
       const fallbackSku = 'com.swiftfx.signals.premium.monthly';
       try {
-        const singleResult = await RNIap.getSubscriptions({ skus: [fallbackSku] });
+        const singleResult = await RNIap.fetchProducts({ skus: [fallbackSku], type: 'subs' });
         console.log(`[IAP] Single-SKU retry (${fallbackSku}):`, singleResult.length, 'products');
         if (singleResult.length > 0) {
-          // Single SKU works — fetch remaining one by one
-          console.log('[IAP] Batch failed but single works. Fetching SKUs individually...');
           const allProducts: any[] = [...singleResult];
           for (const sku of SUBSCRIPTION_SKUS) {
             if (sku === fallbackSku) continue;
             try {
-              const res = await RNIap.getSubscriptions({ skus: [sku] });
+              const res = await RNIap.fetchProducts({ skus: [sku], type: 'subs' });
               if (res.length > 0) allProducts.push(...res);
-              else console.warn(`[IAP] SKU not available in store: ${sku}`);
+              else console.warn(`[IAP] SKU not in store: ${sku}`);
             } catch (skuErr: any) {
-              console.warn(`[IAP] Failed to fetch SKU ${sku}:`, skuErr.message);
+              console.warn(`[IAP] Failed SKU ${sku}:`, skuErr.message);
             }
           }
           storeProducts = allProducts;
-          console.log('[IAP] Individual fetch complete:', storeProducts.length, 'products loaded');
+          console.log('[IAP] Individual fetch complete:', storeProducts.length, 'products');
         } else {
-          console.error('[IAP] Single-SKU retry also returned 0. Store may not have products configured for this build.');
+          console.error('[IAP] Single-SKU also returned 0. Check Play Console setup.');
         }
       } catch (retryErr: any) {
         console.error('[IAP] Single-SKU retry failed:', retryErr.message);
@@ -124,19 +137,22 @@ export async function initIAP(): Promise<boolean> {
 
     if (storeProducts.length > 0) {
       storeProducts.forEach((p: any) => {
-        console.log(`[IAP] Product: ${p.productId} | price: ${p.localizedPrice || p.price} | title: ${p.title || 'N/A'}`);
+        // v14: product.id (not productId), product.displayPrice (not localizedPrice)
+        console.log(`[IAP] Product: ${p.id} | price: ${p.displayPrice || p.price} | title: ${p.title || 'N/A'}`);
       });
     } else {
-      console.warn('[IAP] No products returned from store. Check SKUs match App Store Connect / Google Play Console.');
-      console.warn('[IAP] Expected SKUs:', [...SUBSCRIPTION_SKUS]);
+      console.warn('[IAP] No products returned. Expected SKUs:', skuList);
     }
 
-    // Register listeners ONCE.
     registerListeners();
 
+    console.log('[IAP] ──────── INIT COMPLETE ────────');
+    console.log(`[IAP] connected=${isConnected}, products=${storeProducts.length}`);
     return true;
   } catch (err: any) {
-    console.error('[IAP] initConnection error:', err.message);
+    console.error('[IAP] ──────── INIT FAILED ────────');
+    console.error('[IAP] Error:', err.message, '| code:', err.code);
+    console.error('[IAP] Full error:', JSON.stringify(err, null, 2));
     isConnected = false;
     return false;
   }
@@ -165,11 +181,11 @@ export function getProducts(): any[] {
 
 /**
  * Get a single product by tier + cycle.
- * Returns undefined if product not found in store response.
+ * v14: products use `id` field (not `productId`).
  */
 export function getProductByPlan(plan: SubscriptionPlan, cycle: BillingCycle = 'monthly'): any | undefined {
   const sku = `com.swiftfx.signals.${plan}.${cycle}`;
-  return storeProducts.find((p: any) => p.productId === sku);
+  return storeProducts.find((p: any) => p.id === sku);
 }
 
 /**
@@ -180,16 +196,7 @@ export function getSkuForPlan(plan: SubscriptionPlan, cycle: BillingCycle): stri
 }
 
 /**
- * Request a subscription purchase.
- *
- * Flow:
- * 1. Call store requestSubscription()
- * 2. On receipt, send to backend /iap/{platform}/verify
- * 3. Backend verifies with Apple/Google
- * 4. Backend updates subscription record
- * 5. Return result — caller refreshes /api/subscription/status
- *
- * Content must NOT be unlocked until backend confirms.
+ * Request a subscription purchase via v14 requestPurchase().
  */
 export async function purchaseSubscription(
   plan: SubscriptionPlan,
@@ -206,12 +213,17 @@ export async function purchaseSubscription(
   console.log('[IAP] Requesting purchase:', sku);
 
   try {
-    // iOS uses requestSubscription with sku; Android uses offerToken from subscriptionOfferDetails.
     if (Platform.OS === 'ios') {
-      await RNIap.requestSubscription({ sku });
+      // v14 iOS: requestPurchase with type + apple.sku
+      await RNIap.requestPurchase({
+        type: 'subs',
+        request: {
+          apple: { sku },
+        },
+      });
     } else {
-      // Android: find the product and select the best offer token.
-      const product = storeProducts.find((p: any) => p.productId === sku);
+      // v14 Android: find product, extract offerToken, request with google.skus + offerToken
+      const product = storeProducts.find((p: any) => p.id === sku);
       if (!product) {
         return { success: false, message: `Product ${sku} not found in store.` };
       }
@@ -219,15 +231,17 @@ export async function purchaseSubscription(
       if (!offerToken) {
         return { success: false, message: 'No subscription offer available for this product.' };
       }
-      await RNIap.requestSubscription({
-        sku,
-        subscriptionOffers: [{ sku, offerToken }],
+      await RNIap.requestPurchase({
+        type: 'subs',
+        request: {
+          google: {
+            skus: [sku],
+            offerToken,
+          },
+        },
       });
     }
 
-    // NOTE: The actual purchase completion is handled by the purchaseUpdatedListener.
-    // We return a "pending" result here. The listener will call verifyWithBackend().
-    // The caller should poll /api/subscription/status after a short delay.
     return {
       success: true,
       message: 'Purchase initiated. Verifying with server...',
@@ -251,9 +265,6 @@ export async function purchaseSubscription(
 
 /**
  * Restore purchases (Apple compliance — REQUIRED).
- *
- * Calls getAvailablePurchases(), sends each receipt to backend for re-verification,
- * and returns the highest-tier result.
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
@@ -273,22 +284,19 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
     console.log('[IAP] Found purchases to restore:', purchases.length);
 
-    // Sort by tier priority (VIP > Premium) FIRST, then by date descending.
-    // This ensures VIP is restored over Premium when both exist.
     const tierPriority: Record<string, number> = { vip: 2, premium: 1 };
     const sorted = [...purchases].sort((a: any, b: any) => {
       const aTier = getTierFromProductId(a.productId);
       const bTier = getTierFromProductId(b.productId);
       const aPriority = tierPriority[aTier] || 0;
       const bPriority = tierPriority[bTier] || 0;
-      if (bPriority !== aPriority) return bPriority - aPriority; // VIP first
-      return (b.transactionDate || 0) - (a.transactionDate || 0); // then most recent
+      if (bPriority !== aPriority) return bPriority - aPriority;
+      return (b.transactionDate || 0) - (a.transactionDate || 0);
     });
 
     for (const purchase of sorted) {
       const result = await verifyWithBackend(purchase);
       if (result.success) {
-        // Finish the restored transaction.
         try { await RNIap.finishTransaction({ purchase, isConsumable: false }); } catch { /* ok */ }
         return result;
       }
@@ -314,9 +322,6 @@ export async function getSubscriptionStatus(): Promise<any> {
   }
 }
 
-/**
- * Kept for backward compatibility with existing consumers.
- */
 export async function getIAPStatus(): Promise<any> {
   return getSubscriptionStatus();
 }
@@ -335,16 +340,15 @@ export async function openSubscriptionManagement(): Promise<void> {
 
 /**
  * Format a store product price for display.
- * Returns the store's localized price string (e.g. "$9.99").
+ * v14: uses `displayPrice` (not `localizedPrice`).
  */
 export function formatProductPrice(product: any): string {
   if (!product) return '';
-  return product.localizedPrice || `$${product.price || '0.00'}`;
+  return product.displayPrice || `$${product.price || '0.00'}`;
 }
 
 /**
- * Fetch product IDs from backend.
- * Returns the official product list. Kept for API compatibility.
+ * Fetch product IDs from backend (backward compatibility).
  */
 export async function fetchProductIds(): Promise<any> {
   try {
@@ -357,11 +361,6 @@ export async function fetchProductIds(): Promise<any> {
 
 // ── Internal helpers ──
 
-/**
- * Extract tier from a product ID string.
- * "com.swiftfx.signals.vip.monthly" → "vip"
- * "com.swiftfx.signals.premium.weekly" → "premium"
- */
 function getTierFromProductId(productId: string | undefined): string {
   if (!productId) return '';
   const pid = productId.toLowerCase();
@@ -371,18 +370,16 @@ function getTierFromProductId(productId: string | undefined): string {
 }
 
 /**
- * Select the best offer token from Android subscriptionOfferDetails.
- * Prefers the base plan (no freeTrialPeriod / introductoryPrice) if multiple offers exist.
- * Falls back to the first available offer.
+ * Select the best offer token from Android subscriptionOfferDetailsAndroid.
+ * v14: offers are in `subscriptionOfferDetailsAndroid` array.
  */
 function selectAndroidOfferToken(product: any): string | null {
-  const offers = product?.subscriptionOfferDetails;
+  const offers = product?.subscriptionOfferDetailsAndroid;
   if (!offers || offers.length === 0) return null;
 
-  // If only one offer, use it.
   if (offers.length === 1) return offers[0].offerToken || null;
 
-  // Prefer the base plan offer (no free trial, no introductory pricing).
+  // Prefer the base plan offer (no free trial / zero-price phases)
   const basePlan = offers.find(
     (o: any) =>
       !o.pricingPhases?.pricingPhaseList?.some(
@@ -391,14 +388,13 @@ function selectAndroidOfferToken(product: any): string | null {
   );
   if (basePlan?.offerToken) return basePlan.offerToken;
 
-  // Fallback: first offer with a valid token.
   const withToken = offers.find((o: any) => !!o.offerToken);
   return withToken?.offerToken || null;
 }
 
 /**
  * Verify a purchase with the backend.
- * Builds the correct payload for iOS (receipt_data) vs Android (purchase_token + product_id).
+ * v14 purchase objects use `productId` and `purchaseToken` (unchanged from v12).
  */
 async function verifyWithBackend(purchase: any): Promise<PurchaseResult> {
   try {
@@ -440,8 +436,6 @@ async function verifyWithBackend(purchase: any): Promise<PurchaseResult> {
 
 /**
  * Register purchase listeners ONCE.
- * purchaseUpdatedListener: fires on successful purchase → verify with backend → finish transaction.
- * purchaseErrorListener: fires on purchase error → log.
  */
 function registerListeners(): void {
   if (purchaseListener || !RNIap) return;
@@ -450,7 +444,7 @@ function registerListeners(): void {
     console.log('[IAP] purchaseUpdatedListener fired:', purchase.productId);
 
     if (!purchase.transactionReceipt && !purchase.purchaseToken) {
-      console.warn('[IAP] Purchase has no receipt/token — skipping verification.');
+      console.warn('[IAP] Purchase has no receipt/token — skipping.');
       return;
     }
 
@@ -465,7 +459,6 @@ function registerListeners(): void {
       }
     } else {
       console.warn('[IAP] Backend rejected purchase:', result.message);
-      // Do NOT finish the transaction if backend rejects — store will retry.
     }
   });
 
@@ -476,9 +469,6 @@ function registerListeners(): void {
   console.log('[IAP] Listeners registered');
 }
 
-/**
- * Remove listeners to prevent duplicate events.
- */
 function removeListeners(): void {
   if (purchaseListener) {
     purchaseListener.remove();
@@ -490,7 +480,7 @@ function removeListeners(): void {
   }
 }
 
-// ── Default export (backward compatible) ──
+// ── Default export ──
 export default {
   initIAP,
   endIAP,
