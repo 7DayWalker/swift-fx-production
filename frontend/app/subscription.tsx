@@ -176,10 +176,10 @@ export default function SubscriptionScreen() {
       const result = await IAPService.restorePurchases();
       
       if (result.success) {
+        // onPurchaseVerified callback already triggered SubscriptionContext refresh.
         Alert.alert(
-          'Purchases Restored! 🎉',
+          'Purchases Restored!',
           `Your ${result.plan?.toUpperCase()} subscription has been restored.`,
-          [{ text: 'OK', onPress: () => refreshStatus() }]
         );
       } else {
         Alert.alert('No Purchases Found', result.message);

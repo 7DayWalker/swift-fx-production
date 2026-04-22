@@ -290,7 +290,9 @@ export async function purchaseSubscription(
 }
 
 /**
- * Restore purchases (Apple compliance — REQUIRED).
+ * Restore purchases.
+ * Retrieves existing purchases from the device, verifies each with backend
+ * (highest tier first), and fires onPurchaseVerified on success.
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
@@ -310,12 +312,11 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
     console.log('[IAP] Found purchases to restore:', purchases.length);
 
+    // Sort: VIP first, then most recent
     const tierPriority: Record<string, number> = { vip: 2, premium: 1 };
     const sorted = [...purchases].sort((a: any, b: any) => {
-      const aTier = getTierFromProductId(a.productId);
-      const bTier = getTierFromProductId(b.productId);
-      const aPriority = tierPriority[aTier] || 0;
-      const bPriority = tierPriority[bTier] || 0;
+      const aPriority = tierPriority[getTierFromProductId(a.productId)] || 0;
+      const bPriority = tierPriority[getTierFromProductId(b.productId)] || 0;
       if (bPriority !== aPriority) return bPriority - aPriority;
       return (b.transactionDate || 0) - (a.transactionDate || 0);
     });
@@ -324,6 +325,10 @@ export async function restorePurchases(): Promise<PurchaseResult> {
       const result = await verifyWithBackend(purchase);
       if (result.success) {
         try { await RNIap.finishTransaction({ purchase, isConsumable: false }); } catch { /* ok */ }
+        // Fire the same callback so SubscriptionContext refreshes immediately
+        verificationCallbacks.forEach((cb) => {
+          try { cb(result); } catch { /* consumer error */ }
+        });
         return result;
       }
     }
