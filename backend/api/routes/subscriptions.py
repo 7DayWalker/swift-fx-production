@@ -38,6 +38,50 @@ from api.routes.referral import on_user_subscription_change
 
 logger = logging.getLogger(__name__)
 
+# ── Tier priority for downgrade protection ────────────────────────────────────
+TIER_PRIORITY = {"free": 0, "premium": 1, "vip": 2}
+
+async def should_update_subscription(user_id: str, new_plan: str, new_expiry: datetime) -> bool:
+    """
+    Determine whether a verified purchase should update the user's profile.
+    Prevents a lower-tier subscription from overwriting an active higher-tier one.
+
+    Returns True if the update should proceed:
+      - Upgrade (premium → vip): always
+      - Same tier (renewal): always
+      - Downgrade (vip → premium): only if the higher-tier subscription is expired
+    """
+    profile = await fetch_profile(user_id)
+    if not profile:
+        return True  # No profile yet — first subscription
+
+    current_plan = (profile.get("subscription") or "free").lower()
+    current_priority = TIER_PRIORITY.get(current_plan, 0)
+    new_priority = TIER_PRIORITY.get(new_plan.lower(), 0)
+
+    # Upgrade or same tier — always allow
+    if new_priority >= current_priority:
+        return True
+
+    # Downgrade — only allow if existing subscription is expired
+    current_expiry_str = profile.get("subscription_expiry")
+    if not current_expiry_str:
+        return True  # No expiry recorded — allow
+
+    try:
+        current_expiry = datetime.fromisoformat(str(current_expiry_str).replace("Z", "+00:00"))
+        if current_expiry <= datetime.now(timezone.utc):
+            return True  # Higher tier expired — allow downgrade
+    except (ValueError, TypeError):
+        return True  # Unparseable expiry — allow to be safe
+
+    logger.info(
+        f"[IAP] Downgrade blocked for user {user_id}: "
+        f"current={current_plan} (expires {current_expiry_str}), attempted={new_plan}"
+    )
+    return False
+
+
 router = APIRouter(prefix="/api")
 
 @router.get("/subscription/plans")
@@ -756,19 +800,28 @@ async def verify_apple_purchase(
                 message=f"Unknown product: {product_id}"
             )
         
-        # Update user subscription
+        # Update user subscription (with downgrade protection)
         expiry_date = parsed.get('expiry_date')
         
-        await update_profile(user_id, {
-                "subscription": plan,
-                "subscription_status": "active",
-                "subscription_expiry": expiry_date,
-                "subscription_platform": "ios",
-                "subscription_product_id": product_id,
-                "subscription_auto_renew": parsed.get('auto_renew', True),
-                "subscription_is_trial": parsed.get('is_trial', False),
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            })
+        # Parse expiry for comparison
+        try:
+            expiry_dt = datetime.fromisoformat(str(expiry_date).replace("Z", "+00:00")) if expiry_date else datetime.now(timezone.utc)
+        except (ValueError, TypeError):
+            expiry_dt = datetime.now(timezone.utc)
+        
+        if await should_update_subscription(user_id, plan, expiry_dt):
+            await update_profile(user_id, {
+                    "subscription": plan,
+                    "subscription_status": "active",
+                    "subscription_expiry": expiry_date,
+                    "subscription_platform": "ios",
+                    "subscription_product_id": product_id,
+                    "subscription_auto_renew": parsed.get('auto_renew', True),
+                    "subscription_is_trial": parsed.get('is_trial', False),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        else:
+            logger.info(f"[Apple IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
         
         # Store transaction record
         transaction = {
@@ -986,19 +1039,22 @@ async def verify_google_purchase(
                 request.package_name
             )
         
-        # Update user subscription
+        # Update user subscription (with downgrade protection)
         auto_renewing = validation_result.get('autoRenewing', validation_result.get('auto_renewing', True))
         
-        await update_profile(user_id, {
-                "subscription": plan,
-                "subscription_status": "active",
-                "subscription_expiry": expiry_date.isoformat(),
-                "subscription_platform": "android",
-                "subscription_product_id": request.product_id,
-                "subscription_auto_renew": auto_renewing,
-                "subscription_is_trial": False,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            })
+        if await should_update_subscription(user_id, plan, expiry_date):
+            await update_profile(user_id, {
+                    "subscription": plan,
+                    "subscription_status": "active",
+                    "subscription_expiry": expiry_date.isoformat(),
+                    "subscription_platform": "android",
+                    "subscription_product_id": request.product_id,
+                    "subscription_auto_renew": auto_renewing,
+                    "subscription_is_trial": False,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        else:
+            logger.info(f"[Google IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
         
         # Store transaction record
         order_id = validation_result.get('orderId', f"google_{uuid.uuid4().hex[:12]}")
