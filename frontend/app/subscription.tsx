@@ -35,7 +35,7 @@ export default function SubscriptionScreen() {
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { status: subscriptionStatus, refreshStatus, isLoading: subLoading, isAdminPrivilege } = useSubscription();
+  const { status: subscriptionStatus, refreshStatus, isLoading: subLoading, isAdminPrivilege, verificationError, clearVerificationError } = useSubscription();
   
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
@@ -44,6 +44,18 @@ export default function SubscriptionScreen() {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [iapInitialized, setIapInitialized] = useState(false);
+
+  // Show alert when purchase verification fails
+  useEffect(() => {
+    if (verificationError) {
+      Alert.alert(
+        'Verification Failed',
+        `Your purchase could not be verified: ${verificationError}\n\nIf you were charged, please try "Restore Purchases" or contact support@swiftfx.online.`,
+        [{ text: 'OK', onPress: clearVerificationError }],
+      );
+    }
+  }, [verificationError, clearVerificationError]);
+
 
   // Initialize IAP on mount (mobile only)
   useEffect(() => {

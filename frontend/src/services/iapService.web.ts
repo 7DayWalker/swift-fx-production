@@ -150,6 +150,13 @@ export function onPurchaseVerified(_cb: (result: PurchaseResult) => void): () =>
   return () => {};
 }
 
+/**
+ * Register a callback for purchase verification failure — no-op on web.
+ */
+export function onPurchaseVerificationFailed(_cb: (error: { message: string; code?: string }) => void): () => void {
+  return () => {};
+}
+
 export default {
   initIAP,
   endIAP,

@@ -54,10 +54,12 @@ let storeProducts: any[] = [];
 let purchaseListener: any = null;
 let errorListener: any = null;
 
-// ── Verification callback ──
-// Fires after purchaseUpdatedListener successfully verifies with backend.
+// ── Verification callbacks ──
 type VerificationCallback = (result: PurchaseResult) => void;
+type VerificationFailedCallback = (error: { message: string; code?: string }) => void;
+
 const verificationCallbacks: Set<VerificationCallback> = new Set();
+const verificationFailedCallbacks: Set<VerificationFailedCallback> = new Set();
 
 /**
  * Register a callback that fires when a purchase is verified by the backend.
@@ -66,6 +68,16 @@ const verificationCallbacks: Set<VerificationCallback> = new Set();
 export function onPurchaseVerified(cb: VerificationCallback): () => void {
   verificationCallbacks.add(cb);
   return () => { verificationCallbacks.delete(cb); };
+}
+
+/**
+ * Register a callback that fires when purchase verification fails.
+ * Covers: backend rejection, network errors, missing purchase data.
+ * Returns an unsubscribe function.
+ */
+export function onPurchaseVerificationFailed(cb: VerificationFailedCallback): () => void {
+  verificationFailedCallbacks.add(cb);
+  return () => { verificationFailedCallbacks.delete(cb); };
 }
 
 // ── Module loader ──
@@ -459,6 +471,9 @@ function registerListeners(): void {
 
     if (!purchase.transactionReceipt && !purchase.purchaseToken) {
       console.warn('[IAP] Purchase has no receipt/token — skipping.');
+      verificationFailedCallbacks.forEach((cb) => {
+        try { cb({ message: 'Purchase data is incomplete. Please try again or contact support.', code: 'MISSING_RECEIPT' }); } catch { /* consumer error */ }
+      });
       return;
     }
 
@@ -478,6 +493,9 @@ function registerListeners(): void {
       });
     } else {
       console.warn('[IAP] Backend rejected purchase:', result.message);
+      verificationFailedCallbacks.forEach((cb) => {
+        try { cb({ message: result.message, code: result.error }); } catch { /* consumer error */ }
+      });
     }
   });
 
