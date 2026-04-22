@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '../services/api';
+import { onPurchaseVerified } from '../services/iapService';
 import { useAuth } from './AuthContext';
 
 // ── Types ──
@@ -125,6 +126,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [user, token, fetchStatus]);
+
+  // Refresh immediately when a purchase is verified by the backend.
+  useEffect(() => {
+    const unsubscribe = onPurchaseVerified((result) => {
+      console.log('[SubscriptionContext] Purchase verified, refreshing status:', result.plan);
+      fetchStatus();
+    });
+    return unsubscribe;
+  }, [fetchStatus]);
 
   const refreshStatus = useCallback(async () => {
     setIsLoading(true);

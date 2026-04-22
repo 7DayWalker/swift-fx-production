@@ -125,15 +125,12 @@ export default function SubscriptionScreen() {
         const result = await IAPService.purchaseSubscription(plan, selectedCycle);
         
         if (result.success) {
-          // Wait for backend verification via purchaseUpdatedListener,
-          // then refresh status from the authoritative backend.
-          setTimeout(async () => {
-            await refreshStatus();
-          }, 2000);
+          // Backend verification happens via purchaseUpdatedListener.
+          // SubscriptionContext auto-refreshes when verification completes
+          // (via onPurchaseVerified callback) — no timeout needed.
           Alert.alert(
             'Purchase Initiated',
             'Verifying your subscription with the server...',
-            [{ text: 'OK', onPress: () => refreshStatus() }]
           );
         } else {
           if (result.message !== 'Purchase cancelled.' && result.message !== 'Purchase cancelled') {

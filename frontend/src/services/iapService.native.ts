@@ -54,6 +54,20 @@ let storeProducts: any[] = [];
 let purchaseListener: any = null;
 let errorListener: any = null;
 
+// ── Verification callback ──
+// Fires after purchaseUpdatedListener successfully verifies with backend.
+type VerificationCallback = (result: PurchaseResult) => void;
+const verificationCallbacks: Set<VerificationCallback> = new Set();
+
+/**
+ * Register a callback that fires when a purchase is verified by the backend.
+ * Returns an unsubscribe function.
+ */
+export function onPurchaseVerified(cb: VerificationCallback): () => void {
+  verificationCallbacks.add(cb);
+  return () => { verificationCallbacks.delete(cb); };
+}
+
 // ── Module loader ──
 
 function tryLoadIAPModule(): boolean {
@@ -457,6 +471,11 @@ function registerListeners(): void {
       } catch (finishErr: any) {
         console.error('[IAP] finishTransaction error:', finishErr.message);
       }
+      // Notify all registered listeners that verification succeeded
+      console.log('[IAP] Notifying', verificationCallbacks.size, 'verification listeners');
+      verificationCallbacks.forEach((cb) => {
+        try { cb(result); } catch { /* consumer error */ }
+      });
     } else {
       console.warn('[IAP] Backend rejected purchase:', result.message);
     }
