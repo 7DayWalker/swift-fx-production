@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '../services/api';
+import { onPurchaseVerified, onPurchaseVerificationFailed, restorePurchases as iapRestore, isIAPAvailable } from '../services/iapService';
 import { useAuth } from './AuthContext';
 
 // ── Types ──
@@ -37,7 +38,9 @@ interface SubscriptionContextType {
   status: SubscriptionStatus | null;
   isLoading: boolean;
   error: string | null;
+  verificationError: string | null;
   refreshStatus: () => Promise<void>;
+  clearVerificationError: () => void;
   hasFeature: (feature: keyof SubscriptionFeatures) => boolean;
   canAccessSignal: (visibility: string) => boolean;
   getPlanBadgeColor: () => string;
@@ -68,6 +71,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+
+  const clearVerificationError = useCallback(() => {
+    setVerificationError(null);
+  }, []);
 
   /**
    * Fetch subscription status from backend.
@@ -126,6 +134,24 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }, [user, token, fetchStatus]);
 
+  // Refresh immediately when a purchase is verified by the backend.
+  // Show error when verification fails.
+  useEffect(() => {
+    const unsubVerified = onPurchaseVerified((result) => {
+      console.log('[SubscriptionContext] Purchase verified, refreshing status:', result.plan);
+      setVerificationError(null);
+      fetchStatus();
+    });
+    const unsubFailed = onPurchaseVerificationFailed((err) => {
+      console.warn('[SubscriptionContext] Purchase verification failed:', err.message);
+      setVerificationError(err.message);
+    });
+    return () => {
+      unsubVerified();
+      unsubFailed();
+    };
+  }, [fetchStatus]);
+
   const refreshStatus = useCallback(async () => {
     setIsLoading(true);
     await fetchStatus();
@@ -173,7 +199,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SubscriptionContext.Provider
-      value={{ status, isLoading, error, refreshStatus, hasFeature, canAccessSignal, getPlanBadgeColor, getPlanDisplayName, isAdminPrivilege }}
+      value={{ status, isLoading, error, verificationError, refreshStatus, clearVerificationError, hasFeature, canAccessSignal, getPlanBadgeColor, getPlanDisplayName, isAdminPrivilege }}
     >
       {children}
     </SubscriptionContext.Provider>

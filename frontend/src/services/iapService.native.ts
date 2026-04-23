@@ -54,6 +54,32 @@ let storeProducts: any[] = [];
 let purchaseListener: any = null;
 let errorListener: any = null;
 
+// ── Verification callbacks ──
+type VerificationCallback = (result: PurchaseResult) => void;
+type VerificationFailedCallback = (error: { message: string; code?: string }) => void;
+
+const verificationCallbacks: Set<VerificationCallback> = new Set();
+const verificationFailedCallbacks: Set<VerificationFailedCallback> = new Set();
+
+/**
+ * Register a callback that fires when a purchase is verified by the backend.
+ * Returns an unsubscribe function.
+ */
+export function onPurchaseVerified(cb: VerificationCallback): () => void {
+  verificationCallbacks.add(cb);
+  return () => { verificationCallbacks.delete(cb); };
+}
+
+/**
+ * Register a callback that fires when purchase verification fails.
+ * Covers: backend rejection, network errors, missing purchase data.
+ * Returns an unsubscribe function.
+ */
+export function onPurchaseVerificationFailed(cb: VerificationFailedCallback): () => void {
+  verificationFailedCallbacks.add(cb);
+  return () => { verificationFailedCallbacks.delete(cb); };
+}
+
 // ── Module loader ──
 
 function tryLoadIAPModule(): boolean {
@@ -264,7 +290,9 @@ export async function purchaseSubscription(
 }
 
 /**
- * Restore purchases (Apple compliance — REQUIRED).
+ * Restore purchases.
+ * Retrieves existing purchases from the device, verifies each with backend
+ * (highest tier first), and fires onPurchaseVerified on success.
  */
 export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isIAPAvailable()) {
@@ -284,12 +312,11 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
     console.log('[IAP] Found purchases to restore:', purchases.length);
 
+    // Sort: VIP first, then most recent
     const tierPriority: Record<string, number> = { vip: 2, premium: 1 };
     const sorted = [...purchases].sort((a: any, b: any) => {
-      const aTier = getTierFromProductId(a.productId);
-      const bTier = getTierFromProductId(b.productId);
-      const aPriority = tierPriority[aTier] || 0;
-      const bPriority = tierPriority[bTier] || 0;
+      const aPriority = tierPriority[getTierFromProductId(a.productId)] || 0;
+      const bPriority = tierPriority[getTierFromProductId(b.productId)] || 0;
       if (bPriority !== aPriority) return bPriority - aPriority;
       return (b.transactionDate || 0) - (a.transactionDate || 0);
     });
@@ -298,6 +325,10 @@ export async function restorePurchases(): Promise<PurchaseResult> {
       const result = await verifyWithBackend(purchase);
       if (result.success) {
         try { await RNIap.finishTransaction({ purchase, isConsumable: false }); } catch { /* ok */ }
+        // Fire the same callback so SubscriptionContext refreshes immediately
+        verificationCallbacks.forEach((cb) => {
+          try { cb(result); } catch { /* consumer error */ }
+        });
         return result;
       }
     }
@@ -445,6 +476,9 @@ function registerListeners(): void {
 
     if (!purchase.transactionReceipt && !purchase.purchaseToken) {
       console.warn('[IAP] Purchase has no receipt/token — skipping.');
+      verificationFailedCallbacks.forEach((cb) => {
+        try { cb({ message: 'Purchase data is incomplete. Please try again or contact support.', code: 'MISSING_RECEIPT' }); } catch { /* consumer error */ }
+      });
       return;
     }
 
@@ -457,8 +491,16 @@ function registerListeners(): void {
       } catch (finishErr: any) {
         console.error('[IAP] finishTransaction error:', finishErr.message);
       }
+      // Notify all registered listeners that verification succeeded
+      console.log('[IAP] Notifying', verificationCallbacks.size, 'verification listeners');
+      verificationCallbacks.forEach((cb) => {
+        try { cb(result); } catch { /* consumer error */ }
+      });
     } else {
       console.warn('[IAP] Backend rejected purchase:', result.message);
+      verificationFailedCallbacks.forEach((cb) => {
+        try { cb({ message: result.message, code: result.error }); } catch { /* consumer error */ }
+      });
     }
   });
 
