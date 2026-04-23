@@ -213,30 +213,3 @@ export function useSubscription() {
   }
   return context;
 }
-g => {
-    if (!status) return 'Free';
-    switch (status.capability_tier) {
-      case 'vip': return 'VIP';
-      case 'premium': return 'Premium';
-      default: return 'Free';
-    }
-  }, [status]);
-
-  const isAdminPrivilege = status?.capability_source === 'admin_privilege';
-
-  return (
-    <SubscriptionContext.Provider
-      value={{ status, isLoading, error, verificationError, refreshStatus, clearVerificationError, hasFeature, canAccessSignal, getPlanBadgeColor, getPlanDisplayName, isAdminPrivilege }}
-    >
-      {children}
-    </SubscriptionContext.Provider>
-  );
-}
-
-export function useSubscription() {
-  const context = useContext(SubscriptionContext);
-  if (context === undefined) {
-    throw new Error('useSubscription must be used within a SubscriptionProvider');
-  }
-  return context;
-}
