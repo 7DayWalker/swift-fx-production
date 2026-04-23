@@ -1,62 +1,102 @@
-# SwiftFX Signals — Product Requirements Document
+# Swift FX Production — PRD
 
 ## Original Problem Statement
-A React Native (Expo) mobile trading signals app with FastAPI backend + MongoDB. Features include Supabase Auth, Expo Push Notifications, Google AdMob, Expo In-App Purchases, Community feed, AI Analyzer, and a real-time Signal engine with trailing stop-loss.
+Repository setup, verification, and iterative feature development on the Swift FX mobile trading signals app (Expo/React Native + FastAPI + Supabase + MongoDB).
 
-## Current Focus
-Android push notification delivery — root cause identified as Firebase project misconfiguration.
+## Architecture
+- **Frontend**: Expo/React Native (TypeScript), Expo Router, react-native-iap v14
+- **Backend**: FastAPI (Python), deployed on Railway
+- **Auth**: Supabase Auth (email/password + OAuth)
+- **Database**: Supabase (profiles, auth), MongoDB (device_tokens, iap_transactions, signals)
+- **Push**: Expo Push → FCM (Android) / APNs (iOS)
+- **IAP**: Google Play Billing (via react-native-iap v14 Nitro), Apple StoreKit
+- **Charts**: TradingView WebView embed with signal overlays
 
----
+## What's Been Implemented
 
-## ROOT CAUSE: Android Push Notifications (Apr 14, 2026)
+### Session 1 — Repository & Infrastructure
+- Cloned `swift-fx-production` from GitHub, verified 6,294 files match `origin/main`
+- Hard reset to clean mirror of remote `main`
+- Created `muriel` branch, implemented changes, merged via fast-forward, cleaned up
 
-**Traced via `/api/debug/android-push-trace` endpoint.**
+### Android Notification Branding
+- Added `android.largeIcon` to push notification payload (Supabase-hosted SwiftFX logo)
+- Added `notification.icon` + `notification.color` to `app.json` Android config
+- Created `notification-icon.png` (white silhouette, transparent background)
 
-### Evidence Chain
-1. Backend sends push to Expo API → Expo returns `status: ok`, ticket ID assigned ✅
-2. Expo forwards to FCM (Google) → FCM returns **HTTP 403 PERMISSION_DENIED** ❌
-3. Android device receives NOTHING
+### Firebase Push Fix
+- Swapped Expo FCM v1 credentials from wrong project (`swift-fx-signals`) to correct (`swift-fx-89f91`)
+- Deleted old key, uploaded new service account, validated via `/api/debug/android-push-trace`
 
-### FCM Error (verbatim)
-```
-"code": 403,
-"message": "Permission denied on resource project swift-fx-signals.",
-"status": "PERMISSION_DENIED",
-"reason": "CONSUMER_INVALID",
-"service": "fcm.googleapis.com"
-```
+### Password Recovery Flow (End-to-End)
+- Added `redirectTo: 'swiftfx://auth'` to `resetPasswordForEmail`
+- Created `app/reset-password.tsx` screen with password update + logout flow
+- Moved ALL deep link handling from `auth.tsx` to `AuthContext` (fixes race condition)
+- Cold start: `getInitialURL()` processed before routing; Runtime: `addEventListener` in AuthContext
+- `isLoading` blocks `_layout.tsx` routing until deep link processing completes
+- `auth.tsx` reduced to minimal passthrough screen
 
-### What This Means
-- Token is VALID (Expo accepted it)
-- Token is FRESH (last_seen today)
-- projectId IS present in frontend code
-- Payload structure is correct
-- **The Firebase Cloud Messaging API (V1) is disabled or misconfigured on Firebase project `swift-fx-signals`**
+### Notification Preferences (Full Stack)
+- Unified backend to read/write `notification_preferences` (not `notification_settings`)
+- Frontend settings screen now calls `PUT /settings/notifications` on toggle change
+- Push service enforces `push_enabled` global override before per-category checks
+- `notification_settings` deprecated (not deleted)
 
-### Required Fix (User Action)
-1. Go to https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=swift-fx-signals
-2. **Enable** "Firebase Cloud Messaging API (V1)"
-3. Verify at Firebase Console → Project Settings → Cloud Messaging → server key not disabled
-4. Re-run trace: `POST /api/debug/android-push-trace` → receipt should show `status: ok`
+### In-App TradingView Charts
+- Created `app/chart.tsx` with full-screen WebView loading TradingView widget embed
+- Dashboard watchlist now opens charts in-app via `router.push('/chart?symbol=...')`
+- Fallback to external browser on WebView error
 
----
+### Signal Overlay System
+- `SignalOverlay.tsx`: Floating card showing signal type, entry, SL, TPs with dismiss + "View Signal" action
+- `SignalLinesOverlay.tsx`: Horizontal price lines (Entry=blue, SL=red, TP=green) over WebView
+- Current-price-anchored positioning with adaptive padding (tight→3.5×, normal→2.5×, wide→2.0×)
+- Out-of-range indicators (green tint above, red tint below)
+- Symbol-change auto-reset, smart signal selection (active preferred, then most recent)
 
-## iOS 3x Duplicate Fix (Apr 14, 2026) — RESOLVED
-Root cause: Same iOS push token registered under 3 different user accounts.
-Fix: `register-token` deactivates token across all other users. Cleanup endpoint Phase 2 added.
+### Timestamp Fix (Global)
+- Backend: `UTCJsonEncoder` + `UTCJSONResponse` as default — all datetimes serialized with `Z`
+- Frontend: Removed all `parseUTC()` hacks — `new Date()` works correctly with UTC strings
+- All timezones display correctly worldwide
 
-## Completed Features
-- Signal Engine, Community feed, Dashboard, AI Analyzer, Supabase Auth, AdMob
-- EAS remote versioning, notification deduplication, trailing stop-loss
-- Trace logging on all notification trigger sites
-- `ANDROID_PUSH_PAYLOAD` and `ANDROID_TRACE_*` logging
+### IAP v14 Migration
+- Rewrote `iapService.native.ts` for react-native-iap v14 API:
+  - `getSubscriptions()` → `fetchProducts({ type: 'subs' })`
+  - `requestSubscription()` → `requestPurchase({ type: 'subs', request: { apple/google } })`
+  - `product.productId` → `product.id`, `localizedPrice` → `displayPrice`
+- Added `react-native-iap` config plugin + `expo-build-properties` (Kotlin 2.1.20) to `app.json`
+- Fixed race condition: `isIAPAvailable()` gate removed from `subscription.tsx`
+- Android fallback: individual SKU fetch if batch returns empty
 
-## Diagnostic Endpoints
-- `POST /api/debug/android-push-trace` — Isolated single-device Android push test with full Expo receipt
-- `POST /api/debug/cleanup-device-tokens` — Phase 1+2 token deduplication
+### Purchase Verification Event System
+- `onPurchaseVerified` callback: fires after successful backend verification
+- `onPurchaseVerificationFailed` callback: fires on rejection, network error, missing receipt
+- `SubscriptionContext` subscribes to both → immediate UI refresh or error alert
+- Removed `setTimeout` blind refresh from subscription screen
 
-## Upcoming Tasks
-- P0: Enable FCM API V1 on Firebase project (user action)
-- P1: E2E IAP testing on physical Apple devices
-- P2: Alternative Gold price API
-- P3: Refactor server.py (8500+ lines)
+### Restore Purchases
+- `restorePurchases()` fires `onPurchaseVerified` callbacks for immediate UI update
+- Auto-restore on startup: if user is `free` tier + IAP available, silently checks device
+- Manual restore via button on subscription screen
+
+### Subscription Downgrade Protection
+- `should_update_subscription()` guard on both Apple and Google verify endpoints
+- Tier priority: vip(2) > premium(1) > free(0)
+- Upgrades/renewals: always allowed
+- Downgrades: only if higher tier is confirmed expired
+- Missing expiry treated as active (blocks downgrade)
+- `on_user_subscription_change` referral hook only fires when profile actually updates
+
+## Prioritized Backlog
+- **P0**: EAS Build with `--clear-cache` for native IAP linking (user must run locally)
+- **P1**: Monitor push delivery rates post-Firebase fix across all 16 Android tokens
+- **P2**: Add scheduled push health-check (daily silent push to canary device)
+- **P2**: Bulk push test across full Android device fleet
+- **P3**: Consider `googleServiceAccountKeyForSubmissions` for Play Store submissions
+
+## Next Tasks
+1. User runs `eas build --platform android --clear-cache` to get IAP working
+2. Test full purchase flow end-to-end on Android closed testing
+3. Validate restore purchases on fresh install
+4. Test password recovery deep link on both cold start and runtime
+5. Verify notification preferences toggle persists and filters push correctly

@@ -63,17 +63,27 @@ async def should_update_subscription(user_id: str, new_plan: str, new_expiry: da
     if new_priority >= current_priority:
         return True
 
-    # Downgrade — only allow if existing subscription is expired
+    # Downgrade — only allow if existing subscription is confirmed expired
     current_expiry_str = profile.get("subscription_expiry")
     if not current_expiry_str:
-        return True  # No expiry recorded — allow
+        # No expiry recorded — treat as active (do not allow downgrade)
+        logger.info(
+            f"[IAP] Downgrade blocked for user {user_id}: "
+            f"current={current_plan} (no expiry — treated as active), attempted={new_plan}"
+        )
+        return False
 
     try:
         current_expiry = datetime.fromisoformat(str(current_expiry_str).replace("Z", "+00:00"))
         if current_expiry <= datetime.now(timezone.utc):
             return True  # Higher tier expired — allow downgrade
     except (ValueError, TypeError):
-        return True  # Unparseable expiry — allow to be safe
+        # Unparseable expiry — treat as active (do not allow downgrade)
+        logger.info(
+            f"[IAP] Downgrade blocked for user {user_id}: "
+            f"current={current_plan} (unparseable expiry: {current_expiry_str}), attempted={new_plan}"
+        )
+        return False
 
     logger.info(
         f"[IAP] Downgrade blocked for user {user_id}: "
@@ -820,6 +830,8 @@ async def verify_apple_purchase(
                     "subscription_is_trial": parsed.get('is_trial', False),
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 })
+            # Trigger subscription change event only when profile was actually updated
+            await on_user_subscription_change(user_id, plan)
         else:
             logger.info(f"[Apple IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
         
@@ -846,9 +858,6 @@ async def verify_apple_purchase(
             {"$set": transaction},
             upsert=True
         )
-        
-        # Trigger subscription change event (for referrals, etc.)
-        await on_user_subscription_change(user_id, plan)
         
         logger.info(f"[Apple IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
         
@@ -1053,6 +1062,8 @@ async def verify_google_purchase(
                     "subscription_is_trial": False,
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 })
+            # Trigger subscription change event only when profile was actually updated
+            await on_user_subscription_change(user_id, plan)
         else:
             logger.info(f"[Google IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
         
@@ -1079,9 +1090,6 @@ async def verify_google_purchase(
             {"$set": transaction},
             upsert=True
         )
-        
-        # Trigger subscription change event
-        await on_user_subscription_change(user_id, plan)
         
         logger.info(f"[Google IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
         
