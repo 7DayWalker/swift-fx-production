@@ -126,13 +126,59 @@ export async function initIAP(): Promise<boolean> {
 
     // ── Fetch subscription products via v14 fetchProducts() ──
     const skuList = [...SUBSCRIPTION_SKUS];
-    console.log('[IAP] Calling fetchProducts({ skus, type: "subs" }) with', skuList.length, 'SKUs');
-    const rawResponse = await RNIap.fetchProducts({ skus: skuList, type: 'subs' });
-    console.log('[IAP] fetchProducts() returned', rawResponse?.length ?? 0, 'products');
+    console.log('[IAP] ──────── PRODUCT FETCH START ────────');
+    console.log(`[IAP] Requesting ${skuList.length} SKUs:`, JSON.stringify(skuList));
+    console.log(`[IAP] Fetch type: "subs"`);
+    console.log(`[IAP] Platform: ${Platform.OS}`);
+
+    let rawResponse: any[];
+    try {
+      rawResponse = await RNIap.fetchProducts({ skus: skuList, type: 'subs' });
+    } catch (fetchErr: any) {
+      console.error('[IAP] fetchProducts() THREW:', fetchErr.message, '| code:', fetchErr.code);
+      console.error('[IAP] fetchProducts() full error:', JSON.stringify(fetchErr, null, 2));
+      rawResponse = [];
+    }
+
+    console.log('[IAP] fetchProducts() response type:', typeof rawResponse);
+    console.log('[IAP] fetchProducts() isArray:', Array.isArray(rawResponse));
+    console.log('[IAP] fetchProducts() count:', rawResponse?.length ?? 'null/undefined');
+    if (rawResponse && rawResponse.length > 0) {
+      console.log('[IAP] First product keys:', Object.keys(rawResponse[0]).join(', '));
+    } else {
+      console.warn('[IAP] fetchProducts() returned EMPTY or null');
+      console.warn('[IAP] Raw value:', JSON.stringify(rawResponse));
+    }
 
     storeProducts = rawResponse || [];
 
-    // If batch returned empty on Android, retry one-by-one to isolate propagation issues
+    // ── iOS: retry individually if batch returned empty ──
+    // StoreKit may reject batch if ANY product ID is not configured in App Store Connect.
+    // Apple is stricter than Google — one bad ID can cause the entire batch to return empty.
+    if (storeProducts.length === 0 && Platform.OS === 'ios') {
+      console.warn('[IAP] iOS: Batch returned 0 products. Retrying SKUs individually...');
+      console.warn('[IAP] iOS: This usually means one or more product IDs are not configured in App Store Connect,');
+      console.warn('[IAP]       or the app bundle ID does not match, or agreements are not signed.');
+      const allProducts: any[] = [];
+      for (const sku of SUBSCRIPTION_SKUS) {
+        try {
+          console.log(`[IAP] iOS: Trying single SKU: ${sku}`);
+          const res = await RNIap.fetchProducts({ skus: [sku], type: 'subs' });
+          if (res && res.length > 0) {
+            console.log(`[IAP] iOS: ✓ ${sku} returned ${res.length} product(s)`);
+            allProducts.push(...res);
+          } else {
+            console.warn(`[IAP] iOS: ✗ ${sku} — NOT FOUND in App Store Connect`);
+          }
+        } catch (skuErr: any) {
+          console.error(`[IAP] iOS: ✗ ${sku} — ERROR: ${skuErr.message}`);
+        }
+      }
+      storeProducts = allProducts;
+      console.log(`[IAP] iOS: Individual fetch complete. ${storeProducts.length} of ${SUBSCRIPTION_SKUS.length} products found.`);
+    }
+
+    // ── Android: retry individually if batch returned empty ──
     if (storeProducts.length === 0 && Platform.OS === 'android') {
       console.warn('[IAP] Batch returned 0 products. Retrying individually...');
       const fallbackSku = 'com.swiftfx.signals.premium.monthly';
