@@ -69,6 +69,7 @@ from api.routes import (
     support,
     dashboard,
     market,
+    insights,
 )
 
 app.include_router(signals.router)
@@ -84,6 +85,7 @@ app.include_router(referral.router)
 app.include_router(support.router)
 app.include_router(dashboard.router)
 app.include_router(market.router)
+app.include_router(insights.router)
 
 # ─── Signal Engine ────────────────────────────────────────────────────────────
 from services.signal_engine import (
