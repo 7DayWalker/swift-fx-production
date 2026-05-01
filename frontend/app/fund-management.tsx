@@ -308,7 +308,7 @@ export default function FundManagementScreen() {
           </View>
           <Text style={[styles.introTitle, dynamicStyles.text]}>Professional Fund Management</Text>
           <Text style={[styles.introText, dynamicStyles.textSecondary]}>
-            Let our expert traders manage your investments. Hands-off approach with transparent reporting.
+            Fund Management provides access to external trading strategies and performance insights.{'\n\n'}All trading activity and account management occur outside of this app through third-party platforms such as MT4/MT5.{'\n\n'}Swift FX does not hold, manage, or have direct access to user funds within the app. The app does not execute trades or provide brokerage services.{'\n\n'}This feature is provided for informational and educational purposes only and does not constitute financial advice.
           </Text>
         </View>
 
@@ -386,6 +386,11 @@ export default function FundManagementScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* CTA Disclaimer - Always visible below action area */}
+        <Text style={[styles.ctaDisclaimer, dynamicStyles.textSecondary]}>
+          Trading involves risk. All account activity takes place on external platforms. Swift FX is not a broker and does not hold user funds.
+        </Text>
 
         {/* Legal Disclaimers - Always visible */}
         <View style={[styles.disclaimerCard, { backgroundColor: `${theme.border}30` }]}>
@@ -594,6 +599,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Disclaimer
+  ctaDisclaimer: {
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    fontStyle: 'italic',
+  },
   disclaimerCard: {
     borderRadius: 12,
     padding: 16,

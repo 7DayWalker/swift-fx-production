@@ -31,7 +31,9 @@
             ]
           }
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app uses the camera to capture chart images for AI-powered market analysis.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library so you can upload chart images for AI-powered market analysis."
       }
     },
     "android": {
