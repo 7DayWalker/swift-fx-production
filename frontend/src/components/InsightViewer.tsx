@@ -7,12 +7,15 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
+  Animated,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SOUND_PREF_KEY = 'swiftfx_insights_sound';
 
 interface InsightItem {
   id: string;
@@ -39,11 +42,28 @@ const CATEGORY_COLORS: Record<string, string> = {
   Strategy: '#10B981',
   Analysis: '#06B6D4',
   Fundamentals: '#EC4899',
+  Sponsored: '#8A8D98',
 };
 
 export default function InsightViewer({ items, initialIndex = 0, onClose }: InsightViewerProps) {
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [isMuted, setIsMuted] = useState(true);
+
+  // Load sound preference
+  useEffect(() => {
+    AsyncStorage.getItem(SOUND_PREF_KEY).then((val) => {
+      if (val === 'on') setIsMuted(false);
+    });
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem(SOUND_PREF_KEY, next ? 'off' : 'on');
+      return next;
+    });
+  }, []);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -54,8 +74,15 @@ export default function InsightViewer({ items, initialIndex = 0, onClose }: Insi
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const renderItem = useCallback(({ item, index }: { item: InsightItem; index: number }) => {
-    return <InsightSlide item={item} isActive={index === activeIndex} />;
-  }, [activeIndex]);
+    return (
+      <InsightSlide
+        item={item}
+        isActive={index === activeIndex}
+        isMuted={isMuted}
+        onToggleSound={toggleSound}
+      />
+    );
+  }, [activeIndex, isMuted, toggleSound]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
     length: SCREEN_HEIGHT,
@@ -81,7 +108,6 @@ export default function InsightViewer({ items, initialIndex = 0, onClose }: Insi
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         pagingEnabled
-        vertical
         showsVerticalScrollIndicator={false}
         snapToInterval={SCREEN_HEIGHT}
         decelerationRate="fast"
@@ -97,12 +123,29 @@ export default function InsightViewer({ items, initialIndex = 0, onClose }: Insi
   );
 }
 
-// ── Individual slide ──
-const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: boolean }) => {
+// ── Individual slide with engagement sidebar ──
+const InsightSlide = memo(({ item, isActive, isMuted, onToggleSound }: {
+  item: InsightItem;
+  isActive: boolean;
+  isMuted: boolean;
+  onToggleSound: () => void;
+}) => {
   const videoRef = useRef<Video>(null);
   const categoryColor = CATEGORY_COLORS[item.category] || '#8A8D98';
+  const [liked, setLiked] = useState(false);
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Pause video when not active
+  // Fade in on active
+  useEffect(() => {
+    if (isActive) {
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else {
+      fadeAnim.setValue(0);
+    }
+  }, [isActive, fadeAnim]);
+
+  // Play/pause video
   useEffect(() => {
     if (!videoRef.current || item.type !== 'video') return;
     if (isActive) {
@@ -112,8 +155,32 @@ const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: bo
     }
   }, [isActive, item.type]);
 
+  // Mute/unmute
+  useEffect(() => {
+    if (videoRef.current && item.type === 'video') {
+      videoRef.current.setIsMutedAsync(isMuted);
+    }
+  }, [isMuted, item.type]);
+
+  const handleLike = () => {
+    setLiked(!liked);
+    // Pop animation
+    Animated.sequence([
+      Animated.spring(likeScale, { toValue: 1.4, useNativeDriver: true, speed: 50 }),
+      Animated.spring(likeScale, { toValue: 1, useNativeDriver: true, speed: 30 }),
+    ]).start();
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${item.title} — Swift FX Insights`,
+      });
+    } catch { /* cancelled */ }
+  };
+
   return (
-    <View style={styles.slide}>
+    <Animated.View style={[styles.slide, { opacity: fadeAnim }]}>
       {/* Background media */}
       {item.type === 'video' && item.video_url ? (
         <Video
@@ -122,7 +189,7 @@ const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: bo
           style={styles.media}
           resizeMode={ResizeMode.COVER}
           isLooping
-          isMuted
+          isMuted={isMuted}
           shouldPlay={isActive}
           posterSource={{ uri: item.thumbnail }}
           usePoster
@@ -131,11 +198,11 @@ const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: bo
         <Image source={{ uri: item.thumbnail }} style={styles.media} resizeMode="cover" />
       )}
 
-      {/* Dark gradient overlay at bottom */}
-      <View style={styles.gradient} />
+      {/* Dark overlay for readability */}
+      <View style={styles.darkOverlay} />
 
       {/* Category tag — top left */}
-      <View style={[styles.categoryBadge, { backgroundColor: `${categoryColor}CC` }]}>
+      <View style={[styles.categoryBadge, { backgroundColor: `${categoryColor}DD` }]}>
         <Text style={styles.categoryBadgeText}>{item.category}</Text>
       </View>
 
@@ -147,6 +214,41 @@ const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: bo
         </View>
       )}
 
+      {/* Right-side engagement column */}
+      <View style={styles.engagementColumn}>
+        {/* Like */}
+        <TouchableOpacity onPress={handleLike} style={styles.engagementBtn}>
+          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+            <Ionicons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={26}
+              color={liked ? '#FF6B6B' : '#FFFFFF'}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+
+        {/* Comment */}
+        <TouchableOpacity style={styles.engagementBtn}>
+          <Ionicons name="chatbubble-outline" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Share */}
+        <TouchableOpacity onPress={handleShare} style={styles.engagementBtn}>
+          <Ionicons name="share-outline" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Sound toggle */}
+        {item.type === 'video' && (
+          <TouchableOpacity onPress={onToggleSound} style={styles.engagementBtn}>
+            <Ionicons
+              name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'}
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Caption overlay at bottom */}
       <View style={styles.captionArea}>
         <Text style={styles.caption}>{item.title}</Text>
@@ -154,7 +256,7 @@ const InsightSlide = memo(({ item, isActive }: { item: InsightItem; isActive: bo
           {item.duration < 60 ? `${item.duration}s` : `${Math.round(item.duration / 60)} min`} read
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 });
 
@@ -183,22 +285,16 @@ const styles = StyleSheet.create({
   media: {
     ...StyleSheet.absoluteFillObject,
   },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '40%',
-    backgroundColor: 'transparent',
-    // Simulated gradient with a semi-transparent overlay
-    borderTopWidth: 0,
+  darkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   categoryBadge: {
     position: 'absolute',
     top: 60,
     left: 16,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   categoryBadgeText: {
@@ -224,15 +320,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  // Engagement column — right side
+  engagementColumn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 160,
+    alignItems: 'center',
+    gap: 20,
+  },
+  engagementBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Caption
   captionArea: {
     paddingHorizontal: 20,
     paddingBottom: 80,
+    paddingRight: 70,
   },
   caption: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 26,
+    lineHeight: 24,
     marginBottom: 8,
     textShadowColor: 'rgba(0,0,0,0.7)',
     textShadowOffset: { width: 0, height: 1 },

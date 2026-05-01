@@ -106,7 +106,10 @@ async def get_insights_feed(
     if not items:
         items = SEED_INSIGHTS[offset:offset + limit]
 
-    # Insert ad slots after every 4 content items
+    # Mix categories: prevent same category appearing back-to-back
+    items = _mix_categories(items)
+
+    # Insert ad slots after every 4 content items (never as first item)
     feed = []
     content_count = 0
     for item in items:
@@ -124,3 +127,27 @@ async def get_insights_feed(
             })
 
     return feed
+
+
+def _mix_categories(items: list) -> list:
+    """Reorder items so no two consecutive items share the same category."""
+    if len(items) <= 2:
+        return items
+
+    result = [items[0]]
+    remaining = items[1:]
+
+    while remaining:
+        last_category = result[-1].get("category")
+        # Find first item with a different category
+        diff_idx = next(
+            (i for i, item in enumerate(remaining) if item.get("category") != last_category),
+            None,
+        )
+        if diff_idx is not None:
+            result.append(remaining.pop(diff_idx))
+        else:
+            # All remaining are same category — just append
+            result.append(remaining.pop(0))
+
+    return result

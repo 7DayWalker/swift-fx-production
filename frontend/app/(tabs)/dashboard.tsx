@@ -95,6 +95,7 @@ function SwiftInsightsSection() {
   const [viewerIndex, setViewerIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(0);
+  const autoScrollPaused = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -110,11 +111,12 @@ function SwiftInsightsSection() {
     })();
   }, []);
 
-  // Auto-scroll (subtle, every 4 seconds)
+  // Auto-scroll (subtle, every 4 seconds) — pauses on touch
   useEffect(() => {
     if (insights.length < 4) return;
     const interval = setInterval(() => {
-      scrollX.current += 212; // card width + margin
+      if (autoScrollPaused.current) return;
+      scrollX.current += 212;
       const maxScroll = (insights.length - 2) * 212;
       if (scrollX.current >= maxScroll) scrollX.current = 0;
       scrollRef.current?.scrollTo({ x: scrollX.current, animated: true });
@@ -127,13 +129,22 @@ function SwiftInsightsSection() {
     setViewerVisible(true);
   };
 
+  const handleTouchStart = () => {
+    autoScrollPaused.current = true;
+    // Resume after 8 seconds of inactivity
+    setTimeout(() => { autoScrollPaused.current = false; }, 8000);
+  };
+
   if (insights.length === 0) return null;
 
   return (
     <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Swift Insights</Text>
+          <View>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Swift Insights</Text>
+            <Text style={{ fontSize: 11, color: theme.textSecondary, marginTop: 2 }}>Quick trading insights while you wait</Text>
+          </View>
           <TouchableOpacity onPress={() => handleCardPress(0)}>
             <Text style={{ fontSize: 12, color: theme.primary, fontWeight: '600' }}>See All</Text>
           </TouchableOpacity>
@@ -142,8 +153,8 @@ function SwiftInsightsSection() {
           ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ marginTop: 8 }}
-          onScrollBeginDrag={() => { scrollX.current = 0; }} // Reset auto-scroll on manual touch
+          style={{ marginTop: 10 }}
+          onScrollBeginDrag={handleTouchStart}
         >
           {insights.map((item, idx) => (
             <InsightCard

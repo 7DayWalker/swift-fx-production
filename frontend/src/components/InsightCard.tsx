@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { memo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface InsightCardProps {
@@ -10,6 +10,7 @@ interface InsightCardProps {
   duration: number;
   is_ad?: boolean;
   locked?: boolean;
+  isActive?: boolean;
   onPress: () => void;
 }
 
@@ -23,44 +24,72 @@ const CATEGORY_COLORS: Record<string, string> = {
   Fundamentals: '#EC4899',
 };
 
-function InsightCard({ title, thumbnail, category, duration, is_ad, locked, onPress }: InsightCardProps) {
+function InsightCard({ title, thumbnail, category, duration, is_ad, locked, isActive, onPress }: InsightCardProps) {
   const categoryColor = CATEGORY_COLORS[category] || '#8A8D98';
   const durationLabel = duration < 60 ? `${duration}s` : `${Math.round(duration / 60)}m`;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Scale animation when card becomes active (visible in viewport)
+  useEffect(() => {
+    if (isActive) {
+      Animated.spring(scaleAnim, { toValue: 1.02, useNativeDriver: true, speed: 20 }).start();
+    } else {
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+    }
+  }, [isActive, scaleAnim]);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.8}
-      data-testid={`insight-card-${is_ad ? 'ad' : 'content'}`}
-    >
-      <View style={styles.thumbnailWrap}>
-        <Image source={{ uri: thumbnail }} style={styles.thumbnail} resizeMode="cover" />
-        {/* Duration badge */}
-        <View style={styles.durationBadge}>
-          <Ionicons name="time-outline" size={10} color="#FFFFFF" />
-          <Text style={styles.durationText}>{durationLabel}</Text>
-        </View>
-        {/* Lock overlay */}
-        {locked && (
-          <View style={styles.lockOverlay}>
-            <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={onPress}
+        activeOpacity={0.85}
+        data-testid={`insight-card-${is_ad ? 'ad' : 'content'}`}
+      >
+        <View style={styles.thumbnailWrap}>
+          <Image source={{ uri: thumbnail }} style={styles.thumbnail} resizeMode="cover" />
+
+          {/* Play icon overlay (center) */}
+          <View style={styles.playOverlay}>
+            <View style={styles.playIcon}>
+              <Ionicons name="play" size={16} color="#FFFFFF" />
+            </View>
           </View>
-        )}
-        {/* Sponsored tag */}
-        {is_ad && (
-          <View style={styles.sponsoredBadge}>
-            <Text style={styles.sponsoredText}>Sponsored</Text>
+
+          {/* Progress bar (bottom) */}
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${Math.min(100, (duration / 60) * 100)}%` }]} />
           </View>
-        )}
-      </View>
-      <View style={styles.content}>
-        <View style={[styles.categoryTag, { backgroundColor: `${categoryColor}20` }]}>
-          <Text style={[styles.categoryText, { color: categoryColor }]}>{category}</Text>
+
+          {/* Duration badge */}
+          <View style={styles.durationBadge}>
+            <Ionicons name="time-outline" size={10} color="#FFFFFF" />
+            <Text style={styles.durationText}>{durationLabel}</Text>
+          </View>
+
+          {/* Lock overlay */}
+          {locked && (
+            <View style={styles.lockOverlay}>
+              <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
+            </View>
+          )}
+
+          {/* Sponsored tag */}
+          {is_ad && (
+            <View style={styles.sponsoredBadge}>
+              <Text style={styles.sponsoredText}>Sponsored</Text>
+            </View>
+          )}
         </View>
-        <Text style={styles.title} numberOfLines={2}>{title}</Text>
-      </View>
-    </TouchableOpacity>
+
+        <View style={styles.content}>
+          <View style={[styles.categoryTag, { backgroundColor: `${categoryColor}25`, borderColor: `${categoryColor}40`, borderWidth: 1 }]}>
+            <Text style={[styles.categoryText, { color: categoryColor }]}>{category}</Text>
+          </View>
+          <Text style={styles.title} numberOfLines={2}>{title}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -83,9 +112,36 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 2,
+  },
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00D4AA',
+    borderRadius: 1.5,
+  },
   durationBadge: {
     position: 'absolute',
-    bottom: 6,
+    bottom: 8,
     right: 6,
     flexDirection: 'row',
     alignItems: 'center',
@@ -127,7 +183,7 @@ const styles = StyleSheet.create({
   categoryTag: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     marginBottom: 6,
   },
