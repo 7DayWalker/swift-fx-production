@@ -91,11 +91,13 @@ const getDashboardState = (state: string): { label: string; color: string } => {
 function SwiftInsightsSection() {
   const { theme } = useTheme();
   const [insights, setInsights] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(0);
   const autoScrollPaused = useRef(false);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -106,12 +108,13 @@ function SwiftInsightsSection() {
           setInsights(res.data);
         }
       } catch {
-        // Silent fail — section just won't render
+        // Silent fail
       }
+      setLoading(false);
     })();
   }, []);
 
-  // Auto-scroll (subtle, every 4 seconds) — pauses on touch
+  // Auto-scroll — pauses on touch, resumes after 6s inactivity
   useEffect(() => {
     if (insights.length < 4) return;
     const interval = setInterval(() => {
@@ -124,17 +127,27 @@ function SwiftInsightsSection() {
     return () => clearInterval(interval);
   }, [insights.length]);
 
+  const handleTouchStart = () => {
+    autoScrollPaused.current = true;
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => { autoScrollPaused.current = false; }, 6000);
+  };
+
   const handleCardPress = (index: number) => {
     setViewerIndex(index);
     setViewerVisible(true);
   };
 
-  const handleTouchStart = () => {
-    autoScrollPaused.current = true;
-    // Resume after 8 seconds of inactivity
-    setTimeout(() => { autoScrollPaused.current = false; }, 8000);
-  };
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.section, { alignItems: 'center', paddingVertical: 24 }]}>
+        <ActivityIndicator size="small" color={theme.primary} />
+      </View>
+    );
+  }
 
+  // Empty state — don't render section
   if (insights.length === 0) return null;
 
   return (
