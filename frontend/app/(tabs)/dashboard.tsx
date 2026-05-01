@@ -26,6 +26,8 @@ import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { UpgradeBanner, LockedSignalBody } from '../../src/components/UpgradeKit';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
+import InsightCard from '../../src/components/InsightCard';
+import InsightViewer from '../../src/components/InsightViewer';
 import { PAIR_CATEGORIES } from '../../src/constants/tradingPairs';
 
 const WATCHLIST_STORAGE_KEY = 'swiftfx_watchlist';
@@ -82,6 +84,117 @@ const getDashboardState = (state: string): { label: string; color: string } => {
     default: return { label: state?.toUpperCase() || '', color: '#8A8D98' };
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Swift Insights horizontal section ──
+function SwiftInsightsSection() {
+  const { theme } = useTheme();
+  const [insights, setInsights] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollX = useRef(0);
+  const autoScrollPaused = useRef(false);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { api } = require('../../src/services/api');
+        const res = await api.get('/insights/feed', { params: { limit: 12 } });
+        if (res.data && Array.isArray(res.data)) {
+          setInsights(res.data);
+        }
+      } catch {
+        // Silent fail
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Auto-scroll — pauses on touch, resumes after 6s inactivity
+  useEffect(() => {
+    if (insights.length < 4) return;
+    const interval = setInterval(() => {
+      if (autoScrollPaused.current) return;
+      scrollX.current += 212;
+      const maxScroll = (insights.length - 2) * 212;
+      if (scrollX.current >= maxScroll) scrollX.current = 0;
+      scrollRef.current?.scrollTo({ x: scrollX.current, animated: true });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [insights.length]);
+
+  const handleTouchStart = () => {
+    autoScrollPaused.current = true;
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => { autoScrollPaused.current = false; }, 6000);
+  };
+
+  const handleCardPress = (index: number) => {
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.section, { alignItems: 'center', paddingVertical: 24 }]}>
+        <ActivityIndicator size="small" color={theme.primary} />
+      </View>
+    );
+  }
+
+  // Empty state — don't render section
+  if (insights.length === 0) return null;
+
+  return (
+    <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Swift Insights</Text>
+            <Text style={{ fontSize: 11, color: theme.textSecondary, marginTop: 2 }}>Quick trading insights while you wait</Text>
+          </View>
+          <TouchableOpacity onPress={() => handleCardPress(0)}>
+            <Text style={{ fontSize: 12, color: theme.primary, fontWeight: '600' }}>See All</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: 10 }}
+          onScrollBeginDrag={handleTouchStart}
+        >
+          {insights.map((item, idx) => (
+            <InsightCard
+              key={item.id}
+              id={item.id}
+              title={item.title}
+              thumbnail={item.thumbnail}
+              category={item.category}
+              duration={item.duration}
+              is_ad={item.is_ad}
+              onPress={() => handleCardPress(idx)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+      {viewerVisible && (
+        <Modal visible animationType="slide" statusBarTranslucent>
+          <InsightViewer
+            items={insights}
+            initialIndex={viewerIndex}
+            onClose={() => setViewerVisible(false)}
+          />
+        </Modal>
+      )}
+    </>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -286,6 +399,9 @@ export default function DashboardScreen() {
             })}
           </ScrollView>
         </View>
+
+        {/* Swift Insights */}
+        <SwiftInsightsSection />
 
         {/* Quick Actions */}
         <View style={styles.section}>
