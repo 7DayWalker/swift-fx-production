@@ -13,7 +13,7 @@ from core.dependencies import get_current_user, require_admin
 from models.schemas import User
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 
 # Seed content — in production, fetched from a CMS or database collection.
