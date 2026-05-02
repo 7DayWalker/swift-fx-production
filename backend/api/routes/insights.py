@@ -6,8 +6,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, Query, Path
-from core.dependencies import get_current_user, get_db
+from fastapi import APIRouter, Depends, Query, Path, HTTPException
+from core.database import db
+from core.dependencies import get_current_user
 from models.schemas import User
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ async def get_insights_feed(
     current_user: User = Depends(get_current_user),
 ):
     """Returns the Swift Insights feed with like counts and user like state."""
-    db = await get_db()
+
 
     # Try database first, fall back to seed content
     try:
@@ -186,7 +187,7 @@ async def toggle_like(
     current_user: User = Depends(get_current_user),
 ):
     """Toggle like on an insight. Returns new state."""
-    db = await get_db()
+
     existing = await db.insight_likes.find_one({
         "insight_id": insight_id,
         "user_id": current_user.user_id,
@@ -220,7 +221,7 @@ async def get_comments(
     current_user: User = Depends(get_current_user),
 ):
     """Get comments for an insight, newest first."""
-    db = await get_db()
+
     cursor = db.insight_comments.find(
         {"insight_id": insight_id},
         {"_id": 0}
@@ -236,12 +237,11 @@ async def add_comment(
     current_user: User = Depends(get_current_user),
 ):
     """Add a comment to an insight."""
-    from fastapi import HTTPException
     text = body.text.strip()
     if not text or len(text) > 500:
         raise HTTPException(status_code=400, detail="Comment must be 1-500 characters")
 
-    db = await get_db()
+
     comment = {
         "insight_id": insight_id,
         "user_id": current_user.user_id,
