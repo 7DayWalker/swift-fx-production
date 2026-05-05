@@ -40,9 +40,9 @@ IAP_PRODUCT_IDS = [
     'com.swiftfx.signals.premium.weekly',
     'com.swiftfx.signals.premium.monthly',
     'com.swiftfx.signals.premium.yearly',
-    'com.swiftfx.signals.vip.weekly',
-    'com.swiftfx.signals.vip.monthly',
-    'com.swiftfx.signals.vip.yearly',
+    'com.swiftfx.signals.vip.weekly.v2',
+    'com.swiftfx.signals.vip.monthly.v2',
+    'com.swiftfx.signals.vip.yearly.v2',
 ]
 
 IAP_PRODUCTS_BY_TIER = {
@@ -52,9 +52,9 @@ IAP_PRODUCTS_BY_TIER = {
         'yearly': 'com.swiftfx.signals.premium.yearly',
     },
     'vip': {
-        'weekly': 'com.swiftfx.signals.vip.weekly',
-        'monthly': 'com.swiftfx.signals.vip.monthly',
-        'yearly': 'com.swiftfx.signals.vip.yearly',
+        'weekly': 'com.swiftfx.signals.vip.weekly.v2',
+        'monthly': 'com.swiftfx.signals.vip.monthly.v2',
+        'yearly': 'com.swiftfx.signals.vip.yearly.v2',
     },
 }
 

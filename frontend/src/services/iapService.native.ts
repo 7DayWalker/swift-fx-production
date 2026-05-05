@@ -28,9 +28,9 @@ const SUBSCRIPTION_SKUS = [
   'com.swiftfx.signals.premium.weekly',
   'com.swiftfx.signals.premium.monthly',
   'com.swiftfx.signals.premium.yearly',
-  'com.swiftfx.signals.vip.weekly',
-  'com.swiftfx.signals.vip.monthly',
-  'com.swiftfx.signals.vip.yearly',
+  'com.swiftfx.signals.vip.weekly.v2',
+  'com.swiftfx.signals.vip.monthly.v2',
+  'com.swiftfx.signals.vip.yearly.v2',
 ] as const;
 
 // ── Public types ──
@@ -264,6 +264,9 @@ export function getProductByPlan(plan: SubscriptionPlan, cycle: BillingCycle = '
  * Get the SKU string for a given tier + cycle.
  */
 export function getSkuForPlan(plan: SubscriptionPlan, cycle: BillingCycle): string {
+  if (plan === 'vip') {
+    return `com.swiftfx.signals.vip.${cycle}.v2`;
+  }
   return `com.swiftfx.signals.${plan}.${cycle}`;
 }
 
