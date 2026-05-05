@@ -149,6 +149,13 @@ export default function AdminDashboard() {
       route: '/(admin)/analytics',
       color: '#FF6B6B',
     },
+    {
+      icon: 'bulb-outline',
+      label: 'Insights Management',
+      description: 'Create and manage Swift Insights content',
+      route: '/(admin)/insights',
+      color: '#F97316',
+    },
   ];
 
   if (isLoading) {

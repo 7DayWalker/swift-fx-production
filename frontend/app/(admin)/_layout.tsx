@@ -44,6 +44,7 @@ export default function AdminLayout() {
       <Stack.Screen name="referrals" />
       <Stack.Screen name="withdrawals" />
       <Stack.Screen name="admin-management" />
+      <Stack.Screen name="insights" />
     </Stack>
   );
 }
