@@ -28,9 +28,9 @@ const SUBSCRIPTION_SKUS = [
   'com.swiftfx.signals.premium.weekly',
   'com.swiftfx.signals.premium.monthly',
   'com.swiftfx.signals.premium.yearly',
-  'com.swiftfx.signals.vip.weekly',
-  'com.swiftfx.signals.vip.monthly',
-  'com.swiftfx.signals.vip.yearly',
+  'com.swiftfx.signals.vip.weekly.v2',
+  'com.swiftfx.signals.vip.monthly.v2',
+  'com.swiftfx.signals.vip.yearly.v2',
 ] as const;
 
 // ── Public types ──
@@ -264,6 +264,9 @@ export function getProductByPlan(plan: SubscriptionPlan, cycle: BillingCycle = '
  * Get the SKU string for a given tier + cycle.
  */
 export function getSkuForPlan(plan: SubscriptionPlan, cycle: BillingCycle): string {
+  if (plan === 'vip') {
+    return `com.swiftfx.signals.vip.${cycle}.v2`;
+  }
   return `com.swiftfx.signals.${plan}.${cycle}`;
 }
 
@@ -471,22 +474,45 @@ function selectAndroidOfferToken(product: any): string | null {
 
 /**
  * Verify a purchase with the backend.
- * v14 purchase objects use `productId` and `purchaseToken` (unchanged from v12).
+ * v14 iOS: transactionReceipt is no longer on the purchase object.
+ * Must call getReceiptDataIOS() explicitly to get the App Store receipt.
+ * Android: purchaseToken is still on the purchase object (unchanged).
  */
 async function verifyWithBackend(purchase: any): Promise<PurchaseResult> {
   try {
     const isIOS = Platform.OS === 'ios';
     const endpoint = isIOS ? '/iap/apple/verify' : '/iap/google/verify';
 
-    const payload = isIOS
-      ? {
-          receipt_data: purchase.transactionReceipt,
-          exclude_old_transactions: true,
-        }
-      : {
-          purchase_token: purchase.purchaseToken,
-          product_id: purchase.productId,
-        };
+    let payload: any;
+
+    if (isIOS) {
+      // v14: Fetch receipt explicitly — it's no longer on the purchase object
+      console.log('[IAP] iOS: Fetching receipt via getReceiptDataIOS()...');
+      let receiptData: string | null = null;
+
+      try {
+        receiptData = await RNIap.getReceiptDataIOS();
+      } catch (receiptErr: any) {
+        console.error('[IAP] iOS: getReceiptDataIOS() failed:', receiptErr.message);
+      }
+
+      if (!receiptData) {
+        console.error('[IAP] iOS: No receipt data available. Cannot verify.');
+        return { success: false, message: 'Unable to retrieve purchase receipt from iOS.', error: 'NO_RECEIPT' };
+      }
+
+      console.log('[IAP] iOS: Receipt retrieved successfully (length:', receiptData.length, ')');
+      payload = {
+        receipt_data: receiptData,
+        exclude_old_transactions: true,
+      };
+    } else {
+      // Android: purchaseToken is on the purchase object
+      payload = {
+        purchase_token: purchase.purchaseToken,
+        product_id: purchase.productId,
+      };
+    }
 
     console.log('[IAP] Verifying with backend:', endpoint, 'product:', purchase.productId);
     const response = await api.post(endpoint, payload);
@@ -519,9 +545,18 @@ function registerListeners(): void {
 
   purchaseListener = RNIap.purchaseUpdatedListener(async (purchase: any) => {
     console.log('[IAP] purchaseUpdatedListener fired:', purchase.productId);
+    console.log('[IAP] Purchase keys:', Object.keys(purchase).join(', '));
 
-    if (!purchase.transactionReceipt && !purchase.purchaseToken) {
-      console.warn('[IAP] Purchase has no receipt/token — skipping.');
+    // v14: iOS no longer has transactionReceipt on the purchase object.
+    // Check platform-appropriate fields:
+    //   iOS: productId + transactionId (receipt is fetched separately)
+    //   Android: purchaseToken
+    const hasValidData = Platform.OS === 'ios'
+      ? !!(purchase.productId && purchase.id)
+      : !!purchase.purchaseToken;
+
+    if (!hasValidData) {
+      console.warn('[IAP] Purchase has no valid data — skipping.');
       verificationFailedCallbacks.forEach((cb) => {
         try { cb({ message: 'Purchase data is incomplete. Please try again or contact support.', code: 'MISSING_RECEIPT' }); } catch { /* consumer error */ }
       });
