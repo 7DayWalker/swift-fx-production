@@ -87,16 +87,30 @@ Repository setup, verification, and iterative feature development on the Swift F
 - Missing expiry treated as active (blocks downgrade)
 - `on_user_subscription_change` referral hook only fires when profile actually updates
 
+### Swift Insights — Admin Media Upload Pipeline (Feb 2026)
+- Replaced manual URL inputs with on-device file pickers via `expo-image-picker`
+- Added `expo-video-thumbnails` for auto first-frame thumbnail generation
+- Added `expo-file-system` (legacy API) for base64→ArrayBuffer reads on RN
+- Created `frontend/src/services/storageUploader.ts` (Supabase upload helper, size/duration limits)
+- Rewrote `frontend/app/(admin)/insights.tsx` with:
+  - "Select Video from device" → uploads to bucket `swift-insights-videos`
+  - Auto-generated thumbnail (first frame) → uploads to `swift-insights-thumbnails` (manual override available)
+  - Live preview, "Auto-generated" badge, file size/duration validation (50 MB · 60 s · 8 MB thumb)
+- Created `/app/SUPABASE_INSIGHTS_SETUP.md` with bucket creation + RLS policy SQL
+
 ## Prioritized Backlog
-- **P0**: EAS Build with `--clear-cache` for native IAP linking (user must run locally)
+- **P0**: User runs the SQL in `/app/SUPABASE_INSIGHTS_SETUP.md` to create the two storage buckets
+- **P0**: EAS Build with `--clear-cache` for native IAP linking + new media-picker libs (`expo-image-picker`, `expo-video-thumbnails`, `expo-file-system`)
 - **P1**: Monitor push delivery rates post-Firebase fix across all 16 Android tokens
 - **P2**: Add scheduled push health-check (daily silent push to canary device)
 - **P2**: Bulk push test across full Android device fleet
 - **P3**: Consider `googleServiceAccountKeyForSubmissions` for Play Store submissions
 
 ## Next Tasks
-1. User runs `eas build --platform android --clear-cache` to get IAP working
-2. Test full purchase flow end-to-end on Android closed testing
-3. Validate restore purchases on fresh install
-4. Test password recovery deep link on both cold start and runtime
-5. Verify notification preferences toggle persists and filters push correctly
+1. **Create the Supabase storage buckets** using SQL in `/app/SUPABASE_INSIGHTS_SETUP.md`
+2. Run `eas build --platform android --clear-cache` (or `--platform all`) to ship IAP + new media pickers
+3. Test admin Insight creation end-to-end: pick video → auto thumbnail → submit → appears in feed
+4. Test full purchase flow end-to-end on Android closed testing
+5. Validate restore purchases on fresh install
+6. Test password recovery deep link on both cold start and runtime
+7. Verify notification preferences toggle persists and filters push correctly

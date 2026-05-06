@@ -13,11 +13,22 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import api from '../../src/services/api';
+import {
+  uploadVideoToSupabase,
+  uploadThumbnailToSupabase,
+  generateVideoThumbnail,
+  getFileSize,
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_DURATION_MS,
+  MAX_THUMB_BYTES,
+} from '../../src/services/storageUploader';
 
 interface Insight {
   id: string;
@@ -222,6 +233,11 @@ function InsightFormModal({ visible, insight, onClose, onSave }: {
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Upload state
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [autoThumbGenerated, setAutoThumbGenerated] = useState(false);
+
   useEffect(() => {
     if (insight) {
       setTitle(insight.title);
@@ -240,12 +256,116 @@ function InsightFormModal({ visible, insight, onClose, onSave }: {
       setCategory('Strategy');
       setIsActive(true);
     }
+    setAutoThumbGenerated(false);
   }, [insight, visible]);
+
+  const ensureMediaPermission = async (): Promise<boolean> => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please grant photo/video library access in Settings to upload media.');
+      return false;
+    }
+    return true;
+  };
+
+  const pickAndUploadVideo = async () => {
+    if (!(await ensureMediaPermission())) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: false,
+      videoMaxDuration: Math.floor(MAX_VIDEO_DURATION_MS / 1000),
+      quality: 1,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+
+    // Validate duration (asset.duration is in ms on Expo SDK 50+)
+    if (asset.duration && asset.duration > MAX_VIDEO_DURATION_MS) {
+      Alert.alert(
+        'Video too long',
+        `Please select a video shorter than ${Math.floor(MAX_VIDEO_DURATION_MS / 1000)}s. Selected: ${Math.round(asset.duration / 1000)}s.`,
+      );
+      return;
+    }
+
+    // Validate file size
+    const size = asset.fileSize ?? (await getFileSize(asset.uri));
+    if (size && size > MAX_VIDEO_BYTES) {
+      const mb = (size / (1024 * 1024)).toFixed(1);
+      Alert.alert('Video too large', `Please select a video under ${MAX_VIDEO_BYTES / (1024 * 1024)} MB. Selected: ${mb} MB.`);
+      return;
+    }
+
+    setUploadingVideo(true);
+    try {
+      const { publicUrl } = await uploadVideoToSupabase(asset.uri);
+      setVideoUrl(publicUrl);
+
+      // Auto-set duration if available
+      if (asset.duration) {
+        setDuration(String(Math.max(1, Math.round(asset.duration / 1000))));
+      }
+
+      // Auto-extract thumbnail if none set yet (only first time)
+      if (!thumbnail) {
+        try {
+          setUploadingThumb(true);
+          const thumbUri = await generateVideoThumbnail(asset.uri);
+          const thumbUpload = await uploadThumbnailToSupabase(thumbUri);
+          setThumbnail(thumbUpload.publicUrl);
+          setAutoThumbGenerated(true);
+        } catch (thumbErr: any) {
+          console.warn('[Insights] Auto-thumbnail failed:', thumbErr?.message);
+        } finally {
+          setUploadingThumb(false);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.message || 'Could not upload video. Please try again.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const pickAndUploadThumbnail = async () => {
+    if (!(await ensureMediaPermission())) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [9, 16],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+
+    // Validate size
+    const size = asset.fileSize ?? (await getFileSize(asset.uri));
+    if (size && size > MAX_THUMB_BYTES) {
+      const mb = (size / (1024 * 1024)).toFixed(1);
+      Alert.alert('Image too large', `Please select an image under ${MAX_THUMB_BYTES / (1024 * 1024)} MB. Selected: ${mb} MB.`);
+      return;
+    }
+
+    setUploadingThumb(true);
+    try {
+      const { publicUrl } = await uploadThumbnailToSupabase(asset.uri);
+      setThumbnail(publicUrl);
+      setAutoThumbGenerated(false);
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.message || 'Could not upload thumbnail. Please try again.');
+    } finally {
+      setUploadingThumb(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) { Alert.alert('Error', 'Title is required'); return; }
-    if (!thumbnail.trim()) { Alert.alert('Error', 'Thumbnail URL is required'); return; }
-    if (type === 'video' && !videoUrl.trim()) { Alert.alert('Error', 'Video URL is required for video type'); return; }
+    if (!thumbnail.trim()) { Alert.alert('Error', 'Thumbnail is required'); return; }
+    if (type === 'video' && !videoUrl.trim()) { Alert.alert('Error', 'Video is required for video type'); return; }
 
     setSaving(true);
     await onSave({
@@ -259,6 +379,8 @@ function InsightFormModal({ visible, insight, onClose, onSave }: {
     });
     setSaving(false);
   };
+
+  const isBusy = uploadingVideo || uploadingThumb;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -304,31 +426,77 @@ function InsightFormModal({ visible, insight, onClose, onSave }: {
               </TouchableOpacity>
             </View>
 
-            {/* Video URL */}
+            {/* Video Picker */}
             {type === 'video' && (
               <>
-                <Text style={styles.fieldLabel}>Video URL</Text>
-                <TextInput
-                  style={styles.input}
-                  value={videoUrl}
-                  onChangeText={setVideoUrl}
-                  placeholder="https://cdn.example.com/video.mp4"
-                  placeholderTextColor="#8A8D98"
-                  autoCapitalize="none"
-                />
+                <Text style={styles.fieldLabel}>Video</Text>
+                <TouchableOpacity
+                  style={[styles.uploadBtn, uploadingVideo && styles.uploadBtnDisabled]}
+                  onPress={pickAndUploadVideo}
+                  disabled={uploadingVideo}
+                  data-testid="insight-pick-video"
+                >
+                  {uploadingVideo ? (
+                    <>
+                      <ActivityIndicator color="#00D4AA" />
+                      <Text style={styles.uploadBtnText}>Uploading video…</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={18} color="#00D4AA" />
+                      <Text style={styles.uploadBtnText}>
+                        {videoUrl ? 'Replace Video' : 'Select Video from device'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                {!!videoUrl && (
+                  <View style={styles.uploadHint}>
+                    <Ionicons name="checkmark-circle" size={14} color="#00D4AA" />
+                    <Text style={styles.uploadHintText} numberOfLines={1}>
+                      {videoUrl.split('/').pop()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.helperText}>
+                  Max {MAX_VIDEO_BYTES / (1024 * 1024)} MB · {Math.floor(MAX_VIDEO_DURATION_MS / 1000)}s
+                </Text>
               </>
             )}
 
-            {/* Thumbnail */}
-            <Text style={styles.fieldLabel}>Thumbnail URL</Text>
-            <TextInput
-              style={styles.input}
-              value={thumbnail}
-              onChangeText={setThumbnail}
-              placeholder="https://cdn.example.com/thumb.jpg"
-              placeholderTextColor="#8A8D98"
-              autoCapitalize="none"
-            />
+            {/* Thumbnail Picker */}
+            <Text style={styles.fieldLabel}>Thumbnail</Text>
+            {!!thumbnail && (
+              <View style={styles.thumbPreviewWrap}>
+                <Image source={{ uri: thumbnail }} style={styles.thumbPreview} resizeMode="cover" />
+                {autoThumbGenerated && (
+                  <View style={styles.autoBadge}>
+                    <Ionicons name="sparkles" size={10} color="#0A0E17" />
+                    <Text style={styles.autoBadgeText}>Auto-generated</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            <TouchableOpacity
+              style={[styles.uploadBtn, uploadingThumb && styles.uploadBtnDisabled]}
+              onPress={pickAndUploadThumbnail}
+              disabled={uploadingThumb}
+              data-testid="insight-pick-thumbnail"
+            >
+              {uploadingThumb ? (
+                <>
+                  <ActivityIndicator color="#00D4AA" />
+                  <Text style={styles.uploadBtnText}>Uploading thumbnail…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="image-outline" size={18} color="#00D4AA" />
+                  <Text style={styles.uploadBtnText}>
+                    {thumbnail ? 'Replace Thumbnail' : 'Select Thumbnail from device'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
             {/* Duration */}
             <Text style={styles.fieldLabel}>Duration (seconds)</Text>
@@ -368,9 +536,9 @@ function InsightFormModal({ visible, insight, onClose, onSave }: {
 
             {/* Submit */}
             <TouchableOpacity
-              style={[styles.submitBtn, saving && { opacity: 0.6 }]}
+              style={[styles.submitBtn, (saving || isBusy) && { opacity: 0.6 }]}
               onPress={handleSubmit}
-              disabled={saving}
+              disabled={saving || isBusy}
               data-testid="insight-form-submit"
             >
               {saving ? (
@@ -442,6 +610,26 @@ const styles = StyleSheet.create({
   typeBtnActive: { backgroundColor: '#00D4AA', borderColor: '#00D4AA' },
   typeBtnText: { fontSize: 13, fontWeight: '600', color: '#8A8D98' },
   typeBtnTextActive: { color: '#0A0E17' },
+  // Upload buttons
+  uploadBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: 10, backgroundColor: '#0A0E17',
+    borderWidth: 1, borderColor: '#00D4AA', borderStyle: 'dashed',
+  },
+  uploadBtnDisabled: { opacity: 0.7 },
+  uploadBtnText: { fontSize: 13, fontWeight: '600', color: '#00D4AA' },
+  uploadHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  uploadHintText: { fontSize: 11, color: '#8A8D98', flex: 1 },
+  helperText: { fontSize: 11, color: '#5A5F6E', marginTop: 6 },
+  // Thumbnail preview
+  thumbPreviewWrap: { position: 'relative', marginBottom: 8, alignSelf: 'flex-start' },
+  thumbPreview: { width: 110, height: 195, borderRadius: 8, backgroundColor: '#0A0E17' },
+  autoBadge: {
+    position: 'absolute', top: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#00D4AA', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6,
+  },
+  autoBadgeText: { fontSize: 9, fontWeight: '700', color: '#0A0E17' },
+  // Categories
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChip: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
