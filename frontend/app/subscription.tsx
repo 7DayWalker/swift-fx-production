@@ -322,7 +322,7 @@ export default function SubscriptionScreen() {
                 size={16} 
                 color={subscriptionStatus?.features.fund_management ? theme.success : theme.error} 
               />
-              <Text style={[styles.featureText, { color: theme.textSecondary }]}>Fund Management</Text>
+              <Text style={[styles.featureText, { color: theme.textSecondary }]}>Portfolio Management Tools</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons 
@@ -466,7 +466,9 @@ export default function SubscriptionScreen() {
           <Ionicons name="shield-checkmark" size={20} color="#10B981" />
           <Text style={[styles.securityText, { color: theme.textSecondary }]}>
             {isIAPAvailable() && Platform.OS !== 'web'
-              ? 'Secure payment through Apple App Store or Google Play. Your subscription activates immediately after purchase.'
+              ? Platform.OS === 'ios'
+                ? 'Secure payment through Apple App Store. Your subscription activates immediately after purchase.'
+                : 'Secure payment through Google Play. Your subscription activates immediately after purchase.'
               : 'Secure checkout. Your subscription activates only after payment confirmation.'}
           </Text>
         </View>

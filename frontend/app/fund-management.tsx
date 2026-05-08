@@ -138,7 +138,7 @@ export default function FundManagementScreen() {
   // Open WhatsApp for general enquiry (Contact Fund Manager button)
   const handleContactFundManager = () => {
     const message = encodeURIComponent(
-      `Hello Swift FX Fund Team,\nI have an enquiry about your Fund Management service.`
+      `Hello Swift FX Team,\nI have an enquiry about your Portfolio Management Tools.`
     );
     const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE}?text=${message}`;
     Linking.openURL(whatsappUrl);
@@ -177,7 +177,7 @@ export default function FundManagementScreen() {
 
       // THEN open WhatsApp with the application ID
       const message = encodeURIComponent(
-        `Hello Swift FX Fund Team,\nI want to apply for Fund Management.\n\nName: ${user.name || 'Not provided'}\nEmail: ${user.email}\nSelected Tier: ${selectedTier.name}\nCapital Range: ${selectedTier.capitalRange}\nUser ID: ${user.user_id}\nApplication ID: ${applicationId}`
+        `Hello Swift FX Team,\nI want to apply for your Portfolio Management Tools.\n\nName: ${user.name || 'Not provided'}\nEmail: ${user.email}\nSelected Tier: ${selectedTier.name}\nCapital Range: ${selectedTier.capitalRange}\nUser ID: ${user.user_id}\nApplication ID: ${applicationId}`
       );
       const whatsappUrl = `https://wa.me/${FUND_MANAGER_PHONE}?text=${message}`;
       
@@ -292,7 +292,7 @@ export default function FundManagementScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, dynamicStyles.text]}>Fund Management</Text>
+        <Text style={[styles.headerTitle, dynamicStyles.text]}>Portfolio Management Tools</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -306,9 +306,9 @@ export default function FundManagementScreen() {
           <View style={[styles.introIcon, { backgroundColor: `${theme.primary}25` }]}>
             <Ionicons name="briefcase" size={32} color={theme.primary} />
           </View>
-          <Text style={[styles.introTitle, dynamicStyles.text]}>Professional Fund Management</Text>
+          <Text style={[styles.introTitle, dynamicStyles.text]}>Professional Portfolio Management Tools</Text>
           <Text style={[styles.introText, dynamicStyles.textSecondary]}>
-            Fund Management provides access to external trading strategies and performance insights.{'\n\n'}All trading activity and account management occur outside of this app through third-party platforms such as MT4/MT5.{'\n\n'}Swift FX does not hold, manage, or have direct access to user funds within the app. The app does not execute trades or provide brokerage services.{'\n\n'}This feature is provided for informational and educational purposes only and does not constitute financial advice.
+            These Portfolio Management Tools provide access to external trading strategies and performance insights.{'\n\n'}All trading activity and account management occur outside of this app through third-party platforms such as MT4/MT5.{'\n\n'}Swift FX does not hold, manage, or have direct access to user funds within the app. The app does not execute trades or provide brokerage services.{'\n\n'}This feature is provided for informational and educational purposes only and does not constitute financial advice.
           </Text>
         </View>
 
@@ -376,7 +376,7 @@ export default function FundManagementScreen() {
           <View style={[styles.upgradeCard, { backgroundColor: `${theme.primary}15` }]}>
             <Ionicons name="lock-closed" size={24} color={theme.primary} />
             <Text style={[styles.upgradeText, dynamicStyles.text]}>
-              Upgrade to Premium or VIP to apply for Fund Management
+              Upgrade to Premium or VIP to access Portfolio Management Tools
             </Text>
             <TouchableOpacity
               style={[styles.upgradeButton, { backgroundColor: theme.primary }]}

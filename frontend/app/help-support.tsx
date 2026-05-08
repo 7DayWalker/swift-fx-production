@@ -75,7 +75,7 @@ const STATUS_COLORS: Record<string, string> = {
 const TICKET_CATEGORIES = [
   { id: 'billing', name: 'Billing' },
   { id: 'signals', name: 'Signals' },
-  { id: 'fund', name: 'Fund Management' },
+  { id: 'fund', name: 'Portfolio Management Tools' },
   { id: 'referral', name: 'Referral Program' },
   { id: 'technical', name: 'Technical Issue' },
   { id: 'other', name: 'Other' },

@@ -193,7 +193,7 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
         />
         <FeatureRow 
           icon="briefcase" 
-          label="Fund Management" 
+          label="Portfolio Management Tools" 
           value={status.features.fund_management ? '\u2713' : '\u2717'} 
           theme={theme}
           enabled={status.features.fund_management}
