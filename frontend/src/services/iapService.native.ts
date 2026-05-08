@@ -254,9 +254,11 @@ export function getProducts(): any[] {
 /**
  * Get a single product by tier + cycle.
  * v14: products use `id` field (not `productId`).
+ * NOTE: VIP SKUs use the `.v2` suffix — always go through getSkuForPlan
+ * so we never look up the legacy (unconfigured) VIP IDs.
  */
 export function getProductByPlan(plan: SubscriptionPlan, cycle: BillingCycle = 'monthly'): any | undefined {
-  const sku = `com.swiftfx.signals.${plan}.${cycle}`;
+  const sku = getSkuForPlan(plan, cycle);
   return storeProducts.find((p: any) => p.id === sku);
 }
 
