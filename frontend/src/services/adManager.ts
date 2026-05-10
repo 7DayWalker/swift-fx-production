@@ -1,32 +1,33 @@
 /**
  * Centralized Ad Manager — controls frequency, state, and test/production ID switching.
  *
- * All ad unit IDs live here. Swap TEST → production when going live.
+ * iOS uses LIVE production ad unit IDs.
+ * Android still uses Google well-known TEST IDs (swap when going live on Play Store).
  * TestIds are hardcoded Google well-known test IDs to avoid importing
  * the native-only SDK at the module level (breaks web bundling).
  */
 import { Platform } from 'react-native';
 
-// ─── Ad Unit IDs (Google well-known TEST IDs — replace with production IDs later) ──
+// ─── Ad Unit IDs ────────────────────────────────────────────────────────────
 export const AD_UNITS = {
   BANNER: Platform.select({
     android: 'ca-app-pub-3940256099942544/6300978111',
-    ios: 'ca-app-pub-3940256099942544/2934735716',
+    ios: 'ca-app-pub-3249620629100588/3292403004',
     default: 'test-banner',
   }),
   INTERSTITIAL: Platform.select({
     android: 'ca-app-pub-3940256099942544/1033173712',
-    ios: 'ca-app-pub-3940256099942544/4411468910',
+    ios: 'ca-app-pub-3249620629100588/1155370427',
     default: 'test-interstitial',
   }),
   REWARDED: Platform.select({
     android: 'ca-app-pub-3940256099942544/5224354917',
-    ios: 'ca-app-pub-3940256099942544/1712485313',
+    ios: 'ca-app-pub-3249620629100588/5016548217',
     default: 'test-rewarded',
   }),
   NATIVE: Platform.select({
     android: 'ca-app-pub-3940256099942544/2247696110',
-    ios: 'ca-app-pub-3940256099942544/3986624511',
+    ios: 'ca-app-pub-3249620629100588/5343851273',
     default: 'test-native',
   }),
 };
