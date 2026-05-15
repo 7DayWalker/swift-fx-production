@@ -20,6 +20,8 @@ import { useTheme } from '../src/context/ThemeContext';
 import { SubscriptionBadge } from '../src/components/SubscriptionBadge';
 import { api } from '../src/services/api';
 import IAPService, { isIAPAvailable, PurchaseResult } from '../src/services/iapService';
+import { isFlutterwaveEnabled } from '../src/utils/distribution';
+import { initializeFlutterwavePayment, toFlutterwavePlanId } from '../src/services/payments/flutterwave';
 
 type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
@@ -114,6 +116,36 @@ export default function SubscriptionScreen() {
     refreshStatus();
     fetchData();
   }, [fetchData, refreshStatus]);
+
+  // Open Flutterwave hosted checkout (in-app WebView). Android-only, sideloaded distributions.
+  const handleFlutterwaveUpgrade = async (planId: string) => {
+    if (isPurchasing) return;
+    const planHierarchy: Record<string, number> = { free: 0, premium: 1, vip: 2 };
+    const currentLevel = planHierarchy[subscriptionStatus?.subscription || 'free'] || 0;
+    const targetLevel = planHierarchy[planId] || 0;
+    if (currentLevel >= targetLevel) {
+      Alert.alert('Already Subscribed', `You already have ${subscriptionStatus?.subscription?.toUpperCase()} or higher.`);
+      return;
+    }
+    setIsPurchasing(true);
+    try {
+      const fwPlanId = toFlutterwavePlanId(planId as 'premium' | 'vip', selectedCycle);
+      const init = await initializeFlutterwavePayment(fwPlanId);
+      router.push({
+        pathname: '/checkout-flutterwave',
+        params: {
+          url: init.checkout_url,
+          txRef: init.tx_ref,
+          planLabel: `${planId.toUpperCase()} · ${selectedCycle}`,
+        },
+      });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Could not start payment. Please try again.';
+      Alert.alert('Payment Error', detail);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
   // Handle upgrade with native IAP (iOS/Android) or web checkout
   const handleUpgrade = async (planId: string) => {
@@ -432,24 +464,38 @@ export default function SubscriptionScreen() {
                 </View>
 
                 {!isCurrent ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.upgradeButton,
-                      plan.id === 'vip' && styles.upgradeButtonVip,
-                      (isPurchasing || !priceAvailable) && styles.upgradeButtonDisabled
-                    ]}
-                    onPress={() => handleUpgrade(plan.id)}
-                    disabled={isPurchasing || !priceAvailable}
-                  >
-                    {isPurchasing ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Text style={styles.upgradeButtonText}>Upgrade to {plan.name}</Text>
-                        <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                      </>
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.upgradeButton,
+                        plan.id === 'vip' && styles.upgradeButtonVip,
+                        (isPurchasing || !priceAvailable) && styles.upgradeButtonDisabled
+                      ]}
+                      onPress={() => handleUpgrade(plan.id)}
+                      disabled={isPurchasing || !priceAvailable}
+                    >
+                      {isPurchasing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Text style={styles.upgradeButtonText}>Upgrade to {plan.name}</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {isFlutterwaveEnabled() && (
+                      <TouchableOpacity
+                        style={[styles.flutterwaveButton, isPurchasing && styles.upgradeButtonDisabled]}
+                        onPress={() => handleFlutterwaveUpgrade(plan.id)}
+                        disabled={isPurchasing}
+                        data-testid={`flutterwave-pay-${plan.id}`}
+                      >
+                        <Ionicons name="card-outline" size={18} color="#00D4AA" />
+                        <Text style={styles.flutterwaveButtonText}>Pay with Card</Text>
+                      </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
+                  </>
                 ) : (
                   <View style={styles.currentPlanButton}>
                     <Ionicons name="checkmark-circle" size={20} color="#10B981" />
@@ -837,6 +883,23 @@ const styles = StyleSheet.create({
   },
   upgradeButtonDisabled: {
     opacity: 0.6,
+  },
+  flutterwaveButton: {
+    marginTop: 10,
+    backgroundColor: 'rgba(0, 212, 170, 0.10)',
+    borderColor: '#00D4AA',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  flutterwaveButtonText: {
+    color: '#00D4AA',
+    fontSize: 14,
+    fontWeight: '700',
   },
   upgradeButtonText: {
     color: '#FFFFFF',
