@@ -19,6 +19,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENABLE_FLUTTERWAVE": "true",
+        "EXPO_PUBLIC_DISTRIBUTION_CHANNEL": "android_apk"
       }
     },
 
@@ -37,6 +41,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_ENABLE_FLUTTERWAVE": "true",
+        "EXPO_PUBLIC_DISTRIBUTION_CHANNEL": "android_apk"
       }
     }
   },
