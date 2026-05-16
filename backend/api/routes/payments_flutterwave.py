@@ -54,9 +54,9 @@ PLAN_CATALOG = {
     "premium_weekly":  {"tier": "premium", "duration_days": 7,   "amount": 9.99,   "product_id": "com.swiftfx.signals.premium.weekly"},
     "premium_monthly": {"tier": "premium", "duration_days": 30,  "amount": 29.99,  "product_id": "com.swiftfx.signals.premium.monthly"},
     "premium_yearly":  {"tier": "premium", "duration_days": 365, "amount": 199.99, "product_id": "com.swiftfx.signals.premium.yearly"},
-    "vip_weekly":      {"tier": "vip",     "duration_days": 7,   "amount": 19.99,  "product_id": "com.swiftfx.signals.vip.weekly.v2"},
-    "vip_monthly":     {"tier": "vip",     "duration_days": 30,  "amount": 59.99,  "product_id": "com.swiftfx.signals.vip.monthly.v2"},
-    "vip_yearly":      {"tier": "vip",     "duration_days": 365, "amount": 399.99, "product_id": "com.swiftfx.signals.vip.yearly.v2"},
+    "vip_weekly":      {"tier": "vip",     "duration_days": 7,   "amount": 14.99,  "product_id": "com.swiftfx.signals.vip.weekly.v2"},
+    "vip_monthly":     {"tier": "vip",     "duration_days": 30,  "amount": 49.99,  "product_id": "com.swiftfx.signals.vip.monthly.v2"},
+    "vip_yearly":      {"tier": "vip",     "duration_days": 365, "amount": 299.99, "product_id": "com.swiftfx.signals.vip.yearly.v2"},
 }
 
 # Whitelist client-supplied distribution channel labels (security: never trust raw input).
@@ -195,6 +195,28 @@ async def _activate_subscription_from_txn(txn: dict) -> Optional[str]:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+@router.get("/catalog")
+async def get_catalog():
+    """
+    Server-authoritative plan catalog for Flutterwave (Android sideloaded distributions).
+    Frontend must render Flutterwave prices from this endpoint — never compute them locally.
+    Apple IAP / Google Play continue using their native store pricing APIs.
+    """
+    return {
+        "currency": "USD",
+        "plans": [
+            {
+                "plan_id": plan_id,
+                "tier": meta["tier"],
+                "duration_days": meta["duration_days"],
+                "amount": meta["amount"],
+                "product_id": meta["product_id"],
+            }
+            for plan_id, meta in PLAN_CATALOG.items()
+        ],
+    }
+
+
 @router.post("/initialize", response_model=InitResponse)
 async def initialize_payment(payload: InitRequest, current_user: User = Depends(require_auth)):
     plan = PLAN_CATALOG.get(payload.plan_id)

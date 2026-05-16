@@ -40,6 +40,28 @@ export interface StatusResponse {
   subscription_expiry?: string | null;
 }
 
+export interface CatalogPlan {
+  plan_id: FlutterwavePlanId;
+  tier: 'premium' | 'vip';
+  duration_days: number;
+  amount: number;
+  product_id: string;
+}
+
+export interface CatalogResponse {
+  currency: string;
+  plans: CatalogPlan[];
+}
+
+/**
+ * Server-authoritative catalog. The ONLY place to source Flutterwave prices
+ * for display. Never compute or hardcode them client-side.
+ */
+export async function getFlutterwaveCatalog(): Promise<CatalogResponse> {
+  const res = await api.get<CatalogResponse>('/payments/flutterwave/catalog');
+  return res.data;
+}
+
 /**
  * Maps an internal plan + cycle to the Flutterwave plan_id understood by the backend.
  */
