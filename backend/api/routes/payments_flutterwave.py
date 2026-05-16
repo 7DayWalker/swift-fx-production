@@ -23,6 +23,7 @@ import hmac
 import base64
 import hashlib
 import logging
+import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -132,6 +133,130 @@ async def _verify_flutterwave_transaction(flw_id: str | int) -> dict:
         logger.error(f"[Flutterwave] verify({flw_id}) returned {resp.status_code}: {resp.text[:500]}")
         return {}
     return resp.json()
+
+
+async def _verify_flutterwave_transaction_by_reference(tx_ref: str) -> dict:
+    """Calls Flutterwave GET /v3/transactions/verify_by_reference."""
+    if not FLW_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Flutterwave is not configured on the server.")
+    headers = {
+        "Authorization": f"Bearer {FLW_SECRET_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            f"{FLW_BASE_URL}/transactions/verify_by_reference",
+            headers=headers,
+            params={"tx_ref": tx_ref},
+        )
+    if resp.status_code >= 400:
+        logger.error(f"[Flutterwave] verify_by_reference({tx_ref}) returned {resp.status_code}: {resp.text[:500]}")
+        return {}
+    return resp.json()
+
+
+def _success_status(value: Optional[str]) -> bool:
+    return str(value or "").lower() in {"successful", "succeeded", "success"}
+
+
+def _failure_status(value: Optional[str]) -> bool:
+    return str(value or "").lower() in {"failed", "cancelled", "canceled"}
+
+
+def _verified_data(verify: dict) -> dict:
+    data = verify.get("data")
+    return data if isinstance(data, dict) else {}
+
+
+def _verified_tx_ref(data: dict) -> Optional[str]:
+    meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+    return data.get("tx_ref") or data.get("reference") or data.get("txRef") or meta.get("tx_ref")
+
+
+def _verified_flw_id(data: dict) -> Optional[str | int]:
+    return data.get("id") or data.get("transaction_id") or data.get("flw_id")
+
+
+def _verification_matches_txn(verify: dict, txn: dict) -> bool:
+    data = _verified_data(verify)
+    amount = data.get("amount") if data.get("amount") is not None else data.get("charged_amount")
+    return (
+        _success_status(data.get("status"))
+        and _verified_tx_ref(data) == txn["tx_ref"]
+        and data.get("currency") == txn["currency"]
+        and float(amount or 0) >= float(txn["amount"])
+    )
+
+
+def _extract_webhook_fields(payload: dict) -> tuple[Optional[str], Optional[str], Optional[str | int], Optional[str]]:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    event = payload.get("event") or payload.get("type") or payload.get("event.type") or payload.get("event_type")
+    tx_ref = (
+        data.get("tx_ref")
+        or data.get("reference")
+        or data.get("txRef")
+        or payload.get("tx_ref")
+        or payload.get("reference")
+        or payload.get("txRef")
+    )
+    flw_id = (
+        data.get("id")
+        or data.get("transaction_id")
+        or data.get("flw_id")
+        or payload.get("transaction_id")
+        or payload.get("flw_id")
+    )
+    status = data.get("status") or payload.get("status")
+    return event, tx_ref, flw_id, status
+
+
+async def _verify_payment_for_txn(txn: dict, flw_id: Optional[str | int] = None) -> dict:
+    if flw_id:
+        verify = await _verify_flutterwave_transaction(flw_id)
+        if _verification_matches_txn(verify, txn):
+            return verify
+        logger.warning(f"[Flutterwave] id verification did not match tx_ref={txn['tx_ref']}; trying verify_by_reference")
+    return await _verify_flutterwave_transaction_by_reference(txn["tx_ref"])
+
+
+async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) -> dict:
+    data = _verified_data(verify)
+    flw_id = _verified_flw_id(data) or txn.get("flutterwave_transaction_id")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    update_result = await db.payment_transactions.update_one(
+        {"tx_ref": txn["tx_ref"], "status": {"$ne": "successful"}},
+        {"$set": {
+            "status": "successful",
+            "flutterwave_transaction_id": flw_id,
+            "flutterwave_status": data.get("status"),
+            "flutterwave_flw_ref": data.get("flw_ref"),
+            "flutterwave_payment_type": data.get("payment_type"),
+            "verified_at": now_iso,
+            "verification_source": source,
+            "updated_at": now_iso,
+        }},
+    )
+    if update_result.modified_count == 0:
+        logger.info(f"[Flutterwave] Duplicate success processing for tx_ref={txn['tx_ref']} via {source}.")
+        latest = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
+        return latest or txn
+
+    updated_txn = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0}) or txn
+    expiry_iso = await _activate_subscription_from_txn(updated_txn)
+    if expiry_iso:
+        await db.payment_transactions.update_one(
+            {"tx_ref": txn["tx_ref"]},
+            {"$set": {
+                "subscription_expiry": expiry_iso,
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        updated_txn["subscription_expiry"] = expiry_iso
+        logger.info(f"[Flutterwave] Activated {updated_txn['tier']} for user={updated_txn['user_id']} expires={expiry_iso}")
+
+    latest = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
+    return latest or updated_txn
 
 
 def _signature_valid(raw_body: bytes, headers) -> bool:
@@ -283,18 +408,15 @@ async def webhook(request: Request) -> Response:
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     try:
-        payload = await request.json()
+        print(raw_body.decode("utf-8", errors="replace"))
+        payload = json.loads(raw_body.decode("utf-8"))
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    event = payload.get("event") or payload.get("type")
-    data = payload.get("data") or {}
-    tx_ref = data.get("tx_ref")
-    flw_id = data.get("id")
-    logger.info(f"[Flutterwave] Webhook event={event} tx_ref={tx_ref} flw_id={flw_id}")
+    event, tx_ref, flw_id, payload_status = _extract_webhook_fields(payload)
+    logger.info(f"[Flutterwave] Webhook event={event} tx_ref={tx_ref} flw_id={flw_id} status={payload_status}")
 
-    if not tx_ref or not flw_id:
-        # Acknowledge to stop retries — nothing we can act on.
+    if not tx_ref:
         return Response(status_code=200)
 
     txn = await db.payment_transactions.find_one({"tx_ref": tx_ref})
@@ -302,24 +424,20 @@ async def webhook(request: Request) -> Response:
         logger.warning(f"[Flutterwave] Unknown tx_ref in webhook: {tx_ref}")
         return Response(status_code=200)
 
-    # Re-verify with Flutterwave — webhook payload alone is never trusted.
-    verify = await _verify_flutterwave_transaction(flw_id)
-    vdata = verify.get("data") or {}
+    verify = await _verify_payment_for_txn(txn, flw_id)
+    vdata = _verified_data(verify)
     vstatus = vdata.get("status")
     vamount = vdata.get("amount")
     vcurrency = vdata.get("currency")
-    vtx_ref = vdata.get("tx_ref")
+    vtx_ref = _verified_tx_ref(vdata)
 
-    matches = (
-        vstatus == "successful"
-        and vtx_ref == tx_ref
-        and vcurrency == txn["currency"]
-        and float(vamount or 0) >= float(txn["amount"])
-    )
+    if _verification_matches_txn(verify, txn):
+        await _mark_successful_and_activate(txn, verify, "webhook")
+        return Response(status_code=200)
 
-    if not matches:
+    if _failure_status(vstatus) and vtx_ref == tx_ref:
         logger.warning(
-            f"[Flutterwave] Verification mismatch tx_ref={tx_ref} status={vstatus} "
+            f"[Flutterwave] Verified failed payment tx_ref={tx_ref} status={vstatus} "
             f"amount={vamount}/{txn['amount']} currency={vcurrency}/{txn['currency']}"
         )
         await db.payment_transactions.update_one(
@@ -327,34 +445,17 @@ async def webhook(request: Request) -> Response:
             {"$set": {
                 "status": "failed",
                 "failure_reason": f"verify_mismatch:{vstatus}",
-                "flutterwave_transaction_id": flw_id,
+                "flutterwave_transaction_id": _verified_flw_id(vdata) or flw_id,
+                "flutterwave_status": vstatus,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }},
         )
         return Response(status_code=200)
 
-    # Atomic flip pending → successful. If we don't modify a doc, it was already processed.
-    update_result = await db.payment_transactions.update_one(
-        {"tx_ref": tx_ref, "status": {"$ne": "successful"}},
-        {"$set": {
-            "status": "successful",
-            "flutterwave_transaction_id": flw_id,
-            "verified_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
+    logger.warning(
+        f"[Flutterwave] Verification mismatch tx_ref={tx_ref} status={vstatus} "
+        f"amount={vamount}/{txn['amount']} currency={vcurrency}/{txn['currency']} verified_ref={vtx_ref}"
     )
-    if update_result.modified_count == 0:
-        logger.info(f"[Flutterwave] Duplicate webhook for tx_ref={tx_ref} — already processed.")
-        return Response(status_code=200)
-
-    expiry_iso = await _activate_subscription_from_txn(txn)
-    if expiry_iso:
-        await db.payment_transactions.update_one(
-            {"tx_ref": tx_ref},
-            {"$set": {"subscription_expiry": expiry_iso, "activated_at": datetime.now(timezone.utc).isoformat()}},
-        )
-        logger.info(f"[Flutterwave] Activated {txn['tier']} for user={txn['user_id']} expires={expiry_iso}")
-
     return Response(status_code=200)
 
 
@@ -366,6 +467,31 @@ async def get_status(tx_ref: str, current_user: User = Depends(require_auth)):
     )
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if txn.get("status") == "pending":
+        verify = await _verify_flutterwave_transaction_by_reference(tx_ref)
+        vdata = _verified_data(verify)
+        vstatus = vdata.get("status")
+        vtx_ref = _verified_tx_ref(vdata)
+
+        if _verification_matches_txn(verify, txn):
+            txn = await _mark_successful_and_activate(txn, verify, "status_poll")
+        elif _failure_status(vstatus) and vtx_ref == tx_ref:
+            await db.payment_transactions.update_one(
+                {"tx_ref": tx_ref, "user_id": current_user.user_id, "status": {"$ne": "successful"}},
+                {"$set": {
+                    "status": "failed",
+                    "failure_reason": f"verify_by_reference:{vstatus}",
+                    "flutterwave_transaction_id": _verified_flw_id(vdata),
+                    "flutterwave_status": vstatus,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            txn = await db.payment_transactions.find_one(
+                {"tx_ref": tx_ref, "user_id": current_user.user_id},
+                {"_id": 0},
+            ) or txn
+
     return StatusResponse(
         tx_ref=txn["tx_ref"],
         status=txn["status"],
@@ -373,7 +499,6 @@ async def get_status(tx_ref: str, current_user: User = Depends(require_auth)):
         tier=txn.get("tier"),
         subscription_expiry=txn.get("subscription_expiry"),
     )
-
 
 @router.get("/redirect")
 async def redirect_landing(status: Optional[str] = None, tx_ref: Optional[str] = None, transaction_id: Optional[str] = None):

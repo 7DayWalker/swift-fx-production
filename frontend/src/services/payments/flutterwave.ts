@@ -8,8 +8,8 @@
  *   POST /payments/flutterwave/initialize  → { checkout_url, tx_ref, amount, currency }
  *   GET  /payments/flutterwave/status      → { status, plan_id, tier, subscription_expiry }
  *
- * Subscription activation is performed exclusively by the backend webhook
- * (POST /payments/flutterwave/webhook) after re-verifying with Flutterwave.
+ * Subscription activation is performed by the backend webhook or status
+ * fallback after re-verifying with Flutterwave.
  * The client never grants entitlements on its own.
  */
 import { api } from '../api';
