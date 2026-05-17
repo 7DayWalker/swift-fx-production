@@ -30,8 +30,9 @@ import {
 
 type Stage = 'loading' | 'paying' | 'verifying' | 'success' | 'failed' | 'cancelled';
 
-const MAX_POLL_ATTEMPTS = 12; // ~24s at 2s interval
-const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 30; // ~60s with backoff
+const INITIAL_POLL_INTERVAL_MS = 1500;
+const MAX_POLL_INTERVAL_MS = 5000;
 
 export default function FlutterwaveCheckoutScreen() {
   const router = useRouter();
@@ -76,26 +77,50 @@ export default function FlutterwaveCheckoutScreen() {
   const pollUntilSettled = useCallback(async () => {
     setStage('verifying');
     for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+      // Exponential backoff: 1.5s for first 5, then 3s for next 5, then 5s
+      let delayMs = INITIAL_POLL_INTERVAL_MS;
+      if (i >= 10) {
+        delayMs = MAX_POLL_INTERVAL_MS;
+      } else if (i >= 5) {
+        delayMs = 3000;
+      }
+      
       try {
         const res = await getFlutterwaveStatus(txRef);
         const s: FlutterwaveStatus = res.status;
+        console.log(`[FlutterwaveCheckout] Poll #${i + 1}/${MAX_POLL_ATTEMPTS}: status=${s}, has_expiry=${!!res.subscription_expiry}`);
+        
         if (s === 'successful') {
           if (res.subscription_expiry) {
+            console.log('[FlutterwaveCheckout] Payment verified with subscription active:', res);
             await settleWithStatus('success');
             return;
           }
-          console.log('[FlutterwaveCheckout] Payment successful but subscription activation is still pending:', res);
+          console.log('[FlutterwaveCheckout] Payment successful but subscription activation still pending, continuing poll:', res);
+          // Keep polling - backend is still activating
         }
+        
         if (s === 'failed' || s === 'cancelled') {
+          console.log('[FlutterwaveCheckout] Payment status final:', s, res);
           await settleWithStatus(s as Stage, 'Payment was not completed.');
           return;
         }
+        
+        if (s === 'pending') {
+          console.log('[FlutterwaveCheckout] Payment still processing, continuing poll:', res);
+          // Keep polling
+        }
       } catch (err: any) {
+        console.log('[FlutterwaveCheckout] Poll error (will retry):', err?.message || err);
         // network blip — keep polling
       }
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      
+      if (i < MAX_POLL_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
     }
     // Timed out — leave the user a manual retry path.
+    console.log('[FlutterwaveCheckout] Poll timeout after all attempts');
     await settleWithStatus(
       'failed',
       'We could not confirm the payment in time. If you were charged, tap "Restore" on the subscription screen or contact support.',
