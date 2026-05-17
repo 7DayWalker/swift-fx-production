@@ -19,9 +19,14 @@ import { useSubscription } from '../src/context/SubscriptionContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { SubscriptionBadge } from '../src/components/SubscriptionBadge';
 import { api } from '../src/services/api';
-import IAPService, { isIAPAvailable, PurchaseResult } from '../src/services/iapService';
+import IAPService, { isIAPAvailable } from '@/src/services/iapService';
 import { isFlutterwaveEnabled } from '../src/utils/distribution';
-import { initializeFlutterwavePayment, toFlutterwavePlanId } from '../src/services/payments/flutterwave';
+import {
+  getFlutterwaveCatalog,
+  initializeFlutterwavePayment,
+  toFlutterwavePlanId,
+  type CatalogPlan,
+} from '../src/services/payments/flutterwave';
 
 type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
@@ -46,6 +51,11 @@ export default function SubscriptionScreen() {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [iapInitialized, setIapInitialized] = useState(false);
+  const flutterwaveEnabled = isFlutterwaveEnabled();
+  const [flutterwaveCatalog, setFlutterwaveCatalog] = useState<Record<string, CatalogPlan>>({});
+  const [flutterwaveCurrency, setFlutterwaveCurrency] = useState('USD');
+  const [flutterwaveCatalogLoading, setFlutterwaveCatalogLoading] = useState(false);
+  const [flutterwaveCatalogError, setFlutterwaveCatalogError] = useState<string | null>(null);
 
   // Show alert when purchase verification fails
   useEffect(() => {
@@ -62,7 +72,11 @@ export default function SubscriptionScreen() {
   // Initialize IAP on mount (mobile only)
   useEffect(() => {
     const initializeIAP = async () => {
-      // Call initIAP() directly — it handles platform checks and module loading internally.
+      if (flutterwaveEnabled) {
+        setIapInitialized(false);
+        return;
+      }
+      // Call initIAP() directly - it handles platform checks and module loading internally.
       // Do NOT gate on isIAPAvailable() here: the module hasn't loaded yet at this point.
       try {
         const success = await IAPService.initIAP();
@@ -75,12 +89,48 @@ export default function SubscriptionScreen() {
     initializeIAP();
 
     return () => {
-      if (isIAPAvailable()) {
+      if (!flutterwaveEnabled && isIAPAvailable()) {
         IAPService.endIAP();
       }
     };
-  }, []);
+  }, [flutterwaveEnabled]);
 
+  useEffect(() => {
+    if (!flutterwaveEnabled) {
+      setFlutterwaveCatalog({});
+      setFlutterwaveCatalogError(null);
+      setFlutterwaveCatalogLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadCatalog = async () => {
+      setFlutterwaveCatalogLoading(true);
+      setFlutterwaveCatalogError(null);
+      console.log('[Subscription] Loading Flutterwave catalog via /payments/flutterwave/catalog');
+      try {
+        const catalog = await getFlutterwaveCatalog();
+        if (cancelled) return;
+        const byPlan = catalog.plans.reduce<Record<string, CatalogPlan>>((acc, plan) => {
+          acc[plan.plan_id] = plan;
+          return acc;
+        }, {});
+        setFlutterwaveCurrency(catalog.currency || 'USD');
+        setFlutterwaveCatalog(byPlan);
+      } catch (error: any) {
+        if (cancelled) return;
+        console.error('[Subscription] Failed to fetch Flutterwave catalog:', error?.response?.data || error?.message || error);
+        setFlutterwaveCatalogError('Card prices are unavailable.');
+      } finally {
+        if (!cancelled) setFlutterwaveCatalogLoading(false);
+      }
+    };
+
+    loadCatalog();
+    return () => {
+      cancelled = true;
+    };
+  }, [flutterwaveEnabled]);
   // Fetch plans from backend API (single source of truth)
   const fetchData = useCallback(async () => {
     try {
@@ -263,12 +313,13 @@ export default function SubscriptionScreen() {
     return price;
   }, [iapInitialized]);
 
-  /**
-   * Check if store products have been loaded for a plan.
-   */
-  const hasStorePrice = useCallback((planId: string, cycle: BillingCycle): boolean => {
-    return getStorePrice(planId, cycle) !== null;
-  }, [getStorePrice]);
+  const getFlutterwavePrice = useCallback((planId: string, cycle: BillingCycle): string | null => {
+    const fwPlanId = toFlutterwavePlanId(planId as 'premium' | 'vip', cycle);
+    const catalogPlan = flutterwaveCatalog[fwPlanId];
+    if (!catalogPlan) return null;
+    const amount = Number(catalogPlan.amount).toFixed(2);
+    return flutterwaveCurrency === 'USD' ? `$${amount}` : `${flutterwaveCurrency} ${amount}`;
+  }, [flutterwaveCatalog, flutterwaveCurrency]);
 
   const getPlanIcon = (planId: string) => {
     if (planId === 'vip') return 'diamond';
@@ -401,8 +452,11 @@ export default function SubscriptionScreen() {
           {plans.map((plan) => {
             const isCurrent = isCurrentPlan(plan.id);
             const isHighlighted = highlight === plan.id;
-            const storePrice = getStorePrice(plan.id, selectedCycle);
-            const priceAvailable = storePrice !== null;
+            const displayPrice = flutterwaveEnabled
+              ? getFlutterwavePrice(plan.id, selectedCycle)
+              : getStorePrice(plan.id, selectedCycle);
+            const priceAvailable = displayPrice !== null;
+            const priceLoading = flutterwaveEnabled ? flutterwaveCatalogLoading : !priceAvailable;
             
             return (
               <View 
@@ -441,15 +495,25 @@ export default function SubscriptionScreen() {
                 <View style={styles.priceRow}>
                   {priceAvailable ? (
                     <>
-                      <Text style={styles.priceAmount}>{storePrice}</Text>
+                      <Text style={styles.priceAmount}>{displayPrice}</Text>
                       <Text style={styles.pricePeriod}>
                         /{selectedCycle === 'yearly' ? 'year' : selectedCycle === 'monthly' ? 'month' : 'week'}
                       </Text>
                     </>
-                  ) : (
+                  ) : flutterwaveCatalogError ? (
+                    <View style={styles.priceLoading}>
+                      <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
+                      <Text style={styles.priceLoadingText}>{flutterwaveCatalogError}</Text>
+                    </View>
+                  ) : priceLoading ? (
                     <View style={styles.priceLoading}>
                       <ActivityIndicator size="small" color="#00D4AA" />
                       <Text style={styles.priceLoadingText}>Loading price...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.priceLoading}>
+                      <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
+                      <Text style={styles.priceLoadingText}>Price unavailable</Text>
                     </View>
                   )}
                 </View>
@@ -465,30 +529,32 @@ export default function SubscriptionScreen() {
 
                 {!isCurrent ? (
                   <>
-                    <TouchableOpacity
-                      style={[
-                        styles.upgradeButton,
-                        plan.id === 'vip' && styles.upgradeButtonVip,
-                        (isPurchasing || !priceAvailable) && styles.upgradeButtonDisabled
-                      ]}
-                      onPress={() => handleUpgrade(plan.id)}
-                      disabled={isPurchasing || !priceAvailable}
-                    >
-                      {isPurchasing ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <>
-                          <Text style={styles.upgradeButtonText}>Upgrade to {plan.name}</Text>
-                          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                        </>
-                      )}
-                    </TouchableOpacity>
-
-                    {isFlutterwaveEnabled() && (
+                    {!flutterwaveEnabled && (
                       <TouchableOpacity
-                        style={[styles.flutterwaveButton, isPurchasing && styles.upgradeButtonDisabled]}
+                        style={[
+                          styles.upgradeButton,
+                          plan.id === 'vip' && styles.upgradeButtonVip,
+                          (isPurchasing || !priceAvailable) && styles.upgradeButtonDisabled
+                        ]}
+                        onPress={() => handleUpgrade(plan.id)}
+                        disabled={isPurchasing || !priceAvailable}
+                      >
+                        {isPurchasing ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Text style={styles.upgradeButtonText}>Upgrade to {plan.name}</Text>
+                            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {flutterwaveEnabled && (
+                      <TouchableOpacity
+                        style={[styles.flutterwaveButton, (isPurchasing || !priceAvailable) && styles.upgradeButtonDisabled]}
                         onPress={() => handleFlutterwaveUpgrade(plan.id)}
-                        disabled={isPurchasing}
+                        disabled={isPurchasing || !priceAvailable}
                         data-testid={`flutterwave-pay-${plan.id}`}
                       >
                         <Ionicons name="card-outline" size={18} color="#00D4AA" />
@@ -511,7 +577,9 @@ export default function SubscriptionScreen() {
         <View style={styles.securityNotice}>
           <Ionicons name="shield-checkmark" size={20} color="#10B981" />
           <Text style={[styles.securityText, { color: theme.textSecondary }]}>
-            {isIAPAvailable() && Platform.OS !== 'web'
+            {flutterwaveEnabled
+              ? 'Secure card checkout through Flutterwave. Your subscription activates after payment confirmation.'
+              : isIAPAvailable() && Platform.OS !== 'web'
               ? Platform.OS === 'ios'
                 ? 'Secure payment through Apple App Store. Your subscription activates immediately after purchase.'
                 : 'Secure payment through Google Play. Your subscription activates immediately after purchase.'
@@ -553,7 +621,9 @@ export default function SubscriptionScreen() {
         {/* Legal Compliance (Apple/Google required) */}
         <View style={styles.legalSection}>
           <Text style={[styles.legalAutoRenew, { color: theme.textSecondary }]}>
-            Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. Your {Platform.OS === 'ios' ? 'Apple ID' : 'Google'} account will be charged for renewal. You can manage and cancel subscriptions in your {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} settings.
+            {flutterwaveEnabled
+              ? 'Card payments are one-off charges and do not auto-renew. Renew from this screen when your access period ends.'
+              : `Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. Your ${Platform.OS === 'ios' ? 'Apple ID' : 'Google'} account will be charged for renewal. You can manage and cancel subscriptions in your ${Platform.OS === 'ios' ? 'App Store' : 'Google Play'} settings.`}
           </Text>
           <View style={styles.legalLinks}>
             <TouchableOpacity onPress={() => Linking.openURL('https://swiftfx.online/terms')}>

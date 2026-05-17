@@ -80,8 +80,11 @@ export default function FlutterwaveCheckoutScreen() {
         const res = await getFlutterwaveStatus(txRef);
         const s: FlutterwaveStatus = res.status;
         if (s === 'successful') {
-          await settleWithStatus('success');
-          return;
+          if (res.subscription_expiry) {
+            await settleWithStatus('success');
+            return;
+          }
+          console.log('[FlutterwaveCheckout] Payment successful but subscription activation is still pending:', res);
         }
         if (s === 'failed' || s === 'cancelled') {
           await settleWithStatus(s as Stage, 'Payment was not completed.');
