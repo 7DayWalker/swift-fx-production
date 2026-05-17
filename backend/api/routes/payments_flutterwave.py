@@ -24,6 +24,7 @@ import base64
 import hashlib
 import logging
 import json
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -177,6 +178,12 @@ def _verified_flw_id(data: dict) -> Optional[str | int]:
     return data.get("id") or data.get("transaction_id") or data.get("flw_id")
 
 
+def _billing_cycle_from_plan_id(plan_id: Optional[str]) -> Optional[str]:
+    if not plan_id or "_" not in plan_id:
+        return None
+    return plan_id.rsplit("_", 1)[-1]
+
+
 def _verification_matches_txn(verify: dict, txn: dict) -> bool:
     data = _verified_data(verify)
     amount = data.get("amount") if data.get("amount") is not None else data.get("charged_amount")
@@ -211,12 +218,29 @@ def _extract_webhook_fields(payload: dict) -> tuple[Optional[str], Optional[str]
 
 
 async def _verify_payment_for_txn(txn: dict, flw_id: Optional[str | int] = None) -> dict:
+    logger.info(
+        "[Flutterwave] Verify start tx_ref=%s user_id=%s email=%s plan_id=%s billing_cycle=%s "
+        "txn_status=%s flw_id=%s",
+        txn.get("tx_ref"),
+        txn.get("user_id"),
+        txn.get("email") or txn.get("customer_email"),
+        txn.get("plan_id"),
+        _billing_cycle_from_plan_id(txn.get("plan_id")),
+        txn.get("status"),
+        flw_id,
+    )
     if flw_id:
+        logger.info("[Flutterwave] Before verify transaction by id tx_ref=%s flw_id=%s", txn.get("tx_ref"), flw_id)
         verify = await _verify_flutterwave_transaction(flw_id)
+        logger.info("[Flutterwave] After verify transaction by id tx_ref=%s response=%s", txn.get("tx_ref"), verify)
         if _verification_matches_txn(verify, txn):
+            logger.info("[Flutterwave] Verify matched by id tx_ref=%s", txn.get("tx_ref"))
             return verify
         logger.warning(f"[Flutterwave] id verification did not match tx_ref={txn['tx_ref']}; trying verify_by_reference")
-    return await _verify_flutterwave_transaction_by_reference(txn["tx_ref"])
+    logger.info("[Flutterwave] Before verify transaction by reference tx_ref=%s", txn.get("tx_ref"))
+    verify = await _verify_flutterwave_transaction_by_reference(txn["tx_ref"])
+    logger.info("[Flutterwave] After verify transaction by reference tx_ref=%s response=%s", txn.get("tx_ref"), verify)
+    return verify
 
 
 async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) -> dict:
@@ -224,40 +248,111 @@ async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) ->
     flw_id = _verified_flw_id(data) or txn.get("flutterwave_transaction_id")
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    update_result = await db.payment_transactions.update_one(
-        {"tx_ref": txn["tx_ref"], "status": {"$ne": "successful"}},
+    logger.info(
+        "[Flutterwave] Success path start source=%s tx_ref=%s user_id=%s email=%s plan_id=%s "
+        "billing_cycle=%s txn_status=%s verify_response=%s",
+        source,
+        txn.get("tx_ref"),
+        txn.get("user_id"),
+        txn.get("email") or txn.get("customer_email"),
+        txn.get("plan_id"),
+        _billing_cycle_from_plan_id(txn.get("plan_id")),
+        txn.get("status"),
+        verify,
+    )
+
+    claim_filter = {
+        "tx_ref": txn["tx_ref"],
+        "user_id": txn["user_id"],
+        "status": {"$ne": "successful"},
+        "activation_started_at": {"$exists": False},
+    }
+    if txn.get("email"):
+        claim_filter["email"] = txn["email"]
+    logger.info("[Flutterwave] Before activation claim Mongo update tx_ref=%s filter=%s", txn["tx_ref"], claim_filter)
+    claim_result = await db.payment_transactions.update_one(
+        claim_filter,
         {"$set": {
-            "status": "successful",
             "flutterwave_transaction_id": flw_id,
             "flutterwave_status": data.get("status"),
             "flutterwave_flw_ref": data.get("flw_ref"),
             "flutterwave_payment_type": data.get("payment_type"),
-            "verified_at": now_iso,
+            "activation_started_at": now_iso,
             "verification_source": source,
             "updated_at": now_iso,
         }},
     )
-    if update_result.modified_count == 0:
-        logger.info(f"[Flutterwave] Duplicate success processing for tx_ref={txn['tx_ref']} via {source}.")
+    logger.info(
+        "[Flutterwave] After activation claim Mongo update tx_ref=%s matched=%s modified=%s",
+        txn["tx_ref"],
+        claim_result.matched_count,
+        claim_result.modified_count,
+    )
+
+    if claim_result.modified_count == 0:
         latest = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
+        logger.info("[Flutterwave] Duplicate/in-progress success processing tx_ref=%s latest=%s", txn["tx_ref"], latest)
         return latest or txn
 
     updated_txn = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0}) or txn
-    expiry_iso = await _activate_subscription_from_txn(updated_txn)
-    if expiry_iso:
-        await db.payment_transactions.update_one(
-            {"tx_ref": txn["tx_ref"]},
+    try:
+        logger.info("[Flutterwave] Before activate subscription tx_ref=%s user_id=%s", txn["tx_ref"], txn.get("user_id"))
+        expiry_iso = await _activate_subscription_from_txn(updated_txn, verify)
+        logger.info("[Flutterwave] After activate subscription tx_ref=%s expiry_iso=%s", txn["tx_ref"], expiry_iso)
+
+        if not expiry_iso:
+            raise RuntimeError("Activation did not return a subscription expiry.")
+
+        activated_at = datetime.now(timezone.utc).isoformat()
+        final_filter = {"tx_ref": txn["tx_ref"], "user_id": txn["user_id"], "status": {"$ne": "successful"}}
+        if txn.get("email"):
+            final_filter["email"] = txn["email"]
+        logger.info("[Flutterwave] Before write subscription_expiry/activated_at tx_ref=%s filter=%s", txn["tx_ref"], final_filter)
+        final_result = await db.payment_transactions.update_one(
+            final_filter,
             {"$set": {
+                "status": "successful",
                 "subscription_expiry": expiry_iso,
-                "activated_at": datetime.now(timezone.utc).isoformat(),
+                "activated_at": activated_at,
+                "verified_at": now_iso,
+                "updated_at": activated_at,
             }},
         )
+        logger.info(
+            "[Flutterwave] After write subscription_expiry/activated_at tx_ref=%s matched=%s modified=%s",
+            txn["tx_ref"],
+            final_result.matched_count,
+            final_result.modified_count,
+        )
         updated_txn["subscription_expiry"] = expiry_iso
-        logger.info(f"[Flutterwave] Activated {updated_txn['tier']} for user={updated_txn['user_id']} expires={expiry_iso}")
+        updated_txn["activated_at"] = activated_at
+        updated_txn["status"] = "successful"
+    except Exception as e:
+        print("[Flutterwave Activation Error]", str(e), traceback.format_exc())
+        logger.error(
+            "[Flutterwave Activation Error] tx_ref=%s user_id=%s email=%s error=%s traceback=%s",
+            txn.get("tx_ref"),
+            txn.get("user_id"),
+            txn.get("email") or txn.get("customer_email"),
+            str(e),
+            traceback.format_exc(),
+        )
+        await db.payment_transactions.update_one(
+            {"tx_ref": txn["tx_ref"], "status": {"$ne": "successful"}},
+            {
+                "$set": {
+                    "activation_error": str(e),
+                    "activation_failed_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "$unset": {"activation_started_at": ""},
+            },
+        )
+        raise
 
     latest = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
+    logger.info("[Flutterwave] Subscription activated successfully for user %s tx_ref=%s latest=%s", txn["user_id"], txn["tx_ref"], latest)
     return latest or updated_txn
-
 
 def _signature_valid(raw_body: bytes, headers) -> bool:
     """
@@ -284,42 +379,149 @@ def _signature_valid(raw_body: bytes, headers) -> bool:
     return False
 
 
-async def _activate_subscription_from_txn(txn: dict) -> Optional[str]:
+async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = None) -> Optional[str]:
     """
     Idempotently activate the user's subscription from a verified payment_transactions doc.
     Mirrors Apple/Google verify-endpoint behavior. Returns the ISO expiry on activation, else None.
     """
-    user_id = txn["user_id"]
-    plan_id = txn["plan_id"]
-    plan = PLAN_CATALOG.get(plan_id)
-    if not plan:
-        logger.error(f"[Flutterwave] Unknown plan_id during activation: {plan_id}")
-        return None
+    try:
+        user_id = txn["user_id"]
+        plan_id = txn["plan_id"]
+        billing_cycle = _billing_cycle_from_plan_id(plan_id)
+        plan = PLAN_CATALOG.get(plan_id)
+        if not plan:
+            logger.error(f"[Flutterwave] Unknown plan_id during activation: {plan_id}")
+            return None
 
-    tier = plan["tier"]
-    now = datetime.now(timezone.utc)
-    expiry_dt = now + timedelta(days=plan["duration_days"])
-    expiry_iso = expiry_dt.isoformat()
+        tier = plan["tier"]
+        now = datetime.now(timezone.utc)
+        expiry_dt = now + timedelta(days=plan["duration_days"])
+        expiry_iso = expiry_dt.isoformat()
+        vdata = _verified_data(verify or {})
+        flw_id = _verified_flw_id(vdata) or txn.get("flutterwave_transaction_id")
+        email = txn.get("email") or txn.get("customer_email")
 
-    if not await should_update_subscription(user_id, tier, expiry_dt):
-        logger.info(f"[Flutterwave] Skipping profile update — user {user_id} has higher active tier.")
-        return None
+        logger.info(
+            "[Flutterwave] Activation start tx_ref=%s user_id=%s email=%s plan_id=%s billing_cycle=%s "
+            "txn_status=%s tier=%s expiry=%s verify_response=%s",
+            txn.get("tx_ref"),
+            user_id,
+            email,
+            plan_id,
+            billing_cycle,
+            txn.get("status"),
+            tier,
+            expiry_iso,
+            verify,
+        )
 
-    await update_profile(user_id, {
-        "subscription": tier,
-        "subscription_status": "active",
-        "subscription_expiry": expiry_iso,
-        "subscription_platform": "flutterwave",
-        "subscription_product_id": plan["product_id"],
-        "subscription_auto_renew": False,  # one-off charge
-        "subscription_is_trial": False,
-        "updated_at": now.isoformat(),
-    })
-    await on_user_subscription_change(user_id, tier)
-    return expiry_iso
+        profile_before = await fetch_profile(user_id) or {}
+        email = email or profile_before.get("email")
+        logger.info(
+            "[Flutterwave] Profile before activation tx_ref=%s user_id=%s email=%s subscription=%s "
+            "subscription_tier=%s subscription_expiry=%s role=%s",
+            txn.get("tx_ref"),
+            user_id,
+            email,
+            profile_before.get("subscription"),
+            profile_before.get("subscription_tier"),
+            profile_before.get("subscription_expiry"),
+            profile_before.get("role"),
+        )
 
+        should_update = await should_update_subscription(user_id, tier, expiry_dt)
+        logger.info("[Flutterwave] should_update_subscription tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, should_update)
+        if not should_update:
+            logger.info(f"[Flutterwave] Skipping profile update - user {user_id} has higher active tier.")
+            return profile_before.get("subscription_expiry") or expiry_iso
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+        profile_update = {
+            "subscription": tier,
+            "subscription_tier": tier,
+            "subscription_status": "active",
+            "subscription_expiry": expiry_iso,
+            "subscription_platform": "flutterwave",
+            "subscription_product_id": plan["product_id"],
+            "subscription_auto_renew": False,
+            "subscription_is_trial": False,
+            "activated_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        logger.info("[Flutterwave] Before update_profile tx_ref=%s user_id=%s payload=%s", txn.get("tx_ref"), user_id, profile_update)
+        profile_ok = await update_profile(user_id, profile_update)
+        logger.info("[Flutterwave] After update_profile tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, profile_ok)
+        if not profile_ok:
+            raise RuntimeError("update_profile returned False")
+
+        iap_doc = {
+            "user_id": user_id,
+            "transaction_id": str(flw_id or txn["tx_ref"]),
+            "original_transaction_id": txn["tx_ref"],
+            "product_id": plan["product_id"],
+            "platform": "flutterwave",
+            "status": "active",
+            "plan": tier,
+            "billing_cycle": billing_cycle,
+            "expiry_date": expiry_dt,
+            "auto_renew": False,
+            "is_trial": False,
+            "provider": "flutterwave",
+            "tx_ref": txn["tx_ref"],
+            "amount": txn.get("amount"),
+            "currency": txn.get("currency"),
+            "updated_at": now,
+            "webhook_event": "flutterwave_success",
+        }
+        logger.info("[Flutterwave] Before iap_transactions upsert tx_ref=%s user_id=%s doc=%s", txn.get("tx_ref"), user_id, iap_doc)
+        iap_result = await db.iap_transactions.update_one(
+            {"original_transaction_id": txn["tx_ref"], "platform": "flutterwave"},
+            {
+                "$set": iap_doc,
+                "$setOnInsert": {
+                    "purchase_date": now,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        logger.info(
+            "[Flutterwave] After iap_transactions upsert tx_ref=%s matched=%s modified=%s upserted_id=%s",
+            txn.get("tx_ref"),
+            iap_result.matched_count,
+            iap_result.modified_count,
+            iap_result.upserted_id,
+        )
+
+        logger.info("[Flutterwave] Before on_user_subscription_change tx_ref=%s user_id=%s tier=%s", txn.get("tx_ref"), user_id, tier)
+        referral_result = await on_user_subscription_change(user_id, tier)
+        logger.info("[Flutterwave] After on_user_subscription_change tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, referral_result)
+
+        profile_after = await fetch_profile(user_id) or {}
+        logger.info(
+            "[Flutterwave] Profile after activation tx_ref=%s user_id=%s subscription=%s subscription_tier=%s "
+            "subscription_expiry=%s activated_at=%s platform=%s product_id=%s",
+            txn.get("tx_ref"),
+            user_id,
+            profile_after.get("subscription"),
+            profile_after.get("subscription_tier"),
+            profile_after.get("subscription_expiry"),
+            profile_after.get("activated_at"),
+            profile_after.get("subscription_platform"),
+            profile_after.get("subscription_product_id"),
+        )
+        logger.info("[Flutterwave] Subscription activated successfully for user %s", user_id)
+        return expiry_iso
+    except Exception as e:
+        print("[Flutterwave Activation Error]", str(e), traceback.format_exc())
+        logger.error(
+            "[Flutterwave Activation Error] tx_ref=%s user_id=%s error=%s traceback=%s",
+            txn.get("tx_ref"),
+            txn.get("user_id"),
+            str(e),
+            traceback.format_exc(),
+        )
+        raise
+
 @router.get("/catalog")
 async def get_catalog():
     """
@@ -352,7 +554,7 @@ async def initialize_payment(payload: InitRequest, current_user: User = Depends(
 
     user_id = current_user.user_id
     profile = await fetch_profile(user_id) or {}
-    customer_email = profile.get("email") or f"{user_id}@swiftfx.app"
+    customer_email = profile.get("email") or current_user.email or f"{user_id}@swiftfx.app"
     customer_name = profile.get("full_name") or profile.get("name") or "Swift FX User"
 
     tx_ref = f"swfx-{platform}-{uuid.uuid4().hex[:16]}"
@@ -362,8 +564,10 @@ async def initialize_payment(payload: InitRequest, current_user: User = Depends(
     await db.payment_transactions.insert_one({
         "tx_ref": tx_ref,
         "user_id": user_id,
+        "email": customer_email,
         "provider": "flutterwave",
         "plan_id": payload.plan_id,
+        "billing_cycle": _billing_cycle_from_plan_id(payload.plan_id),
         "tier": plan["tier"],
         "amount": plan["amount"],
         "currency": "USD",
@@ -440,8 +644,12 @@ async def webhook(request: Request) -> Response:
             f"[Flutterwave] Verified failed payment tx_ref={tx_ref} status={vstatus} "
             f"amount={vamount}/{txn['amount']} currency={vcurrency}/{txn['currency']}"
         )
+        failed_filter = {"tx_ref": tx_ref, "user_id": txn["user_id"], "status": {"$ne": "successful"}}
+        if txn.get("email"):
+            failed_filter["email"] = txn["email"]
+        logger.info("[Flutterwave] Before failed Mongo update tx_ref=%s filter=%s", tx_ref, failed_filter)
         await db.payment_transactions.update_one(
-            {"tx_ref": tx_ref, "status": {"$ne": "successful"}},
+            failed_filter,
             {"$set": {
                 "status": "failed",
                 "failure_reason": f"verify_mismatch:{vstatus}",
@@ -468,17 +676,37 @@ async def get_status(tx_ref: str, current_user: User = Depends(require_auth)):
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    logger.info(
+        "[Flutterwave] Status poll tx_ref=%s user_id=%s email=%s plan_id=%s billing_cycle=%s "
+        "txn_status=%s subscription_expiry=%s activated_at=%s",
+        tx_ref,
+        current_user.user_id,
+        txn.get("email") or txn.get("customer_email") or current_user.email,
+        txn.get("plan_id"),
+        txn.get("billing_cycle") or _billing_cycle_from_plan_id(txn.get("plan_id")),
+        txn.get("status"),
+        txn.get("subscription_expiry"),
+        txn.get("activated_at"),
+    )
+
     if txn.get("status") == "pending":
+        logger.info("[Flutterwave] Status fallback before verify_by_reference tx_ref=%s", tx_ref)
         verify = await _verify_flutterwave_transaction_by_reference(tx_ref)
+        logger.info("[Flutterwave] Status fallback after verify_by_reference tx_ref=%s response=%s", tx_ref, verify)
         vdata = _verified_data(verify)
         vstatus = vdata.get("status")
         vtx_ref = _verified_tx_ref(vdata)
 
         if _verification_matches_txn(verify, txn):
+            logger.info("[Flutterwave] Status fallback matched successful verify tx_ref=%s", tx_ref)
             txn = await _mark_successful_and_activate(txn, verify, "status_poll")
         elif _failure_status(vstatus) and vtx_ref == tx_ref:
+            failed_filter = {"tx_ref": tx_ref, "user_id": current_user.user_id, "status": {"$ne": "successful"}}
+            if txn.get("email"):
+                failed_filter["email"] = txn["email"]
+            logger.info("[Flutterwave] Status fallback before failed Mongo update tx_ref=%s status=%s filter=%s", tx_ref, vstatus, failed_filter)
             await db.payment_transactions.update_one(
-                {"tx_ref": tx_ref, "user_id": current_user.user_id, "status": {"$ne": "successful"}},
+                failed_filter,
                 {"$set": {
                     "status": "failed",
                     "failure_reason": f"verify_by_reference:{vstatus}",
@@ -491,10 +719,50 @@ async def get_status(tx_ref: str, current_user: User = Depends(require_auth)):
                 {"tx_ref": tx_ref, "user_id": current_user.user_id},
                 {"_id": 0},
             ) or txn
+            logger.info("[Flutterwave] Status fallback after failed Mongo update tx_ref=%s txn=%s", tx_ref, txn)
+
+    if txn.get("status") == "successful" and (not txn.get("subscription_expiry") or not txn.get("activated_at")):
+        logger.warning("[Flutterwave] Successful tx missing activation fields; attempting repair tx_ref=%s txn=%s", tx_ref, txn)
+        verify = await _verify_flutterwave_transaction_by_reference(tx_ref)
+        logger.info("[Flutterwave] Repair verify response tx_ref=%s response=%s", tx_ref, verify)
+        if _verification_matches_txn(verify, txn):
+            expiry_iso = await _activate_subscription_from_txn(txn, verify)
+            if not expiry_iso:
+                raise RuntimeError("Repair activation did not return a subscription expiry.")
+            activated_at = datetime.now(timezone.utc).isoformat()
+            repair_filter = {"tx_ref": tx_ref, "user_id": current_user.user_id, "status": "successful"}
+            if txn.get("email"):
+                repair_filter["email"] = txn["email"]
+            logger.info("[Flutterwave] Repair before subscription_expiry/activated_at write tx_ref=%s filter=%s", tx_ref, repair_filter)
+            repair_result = await db.payment_transactions.update_one(
+                repair_filter,
+                {"$set": {
+                    "subscription_expiry": expiry_iso,
+                    "activated_at": activated_at,
+                    "updated_at": activated_at,
+                }},
+            )
+            logger.info(
+                "[Flutterwave] Repair activation write result tx_ref=%s matched=%s modified=%s expiry=%s activated_at=%s",
+                tx_ref,
+                repair_result.matched_count,
+                repair_result.modified_count,
+                expiry_iso,
+                activated_at,
+            )
+            txn = await db.payment_transactions.find_one(
+                {"tx_ref": tx_ref, "user_id": current_user.user_id},
+                {"_id": 0},
+            ) or txn
+
+    response_status = txn["status"]
+    if response_status == "successful" and (not txn.get("subscription_expiry") or not txn.get("activated_at")):
+        logger.warning("[Flutterwave] Holding success response until activation completes tx_ref=%s txn=%s", tx_ref, txn)
+        response_status = "pending"
 
     return StatusResponse(
         tx_ref=txn["tx_ref"],
-        status=txn["status"],
+        status=response_status,
         plan_id=txn.get("plan_id"),
         tier=txn.get("tier"),
         subscription_expiry=txn.get("subscription_expiry"),
