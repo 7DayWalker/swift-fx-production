@@ -5,7 +5,10 @@
   },
   "build": {
     "base": {
-      "distribution": "store"
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY": "FLWPUBK-78c7ade9eac6f36a57aa06f59032a886-X"
+      }
     },
 
     "development": {

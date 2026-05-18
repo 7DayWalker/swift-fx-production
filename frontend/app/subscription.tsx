@@ -37,6 +37,21 @@ interface Plan {
   features: string[];
 }
 
+const FRONTEND_PLAN_PRICING: Record<'premium' | 'vip', Record<BillingCycle, number>> = {
+  premium: {
+    weekly: 4.99,
+    monthly: 14.99,
+    yearly: 149.99,
+  },
+  vip: {
+    weekly: 9.99,
+    monthly: 29.99,
+    yearly: 199.99,
+  },
+};
+
+const formatUsd = (amount: number) => `$${amount.toFixed(2)}`;
+
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
@@ -321,6 +336,24 @@ export default function SubscriptionScreen() {
     return flutterwaveCurrency === 'USD' ? `$${amount}` : `${flutterwaveCurrency} ${amount}`;
   }, [flutterwaveCatalog, flutterwaveCurrency]);
 
+  const getFallbackPrice = (planId: string, cycle: BillingCycle): string | null => {
+    const pricing = FRONTEND_PLAN_PRICING[planId as 'premium' | 'vip'];
+    if (!pricing) return null;
+    return formatUsd(pricing[cycle]);
+  };
+
+  const getYearlySavingsText = (planId: string): string | null => {
+    if (selectedCycle !== 'yearly') return null;
+    const pricing = FRONTEND_PLAN_PRICING[planId as 'premium' | 'vip'];
+    if (!pricing) return null;
+    const yearly = pricing.yearly;
+    const monthlyTotal = pricing.monthly * 12;
+    const savingsValue = monthlyTotal - yearly;
+    if (savingsValue <= 0) return null;
+    const savingsPercent = Math.round((savingsValue / monthlyTotal) * 100);
+    return `Save ${formatUsd(savingsValue)} (${savingsPercent}%) vs monthly`;
+  };
+
   const getPlanIcon = (planId: string) => {
     if (planId === 'vip') return 'diamond';
     if (planId === 'premium') return 'star';
@@ -455,8 +488,11 @@ export default function SubscriptionScreen() {
             const displayPrice = flutterwaveEnabled
               ? getFlutterwavePrice(plan.id, selectedCycle)
               : getStorePrice(plan.id, selectedCycle);
-            const priceAvailable = displayPrice !== null;
+            const fallbackPrice = getFallbackPrice(plan.id, selectedCycle);
+            const effectivePrice = displayPrice || fallbackPrice;
+            const priceAvailable = effectivePrice !== null;
             const priceLoading = flutterwaveEnabled ? flutterwaveCatalogLoading : !priceAvailable;
+            const savingsText = getYearlySavingsText(plan.id);
             
             return (
               <View 
@@ -495,7 +531,7 @@ export default function SubscriptionScreen() {
                 <View style={styles.priceRow}>
                   {priceAvailable ? (
                     <>
-                      <Text style={styles.priceAmount}>{displayPrice}</Text>
+                      <Text style={styles.priceAmount}>{effectivePrice}</Text>
                       <Text style={styles.pricePeriod}>
                         /{selectedCycle === 'yearly' ? 'year' : selectedCycle === 'monthly' ? 'month' : 'week'}
                       </Text>
@@ -517,6 +553,10 @@ export default function SubscriptionScreen() {
                     </View>
                   )}
                 </View>
+
+                {savingsText && (
+                  <Text style={styles.savingsText}>{savingsText}</Text>
+                )}
 
                 <View style={styles.featuresList}>
                   {plan.features.map((feature, i) => (
@@ -915,6 +955,11 @@ const styles = StyleSheet.create({
   priceLoadingText: {
     color: '#8A8D98',
     fontSize: 14,
+  },
+  savingsText: {
+    color: '#A7F3D0',
+    fontSize: 13,
+    marginBottom: 12,
   },
   priceAmount: {
     color: '#00D4AA',
