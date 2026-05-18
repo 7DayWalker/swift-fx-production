@@ -157,7 +157,8 @@ async def _verify_flutterwave_transaction_by_reference(tx_ref: str) -> dict:
 
 
 def _success_status(value: Optional[str]) -> bool:
-    return str(value or "").lower() in {"successful", "succeeded", "success"}
+    status_lower = str(value or "").lower().strip()
+    return status_lower in {"successful", "succeeded", "success", "approved", "completed"}
 
 
 def _failure_status(value: Optional[str]) -> bool:
@@ -232,6 +233,7 @@ async def _verify_payment_for_txn(txn: dict, flw_id: Optional[str | int] = None)
     if flw_id:
         logger.info("[Flutterwave] Before verify transaction by id tx_ref=%s flw_id=%s", txn.get("tx_ref"), flw_id)
         verify = await _verify_flutterwave_transaction(flw_id)
+        print("[Flutterwave Verify RAW]", verify)
         logger.info("[Flutterwave] After verify transaction by id tx_ref=%s response=%s", txn.get("tx_ref"), verify)
         if _verification_matches_txn(verify, txn):
             logger.info("[Flutterwave] Verify matched by id tx_ref=%s", txn.get("tx_ref"))
@@ -239,6 +241,7 @@ async def _verify_payment_for_txn(txn: dict, flw_id: Optional[str | int] = None)
         logger.warning(f"[Flutterwave] id verification did not match tx_ref={txn['tx_ref']}; trying verify_by_reference")
     logger.info("[Flutterwave] Before verify transaction by reference tx_ref=%s", txn.get("tx_ref"))
     verify = await _verify_flutterwave_transaction_by_reference(txn["tx_ref"])
+    print("[Flutterwave Verify RAW by_reference]", verify)
     logger.info("[Flutterwave] After verify transaction by reference tx_ref=%s response=%s", txn.get("tx_ref"), verify)
     return verify
 
@@ -327,6 +330,14 @@ async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) ->
         updated_txn["subscription_expiry"] = expiry_iso
         updated_txn["activated_at"] = activated_at
         updated_txn["status"] = "successful"
+        
+        # Wait for DB to reflect the successful write before returning
+        logger.info("[Flutterwave] Verifying final write propagation tx_ref=%s", txn["tx_ref"])
+        verify_result = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
+        if verify_result and verify_result.get("status") == "successful" and verify_result.get("subscription_expiry"):
+            logger.info("[Flutterwave] Final write verified tx_ref=%s subscription_expiry=%s", txn["tx_ref"], verify_result.get("subscription_expiry"))
+        else:
+            logger.warning("[Flutterwave] Final write verification failed or incomplete tx_ref=%s result=%s", txn["tx_ref"], verify_result)
     except Exception as e:
         print("[Flutterwave Activation Error]", str(e), traceback.format_exc())
         logger.error(
@@ -352,6 +363,7 @@ async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) ->
 
     latest = await db.payment_transactions.find_one({"tx_ref": txn["tx_ref"]}, {"_id": 0})
     logger.info("[Flutterwave] Subscription activated successfully for user %s tx_ref=%s latest=%s", txn["user_id"], txn["tx_ref"], latest)
+    print("[Flutterwave] FINAL ACTIVATION SUCCESS tx_ref=%s user_id=%s subscription_expiry=%s" % (txn["tx_ref"], txn["user_id"], latest.get("subscription_expiry") if latest else None))
     return latest or updated_txn
 
 def _signature_valid(raw_body: bytes, headers) -> bool:
@@ -758,7 +770,38 @@ async def get_status(tx_ref: str, current_user: User = Depends(require_auth)):
     response_status = txn["status"]
     if response_status == "successful" and (not txn.get("subscription_expiry") or not txn.get("activated_at")):
         logger.warning("[Flutterwave] Holding success response until activation completes tx_ref=%s txn=%s", tx_ref, txn)
-        response_status = "pending"
+        logger.info("[Flutterwave] Aggressive fallback re-verify for incomplete successful tx tx_ref=%s", tx_ref)
+        verify = await _verify_flutterwave_transaction_by_reference(tx_ref)
+        if _verification_matches_txn(verify, txn):
+            expiry_iso = await _activate_subscription_from_txn(txn, verify)
+            if expiry_iso:
+                activated_at = datetime.now(timezone.utc).isoformat()
+                aggressive_filter = {"tx_ref": tx_ref, "user_id": current_user.user_id, "status": "successful"}
+                if txn.get("email"):
+                    aggressive_filter["email"] = txn["email"]
+                logger.info("[Flutterwave] Aggressive fallback before write tx_ref=%s filter=%s", tx_ref, aggressive_filter)
+                aggressive_result = await db.payment_transactions.update_one(
+                    aggressive_filter,
+                    {"$set": {
+                        "subscription_expiry": expiry_iso,
+                        "activated_at": activated_at,
+                        "updated_at": activated_at,
+                    }},
+                )
+                logger.info(
+                    "[Flutterwave] Aggressive fallback write result tx_ref=%s matched=%s modified=%s expiry=%s",
+                    tx_ref,
+                    aggressive_result.matched_count,
+                    aggressive_result.modified_count,
+                    expiry_iso,
+                )
+                txn = await db.payment_transactions.find_one(
+                    {"tx_ref": tx_ref, "user_id": current_user.user_id},
+                    {"_id": 0},
+                ) or txn
+                response_status = "pending" if not txn.get("subscription_expiry") else "successful"
+        else:
+            response_status = "pending"
 
     return StatusResponse(
         tx_ref=txn["tx_ref"],
