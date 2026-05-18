@@ -76,7 +76,7 @@ def calculate_pips(pair: str, entry_price: float, exit_price: float, signal_type
 
 @router.get("/signals")
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
-    signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
     
     # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
@@ -858,7 +858,7 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     user_role = current_user.role if current_user else UserRole.FREE
     
     # Get all closed signals
-    all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(500)
+    all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(None)
     
     # Filter signals based on user's access level
     accessible_signals = []
