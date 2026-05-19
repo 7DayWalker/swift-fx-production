@@ -353,12 +353,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     name: string,
     email: string,
     password: string,
-    _referralCode?: string,
+    referralCode?: string,
   ): Promise<User> => {
+    const signupData: any = { data: { name } };
+    
+    // Include referral code in auth metadata if provided
+    if (referralCode) {
+      signupData.data.referral_code = referralCode;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } },
+      options: signupData,
     });
     if (error) throw new Error(error.message);
 
@@ -373,6 +380,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(data.session.access_token);
 
     enrichProfile(data.user!, data.session.access_token);
+    
+    // Create referral record in backend if referral code was provided
+    if (referralCode && data.user) {
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+        await fetch(`${apiUrl}/api/referral/record-signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify({
+            referral_code: referralCode,
+            user_id: data.user.id,
+          }),
+        });
+      } catch (err) {
+        console.error('[Auth] Failed to record referral on signup:', err);
+        // Don't fail signup if referral recording fails
+      }
+    }
+
     return immediateUser;
   };
 
