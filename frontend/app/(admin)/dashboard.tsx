@@ -156,6 +156,13 @@ export default function AdminDashboard() {
       route: '/(admin)/insights',
       color: '#F97316',
     },
+    {
+      icon: 'megaphone-outline',
+      label: 'App Announcements',
+      description: 'Post update announcements',
+      route: '/(admin)/app-announcements',
+      color: '#D97706',
+    },
   ];
 
   if (isLoading) {
