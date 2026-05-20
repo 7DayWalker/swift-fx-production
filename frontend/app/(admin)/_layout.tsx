@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { useAuth } from '../../src/context/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
@@ -45,6 +45,7 @@ export default function AdminLayout() {
       <Stack.Screen name="withdrawals" />
       <Stack.Screen name="admin-management" />
       <Stack.Screen name="insights" />
+      <Stack.Screen name="app-announcements" />
     </Stack>
   );
 }

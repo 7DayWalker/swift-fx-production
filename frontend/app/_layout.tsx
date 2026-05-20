@@ -15,6 +15,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationService from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
+import AppAnnouncementModal from '../src/components/AppAnnouncementModal';
 
 // ─── GLOBAL notification handler (must run before any notification arrives) ───
 Notifications.setNotificationHandler({
@@ -22,6 +23,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -102,6 +105,7 @@ function RootLayoutContent() {
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="chart" />
       </Stack>
+      <AppAnnouncementModal />
     </>
   );
 }
