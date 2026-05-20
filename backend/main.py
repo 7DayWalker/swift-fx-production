@@ -71,6 +71,7 @@ from api.routes import (
     market,
     insights,
     payments_flutterwave,
+    announcement,
 )
 
 app.include_router(signals.router)
@@ -88,6 +89,7 @@ app.include_router(dashboard.router)
 app.include_router(market.router)
 app.include_router(insights.router)
 app.include_router(payments_flutterwave.router)
+app.include_router(announcement.router)
 
 # ─── Signal Engine ────────────────────────────────────────────────────────────
 from services.signal_engine import (
