@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
+import { api } from '../services/api';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
@@ -384,17 +385,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Create referral record in backend if referral code was provided
     if (referralCode && data.user) {
       try {
-        const apiUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-        await fetch(`${apiUrl}/api/referral/record-signup`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.session.access_token}`,
-          },
-          body: JSON.stringify({
-            referral_code: referralCode,
-            user_id: data.user.id,
-          }),
+        await api.post('/referral/record-signup', {
+          referral_code: referralCode,
+          user_id: data.user.id,
         });
       } catch (err) {
         console.error('[Auth] Failed to record referral on signup:', err);
