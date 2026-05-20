@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { api } from './api';
-import * as Linking from 'expo-linking';
 
 const NOTIFICATION_ENABLED_KEY = '@notification_enabled';
 const CALENDAR_NOTIFICATION_KEY = '@calendar_notification_enabled';
@@ -21,8 +20,6 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
   }),
 });
 
@@ -53,7 +50,7 @@ export async function initializeNotifications(): Promise<void> {
     }
 
     // Small delay to ensure auth session is fully established
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Request permissions and get token
     const token = await registerForPushNotifications();
@@ -118,19 +115,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export async function registerTokenWithBackend(token: string): Promise<void> {
   try {
     const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
-
+    
     await api.post('/notifications/register-token', {
       token,
       platform,
     });
-
+    
     console.log('[Notifications] Token registered with backend');
   } catch (error: any) {
-    console.error(
-      'Token registration failed:',
-      error?.response?.status,
-      error?.message,
-    );
+    console.error('[Notifications] Token registration failed:', error?.response?.status, error?.message);
     throw error; // Re-throw so retry can catch it
   }
 }
@@ -140,14 +133,14 @@ export async function registerTokenWithBackend(token: string): Promise<void> {
  */
 async function registerTokenWithBackendRetry(token: string): Promise<void> {
   const maxRetries = 3;
-  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await registerTokenWithBackend(token);
       return; // Success
     } catch (error) {
       if (attempt < maxRetries) {
         console.log(`[Notifications] Retry ${attempt}/${maxRetries} in ${attempt * 2}s...`);
-        await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
       } else {
         console.error('[Notifications] All registration attempts failed');
       }
@@ -163,28 +156,16 @@ export function setupNotificationListeners(): void {
   cleanupNotifications();
 
   // Handle notification received while app is foregrounded
-  receivedListener = Notifications.addNotificationReceivedListener((notification) => {
+  receivedListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
   });
 
   // Handle notification tap (when user taps the notification)
-  responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+  responseListener = Notifications.addNotificationResponseReceivedListener(response => {
     console.log('Notification tapped:', response);
-
+    
     const data = response.notification.request.content.data;
-
-    // App update announcement tap
-    if (data?.type === 'app_announcement') {
-      const rawCtaUrl = (data as { cta_url?: unknown }).cta_url;
-      const url =
-        typeof rawCtaUrl === 'string' && rawCtaUrl.trim().length > 0
-          ? rawCtaUrl
-          : 'https://swiftfx.online/app/';
-
-      Linking.openURL(url);
-      return;
-    }
-
+    
     // Navigate to Signals screen when notification is tapped
     if (data?.type === 'new_signal') {
       router.push('/(tabs)/signals');
@@ -199,18 +180,21 @@ export function setupNotificationListeners(): void {
 export function cleanupNotifications(): void {
   try {
     if (responseListener) {
+      // Use .remove() method on the subscription object (correct API)
       if (typeof responseListener.remove === 'function') {
         responseListener.remove();
       }
       responseListener = null;
     }
     if (receivedListener) {
+      // Use .remove() method on the subscription object (correct API)
       if (typeof receivedListener.remove === 'function') {
         receivedListener.remove();
       }
       receivedListener = null;
     }
   } catch (error) {
+    // Silently handle cleanup errors - logout must never crash
     console.log('Notification cleanup skipped:', error);
     responseListener = null;
     receivedListener = null;
@@ -223,6 +207,7 @@ export function cleanupNotifications(): void {
 export async function isNotificationEnabled(): Promise<boolean> {
   try {
     const value = await AsyncStorage.getItem(NOTIFICATION_ENABLED_KEY);
+    // Default to true if not set
     return value === null ? true : value === 'true';
   } catch (error) {
     console.error('Error reading notification setting:', error);
@@ -236,7 +221,7 @@ export async function isNotificationEnabled(): Promise<boolean> {
 export async function setNotificationEnabled(enabled: boolean): Promise<void> {
   try {
     await AsyncStorage.setItem(NOTIFICATION_ENABLED_KEY, enabled.toString());
-
+    
     // Update backend preferences
     try {
       await api.put('/notifications/preferences', {
@@ -247,8 +232,10 @@ export async function setNotificationEnabled(enabled: boolean): Promise<void> {
     }
 
     if (enabled) {
+      // Re-initialize notifications
       await initializeNotifications();
     } else {
+      // Cleanup listeners
       cleanupNotifications();
     }
   } catch (error) {
@@ -261,6 +248,8 @@ export async function setNotificationEnabled(enabled: boolean): Promise<void> {
  */
 export function unregisterToken(): void {
   cleanupNotifications();
+  // Note: Token is still stored on backend but won't receive notifications
+  // if user preferences are updated
 }
 
 // Default export for convenience
@@ -291,6 +280,7 @@ export default NotificationService;
 export async function isCalendarNotificationEnabled(): Promise<boolean> {
   try {
     const value = await AsyncStorage.getItem(CALENDAR_NOTIFICATION_KEY);
+    // Default to false - opt-in only
     return value === 'true';
   } catch (error) {
     console.error('Error reading calendar notification setting:', error);
@@ -304,11 +294,12 @@ export async function isCalendarNotificationEnabled(): Promise<boolean> {
 export async function setCalendarNotificationEnabled(enabled: boolean): Promise<void> {
   try {
     await AsyncStorage.setItem(CALENDAR_NOTIFICATION_KEY, enabled.toString());
-
+    
     if (!enabled) {
+      // Cancel all scheduled calendar notifications
       await cancelAllCalendarNotifications();
     }
-
+    
     console.log(`Calendar notifications ${enabled ? 'enabled' : 'disabled'}`);
   } catch (error) {
     console.error('Error saving calendar notification setting:', error);
@@ -335,7 +326,7 @@ export async function setCalendarNotificationMinutes(minutes: number): Promise<v
   try {
     await AsyncStorage.setItem(CALENDAR_NOTIFICATION_MINUTES_KEY, minutes.toString());
   } catch (error) {
-    console.error('Error saving calendar notification minutes:', error);
+    console.error('Error saving notification minutes:', error);
   }
 }
 
@@ -351,51 +342,49 @@ export async function scheduleCalendarEventNotification(event: {
   impact: string;
 }): Promise<string | null> {
   try {
+    // Only schedule for high-impact events
     if (event.impact.toLowerCase() !== 'high') {
       return null;
     }
 
+    // Check if calendar notifications are enabled
     const isEnabled = await isCalendarNotificationEnabled();
     if (!isEnabled) {
       return null;
     }
 
+    // Get notification timing
     const minutesBefore = await getCalendarNotificationMinutes();
     const eventDate = new Date(event.date);
     const notificationDate = new Date(eventDate.getTime() - minutesBefore * 60 * 1000);
 
+    // Don't schedule if notification time has passed
     if (notificationDate <= new Date()) {
       console.log('Event notification time has passed, skipping:', event.title);
       return null;
     }
 
-    const flags: Record<string, string> = {
-      USD: '🇺🇸',
-      EUR: '🇪🇺',
-      GBP: '🇬🇧',
-      JPY: '🇯🇵',
-      AUD: '🇦🇺',
-      NZD: '🇳🇿',
-      CAD: '🇨🇦',
-      CHF: '🇨🇭',
-      CNY: '🇨🇳',
+    // Currency flag mapping
+    const flags: { [key: string]: string } = {
+      USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵',
+      AUD: '🇦🇺', NZD: '🇳🇿', CAD: '🇨🇦', CHF: '🇨🇭', CNY: '🇨🇳',
     };
     const flag = flags[event.country] || '🌍';
 
+    // Schedule the notification
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: `${flag} High-Impact Event`,
         body: `${event.country}: ${event.title} in ${minutesBefore} minutes`,
-        data: {
+        data: { 
           type: 'calendar_event',
           eventId: event.id,
         },
         sound: true,
       },
-      trigger: ({
-        type: 'date',
+      trigger: {
         date: notificationDate,
-      } as any),
+      },
     });
 
     console.log(`Scheduled notification for ${event.title} at ${notificationDate.toISOString()}`);
@@ -412,12 +401,14 @@ export async function scheduleCalendarEventNotification(event: {
 export async function cancelAllCalendarNotifications(): Promise<void> {
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    const calendarNotifications = scheduled.filter((n) => n.content.data?.type === 'calendar_event');
-
+    const calendarNotifications = scheduled.filter(
+      n => n.content.data?.type === 'calendar_event'
+    );
+    
     for (const notification of calendarNotifications) {
       await Notifications.cancelScheduledNotificationAsync(notification.identifier);
     }
-
+    
     console.log(`Cancelled ${calendarNotifications.length} calendar notifications`);
   } catch (error) {
     console.error('Error cancelling calendar notifications:', error);
