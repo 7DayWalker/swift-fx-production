@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Image, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
+import { storeReferralCode, validateReferralCode } from '../src/services/referralService';
 
 /**
  * Splash / Loading screen.
@@ -8,6 +10,27 @@ import { LinearGradient } from 'expo-linear-gradient';
  * Navigation is handled entirely by _layout.tsx watching auth state.
  */
 export default function SplashScreen() {
+  const params = useLocalSearchParams<{ ref?: string; referral?: string }>();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const code = params.ref || params.referral;
+    if (!code) return;
+
+    (async () => {
+      try {
+        const validation = await validateReferralCode(code);
+        if (validation.valid) {
+          await storeReferralCode(code, 'deeplink');
+          console.log('[Referral] Stored referral from web root:', code.toUpperCase().trim());
+        }
+      } catch (err) {
+        console.error('[Referral] Failed to process web root referral:', err);
+      }
+    })();
+  }, [params.ref, params.referral]);
+
   return (
     <LinearGradient colors={['#0A0E17', '#1A1F2E', '#0A0E17']} style={styles.container}>
       <View style={styles.logoContainer}>

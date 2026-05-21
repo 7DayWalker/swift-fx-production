@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
+import { getStoredReferralCode, clearStoredReferralCode } from '../services/referralService';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
@@ -67,6 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+
+  // When an OAuth deep link is detected, we will bridge stored referral attribution into
+  // /api/referral/record-signup once the Supabase session exists.
+  const oauthAttributionReadyRef = useRef(false);
+  const oauthAttributionProcessedUserIdRef = useRef<string | null>(null);
 
   const isAdmin = user?.is_admin === true;
 
@@ -167,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('[Auth] OAuth code exchange error:', error.message);
         }
+        // OAuth succeeded; we will bridge stored referral attribution after session is established
+        oauthAttributionReadyRef.current = true;
         // onAuthStateChange will set user + isLoading
         return true;
       }
@@ -188,6 +196,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('[Auth] OAuth setSession error:', error.message);
         }
+
+        // OAuth succeeded; we will bridge stored referral attribution after session is established
+        oauthAttributionReadyRef.current = true;
+
         // onAuthStateChange will set user + isLoading
         return true;
       }
@@ -218,16 +230,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!mounted) return;
 
-      if (session) {
-        setUser(buildUserFromSession(session.user));
-        setToken(session.access_token);
-        setIsLoading(false);
-        enrichProfile(session.user, session.access_token);
-      } else {
-        setUser(null);
-        setToken(null);
-        setIsLoading(false);
-      }
+        if (session) {
+          const sbUser = session.user;
+
+          setUser(buildUserFromSession(sbUser));
+          setToken(session.access_token);
+          setIsLoading(false);
+
+          // OAuth referral attribution bridge:
+          // After OAuth session exists, consume AsyncStorage and record referral attribution once.
+          if (
+            oauthAttributionReadyRef.current &&
+            oauthAttributionProcessedUserIdRef.current !== sbUser.id
+          ) {
+            oauthAttributionReadyRef.current = false;
+
+            void (async () => {
+              try {
+                const stored = await getStoredReferralCode();
+                if (!stored?.code) return;
+
+                await api.post('/referral/record-signup', {
+                  referral_code: stored.code,
+                  user_id: sbUser.id,
+                });
+
+                // Clear so cold-restart does not re-attribute
+                await clearStoredReferralCode();
+                oauthAttributionProcessedUserIdRef.current = sbUser.id;
+
+                console.log('[Referral] OAuth referral attribution recorded:', stored.code);
+              } catch (err) {
+                console.error('[Referral] OAuth referral attribution failed:', err);
+              }
+            })();
+          }
+
+          enrichProfile(sbUser, session.access_token);
+        } else {
+          setUser(null);
+          setToken(null);
+          setIsLoading(false);
+        }
     };
 
     init();
@@ -259,10 +303,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (session) {
-          setUser(buildUserFromSession(session.user));
+          const sbUser = session.user;
+
+          setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);
           setIsLoading(false);
-          enrichProfile(session.user, session.access_token);
+
+          // OAuth referral attribution bridge (runtime + cold-start safety):
+          // if an OAuth callback was processed, consume AsyncStorage referral code
+          // and record it server-side once per user.
+          if (
+            oauthAttributionReadyRef.current &&
+            oauthAttributionProcessedUserIdRef.current !== sbUser.id
+          ) {
+            oauthAttributionReadyRef.current = false;
+
+            void (async () => {
+              try {
+                const stored = await getStoredReferralCode();
+                if (!stored?.code) return;
+
+                await api.post('/referral/record-signup', {
+                  referral_code: stored.code,
+                  user_id: sbUser.id,
+                });
+
+                await clearStoredReferralCode();
+                oauthAttributionProcessedUserIdRef.current = sbUser.id;
+
+                console.log('[Referral] OAuth referral attribution recorded (runtime):', stored.code);
+              } catch (err) {
+                console.error('[Referral] OAuth referral attribution failed (runtime):', err);
+              }
+            })();
+          }
+
+          enrichProfile(sbUser, session.access_token);
         } else {
           setUser(null);
           setToken(null);

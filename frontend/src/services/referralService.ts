@@ -22,7 +22,7 @@ export const APP_STORE_URLS = {
 // Deep link schemes
 export const DEEP_LINK_SCHEMES = {
   custom: 'swiftfx://',
-  universal: 'https://swiftfx.app',
+  universal: 'https://swiftfx.online/app',
 };
 
 export interface ReferralInfo {
@@ -139,12 +139,17 @@ export async function validateReferralCode(code: string): Promise<ReferralValida
  */
 export function extractReferralCodeFromUrl(url: string): string | null {
   try {
-    // Handle various URL formats
-    // https://swiftfx.app/register?ref=CODE
+    // Handle various URL formats:
+    // https://swiftfx.online/app/?ref=CODE
     // swiftfx://register?ref=CODE
     // swiftfx://ref/CODE
+    // (also tolerant of https://swiftfx.online/app/register?ref=CODE)
     
-    const urlObj = new URL(url.replace('swiftfx://', 'https://swiftfx.app/'));
+    const normalizedUrl = url.startsWith('swiftfx://')
+      ? url.replace('swiftfx://', 'https://swiftfx.online/app/')
+      : url;
+
+    const urlObj = new URL(normalizedUrl);
     
     // Check query parameter
     const refParam = urlObj.searchParams.get('ref') || urlObj.searchParams.get('referral');
@@ -243,5 +248,6 @@ export function getDeviceType(): 'android' | 'ios' | 'desktop' {
  * Generate referral link for sharing
  */
 export function generateReferralLink(code: string): string {
-  return `${DEEP_LINK_SCHEMES.universal}/register?ref=${code}`;
+  // Backend expects the landing route to accept `?ref=CODE` on `/app/`
+  return `${DEEP_LINK_SCHEMES.universal}/?ref=${code}`;
 }

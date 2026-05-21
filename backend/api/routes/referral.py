@@ -79,7 +79,7 @@ async def get_my_referral_code(current_user: User = Depends(require_auth)):
     
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://swiftfx.app/register?ref={referral_code}",
+        "referral_link": f"https://swiftfx.online/app/?ref={referral_code}",
         "stats": {
             "total_referrals": total_referrals,
             "successful_referrals": successful_referrals,
