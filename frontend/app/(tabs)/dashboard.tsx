@@ -275,11 +275,52 @@ export default function DashboardScreen() {
   const currentPlan = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
   const isFreeUser = currentPlan === 'free';
   
-  // REACTIVE STATS - Directly computed from SignalContext (no caching, no local state)
-  const winRate = stats?.win_rate ?? 0;
-  const totalPips = stats?.total_pips ?? 0;
-  const totalSignals = signals.length;
+  type GlobalPerformance = {
+    win_rate: number;
+    total_pips: number;
+    total_signals: number;
+  };
+
+  const [globalPerformance, setGlobalPerformance] = useState<GlobalPerformance | null>(null);
+
+  useEffect(() => {
+    // SOURCE-OF-TRUTH correction:
+    // Dashboard performance cards must use global aggregation, not tier-shaped SignalContext stats.
+    const fetchGlobalPerformance = async () => {
+      try {
+        const { api } = require('../../src/services/api');
+        const res = await api.get('/dashboard');
+        const perf = res?.data?.performance;
+        if (
+          perf &&
+          typeof perf.win_rate === 'number' &&
+          typeof perf.total_pips === 'number' &&
+          typeof perf.total_signals === 'number'
+        ) {
+          setGlobalPerformance({
+            win_rate: perf.win_rate,
+            total_pips: perf.total_pips,
+            total_signals: perf.total_signals,
+          });
+        }
+      } catch (err) {
+        console.error('[Dashboard] Failed to fetch global performance (/api/dashboard). Falling back to SignalContext stats.', err);
+        // fail-closed: keep null so we fall back below
+      }
+    };
+
+    // Trigger once per-user
+    if (user?.user_id) fetchGlobalPerformance();
+  }, [user?.user_id]);
+
+  const fallbackWinRate = stats?.win_rate ?? 0;
+  const fallbackTotalPips = stats?.total_pips ?? 0;
+  const fallbackTotalSignals = signals.length;
   const closedCount = closedSignals.length;
+
+  const winRate = globalPerformance?.win_rate ?? fallbackWinRate;
+  const totalPips = globalPerformance?.total_pips ?? fallbackTotalPips;
+  const totalSignals = globalPerformance?.total_signals ?? fallbackTotalSignals;
   
   // Format helpers - pure functions, no state
   const formatWinRate = (rate: number): string => {
