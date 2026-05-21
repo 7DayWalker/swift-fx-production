@@ -12,7 +12,7 @@ from models.schemas import AppAnnouncementCreate, AppAnnouncementRead
 from services.admin import create_admin_notification
 from services.push_notifications import send_notification
 
-router = APIRouter(tags=["announcement"])
+router = APIRouter(prefix="/api", tags=["announcement"])
 
 _COLLECTION_NAME = "app_announcements"
 
