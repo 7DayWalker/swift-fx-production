@@ -36,17 +36,17 @@ async def send_signal_notification(signal_id, pair, signal_type, visibility):
     await notify_new_signal(signal_id, pair, sig_type)
 
 
-async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility):
+async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility, tp_hit=0):
     from services.push_notifications import notify_signal_closed
     sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
     import traceback
     caller = traceback.extract_stack(limit=3)[0]
     logger.warning(
-        f"TRIGGER CALL → signal_closed → signal_id={signal_id} → pips={pips} → "
+        f"TRIGGER CALL → signal_closed → signal_id={signal_id} → pips={pips} → tp_hit={tp_hit} → "
         f"source=signal_engine.send_signal_close_notification → "
         f"caller={caller.filename}:{caller.lineno}:{caller.name}"
     )
-    await notify_signal_closed(signal_id, pair, sig_type, pips)
+    await notify_signal_closed(signal_id, pair, sig_type, pips, tp_hit)
 
 
 async def send_tp_hit_notification(signal_id, pair, signal_type, tp_level, running_pips=None):
@@ -776,9 +776,10 @@ class SignalLifecycleController:
                 )
                 if success:
                     pips = calculate_signal_pips(entry_actual, tp3_price, signal_type, pair)
+                    tp_hit = signal.get("tp_hit", 3)  # TP3 means tp_hit should be 3
                     visibility = SignalVisibility(signal.get("visibility", "free"))
                     asyncio.create_task(send_signal_close_notification(
-                        signal_id, pair, signal_type, pips, visibility
+                        signal_id, pair, signal_type, pips, visibility, tp_hit
                     ))
                     return {"action": "closed", "reason": "tp3", "signal_id": signal_id}
                 return None
@@ -816,9 +817,10 @@ class SignalLifecycleController:
                     
                     if success:
                         pips = calculate_signal_pips(entry_actual, sl_exit_price, signal_type, pair)
+                        tp_hit = signal.get("tp_hit", 0)  # Get tp_hit from signal (set when TP was hit before SL)
                         visibility = SignalVisibility(signal.get("visibility", "free"))
                         asyncio.create_task(send_signal_close_notification(
-                            signal_id, pair, signal_type, pips, visibility
+                            signal_id, pair, signal_type, pips, visibility, tp_hit
                         ))
                         return {
                             "action": "closed",
@@ -869,9 +871,10 @@ class SignalLifecycleController:
                         )
                         if success:
                             pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
+                            tp_hit_value = tp_level if exit_reason in ["tp1", ExitReason.TP1, "tp2", ExitReason.TP2, "tp3", ExitReason.TP3] else 0
                             visibility = SignalVisibility(signal.get("visibility", "free"))
                             asyncio.create_task(send_signal_close_notification(
-                                signal_id, pair, signal_type, pips, visibility
+                                signal_id, pair, signal_type, pips, visibility, tp_hit_value
                             ))
                             return {
                                 "action": "closed",

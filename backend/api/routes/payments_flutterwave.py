@@ -53,12 +53,12 @@ FLW_REDIRECT_URL = os.environ.get(
 # ── Plan catalog (server is source of truth — never trust client amounts) ─────
 # Each entry mirrors the same product_id Apple/Google use, so reporting stays unified.
 PLAN_CATALOG = {
-    "premium_weekly":  {"tier": "premium", "duration_days": 7,   "amount": 9.99,   "product_id": "com.swiftfx.signals.premium.weekly"},
-    "premium_monthly": {"tier": "premium", "duration_days": 30,  "amount": 29.99,  "product_id": "com.swiftfx.signals.premium.monthly"},
-    "premium_yearly":  {"tier": "premium", "duration_days": 365, "amount": 199.99, "product_id": "com.swiftfx.signals.premium.yearly"},
-    "vip_weekly":      {"tier": "vip",     "duration_days": 7,   "amount": 14.99,  "product_id": "com.swiftfx.signals.vip.weekly.v2"},
-    "vip_monthly":     {"tier": "vip",     "duration_days": 30,  "amount": 49.99,  "product_id": "com.swiftfx.signals.vip.monthly.v2"},
-    "vip_yearly":      {"tier": "vip",     "duration_days": 365, "amount": 299.99, "product_id": "com.swiftfx.signals.vip.yearly.v2"},
+    "premium_weekly":  {"tier": "premium", "duration_days": 7,   "amount": 4.99,   "product_id": "com.swiftfx.signals.premium.weekly"},
+    "premium_monthly": {"tier": "premium", "duration_days": 30,  "amount": 14.99,  "product_id": "com.swiftfx.signals.premium.monthly"},
+    "premium_yearly":  {"tier": "premium", "duration_days": 365, "amount": 149.99, "product_id": "com.swiftfx.signals.premium.yearly"},
+    "vip_weekly":      {"tier": "vip",     "duration_days": 7,   "amount": 9.99,   "product_id": "com.swiftfx.signals.vip.weekly.v2"},
+    "vip_monthly":     {"tier": "vip",     "duration_days": 30,  "amount": 29.99,  "product_id": "com.swiftfx.signals.vip.monthly.v2"},
+    "vip_yearly":      {"tier": "vip",     "duration_days": 365, "amount": 199.99, "product_id": "com.swiftfx.signals.vip.yearly.v2"},
 }
 
 # Whitelist client-supplied distribution channel labels (security: never trust raw input).
@@ -282,6 +282,10 @@ async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) ->
             "flutterwave_payment_type": data.get("payment_type"),
             "activation_started_at": now_iso,
             "verification_source": source,
+            "auto_renew": False,
+            "renewal_provider": "flutterwave",
+            "renewal_reference": None,
+            "next_billing_date": None,
             "updated_at": now_iso,
         }},
     )
@@ -318,6 +322,10 @@ async def _mark_successful_and_activate(txn: dict, verify: dict, source: str) ->
                 "subscription_expiry": expiry_iso,
                 "activated_at": activated_at,
                 "verified_at": now_iso,
+                "auto_renew": False,
+                "renewal_provider": "flutterwave",
+                "renewal_reference": None,
+                "next_billing_date": None,
                 "updated_at": activated_at,
             }},
         )
@@ -476,6 +484,9 @@ async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = No
             "billing_cycle": billing_cycle,
             "expiry_date": expiry_dt,
             "auto_renew": False,
+            "renewal_provider": "flutterwave",
+            "renewal_reference": None,
+            "next_billing_date": None,
             "is_trial": False,
             "provider": "flutterwave",
             "tx_ref": txn["tx_ref"],
@@ -587,6 +598,10 @@ async def initialize_payment(payload: InitRequest, current_user: User = Depends(
         "flutterwave_transaction_id": None,
         "platform": platform,
         "product_id": plan["product_id"],
+        "auto_renew": False,
+        "renewal_provider": "flutterwave",
+        "renewal_reference": None,
+        "next_billing_date": None,
         "created_at": now.isoformat(),
         "updated_at": now.isoformat(),
     })

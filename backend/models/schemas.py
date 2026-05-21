@@ -359,3 +359,22 @@ class NotificationPreferencesUpdate(BaseModel):
 
 class AccountDeactivateRequest(BaseModel):
     reason: Optional[str] = None
+
+
+# ─── App Announcements ─────────────────────────────────────────────────────
+class AppAnnouncementCreate(BaseModel):
+    title: str
+    message: str
+    version: str
+    cta_url: Optional[str] = None
+    active: bool = True
+
+
+class AppAnnouncementRead(BaseModel):
+    id: str
+    title: str
+    message: str
+    version: str
+    cta_url: Optional[str] = None
+    active: bool
+    created_at: datetime

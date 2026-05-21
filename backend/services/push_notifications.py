@@ -331,13 +331,21 @@ async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
     )
 
 
-async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, final_pips: float):
+async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, final_pips: float, tp_hit: int = 0):
     """Notify all users that a signal was closed. Deduped per signal_id."""
     claimed = await _claim_notification_slot_safe(signal_id, "closed")
     if not claimed:
         logger.info(f"[Dedup] Skipping duplicate closed notification for {signal_id}")
         return
-    result = "WIN" if final_pips > 0 else "LOSS"
+    
+    # Determine result: BREAKEVEN if final_pips=0 and tp_hit >= 1, else WIN/LOSS
+    if final_pips > 0:
+        result = "WIN"
+    elif final_pips == 0 and tp_hit >= 1:
+        result = "BREAKEVEN"
+    else:
+        result = "LOSS"
+    
     pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
     await send_notification(
         title=f"Signal Closed: {result}",

@@ -71,6 +71,7 @@ from api.routes import (
     market,
     insights,
     payments_flutterwave,
+    announcement,
 )
 
 app.include_router(signals.router)
@@ -88,6 +89,7 @@ app.include_router(dashboard.router)
 app.include_router(market.router)
 app.include_router(insights.router)
 app.include_router(payments_flutterwave.router)
+app.include_router(announcement.router)
 
 # ─── Signal Engine ────────────────────────────────────────────────────────────
 from services.signal_engine import (
@@ -202,6 +204,23 @@ async def startup_event():
     # Start streak reminder background task
     from services.streak_reminders import streak_reminder_loop
     asyncio.create_task(streak_reminder_loop())
+
+    # Referral reward unlock orchestration (LOCKED → PENDING progression)
+    # Lightweight periodic background loop to run referral reward processing.
+    from api.routes.referral import check_and_process_referral_rewards
+
+    async def referral_reward_unlock_loop():
+        interval_seconds = int(os.environ.get("REFERRAL_REWARD_UNLOCK_INTERVAL_SECONDS", "600"))
+        while True:
+            try:
+                await check_and_process_referral_rewards()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"[Referral] check_and_process_referral_rewards loop error: {str(e)}")
+            await asyncio.sleep(interval_seconds)
+
+    asyncio.create_task(referral_reward_unlock_loop())
 
     logger.info("[Startup] Startup complete")
 

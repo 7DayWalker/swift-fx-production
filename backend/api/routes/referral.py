@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from core.database import db
 from core.dependencies import require_auth, require_admin
@@ -22,10 +23,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
-def generate_referral_code(user_id: str) -> str:
-    hash_part = hashlib.md5(user_id.encode()).hexdigest()[:4].upper()
-    random_part = uuid.uuid4().hex[:4].upper()
-    return f"SWIFT{hash_part}{random_part}"
+class ReferralSignupRecord(BaseModel):
+    referral_code: str
+    user_id: str
+
 
 def generate_referral_code(user_id: str) -> str:
     hash_part = hashlib.md5(user_id.encode()).hexdigest()[:4].upper()
@@ -78,7 +79,7 @@ async def get_my_referral_code(current_user: User = Depends(require_auth)):
     
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://swiftfx.app/register?ref={referral_code}",
+        "referral_link": f"https://swiftfx.online/app/?ref={referral_code}",
         "stats": {
             "total_referrals": total_referrals,
             "successful_referrals": successful_referrals,
@@ -102,6 +103,69 @@ async def validate_referral_code(code: str):
         "valid": True,
         "referrer_name": user.get("name", "A Swift FX user"),
         "message": "Valid referral code!"
+    }
+
+
+@router.post("/referral/record-signup")
+async def record_referral_signup(
+    body: ReferralSignupRecord,
+    current_user: User = Depends(require_auth)
+):
+    """
+    Record a referral relationship when a referred user signs up.
+    Called immediately after signup with the referral code.
+    Creates the referral record in MongoDB linking referrer → referred user.
+    """
+    referral_code = body.referral_code.upper()
+    referred_user_id = body.user_id
+    
+    # Validate that the referral code exists and find the referrer
+    referrer_profile = (await list_profiles({"referral_code": referral_code}) or [None])[0]
+    
+    if not referrer_profile:
+        raise HTTPException(status_code=400, detail="Invalid referral code")
+    
+    referrer_id = referrer_profile.get("id")
+    
+    # Prevent self-referral
+    if referrer_id == referred_user_id:
+        logger.warning(f"[Referral] Blocked self-referral attempt: {referred_user_id}")
+        raise HTTPException(status_code=400, detail="Cannot refer yourself")
+    
+    # Check if referral already exists for this user (prevent duplicates)
+    existing = await db.referrals.find_one({
+        "referred_user_id": referred_user_id
+    })
+    
+    if existing:
+        logger.info(f"[Referral] User {referred_user_id} already has a referral record")
+        return {"success": False, "message": "User already has a referral record"}
+    
+    # Create referral record
+    now = datetime.now(timezone.utc)
+    referral_id = str(uuid.uuid4())
+    
+    referral_doc = {
+        "referral_id": referral_id,
+        "referrer_id": referrer_id,
+        "referred_user_id": referred_user_id,
+        "referral_code": referral_code,
+        "status": ReferralStatus.PENDING.value,
+        "reward_status": RewardStatus.LOCKED.value,
+        "created_at": now.isoformat(),
+        "subscribed_at": None,
+        "subscription_tier": None,
+        "reward_type": None,
+        "reward_applied_at": None,
+    }
+    
+    await db.referrals.insert_one(referral_doc)
+    logger.info(f"[Referral] Created referral record: {referral_id} (referrer={referrer_id[:12]}... referred={referred_user_id[:12]}...)")
+    
+    return {
+        "success": True,
+        "referral_id": referral_id,
+        "message": "Referral recorded successfully"
     }
 
 

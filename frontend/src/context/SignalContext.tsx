@@ -259,6 +259,15 @@ export function SignalProvider({ children }: { children: ReactNode }) {
         const pips = s.final_pips ?? s.result_pips ?? 0;
         return pips > 0;
       });
+      // Breakeven: final_pips == 0 AND tp_hit >= 1
+      const breakeven = closed.filter((s) => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return pips === 0 && (s.tp_hit ?? 0) >= 1;
+      });
+      const losing = closed.filter((s) => {
+        const pips = s.final_pips ?? s.result_pips ?? 0;
+        return pips < 0;
+      });
 
       const totalPips = closed.reduce((sum, s) => {
         const pips = s.final_pips ?? s.result_pips ?? 0;
@@ -275,7 +284,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       setStats({
         total_signals: signals.length,
         winning_trades: winning.length,
-        losing_trades: closed.length - winning.length,
+        losing_trades: losing.length,
         win_rate: Math.round(rawWinRate * 10) / 10,
         total_pips: Math.round(totalPips * 10) / 10,
         average_pips: closed.length > 0 ? Math.round((totalPips / closed.length) * 10) / 10 : 0,
@@ -293,13 +302,19 @@ export function SignalProvider({ children }: { children: ReactNode }) {
 
     const closed = signals.filter((s) => s.state === 'closed');
     const winning = closed.filter((s) => (s.final_pips ?? 0) > 0);
+    // Breakeven: final_pips == 0 AND tp_hit >= 1
+    const breakeven = closed.filter((s) => (s.final_pips ?? 0) === 0 && (s.tp_hit ?? 0) >= 1);
+    const losing = closed.filter((s) => {
+      const pips = s.final_pips ?? 0;
+      return pips < 0;
+    });
     const totalPips = closed.reduce((sum, s) => sum + (s.final_pips ?? 0), 0);
 
     setHistoryData({
       stats: {
         total_signals: signals.length,
         winning_trades: winning.length,
-        losing_trades: closed.length - winning.length,
+        losing_trades: losing.length,
         win_rate: closed.length > 0 ? Math.round((winning.length / closed.length) * 100 * 10) / 10 : 0,
         total_pips: Math.round(totalPips * 10) / 10,
         average_pips: closed.length > 0 ? Math.round((totalPips / closed.length) * 10) / 10 : 0,

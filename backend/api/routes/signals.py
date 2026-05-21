@@ -76,7 +76,7 @@ def calculate_pips(pair: str, entry_price: float, exit_price: float, signal_type
 
 @router.get("/signals")
 async def get_signals(current_user: Optional[User] = Depends(get_current_user)):
-    signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    signals = await db.signals.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
     
     # Resolve tier from subscriptions+plans (single source of truth)
     if current_user:
@@ -858,7 +858,7 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     user_role = current_user.role if current_user else UserRole.FREE
     
     # Get all closed signals
-    all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(500)
+    all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(None)
     
     # Filter signals based on user's access level
     accessible_signals = []
@@ -868,10 +868,12 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
             accessible_signals.append(signal)
     
     # Calculate basic stats (available to all users) - use final_pips or result_pips
+    # Classify trades: winning (pips > 0), breakeven (pips == 0 and tp_hit >= 1), losing (pips < 0)
     total_signals = len(accessible_signals)
     winning_signals = len([s for s in accessible_signals if get_pips_value(s) > 0])
-    losing_signals = len([s for s in accessible_signals if get_pips_value(s) < 0])
-    breakeven_signals = total_signals - winning_signals - losing_signals
+    # Breakeven: final_pips == 0 AND tp_hit >= 1 (TP was reached, then closed at entry)
+    breakeven_signals = len([s for s in accessible_signals if get_pips_value(s) == 0 and s.get("tp_hit", 0) >= 1])
+    losing_signals = total_signals - winning_signals - breakeven_signals
     
     win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
     total_pips = sum([get_pips_value(s) for s in accessible_signals])
