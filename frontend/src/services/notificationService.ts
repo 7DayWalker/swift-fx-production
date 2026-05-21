@@ -18,6 +18,8 @@ let receivedListener: Notifications.Subscription | null = null;
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -383,6 +385,7 @@ export async function scheduleCalendarEventNotification(event: {
         sound: true,
       },
       trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: notificationDate,
       },
     });
