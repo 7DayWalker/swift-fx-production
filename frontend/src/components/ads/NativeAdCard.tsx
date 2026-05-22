@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { AD_UNITS } from '../../services/adManager';
 
 let NativeAdClass: any = null;
@@ -30,8 +31,17 @@ interface NativeAdCardProps {
 }
 
 function NativeAdCardInner({ style }: NativeAdCardProps) {
+  const { status, isLoading } = useSubscription();
+
+  const tier = status?.capability_tier || status?.subscription || 'free';
+  const isFreeTier = !status?.is_admin && tier === 'free';
+
   const [nativeAd, setNativeAd] = useState<any>(null);
   const [adError, setAdError] = useState(false);
+
+  // Hard gate: Premium/VIP/Admin => no native ads
+  if (isLoading) return null;
+  if (!isFreeTier) return null;
 
   useEffect(() => {
     if (!NativeAdClass || !AD_UNITS.NATIVE) return;
@@ -55,7 +65,7 @@ function NativeAdCardInner({ style }: NativeAdCardProps) {
         try { nativeAd.destroy(); } catch {}
       }
     };
-  }, []);
+  }, [isFreeTier]);
 
   // Cleanup ad on unmount if it loaded after initial effect
   useEffect(() => {

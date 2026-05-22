@@ -119,7 +119,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [isPolling, setIsPolling] = useState(false);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   
   // Track if tier has been fetched for current user to prevent duplicate calls
