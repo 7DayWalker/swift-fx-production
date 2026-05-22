@@ -32,6 +32,7 @@ class AccountStatus(str, Enum):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    picture: Optional[str] = None
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -238,6 +239,14 @@ async def update_user_profile(
     
     if update.phone is not None:
         update_data["phone"] = update.phone.strip()
+
+    if update.picture is not None:
+        # Allow clearing picture by sending null/empty string; here we treat empty string as null.
+        picture_value = update.picture.strip()
+        if picture_value == "":
+            picture_value = None
+        if picture_value is not None:
+            update_data["picture"] = picture_value
     
     await update_profile(current_user.user_id, update_data)
     

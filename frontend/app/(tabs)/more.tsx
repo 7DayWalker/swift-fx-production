@@ -8,6 +8,7 @@ import {
   Switch,
   Modal,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,7 +90,17 @@ export default function MoreScreen() {
         {/* Profile Header */}
         <View style={[styles.profileHeader, dynamicStyles.card]}>
           <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+            {user?.picture ? (
+              <Image
+                source={{ uri: user.picture }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
+            )}
           </View>
           <View style={styles.profileInfo}>
             <View style={styles.profileNameRow}>
@@ -317,6 +328,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#0A0E17',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
   },
   profileInfo: {
     flex: 1,

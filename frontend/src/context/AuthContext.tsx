@@ -48,7 +48,7 @@ const buildUserFromSession = (sbUser: SupabaseUser): User => ({
 /** Enrich User with profile data from Supabase profiles table */
 const enrichWithProfile = (
   sbUser: SupabaseUser,
-  profile: { name?: string; role?: string; admin_role?: string } | null,
+  profile: { name?: string; role?: string; admin_role?: string; picture?: string } | null,
 ): User => {
   const profileRole = profile?.role ?? 'free';
   const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
@@ -60,6 +60,7 @@ const enrichWithProfile = (
     role: isAdmin ? 'vip' : (profileRole as 'free' | 'premium' | 'vip'),
     is_admin: isAdmin,
     admin_role: profile?.admin_role ?? undefined,
+    picture: profile?.picture ?? undefined,
   };
 };
 
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('name, role, admin_role')
+        .select('name, role, admin_role, picture')
         .eq('id', sbUser.id)
         .single();
 
