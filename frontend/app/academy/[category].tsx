@@ -12,6 +12,9 @@ import api from '../../src/services/api';
 import {
   BEGINNER_COURSES, INTERMEDIATE_COURSES, ADVANCED_COURSES, CourseContent,
 } from '../../src/data/academyContent';
+import {
+  isCategoryUnlocked, unlockCategory,
+} from '../../src/services/academyPreviewSession';
 
 const CATEGORY_META: Record<string, { title: string; color: string; icon: string; requiredRole: 'free' | 'premium' | 'vip' }> = {
   beginner:     { title: 'Beginner',     color: '#00D4AA', icon: 'school-outline',       requiredRole: 'free' },
@@ -41,18 +44,19 @@ export default function CourseListScreen() {
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const meta = CATEGORY_META[category || 'beginner'] || CATEGORY_META.beginner;
-  const courses = getCourses(category || 'beginner');
+  const categoryKey = category || 'beginner';
+  const meta = CATEGORY_META[categoryKey] || CATEGORY_META.beginner;
+  const courses = getCourses(categoryKey);
+  const previewUnlocked = isCategoryUnlocked(categoryKey);
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
   const isFree = userTier === 'free';
   const { showRewardedAd, isAdReady, adFailed, retryLoadAd } = useRewardedAd();
-  const [adUnlocked, setAdUnlocked] = useState(false);
   const [adLoading, setAdLoading] = useState(false);
 
   const hasAccess = () => {
     if (isAdminPrivilege) return true;
-    if (adUnlocked) return true;
+    if (previewUnlocked) return true;
     const req = meta.requiredRole;
     if (req === 'free') return true;
     if (req === 'premium') return userTier === 'premium' || userTier === 'vip';
@@ -69,7 +73,7 @@ export default function CourseListScreen() {
     try {
       const rewarded = await showRewardedAd();
       if (rewarded) {
-        setAdUnlocked(true);
+        unlockCategory(categoryKey);
         Alert.alert('Unlocked!', `You now have temporary access to ${meta.title} courses for this session.`);
       } else {
         Alert.alert('Ad Not Available', 'Please try again in a moment.');

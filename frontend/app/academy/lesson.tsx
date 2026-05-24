@@ -12,6 +12,7 @@ import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
 import { getCourseContent, LessonContent, CourseContent } from '../../src/data/academyContent';
+import { isCategoryUnlocked } from '../../src/services/academyPreviewSession';
 
 // ─── Category color helper ───
 const getCategoryColor = (cat: string) => {
@@ -657,6 +658,7 @@ export default function LessonScreen() {
   const requiredRole = CATEGORY_REQUIRED_ROLE[category] || 'free';
   const hasAccess = () => {
     if (isAdminPrivilege) return true;
+    if (isCategoryUnlocked(category)) return true;
     if (requiredRole === 'free') return true;
     if (requiredRole === 'premium') return userTier === 'premium' || userTier === 'vip';
     if (requiredRole === 'vip') return userTier === 'vip';

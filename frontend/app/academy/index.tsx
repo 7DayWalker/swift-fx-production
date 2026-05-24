@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
+import { unlockCategory } from '../../src/services/academyPreviewSession';
 import { AdBanner, useRewardedAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 
 interface Category {
@@ -155,6 +156,7 @@ export default function AcademyScreen() {
 
   const userTier = sub?.capability_tier || sub?.subscription || 'free';
   const { showRewardedAd, isAdReady } = useRewardedAd();
+  const [adLoading, setAdLoading] = useState(false);
   const hasAccess = (req: string) => {
     if (isAdminPrivilege) return true;
     if (req === 'free') return true;
@@ -317,16 +319,38 @@ export default function AcademyScreen() {
             {userTier === 'free' && (
               <TouchableOpacity
                 data-testid="academy-watch-ad-btn"
-                style={[styles.upgradeButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#FFD700', marginTop: 8 }]}
+                disabled={adLoading || !isAdReady}
+                style={[
+                  styles.upgradeButton,
+                  {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: '#FFD700',
+                    marginTop: 8,
+                    opacity: adLoading || !isAdReady ? 0.5 : 1,
+                  },
+                ]}
                 onPress={async () => {
-                  const rewarded = await showRewardedAd();
-                  if (rewarded) {
-                    router.push('/academy/intermediate' as any);
+                  if (adLoading) return;
+                  setAdLoading(true);
+                  try {
+                    const rewarded = await showRewardedAd();
+                    if (rewarded) {
+                      unlockCategory('intermediate');
+                      router.push('/academy/intermediate' as any);
+                    } else {
+                      // Reward not earned (dismissed / error / not ready)
+                      // Keep UX minimal; user can retry once ad is ready again.
+                    }
+                  } finally {
+                    setAdLoading(false);
                   }
                 }}
               >
                 <Ionicons name="play-circle-outline" size={16} color="#FFD700" style={{ marginRight: 6 }} />
-                <Text style={[styles.upgradeButtonText, { color: '#FFD700' }]}>Watch Ad to Preview</Text>
+                <Text style={[styles.upgradeButtonText, { color: '#FFD700' }]}>
+                  {adLoading ? 'Loading Ad...' : isAdReady ? 'Watch Ad to Preview' : 'Ad Loading...'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
