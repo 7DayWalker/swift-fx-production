@@ -158,11 +158,12 @@ async def create_signal(signal_data: SignalCreate, background_tasks: BackgroundT
     
     signal_id = f"sig_{uuid.uuid4().hex[:12]}"
     
-    # Calculate risk/reward using tp1 as primary target
+    # Calculate risk/reward using FULL TRADE THESIS TP3 || TP2 || TP1 as primary target
+    reward_target = signal_data.tp3 or signal_data.tp2 or signal_data.tp1
     risk_reward = calculate_risk_reward(
         signal_data.entry,
         signal_data.stop_loss,
-        signal_data.tp1,
+        reward_target,
         signal_data.signal_type
     )
     
@@ -719,14 +720,17 @@ async def full_update_signal(
         if new_state == "closed" and current_state != "closed":
             update_doc["closed_at"] = datetime.now(timezone.utc)
     
-    # Recalculate risk/reward if entry, SL, or TP1 changed
+    # Recalculate risk/reward if entry, SL, or any TP changed
     entry = update_data.entry if update_data.entry else signal.get("entry")
     sl = update_data.stop_loss if update_data.stop_loss else signal.get("stop_loss")
     tp1 = update_data.tp1 if update_data.tp1 else signal.get("tp1")
+    tp2 = update_data.tp2 if update_data.tp2 else signal.get("tp2")
+    tp3 = update_data.tp3 if update_data.tp3 else signal.get("tp3")
     sig_type = update_data.signal_type.value if update_data.signal_type and hasattr(update_data.signal_type, 'value') else (update_data.signal_type or signal.get("signal_type"))
-    
-    if entry and sl and tp1:
-        update_doc["risk_reward"] = calculate_risk_reward(entry, sl, tp1, sig_type)
+
+    reward_target = tp3 or tp2 or tp1
+    if entry and sl and reward_target:
+        update_doc["risk_reward"] = calculate_risk_reward(entry, sl, reward_target, sig_type)
     
     if not update_doc:
         raise HTTPException(status_code=400, detail="No update fields provided")
