@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,11 @@ import { StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationService from '../src/services/notificationService';
+import {
+  isCalendarNotificationEnabled,
+  scheduleCalendarEventNotification,
+  cancelCalendarNotificationsForEventIds,
+} from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../src/services/api';
@@ -128,6 +133,46 @@ function RootLayoutContent() {
       NotificationService.cleanup();
     };
   }, [user]);
+
+  // Lightweight startup rehydration for calendar reminders
+  // (recreate upcoming high-impact local notifications when enabled)
+  const calendarRemindersRehydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (calendarRemindersRehydratedRef.current) return;
+    if (Platform.OS === 'web') return;
+    if (isLoading) return;
+    if (isPasswordRecovery) return;
+    if (!user) return;
+
+    calendarRemindersRehydratedRef.current = true;
+
+    void (async () => {
+      try {
+        const enabled = await isCalendarNotificationEnabled();
+        if (!enabled) return;
+
+        const res = await api.get('/calendar/events', {
+          params: { filter: 'week' },
+        });
+
+        const events = res.data?.events ?? [];
+        const highImpactEvents = events.filter(
+          (e: any) => (e?.impact || '').trim().toLowerCase() === 'high',
+        );
+
+        const eventIds = highImpactEvents.map((e: any) => e?.id).filter(Boolean);
+
+        await cancelCalendarNotificationsForEventIds(eventIds);
+
+        for (const event of highImpactEvents) {
+          await scheduleCalendarEventNotification(event);
+        }
+      } catch (err) {
+        console.log('[Calendar Reminders] Startup rehydration failed:', err);
+      }
+    })();
+  }, [isLoading, isPasswordRecovery, user]);
   
   // Initialize deep link listener for referrals
   useEffect(() => {

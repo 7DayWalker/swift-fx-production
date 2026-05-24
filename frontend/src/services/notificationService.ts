@@ -345,7 +345,8 @@ export async function scheduleCalendarEventNotification(event: {
 }): Promise<string | null> {
   try {
     // Only schedule for high-impact events
-    if (event.impact.toLowerCase() !== 'high') {
+    const impactNormalized = event.impact?.trim().toLowerCase();
+    if (impactNormalized !== 'high') {
       return null;
     }
 
@@ -355,16 +356,40 @@ export async function scheduleCalendarEventNotification(event: {
       return null;
     }
 
-    // Get notification timing
-    const minutesBefore = await getCalendarNotificationMinutes();
-    const eventDate = new Date(event.date);
-    const notificationDate = new Date(eventDate.getTime() - minutesBefore * 60 * 1000);
+    // Permission-aware scheduling (avoid silent failures)
+    const permission = await Notifications.getPermissionsAsync();
+    const granted = permission.granted ?? permission.status === 'granted';
+    if (!granted) {
+      console.log('[Calendar Reminders] Notifications permission not granted; skipping scheduling');
+      return null;
+    }
 
-    // Don't schedule if notification time has passed
-    if (notificationDate <= new Date()) {
+    // Get notification timing
+    const minutesRaw = await getCalendarNotificationMinutes();
+    const minutesBefore = Number.isFinite(minutesRaw) ? minutesRaw : 15;
+
+    // Deterministic date parsing
+    const rawDate = event.date;
+    const hasTimezone = /Z$|[+-]\d\d:\d\d$/.test(rawDate);
+    const normalizedDate = hasTimezone ? rawDate : `${rawDate}Z`;
+
+    const eventDate = new Date(normalizedDate);
+    const eventMs = eventDate.getTime();
+    if (Number.isNaN(eventMs)) {
+      console.log('[Calendar Reminders] Invalid event date; skipping:', event.date);
+      return null;
+    }
+
+    const notificationMs = eventMs - minutesBefore * 60 * 1000;
+
+    // Don't schedule if notification time has passed (allow small grace)
+    const nowMs = Date.now();
+    if (notificationMs <= nowMs + 60 * 1000) {
       console.log('Event notification time has passed, skipping:', event.title);
       return null;
     }
+
+    const notificationDate = new Date(notificationMs);
 
     // Currency flag mapping
     const flags: { [key: string]: string } = {
@@ -407,13 +432,40 @@ export async function cancelAllCalendarNotifications(): Promise<void> {
     const calendarNotifications = scheduled.filter(
       n => n.content.data?.type === 'calendar_event'
     );
-    
+
     for (const notification of calendarNotifications) {
       await Notifications.cancelScheduledNotificationAsync(notification.identifier);
     }
-    
+
     console.log(`Cancelled ${calendarNotifications.length} calendar notifications`);
   } catch (error) {
     console.error('Error cancelling calendar notifications:', error);
+  }
+}
+
+/**
+ * Cancel only calendar reminder notifications for a specific set of eventIds.
+ * This avoids wiping unrelated future reminders on calendar refetch / tab changes.
+ */
+export async function cancelCalendarNotificationsForEventIds(eventIds: string[]): Promise<void> {
+  try {
+    const ids = new Set(eventIds.filter(Boolean));
+    if (ids.size === 0) return;
+
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const calendarNotifications = scheduled.filter(
+      n =>
+        n.content.data?.type === 'calendar_event' &&
+        typeof n.content.data?.eventId === 'string' &&
+        ids.has(n.content.data.eventId)
+    );
+
+    for (const notification of calendarNotifications) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+
+    console.log(`Cancelled ${calendarNotifications.length} calendar notifications for eventIds`);
+  } catch (error) {
+    console.error('Error cancelling calendar notifications for eventIds:', error);
   }
 }
