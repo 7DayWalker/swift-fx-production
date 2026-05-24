@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { AdBanner, useInterstitialAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { LockedSignalBody } from '../../src/components/UpgradeKit';
+import api from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
 
 interface Signal {
@@ -145,6 +147,45 @@ const SignalCard = ({ item, theme }: CardProps) => {
   const projectedPips = calcProjectedPips(item.pair, item.entry, bestTp);
   const signalAge = getSignalAge(item.created_at);
   const validity = getEntryValidity(item.state);
+
+  const [isAddingJournal, setIsAddingJournal] = useState(false);
+
+  const handleAddToJournal = async () => {
+    if (isAddingJournal) return;
+
+    if (item.locked) {
+      Alert.alert('Premium Feature', 'Upgrade to add trades to journal.');
+      return;
+    }
+
+    // Type 1 journal entries require snapshot closure metrics, so only allow on closed signals.
+    if (item.state !== 'closed') {
+      Alert.alert('Not ready', 'This signal has no final result yet.');
+      return;
+    }
+
+    try {
+      setIsAddingJournal(true);
+
+      const res = await api.post('/journal/from-signal', {
+        source_signal_id: item.signal_id,
+      });
+
+      const already = res.data?.already_journaled === true;
+
+      Alert.alert(
+        already ? 'Already Saved' : 'Saved to Journal',
+        already ? 'This signal is already in your journal.' : 'Your signal was added to your journal.'
+      );
+
+      router.push('/journal' as any);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Failed to add to journal';
+      Alert.alert('Journal Error', detail);
+    } finally {
+      setIsAddingJournal(false);
+    }
+  };
 
   return (
     <View style={cardStyles.wrapper}>
@@ -282,12 +323,42 @@ const SignalCard = ({ item, theme }: CardProps) => {
 
             {/* ── Closed result ── */}
             {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
-              <View style={[cardStyles.resultRow, { borderTopColor: theme.border }]}>
-                <Text style={[cardStyles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
-                <Text style={[cardStyles.resultValue, { color: (item.final_pips ?? item.result_pips ?? 0) >= 0 ? theme.success : theme.error }]}>
-                  {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}{item.final_pips ?? item.result_pips} pips
-                </Text>
-              </View>
+              <>
+                <View style={[cardStyles.resultRow, { borderTopColor: theme.border }]}>
+                  <Text style={[cardStyles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
+                  <Text
+                    style={[
+                      cardStyles.resultValue,
+                      {
+                        color:
+                          (item.final_pips ?? item.result_pips ?? 0) >= 0 ? theme.success : theme.error,
+                      },
+                    ]}
+                  >
+                    {(item.final_pips ?? item.result_pips ?? 0) >= 0 ? '+' : ''}
+                    {item.final_pips ?? item.result_pips} pips
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    cardStyles.journalBtn,
+                    {
+                      backgroundColor: isAddingJournal ? `${theme.primary}35` : `${theme.primary}18`,
+                      borderColor: `${theme.primary}55`,
+                      opacity: item.locked ? 0.6 : 1,
+                    },
+                  ]}
+                  onPress={handleAddToJournal}
+                  disabled={isAddingJournal || item.locked}
+                  testID="add-to-journal-btn"
+                >
+                  <Ionicons name="bookmark-outline" size={16} color={theme.primary} />
+                  <Text style={[cardStyles.journalBtnText, { color: theme.primary }]}>
+                    {isAddingJournal ? 'Adding…' : 'Add To Journal'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </>
         )}
@@ -372,6 +443,19 @@ const cardStyles = StyleSheet.create({
   resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 10, marginTop: 2, borderTopWidth: 0.5 },
   resultLabel: { fontSize: 12, marginRight: 8, opacity: 0.7 },
   resultValue: { fontSize: 14, fontWeight: '700' },
+
+  // Journal
+  journalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  journalBtnText: { fontSize: 13, fontWeight: '700' },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
