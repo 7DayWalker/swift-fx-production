@@ -69,8 +69,10 @@ async def _update_streak_and_xp(user_id: str, base_xp: int) -> dict:
     """Core streak logic. Returns streak info and total XP awarded."""
     streaks = db["academy_streaks"]
     lb = db["academy_leaderboard"]
+    weekly_lb = db["academy_weekly_leaderboard"]
     now_utc = datetime.now(timezone.utc)
     today_str = now_utc.strftime("%Y-%m-%d")
+    week_start = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
 
     doc = await streaks.find_one({"user_id": user_id}, {"_id": 0})
     if not doc:
@@ -153,6 +155,14 @@ async def _update_streak_and_xp(user_id: str, base_xp: int) -> dict:
         upsert=True,
     )
 
+    # Weekly leaderboard aggregation (write-time incremental; no backfill)
+    await weekly_lb.update_one(
+        {"user_id": user_id, "week_start": week_start},
+        {"$set": {"user_id": user_id, "week_start": week_start, "display_name": display_name},
+         "$inc": {"total_xp": total_xp}},
+        upsert=True,
+    )
+
     return {
         "current_streak": current, "longest_streak": longest,
         "streak_increased": streak_increased, "shield_used": shield_used,
@@ -197,23 +207,62 @@ async def submit_quiz(body: dict, current_user: User = Depends(require_auth)):
     if not course_id:
         raise HTTPException(status_code=400, detail="course_id required")
 
+    quiz_lesson_key = lesson_id or "quiz"
     col = db["academy_progress"]
+
+    # Detect whether this user already has a COMPLETED+PASSED quiz for this key.
+    existing = await col.find_one(
+        {
+            "user_id": current_user.user_id,
+            "course_id": course_id,
+            "lesson_id": quiz_lesson_key,
+            "completed": True,
+        },
+        {"_id": 0},
+    )
+    existing_passed = (existing or {}).get("score", 0) >= 60
+
+    # Persist attempt (even if we skip XP awarding)
     await col.update_one(
-        {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": lesson_id or "quiz"},
+        {"user_id": current_user.user_id, "course_id": course_id, "lesson_id": quiz_lesson_key},
         {"$set": {
             "user_id": current_user.user_id, "course_id": course_id,
-            "lesson_id": lesson_id or "quiz", "completed": True,
+            "lesson_id": quiz_lesson_key, "completed": True,
             "score": score, "completed_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
     )
+
     passed = score >= 60
-    base_xp = 0
-    if passed:
-        if score == 100:
-            base_xp = 60
-        else:
-            base_xp = 40
+
+    # XP awarding rule (anti-farming):
+    # Only award XP once, on the first transition to "passed" for this quiz key.
+    award_xp = passed and not existing_passed
+    if not award_xp:
+        streaks = db["academy_streaks"]
+        streak_doc = await streaks.find_one({"user_id": current_user.user_id}, {"_id": 0})
+        cap = await _get_user_capability(current_user.user_id)
+        is_vip = cap == "vip"
+
+        return {
+            "success": True,
+            "score": score,
+            "passed": passed,
+            "xp": {
+                "current_streak": (streak_doc or {}).get("current_streak", 0),
+                "longest_streak": (streak_doc or {}).get("longest_streak", 0),
+                "streak_increased": False,
+                "shield_used": False,
+                "base_xp": 0,
+                "bonus_xp": 0,
+                "total_xp_earned": 0,
+                "milestone_7": False,
+                "is_vip": is_vip,
+            },
+        }
+
+    # passed==True here, existing_passed==False
+    base_xp = 60 if score == 100 else 40
     streak_info = await _update_streak_and_xp(current_user.user_id, base_xp)
     return {"success": True, "score": score, "passed": passed, "xp": streak_info}
 
@@ -427,17 +476,28 @@ async def get_academy_progress(current_user: User = Depends(require_auth)):
 
 @router.get("/academy/leaderboard")
 async def get_academy_leaderboard(current_user: User = Depends(require_auth)):
-    lb = db["academy_leaderboard"]
-    top = await lb.find({}, {"_id": 0}).sort("total_xp", -1).to_list(length=50)
+    weekly_lb = db["academy_weekly_leaderboard"]
+    now_utc = datetime.now(timezone.utc)
+    week_start = (now_utc - timedelta(days=now_utc.weekday())).strftime("%Y-%m-%d")
+
+    top = await weekly_lb.find({"week_start": week_start}, {"_id": 0}).sort("total_xp", -1).to_list(length=50)
+
     # Add rank
     for i, entry in enumerate(top):
         entry["rank"] = i + 1
-    # Find current user rank
-    my_entry = await lb.find_one({"user_id": current_user.user_id}, {"_id": 0})
+
+    # Find current user rank (within this week)
+    my_entry = await weekly_lb.find_one(
+        {"user_id": current_user.user_id, "week_start": week_start},
+        {"_id": 0},
+    )
     my_rank = None
     if my_entry:
-        higher = await lb.count_documents({"total_xp": {"$gt": my_entry.get("total_xp", 0)}})
+        higher = await weekly_lb.count_documents(
+            {"week_start": week_start, "total_xp": {"$gt": my_entry.get("total_xp", 0)}}
+        )
         my_rank = higher + 1
+
     return {"leaderboard": top, "my_rank": my_rank, "my_xp": (my_entry or {}).get("total_xp", 0)}
 
 
