@@ -149,7 +149,7 @@ export default function CommunityScreen() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
-  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
+    const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
   const fetchPosts = async () => {
     try {
@@ -234,7 +234,7 @@ export default function CommunityScreen() {
       const { liked } = res.data;
       setPosts(posts.map(post => {
         if (post.post_id === postId) {
-          const userId = user?.user_id || user?.id || '';
+          const userId = user?.user_id || '';
           const newLikes = liked
             ? [...(post.likes || []), userId]
             : (post.likes || []).filter((id: string) => id !== userId);
@@ -287,7 +287,7 @@ export default function CommunityScreen() {
 
   // ─── Post Card ────────────────────────────────────────────────────────────
   const renderPost = ({ item }: { item: Post }) => {
-    const isLiked = item.likes?.includes(user?.user_id || user?.id || '');
+    const isLiked = item.likes?.includes(user?.user_id || '');
     const likesCount = item.likes?.length || 0;
     const commentCount = item.comment_count || 0;
     const hasImage = !!item.image;

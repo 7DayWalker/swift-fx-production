@@ -24,7 +24,7 @@ import { api } from '../src/services/api';
 const { width: screenWidth } = Dimensions.get('window');
 
 // Status colors
-const STATUS_COLORS = {
+const STATUS_COLORS: Record<string, string> = {
   active: '#10B981',
   paused: '#F59E0B',
   closed: '#EF4444',
@@ -206,6 +206,8 @@ export default function InvestorDashboardScreen() {
     textSecondary: { color: theme.textSecondary },
   };
 
+  const totalReturnPct = portfolio?.total_return_pct ?? 0;
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
@@ -274,10 +276,14 @@ export default function InvestorDashboardScreen() {
           </View>
 
           <View style={[styles.overviewCard, dynamicStyles.card]}>
-            <Ionicons name="trending-up-outline" size={24} color={portfolio?.total_return_pct >= 0 ? '#10B981' : '#EF4444'} />
+            <Ionicons
+              name="trending-up-outline"
+              size={24}
+              color={totalReturnPct >= 0 ? '#10B981' : '#EF4444'}
+            />
             <Text style={[styles.overviewLabel, dynamicStyles.textSecondary]}>Total Return</Text>
-            <Text style={[styles.overviewValue, { color: portfolio?.total_return_pct >= 0 ? '#10B981' : '#EF4444' }]}>
-              {portfolio?.total_return_pct >= 0 ? '+' : ''}{portfolio?.total_return_pct?.toFixed(2) || '0.00'}%
+            <Text style={[styles.overviewValue, { color: totalReturnPct >= 0 ? '#10B981' : '#EF4444' }]}>
+              {totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%
             </Text>
           </View>
 

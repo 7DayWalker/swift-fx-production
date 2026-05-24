@@ -291,7 +291,10 @@ export default function SignalManagement() {
       tp2: safeStr(signal.tp2),
       tp3: safeStr(signal.tp3),
       tp_hit: safeNum(signal.tp_hit, 0),
-      status: signal.state || 'pending',
+      status: (STATUSES.includes(signal.state) ? signal.state : 'pending') as
+        | 'pending'
+        | 'active'
+        | 'closed',
       visibility: signal.visibility || 'free',
       final_pips: safeStr(signal.final_pips || signal.result_pips),
     });
