@@ -46,16 +46,16 @@ class JournalFromSignalCreate(BaseModel):
     confidence: Optional[float] = None
 
 
-def _get_user_effective_tier(current_user: User) -> str:
+async def _get_user_effective_tier(current_user: User) -> str:
     # Match the pattern used in backend/api/routes/signals.py
-    effective = get_effective_subscription(
+    effective = await get_effective_subscription(
         {"user_id": current_user.user_id, "role": current_user.role}
     )
     return (effective or "free").lower()
 
 
-def _require_premium_vip(current_user: User) -> str:
-    tier = _get_user_effective_tier(current_user)
+async def _require_premium_vip(current_user: User) -> str:
+    tier = await _get_user_effective_tier(current_user)
     if tier not in ("premium", "vip"):
         raise HTTPException(status_code=403, detail="Premium/VIP access required")
     return tier
@@ -172,7 +172,7 @@ async def create_journal_from_signal(
     payload: JournalFromSignalCreate,
     current_user: User = Depends(require_auth),
 ):
-    _require_premium_vip(current_user)
+    await _require_premium_vip(current_user)
 
     source_signal_id = payload.source_signal_id.strip()
     if not source_signal_id:
@@ -305,7 +305,7 @@ async def create_journal_manual(
     screenshot: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_auth),
 ):
-    _require_premium_vip(current_user)
+    await _require_premium_vip(current_user)
 
     symbol = symbol.strip()
     if not symbol:
@@ -356,7 +356,7 @@ async def create_journal_manual(
 
 @router.get("/journal/list")
 async def list_journal_entries(current_user: User = Depends(require_auth)):
-    _require_premium_vip(current_user)
+    await _require_premium_vip(current_user)
 
     try:
         entries = await db.journals.find(
