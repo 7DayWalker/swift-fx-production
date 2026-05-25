@@ -759,7 +759,7 @@ export default function SettingsScreen() {
         {/* App Info */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
-          {renderSettingItem('information-circle-outline', 'App Version', '1.0.4', undefined, false)}
+          {renderSettingItem('information-circle-outline', 'App Version', '1.0.6', undefined, false)}
           {renderSettingItem('code-slash-outline', 'Build', '2026.04', undefined, false)}
         </View>
       </ScrollView>

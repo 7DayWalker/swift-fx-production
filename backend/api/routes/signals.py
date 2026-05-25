@@ -871,24 +871,32 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
         if can_access_signal(user_role, signal_visibility):
             accessible_signals.append(signal)
     
-    # Calculate basic stats (available to all users) - use final_pips or result_pips
+    # We want FREE users to see GLOBAL platform performance stats (not tier-limited),
+    # but we still keep the limited signal history preview based on access.
+    #
+    # - accessible_signals: signals a user can view (for preview + limiting)
+    # - stats_signals: signals used for winrate/pips/overview calculations
+    accessible_total_signals = len(accessible_signals)
+    stats_signals = all_closed if user_role == UserRole.FREE else accessible_signals
+
+    # Calculate basic stats (use final_pips or result_pips)
     # Classify trades: winning (pips > 0), breakeven (pips == 0 and tp_hit >= 1), losing (pips < 0)
-    total_signals = len(accessible_signals)
-    winning_signals = len([s for s in accessible_signals if get_pips_value(s) > 0])
+    total_signals = len(stats_signals)
+    winning_signals = len([s for s in stats_signals if get_pips_value(s) > 0])
     # Breakeven: final_pips == 0 AND tp_hit >= 1 (TP was reached, then closed at entry)
-    breakeven_signals = len([s for s in accessible_signals if get_pips_value(s) == 0 and s.get("tp_hit", 0) >= 1])
+    breakeven_signals = len([s for s in stats_signals if get_pips_value(s) == 0 and s.get("tp_hit", 0) >= 1])
     losing_signals = total_signals - winning_signals - breakeven_signals
-    
+
     win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
-    total_pips = sum([get_pips_value(s) for s in accessible_signals])
+    total_pips = sum([get_pips_value(s) for s in stats_signals])
     avg_pips = round(total_pips / total_signals, 1) if total_signals > 0 else 0
-    
+
     # Calculate best/worst trades
-    pips_list = [get_pips_value(s) for s in accessible_signals if get_pips_value(s) != 0]
+    pips_list = [get_pips_value(s) for s in stats_signals if get_pips_value(s) != 0]
     best_trade = max(pips_list) if pips_list else 0
     worst_trade = min(pips_list) if pips_list else 0
-    
-    # Basic stats for all users
+
+    # Basic stats for the chosen dataset (global for FREE, accessible for Premium/VIP)
     basic_stats = {
         "total_signals": total_signals,
         "winning_signals": winning_signals,
@@ -903,7 +911,7 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
 
     # Calculate winning streak (consecutive wins from most recent)
     winning_streak = 0
-    for s in accessible_signals:
+    for s in stats_signals:
         if get_pips_value(s) > 0:
             winning_streak += 1
         else:
@@ -914,7 +922,7 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     monthly_pips_map: dict[str, float] = defaultdict(float)
     monthly_wins_map: dict[str, int] = defaultdict(int)
     monthly_losses_map: dict[str, int] = defaultdict(int)
-    for s in accessible_signals:
+    for s in stats_signals:
         closed_date = s.get("closed_at") or s.get("created_at")
         if closed_date:
             dt = closed_date if isinstance(closed_date, datetime) else datetime.fromisoformat(str(closed_date).replace("Z", "+00:00"))
