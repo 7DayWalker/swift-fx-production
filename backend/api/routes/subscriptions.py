@@ -110,6 +110,7 @@ async def get_plans():
                 "features": [
                     "Everything in Free",
                     "Full access to Premium signals",
+                    "Personal Trading Journal",
                     "10 AI Chart Analyses per week",
                     "Ads removed"
                 ],
@@ -121,6 +122,7 @@ async def get_plans():
                 "description": "For professional traders",
                 "features": [
                     "Everything in Premium",
+                    "Personal Trading Journal",
                     "Unlimited AI chart analyses",
                     "Academy access",
                     "Fund Management access",

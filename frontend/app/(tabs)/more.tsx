@@ -230,7 +230,7 @@ export default function MoreScreen() {
           <Text style={[styles.logoutText, { color: theme.error }]}>Logout</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.4</Text>
+        <Text style={[styles.versionText, { color: theme.textMuted }]}>Swift FX Signals v1.0.6</Text>
       </ScrollView>
 
       {/* Fixed bottom ad banner — free users only */}
