@@ -4,6 +4,7 @@ Single source of truth for all application configuration.
 """
 import os
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -157,8 +158,8 @@ SYMBOL_MAP = {
     "USDCHF": {"type": "forex", "symbol": "USDCHF", "pip_multiplier": 10000, "pip_size": 0.0001},
     "XAU/USD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
     "XAUUSD": {"type": "gold", "symbol": "XAUUSD", "pip_multiplier": 10, "pip_size": 0.1},
-    "BTC/USD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
-    "BTCUSD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 1, "pip_size": 1.0},
+    "BTC/USD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 10, "pip_size": 1.0},
+    "BTCUSD": {"type": "crypto", "symbol": "bitcoin", "pip_multiplier": 10, "pip_size": 1.0},
     "ETH/USD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
     "ETHUSD": {"type": "crypto", "symbol": "ethereum", "pip_multiplier": 1, "pip_size": 1.0},
 }
@@ -175,11 +176,22 @@ def get_instrument_info(pair: str) -> dict:
             "pip_size": mapping["pip_size"]
         }
 
+    # Harden symbol normalization to avoid wrong default (×10000) for common index variants.
+    # Examples:
+    #   US30, US30.cash, US30USD, DJ30, WS30
+    # We strip non-alphanumerics so:
+    #   "US30.cash" -> "US30CASH"
+    normalized = re.sub(r'[^A-Z0-9]', '', pair_upper)
+
     if "JPY" in pair_upper:
         return {"pip_multiplier": 100, "pip_size": 0.01}
     elif "XAU" in pair_upper or "GOLD" in pair_upper:
         return {"pip_multiplier": 10, "pip_size": 0.1}
-    elif "BTC" in pair_upper or "ETH" in pair_upper:
+    elif normalized.startswith("US30") or normalized.startswith("DJ30") or normalized.startswith("WS30"):
+        return {"pip_multiplier": 10, "pip_size": 1.0}
+    elif "BTC" in normalized:
+        return {"pip_multiplier": 10, "pip_size": 1.0}
+    elif "ETH" in normalized:
         return {"pip_multiplier": 1, "pip_size": 1.0}
     else:
         return {"pip_multiplier": 10000, "pip_size": 0.0001}

@@ -149,6 +149,7 @@ export default function CommunityScreen() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  const isGuest = !user;
   const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
   const fetchPosts = async () => {
@@ -180,6 +181,7 @@ export default function CommunityScreen() {
   }, [posts, activeTab])();
 
   const createPost = async () => {
+    if (isGuest) return;
     if (!newPostContent.trim()) {
       Alert.alert('Error', 'Please enter some content');
       return;
@@ -229,12 +231,13 @@ export default function CommunityScreen() {
   };
 
   const toggleLike = async (postId: string) => {
+    if (!user) return; // Guest: read-only (no like writes)
     try {
       const res = await api.post(`/community/posts/${postId}/like`);
       const { liked } = res.data;
       setPosts(posts.map(post => {
         if (post.post_id === postId) {
-          const userId = user?.user_id || user?.id || '';
+          const userId = user?.user_id || '';
           const newLikes = liked
             ? [...(post.likes || []), userId]
             : (post.likes || []).filter((id: string) => id !== userId);
@@ -261,6 +264,7 @@ export default function CommunityScreen() {
   };
 
   const addComment = async () => {
+    if (isGuest) return;
     if (!newComment.trim() || !selectedPost) return;
     try {
       const res = await api.post(`/community/posts/${selectedPost.post_id}/comments`, { content: newComment.trim() });
@@ -287,7 +291,7 @@ export default function CommunityScreen() {
 
   // ─── Post Card ────────────────────────────────────────────────────────────
   const renderPost = ({ item }: { item: Post }) => {
-    const isLiked = item.likes?.includes(user?.user_id || user?.id || '');
+    const isLiked = item.likes?.includes(user?.user_id || '');
     const likesCount = item.likes?.length || 0;
     const commentCount = item.comment_count || 0;
     const hasImage = !!item.image;

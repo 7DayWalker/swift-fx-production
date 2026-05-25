@@ -138,7 +138,7 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
 
   if (isLoading || !status) {
     return (
-      <View style={[styles.card, { backgroundColor: theme.card }]}>
+      <View style={[styles.card, { backgroundColor: theme.cardBackground }]}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>Loading subscription...</Text>
       </View>
     );
@@ -150,7 +150,7 @@ export function SubscriptionCard({ onUpgradePress }: SubscriptionCardProps) {
   const billingTierDisplay = (status.billing_tier || 'free').toUpperCase();
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: colors.border, borderWidth: 1 }]}>
+    <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: colors.border, borderWidth: 1 }]}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleRow}>
           <Text style={[styles.cardTitle, { color: theme.text }]}>Current Plan</Text>

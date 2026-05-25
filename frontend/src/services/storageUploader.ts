@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 
 export const SWIFT_INSIGHTS_VIDEOS_BUCKET = 'swift-insights-videos';
 export const SWIFT_INSIGHTS_THUMBNAILS_BUCKET = 'swift-insights-thumbnails';
+export const AVATARS_BUCKET = 'avatars';
 
 // 50 MB max upload size for videos
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -17,7 +18,7 @@ export const MAX_THUMB_BYTES = 8 * 1024 * 1024;
  * `atob` is available in Hermes/JSC.
  */
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = global.atob(base64);
+  const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
@@ -103,6 +104,38 @@ export async function uploadThumbnailToSupabase(uri: string): Promise<UploadResu
     fallbackContentType: 'image/jpeg',
     prefix: 'thumb',
   });
+}
+
+/**
+ * Upload profile avatar image for a specific user.
+ * Storage path is under the avatars bucket:
+ *   {userId}/avatar-{timestamp}.{ext}
+ */
+export async function uploadAvatarToSupabase(params: {
+  uri: string;
+  userId: string;
+}): Promise<UploadResult> {
+  const { uri, userId } = params;
+
+  const contentType = inferContentType(uri, 'image/jpeg');
+  const ext = extensionFor(contentType);
+  const ts = Date.now();
+  const path = `${userId}/avatar-${ts}.${ext}`;
+
+  const base64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const arrayBuffer = base64ToArrayBuffer(base64);
+
+  const { error } = await supabase.storage.from(AVATARS_BUCKET).upload(path, arrayBuffer, {
+    contentType,
+    upsert: false,
+  });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('Failed to retrieve public URL after avatar upload.');
+  return { publicUrl: data.publicUrl, path };
 }
 
 /**

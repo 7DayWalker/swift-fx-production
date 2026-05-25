@@ -11,30 +11,30 @@ import { Platform } from 'react-native';
 // ─── Ad Unit IDs ────────────────────────────────────────────────────────────
 export const AD_UNITS = {
   BANNER: Platform.select({
-    android: 'ca-app-pub-3940256099942544/6300978111',
+    android: 'ca-app-pub-3249620629100588/7634484992',
     ios: 'ca-app-pub-3249620629100588/3292403004',
     default: 'test-banner',
   }),
   INTERSTITIAL: Platform.select({
-    android: 'ca-app-pub-3940256099942544/1033173712',
+    android: 'ca-app-pub-3249620629100588/1327033881',
     ios: 'ca-app-pub-3249620629100588/1155370427',
     default: 'test-interstitial',
   }),
   REWARDED: Platform.select({
-    android: 'ca-app-pub-3940256099942544/5224354917',
+    android: 'ca-app-pub-3249620629100588/8822380527',
     ios: 'ca-app-pub-3249620629100588/5016548217',
     default: 'test-rewarded',
   }),
   NATIVE: Platform.select({
-    android: 'ca-app-pub-3940256099942544/2247696110',
+    android: 'ca-app-pub-3249620629100588/4182325141',
     ios: 'ca-app-pub-3249620629100588/5343851273',
     default: 'test-native',
   }),
 };
 
 // ─── Interstitial Frequency Gate ────────────────────────────────────────────
-const INTERSTITIAL_ACTION_THRESHOLD = 1; // show after every meaningful action
-const INTERSTITIAL_COOLDOWN_MS = 0; // no cooldown — show after every action
+const INTERSTITIAL_ACTION_THRESHOLD = 2; // show after every meaningful action (safer production pacing)
+const INTERSTITIAL_COOLDOWN_MS = 120000; // 2 minutes cooldown between interstitials
 
 let _actionCount = 0;
 let _lastInterstitialTime = 0;

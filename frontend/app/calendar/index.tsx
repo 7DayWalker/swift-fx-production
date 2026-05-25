@@ -15,7 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useAuth } from '../../src/context/AuthContext';
 import api from '../../src/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AdBanner, NativeAdCard, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import {
   isCalendarNotificationEnabled,
@@ -24,6 +26,7 @@ import {
   setCalendarNotificationMinutes,
   scheduleCalendarEventNotification,
   cancelAllCalendarNotifications,
+  cancelCalendarNotificationsForEventIds,
 } from '../../src/services/notificationService';
 
 // Types for economic events
@@ -51,6 +54,10 @@ const NOTIFICATION_MINUTES_OPTIONS = [5, 15, 30, 60];
 export default function EconomicCalendarScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { user } = useAuth();
+
+  const calendarPrefsStorageKey = user ? `calendar_preferences_${user.user_id}` : null;
+
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +68,9 @@ export default function EconomicCalendarScreen() {
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
   const [selectedImpacts, setSelectedImpacts] = useState<string[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Hydrate calendar filter preferences before running fetch/filter/schedule logic
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   
   // Notifications
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -82,17 +92,21 @@ export default function EconomicCalendarScreen() {
   useEffect(() => {
     const scheduleNotifications = async () => {
       if (!notificationsEnabled || events.length === 0) return;
-      
-      // Cancel existing notifications first
-      await cancelAllCalendarNotifications();
-      
-      // Schedule notifications for high-impact events
-      const highImpactEvents = events.filter(e => e.impact.toLowerCase() === 'high');
+
+      // Cancel only the reminders we are about to replace (avoid wiping future reminders
+      // scheduled from other time windows / prior fetches)
+      const highImpactEvents = events.filter(
+        (e) => (e.impact || '').trim().toLowerCase() === 'high',
+      );
+      const highImpactIds = highImpactEvents.map((e) => e.id);
+
+      await cancelCalendarNotificationsForEventIds(highImpactIds);
+
       for (const event of highImpactEvents) {
         await scheduleCalendarEventNotification(event);
       }
     };
-    
+
     scheduleNotifications();
   }, [notificationsEnabled, events]);
 
@@ -109,11 +123,16 @@ export default function EconomicCalendarScreen() {
     setNotificationMinutesState(minutes);
     await setCalendarNotificationMinutes(minutes);
     setShowNotificationModal(false);
-    
+
     // Re-schedule notifications with new timing
     if (notificationsEnabled) {
-      await cancelAllCalendarNotifications();
-      const highImpactEvents = events.filter(e => e.impact.toLowerCase() === 'high');
+      const highImpactEvents = events.filter(
+        (e) => (e.impact || '').trim().toLowerCase() === 'high',
+      );
+      const highImpactIds = highImpactEvents.map((e) => e.id);
+
+      await cancelCalendarNotificationsForEventIds(highImpactIds);
+
       for (const event of highImpactEvents) {
         await scheduleCalendarEventNotification(event);
       }
@@ -139,9 +158,85 @@ export default function EconomicCalendarScreen() {
     }
   }, [timeFilter]);
 
+  // Load persisted calendar filter preferences
   useEffect(() => {
+    if (!calendarPrefsStorageKey) {
+      setPrefsHydrated(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(calendarPrefsStorageKey);
+        if (!saved) return;
+
+        const parsed: unknown = JSON.parse(saved);
+
+        if (
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          'timeFilter' in parsed &&
+          'selectedCurrencies' in parsed &&
+          'selectedImpacts' in parsed
+        ) {
+          const p = parsed as {
+            timeFilter?: unknown;
+            selectedCurrencies?: unknown;
+            selectedImpacts?: unknown;
+          };
+
+          if (p.timeFilter === 'today' || p.timeFilter === 'week') {
+            setTimeFilter(p.timeFilter);
+          }
+
+          if (Array.isArray(p.selectedCurrencies)) {
+            setSelectedCurrencies(
+              p.selectedCurrencies.filter((c): c is string => typeof c === 'string'),
+            );
+          }
+
+          if (Array.isArray(p.selectedImpacts)) {
+            setSelectedImpacts(
+              p.selectedImpacts.filter((i): i is string => typeof i === 'string'),
+            );
+          }
+        }
+      } catch (e) {
+        console.log('[Calendar] Failed to load prefs:', e);
+      } finally {
+        if (!cancelled) setPrefsHydrated(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarPrefsStorageKey]);
+
+  // Persist calendar filter preferences on change
+  useEffect(() => {
+    if (!calendarPrefsStorageKey || !prefsHydrated) return;
+
+    void (async () => {
+      const payload = {
+        timeFilter,
+        selectedCurrencies,
+        selectedImpacts,
+      };
+      try {
+        await AsyncStorage.setItem(calendarPrefsStorageKey, JSON.stringify(payload));
+      } catch (e) {
+        console.log('[Calendar] Failed to save prefs:', e);
+      }
+    })();
+  }, [calendarPrefsStorageKey, prefsHydrated, timeFilter, selectedCurrencies, selectedImpacts]);
+
+  useEffect(() => {
+    if (!prefsHydrated) return;
     fetchEvents();
-  }, [fetchEvents]);
+  }, [fetchEvents, prefsHydrated]);
 
   const onRefresh = () => {
     setRefreshing(true);

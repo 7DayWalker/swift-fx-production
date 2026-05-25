@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
 import { getStoredReferralCode, clearStoredReferralCode } from '../services/referralService';
@@ -48,7 +49,7 @@ const buildUserFromSession = (sbUser: SupabaseUser): User => ({
 /** Enrich User with profile data from Supabase profiles table */
 const enrichWithProfile = (
   sbUser: SupabaseUser,
-  profile: { name?: string; role?: string; admin_role?: string } | null,
+  profile: { name?: string; role?: string; admin_role?: string; picture?: string } | null,
 ): User => {
   const profileRole = profile?.role ?? 'free';
   const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
@@ -60,6 +61,7 @@ const enrichWithProfile = (
     role: isAdmin ? 'vip' : (profileRole as 'free' | 'premium' | 'vip'),
     is_admin: isAdmin,
     admin_role: profile?.admin_role ?? undefined,
+    picture: profile?.picture ?? undefined,
   };
 };
 
@@ -85,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('name, role, admin_role')
+        .select('name, role, admin_role, picture')
         .eq('id', sbUser.id)
         .single();
 
@@ -230,8 +232,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!mounted) return;
 
-        if (session) {
+      if (session) {
           const sbUser = session.user;
+
+          // Real authenticated session ALWAYS supersedes guest mode.
+          // Clear stale guest flag only after confirmed session exists.
+          try {
+            await AsyncStorage.removeItem('swiftfx_guest');
+          } catch {
+            // fail-closed: auth routing still uses `user`, not guest flag
+          }
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);
@@ -304,6 +314,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session) {
           const sbUser = session.user;
+
+          // Real authenticated session ALWAYS supersedes guest mode.
+          // Clear stale guest flag only after confirmed session exists.
+          void (async () => {
+            try {
+              await AsyncStorage.removeItem('swiftfx_guest');
+            } catch {
+              // fail-closed
+            }
+          })();
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);

@@ -28,6 +28,7 @@ import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
 import InsightCard from '../../src/components/InsightCard';
 import InsightViewer from '../../src/components/InsightViewer';
+import GuestUpgradePrompt from '../../src/components/GuestUpgradePrompt';
 import { PAIR_CATEGORIES } from '../../src/constants/tradingPairs';
 
 const WATCHLIST_STORAGE_KEY = 'swiftfx_watchlist';
@@ -206,6 +207,19 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
 
+  const [isGuest, setIsGuest] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      }
+    })();
+  }, [user]);
+
   // Admin redirect guard — skipped when admin explicitly chose "View User App"
   // Read params synchronously to avoid race condition between state updates
   const hasRedirected = useRef(false);
@@ -275,11 +289,52 @@ export default function DashboardScreen() {
   const currentPlan = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
   const isFreeUser = currentPlan === 'free';
   
-  // REACTIVE STATS - Directly computed from SignalContext (no caching, no local state)
-  const winRate = stats?.win_rate ?? 0;
-  const totalPips = stats?.total_pips ?? 0;
-  const totalSignals = signals.length;
+  type GlobalPerformance = {
+    win_rate: number;
+    total_pips: number;
+    total_signals: number;
+  };
+
+  const [globalPerformance, setGlobalPerformance] = useState<GlobalPerformance | null>(null);
+
+  useEffect(() => {
+    // SOURCE-OF-TRUTH correction:
+    // Dashboard performance cards must use global aggregation, not tier-shaped SignalContext stats.
+    const fetchGlobalPerformance = async () => {
+      try {
+        const { api } = require('../../src/services/api');
+        const res = await api.get('/dashboard');
+        const perf = res?.data?.performance;
+        if (
+          perf &&
+          typeof perf.win_rate === 'number' &&
+          typeof perf.total_pips === 'number' &&
+          typeof perf.total_signals === 'number'
+        ) {
+          setGlobalPerformance({
+            win_rate: perf.win_rate,
+            total_pips: perf.total_pips,
+            total_signals: perf.total_signals,
+          });
+        }
+      } catch (err) {
+        console.error('[Dashboard] Failed to fetch global performance (/api/dashboard). Falling back to SignalContext stats.', err);
+        // fail-closed: keep null so we fall back below
+      }
+    };
+
+    // Trigger once per-user
+    if (user?.user_id) fetchGlobalPerformance();
+  }, [user?.user_id]);
+
+  const fallbackWinRate = stats?.win_rate ?? 0;
+  const fallbackTotalPips = stats?.total_pips ?? 0;
+  const fallbackTotalSignals = signals.length;
   const closedCount = closedSignals.length;
+
+  const winRate = globalPerformance?.win_rate ?? fallbackWinRate;
+  const totalPips = globalPerformance?.total_pips ?? fallbackTotalPips;
+  const totalSignals = globalPerformance?.total_signals ?? fallbackTotalSignals;
   
   // Format helpers - pure functions, no state
   const formatWinRate = (rate: number): string => {
@@ -340,27 +395,36 @@ export default function DashboardScreen() {
           <UpgradeBanner onPress={() => router.push('/subscription')} theme={theme} />
         )}
 
-        {/* Performance Stats - REACTIVE from SignalContext */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Performance</Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 8, marginHorizontal: 16 }}>Personal stats based on your followed signals</Text>
-          <View style={styles.statsContainer}>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statValue, { color: theme.text }]}>{formatWinRate(winRate)}%</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Win Rate</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statValue, { color: totalPips >= 0 ? theme.success : theme.error }]}>
-                {formatPips(totalPips)}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Total Pips</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.statValue, { color: theme.text }]}>{totalSignals}</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Signals</Text>
+        {/* Performance Stats - REACTIVE from SignalContext (guest UX override) */}
+        {isGuest ? (
+          <GuestUpgradePrompt
+            icon="diamond"
+            title="Sign up to unlock full trading performance"
+            description="Track win rate, pips, journal performance, premium analytics, and your full Swift FX trading history."
+            buttonLabel="Create Free Account"
+          />
+        ) : (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Performance</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 8, marginHorizontal: 16 }}>Personal stats based on your followed signals</Text>
+            <View style={styles.statsContainer}>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statValue, { color: theme.text }]}>{formatWinRate(winRate)}%</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Win Rate</Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statValue, { color: totalPips >= 0 ? theme.success : theme.error }]}>
+                  {formatPips(totalPips)}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Total Pips</Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.statValue, { color: theme.text }]}>{totalSignals}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Signals</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Watchlist — clickable pairs, editable */}
         <View style={styles.section}>
@@ -408,13 +472,13 @@ export default function DashboardScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
             <View style={styles.quickActionCard}>
-              <PressableScale onPress={() => router.push('/calendar')}>
+              <PressableScale onPress={() => router.push('/journal')}>
                 <View style={[styles.quickActionCardInner, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                    <Ionicons name="calendar" size={22} color="#6366F1" />
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${theme.primary}15` }]}>
+                    <Ionicons name="bookmark-outline" size={22} color={theme.primary} />
                   </View>
-                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>Calendar</Text>
-                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Economic Events</Text>
+                  <Text style={[styles.quickActionTitle, { color: theme.text }]}>My Journal</Text>
+                  <Text style={[styles.quickActionSubtitle, { color: theme.textSecondary }]}>Track trades & performance</Text>
                 </View>
               </PressableScale>
             </View>

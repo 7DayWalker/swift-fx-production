@@ -8,10 +8,12 @@ import {
   Switch,
   Modal,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
@@ -28,12 +30,28 @@ export default function MoreScreen() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [isApprovedInvestor, setIsApprovedInvestor] = useState(false);
+
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestCheckDone, setGuestCheckDone] = useState(false);
   
   // Investor status — not yet available in Supabase (needs table migration)
   // Defaults to false until fund-related tables are created
   
   // Calculate bottom padding for content to avoid tab bar overlap
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
 
   // Dynamic styles based on theme
   const dynamicStyles = {
@@ -51,19 +69,32 @@ export default function MoreScreen() {
 
   const confirmLogout = async () => {
     setShowLogoutModal(false);
+
+    // Guest users must NOT call Supabase signOut().
+    if (guestCheckDone && isGuest) {
+      try {
+        await AsyncStorage.removeItem('swiftfx_guest');
+      } catch {
+        // fail-closed: still route to login
+      }
+      router.replace('/(auth)/login');
+      return;
+    }
+
     await logout();
   };
 
   const menuItems = [
     {
       section: 'Trading',
-      items: [
+        items: [
         { icon: 'school-outline', label: 'Academy', badge: null, locked: false, action: () => router.push('/academy') },
         // Conditionally show Investor Dashboard or Portfolio Management Tools based on approval status
         isApprovedInvestor 
           ? { icon: 'stats-chart-outline', label: 'Investor Dashboard', badge: 'INVESTOR', locked: false, action: () => router.push('/investor-dashboard') }
           : { icon: 'briefcase-outline', label: 'Portfolio Management Tools', badge: 'VIP', locked: false, action: () => router.push('/fund-management') },
         { icon: 'business-outline', label: 'Recommended Brokers', badge: null, locked: false, action: () => router.push('/brokers') },
+        { icon: 'bookmark-outline', label: 'Trading Journal', badge: null, locked: false, action: () => router.push('/journal') },
         { icon: 'calendar-outline', label: 'Economic Calendar', badge: null, locked: false, action: () => router.push('/calendar') },
         { icon: 'newspaper-outline', label: 'News', badge: null, locked: false, action: () => router.push('/news') },
       ],
@@ -89,7 +120,17 @@ export default function MoreScreen() {
         {/* Profile Header */}
         <View style={[styles.profileHeader, dynamicStyles.card]}>
           <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+            {user?.picture ? (
+              <Image
+                source={{ uri: user.picture }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
+            )}
           </View>
           <View style={styles.profileInfo}>
             <View style={styles.profileNameRow}>
@@ -317,6 +358,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#0A0E17',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
   },
   profileInfo: {
     flex: 1,

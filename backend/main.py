@@ -73,6 +73,7 @@ from api.routes import (
     payments_flutterwave,
     announcement,
 )
+from api.routes.journal import router as journal_router
 
 app.include_router(signals.router)
 app.include_router(admin.router)
@@ -90,6 +91,7 @@ app.include_router(market.router)
 app.include_router(insights.router)
 app.include_router(payments_flutterwave.router)
 app.include_router(announcement.router)
+app.include_router(journal_router)
 
 # ─── Signal Engine ────────────────────────────────────────────────────────────
 from services.signal_engine import (
@@ -164,6 +166,23 @@ async def startup_event():
     await db.ai_analyses.create_index([("user_id", 1), ("created_at", -1)])
     await db.posts.create_index("created_at")
     await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+
+    # Journals (Premium/VIP Trading Journal V1)
+    await db.journals.create_index([("user_id", 1), ("created_at", -1)])
+    await db.journals.create_index([("user_id", 1), ("type", 1), ("created_at", -1)])
+    # Dedupe: prevent multiple signal-journal entries per signal tap per user
+    # Only enforce uniqueness for type="signal" documents that have source_signal_id.
+    try:
+        await db.journals.create_index(
+            [("user_id", 1), ("type", 1), ("source_signal_id", 1)],
+            unique=True,
+            name="uniq_user_type_source_signal",
+            partialFilterExpression={"type": "signal", "source_signal_id": {"$exists": True}},
+        )
+    except Exception:
+        # Index may already exist with slightly different options; ignore startup failure
+        pass
+
     # TTL index: auto-expire notification dedup records after 1 hour
     try:
         await db.notification_dedup.create_index(

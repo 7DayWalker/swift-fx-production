@@ -3,6 +3,7 @@ api/routes/support.py — Support tickets, FAQs, admin ticket management.
 """
 import logging
 import uuid
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List
 from enum import Enum
@@ -15,6 +16,7 @@ from core.database import db
 from core.dependencies import require_auth, require_admin, get_current_user
 from models.schemas import User
 from services.admin import create_admin_notification, log_admin_action
+from services.push_notifications import notify_admin_support_ticket
 from supabase_auth import fetch_profile
 from models.enums import AdminRole
 
@@ -282,7 +284,18 @@ async def create_support_ticket(
         message=f"New ticket from {current_user.name}: {ticket.subject}",
         resource_id=ticket_id
     )
-    
+
+    # Best-effort real-time admin push (never block ticket creation).
+    # If push fails, in-app admin_notifications still exist.
+    asyncio.create_task(
+        notify_admin_support_ticket(
+            ticket_id=ticket_id,
+            user_name=current_user.name,
+            category=ticket.category.value,
+            subject=ticket.subject,
+        )
+    )
+
     logger.info(f"[Support] New ticket {ticket_id} from user {current_user.user_id}")
     
     return {

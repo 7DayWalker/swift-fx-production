@@ -18,17 +18,27 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme, ThemeType } from '../src/context/ThemeContext';
+import GuestOverlayGate from '../src/components/GuestOverlayGate';
 import { supabase } from '../src/services/supabase';
 import api from '../src/services/api';
+import { uploadAvatarToSupabase } from '../src/services/storageUploader';
 
 // Types
+interface LegalDocument {
+  title: string;
+  content: string;
+  last_updated?: string;
+}
+
 interface UserProfile {
   user_id: string;
   name: string;
@@ -42,6 +52,7 @@ interface UserProfile {
   account_status: string;
   created_at?: string;
   last_login?: string;
+  picture?: string;
 }
 
 interface NotificationPreferences {
@@ -55,10 +66,14 @@ interface NotificationPreferences {
 
 
 export default function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const [isGuest, setIsGuest] = React.useState(false);
+  const [guestCheckDone, setGuestCheckDone] = React.useState(false);
+  const isGuestOverlay = guestCheckDone && isGuest;
   
   // State
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -89,6 +104,19 @@ export default function SettingsScreen() {
   const [loadingLegal, setLoadingLegal] = useState(false);
 
   useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -115,6 +143,7 @@ export default function SettingsScreen() {
           is_admin: profile.role === 'admin',
           account_status: 'active',
           created_at: profile.created_at,
+          picture: profile.picture,
         });
         setEditName(profile.name || '');
       }
@@ -178,6 +207,48 @@ export default function SettingsScreen() {
       Alert.alert('Success', 'Phone number updated');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update phone');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePickAndUploadAvatar = async () => {
+    if (!user) return;
+
+    try {
+      setSaving(true);
+
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photo library');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
+      }
+
+      const assetUri = result.assets[0].uri;
+      const uploadRes = await uploadAvatarToSupabase({
+        uri: assetUri,
+        userId: user.user_id,
+      });
+
+      await api.put('/settings/profile', { picture: uploadRes.publicUrl });
+
+      // Refresh AuthContext so the profile header updates immediately.
+      await refreshUser();
+
+      setProfile(prev => (prev ? { ...prev, picture: uploadRes.publicUrl } : prev));
+      Alert.alert('Success', 'Profile picture updated');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update profile picture');
     } finally {
       setSaving(false);
     }
@@ -330,6 +401,18 @@ export default function SettingsScreen() {
 
   const confirmLogout = async () => {
     setShowLogoutModal(false);
+
+    // Guest users must NOT call Supabase signOut().
+    if (isGuest) {
+      try {
+        await AsyncStorage.removeItem('swiftfx_guest');
+      } catch {
+        // fail-closed: still route to login
+      }
+      router.replace('/(auth)/login');
+      return;
+    }
+
     await logout();
     router.replace('/(auth)/login');
   };
@@ -407,9 +490,18 @@ export default function SettingsScreen() {
     </View>
   );
 
+  // Guest UX: overlay gating (do not replace the settings UI)
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="settings-outline"
+          title="Sign up to personalize your experience"
+          description="Create an account to manage reminders, notifications, preferences, subscriptions, and your Swift FX experience."
+          buttonLabel="Create Free Account"
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={styles.loadingText}>Loading settings...</Text>
@@ -420,6 +512,13 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <GuestOverlayGate
+        isGuest={isGuestOverlay}
+        icon="settings-outline"
+        title="Sign up to personalize your experience"
+        description="Create an account to manage reminders, notifications, preferences, subscriptions, and your Swift FX experience."
+        buttonLabel="Create Free Account"
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -437,6 +536,45 @@ export default function SettingsScreen() {
         {/* Profile Section */}
         <Text style={styles.sectionTitle}>Profile</Text>
         <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.avatarUploadRow}
+            onPress={handlePickAndUploadAvatar}
+            activeOpacity={0.8}
+            disabled={saving}
+          >
+            <View
+              style={[
+                styles.avatarPreview,
+                { backgroundColor: profile?.picture ? 'transparent' : `${theme.primary}15` },
+              ]}
+            >
+              {profile?.picture ? (
+                <Image
+                  source={{ uri: profile.picture }}
+                  style={styles.avatarPreviewImage}
+                  resizeMode="cover"
+                />
+              ) : user?.picture ? (
+                <Image
+                  source={{ uri: user.picture }}
+                  style={styles.avatarPreviewImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarPreviewInitial}>
+                  {(profile?.name || user?.name || 'User').charAt(0).toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View style={styles.avatarUploadText}>
+              <Text style={styles.avatarUploadTitle}>Profile Picture</Text>
+              <Text style={styles.avatarUploadHint}>
+                {saving ? 'Updating...' : 'Tap to change'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+
           {renderSettingItem('person-outline', 'Name', profile?.name, () => setShowEditName(true))}
           {renderSettingItem('mail-outline', 'Email', profile?.email, undefined, false)}
           {renderSettingItem('call-outline', 'Phone', profile?.phone || 'Not set', () => setShowEditPhone(true))}
@@ -934,6 +1072,45 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
     overflow: 'hidden',
+  },
+  avatarUploadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    gap: 12,
+  },
+  avatarPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPreviewInitial: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  avatarUploadText: {
+    flex: 1,
+  },
+  avatarUploadTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.text,
+  },
+  avatarUploadHint: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
   },
   settingItem: {
     flexDirection: 'row',

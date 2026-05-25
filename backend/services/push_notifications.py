@@ -106,6 +106,41 @@ async def _fetch_user_profiles_batch(user_ids: List[str]) -> dict:
         return {}
 
 
+async def _fetch_user_admin_flags_batch(user_ids: List[str]) -> dict:
+    """
+    Batch fetch admin flags from Supabase profiles.
+
+    We need admin_role + admin_enabled to target only:
+      - super_admin
+      - customer_support
+    """
+    import os
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not supabase_key or not user_ids:
+        return {}
+
+    try:
+        ids_param = ",".join(user_ids)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"{supabase_url}/rest/v1/profiles",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                },
+                params={
+                    "select": "id,admin_role,admin_enabled,notification_preferences",
+                    "id": f"in.({ids_param})",
+                },
+            )
+            profiles_data = r.json() if r.status_code == 200 else []
+        return {p["id"]: p for p in profiles_data}
+    except Exception as e:
+        logger.warning(f"Failed to batch fetch admin flags: {e}")
+        return {}
+
+
 async def _mark_tokens_inactive(tokens: List[str]):
     """Mark invalid tokens as inactive in MongoDB."""
     if not tokens:
@@ -325,7 +360,7 @@ async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
         return
     await send_notification(
         title="New Signal Alert",
-        body=f"{pair} \u2022 {signal_type.upper()}",
+        body=f"{pair} • {signal_type.upper()}",
         data={"signalId": signal_id, "type": "new_signal"},
         preference_key="signals",
     )
@@ -349,7 +384,7 @@ async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, fina
     pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
     await send_notification(
         title=f"Signal Closed: {result}",
-        body=f"{pair} \u2022 {signal_type.upper()} \u2022 {pips_str} pips",
+        body=f"{pair} • {signal_type.upper()} • {pips_str} pips",
         data={"signalId": signal_id, "type": "signal_closed", "result": result},
         preference_key="signals",
     )
@@ -361,19 +396,125 @@ async def notify_tp_hit(signal_id: str, pair: str, signal_type: str, tp_level: i
     if not claimed:
         logger.info(f"[Dedup] Skipping duplicate TP{tp_level} notification for {signal_id}")
         return
-    pips_part = f" \u2022 +{running_pips:.1f} pips" if running_pips else ""
+    pips_part = f" • +{running_pips:.1f} pips" if running_pips else ""
     
     # Include trailing SL action in the notification body
     if tp_level == 1:
-        trail_info = " \u2022 SL moved to entry"
+        trail_info = " • SL moved to entry"
     elif tp_level == 2:
-        trail_info = " \u2022 SL moved to TP1"
+        trail_info = " • SL moved to TP1"
     else:
         trail_info = ""
     
     await send_notification(
         title=f"TP{tp_level} Hit!",
-        body=f"{pair} \u2022 {signal_type.upper()}{pips_part}{trail_info}",
+        body=f"{pair} • {signal_type.upper()}{pips_part}{trail_info}",
         data={"signalId": signal_id, "type": "tp_hit", "level": tp_level},
         preference_key="signals",
     )
+
+
+# ======================================================================
+# Admin support ticket push (best-effort, lightweight)
+# ======================================================================
+
+_ADMIN_SUPPORT_TARGET_ROLES = {"super_admin", "customer_support"}
+
+
+async def notify_admin_support_ticket(
+    *,
+    ticket_id: str,
+    user_name: str,
+    category: str,
+    subject: str,
+):
+    """
+    Best-effort admin-only Expo push notification for support tickets.
+
+    Target admin roles:
+      - super_admin
+      - customer_support
+
+    This function:
+      - does NOT create any DB records
+      - sends via existing Expo push infrastructure
+      - respects push_enabled in notification_preferences
+      - never blocks ticket creation (caller should fire-and-forget)
+    """
+    try:
+        # Only send to admin devices, so we cannot reuse send_notification() directly.
+        device_tokens = await _fetch_active_tokens()
+        if not device_tokens:
+            return
+
+        user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
+        if not user_ids:
+            return
+
+        admin_flags_map = await _fetch_user_admin_flags_batch(user_ids)
+        enriched_data = {
+            "type": "admin_support_ticket",
+            "ticket_id": ticket_id,
+            "category": category,
+            "subject": (subject or "")[:120],
+        }
+
+        title = "New Support Ticket"
+        body = f"New ticket from {user_name}"
+
+        messages: List[dict] = []
+        for token_doc in device_tokens:
+            token = token_doc.get("token", "")
+            user_id = token_doc.get("user_id")
+            platform = token_doc.get("platform", "unknown")
+
+            if not token.startswith("ExponentPushToken") or not user_id:
+                continue
+
+            profile = admin_flags_map.get(user_id) or {}
+            admin_role = profile.get("admin_role")
+            admin_enabled = profile.get("admin_enabled", True)
+
+            # Target only configured staff roles
+            if not admin_enabled:
+                continue
+            if admin_role not in _ADMIN_SUPPORT_TARGET_ROLES:
+                continue
+
+            prefs = profile.get("notification_preferences", {}) or {}
+            if prefs.get("push_enabled") is False:
+                continue
+
+            # Optional per-key toggle (defaults to True if missing)
+            if not prefs.get("admin_support_ticket", True):
+                continue
+
+            message = {
+                "to": token,
+                "title": title,
+                "body": body,
+                "data": {**enriched_data, "title": title, "body": body},
+                "sound": "default",
+                "priority": "high",
+                "channelId": "default",
+            }
+
+            if platform == "ios":
+                message["_contentAvailable"] = True
+
+            if platform == "android":
+                message["android"] = {
+                    "largeIcon": "https://hrzghlqcfccnmgcipxxo.supabase.co/storage/v1/object/public/public-assets/SwiftFX-logo.png"
+                }
+
+            messages.append(message)
+
+        if not messages:
+            logger.info(f"[AdminTicketPush] No eligible admin devices for ticket {ticket_id}")
+            return
+
+        logger.info(f"[AdminTicketPush] Sending admin ticket alert to {len(messages)} devices (ticket={ticket_id})")
+        await _send_expo_push_batch(messages)
+    except Exception as e:
+        # Caller promised best-effort, and we never want to break ticket creation.
+        logger.error(f"[AdminTicketPush] notify_admin_support_ticket failed: {e}")

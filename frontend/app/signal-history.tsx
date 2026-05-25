@@ -16,6 +16,8 @@ import { format } from 'date-fns';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme } from '../src/context/ThemeContext';
 import api from '../src/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import GuestOverlayGate from '../src/components/GuestOverlayGate';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Signal {
@@ -233,9 +235,40 @@ export default function SignalHistoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => { fetchHistory(); }, [token]);
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestCheckDone, setGuestCheckDone] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
+
+  useEffect(() => {
+    if (!guestCheckDone) return;
+    if (isGuest) {
+      // Guests must not access history analytics — skip fetch but keep UI underneath.
+      setIsLoading(false);
+      return;
+    }
+    fetchHistory();
+  }, [token, guestCheckDone, isGuest]);
+
+  const isGuestOverlay = guestCheckDone && isGuest;
 
   const fetchHistory = async () => {
+    if (isGuest) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const res = await api.get('/signals/history/stats');
       setData(res.data);
@@ -356,6 +389,14 @@ export default function SignalHistoryScreen() {
   // ─── Render ────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[st.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <GuestOverlayGate
+        isGuest={isGuestOverlay}
+        icon="analytics"
+        title="Sign up to view signal performance history"
+        description="Track historical performance, win rates, pip history, and completed trade analytics with a free Swift FX account."
+        buttonLabel="Create Free Account"
+      />
+
       {/* Header */}
       <View style={[st.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity style={[st.backButton, { backgroundColor: theme.surface }]} onPress={() => router.back()} data-testid="history-back-button">

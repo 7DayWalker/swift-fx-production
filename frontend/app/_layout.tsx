@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,12 +14,22 @@ import { StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationService from '../src/services/notificationService';
+import {
+  isCalendarNotificationEnabled,
+  scheduleCalendarEventNotification,
+  cancelCalendarNotificationsForEventIds,
+} from '../src/services/notificationService';
 import { initDeepLinkListener } from '../src/services/referralService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../src/services/api';
+import AppAnnouncementModal, { AppAnnouncement } from '../src/components/AppAnnouncementModal';
 
 // ─── GLOBAL notification handler (must run before any notification arrives) ───
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -40,6 +50,26 @@ function RootLayoutContent() {
   const { theme, isDark } = useTheme();
   const { user, isLoading, isPasswordRecovery } = useAuth();
 
+  const DISMISSED_ANNOUNCEMENT_ID_KEY = '@dismissed_app_announcement_id';
+
+  const [appAnnouncement, setAppAnnouncement] = useState<AppAnnouncement | null>(null);
+  const [appAnnouncementVisible, setAppAnnouncementVisible] = useState(false);
+  const [appAnnouncementCheckDone, setAppAnnouncementCheckDone] = useState(false);
+
+  const dismissAppAnnouncement = async () => {
+    const id = appAnnouncement?.id;
+    setAppAnnouncementVisible(false);
+    setAppAnnouncement(null);
+
+    try {
+      if (id) {
+        await AsyncStorage.setItem(DISMISSED_ANNOUNCEMENT_ID_KEY, id);
+      }
+    } catch (err) {
+      // fail closed: never block navigation/UI
+    }
+  };
+
   // ── SINGLE source of navigation truth ──
   useEffect(() => {
     if (isLoading) return;
@@ -52,9 +82,52 @@ function RootLayoutContent() {
     if (user) {
       router.replace('/(tabs)/dashboard');
     } else {
-      router.replace('/(auth)/login');
+      // Guest routing (frontend-only)
+      void (async () => {
+        try {
+          const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+          if (guestFlag === 'true') {
+            router.replace('/(tabs)/signals');
+            return;
+          }
+        } catch {
+          // fail-closed: fall back to login
+        }
+        router.replace('/(auth)/login');
+      })();
     }
   }, [isLoading, user, isPasswordRecovery]);
+
+  // ── App announcement popup (show once, after auth stabilization) ──
+  useEffect(() => {
+    if (appAnnouncementCheckDone) return;
+    if (isLoading) return;
+    if (isPasswordRecovery) return;
+    if (!user) return;
+
+    void (async () => {
+      try {
+        // Wait a beat so auth routing (router.replace) has time to settle.
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const dismissedId = await AsyncStorage.getItem(DISMISSED_ANNOUNCEMENT_ID_KEY);
+
+        const res = await api.get('/announcements/active');
+        const latest = res.data as AppAnnouncement | null;
+
+        if (!latest?.id) return;
+
+        if (dismissedId !== latest.id) {
+          setAppAnnouncement(latest);
+          setAppAnnouncementVisible(true);
+        }
+      } catch (err) {
+        // fail closed: silently ignore fetch/storage errors
+      } finally {
+        setAppAnnouncementCheckDone(true);
+      }
+    })();
+  }, [appAnnouncementCheckDone, isLoading, isPasswordRecovery, user]);
 
   // Request notification permissions early (Android needs this before notifications arrive)
   useEffect(() => {
@@ -72,6 +145,46 @@ function RootLayoutContent() {
       NotificationService.cleanup();
     };
   }, [user]);
+
+  // Lightweight startup rehydration for calendar reminders
+  // (recreate upcoming high-impact local notifications when enabled)
+  const calendarRemindersRehydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (calendarRemindersRehydratedRef.current) return;
+    if (Platform.OS === 'web') return;
+    if (isLoading) return;
+    if (isPasswordRecovery) return;
+    if (!user) return;
+
+    calendarRemindersRehydratedRef.current = true;
+
+    void (async () => {
+      try {
+        const enabled = await isCalendarNotificationEnabled();
+        if (!enabled) return;
+
+        const res = await api.get('/calendar/events', {
+          params: { filter: 'week' },
+        });
+
+        const events = res.data?.events ?? [];
+        const highImpactEvents = events.filter(
+          (e: any) => (e?.impact || '').trim().toLowerCase() === 'high',
+        );
+
+        const eventIds = highImpactEvents.map((e: any) => e?.id).filter(Boolean);
+
+        await cancelCalendarNotificationsForEventIds(eventIds);
+
+        for (const event of highImpactEvents) {
+          await scheduleCalendarEventNotification(event);
+        }
+      } catch (err) {
+        console.log('[Calendar Reminders] Startup rehydration failed:', err);
+      }
+    })();
+  }, [isLoading, isPasswordRecovery, user]);
   
   // Initialize deep link listener for referrals
   useEffect(() => {
@@ -84,6 +197,13 @@ function RootLayoutContent() {
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <AppAnnouncementModal
+        visible={appAnnouncementVisible}
+        announcement={appAnnouncement}
+        onDismiss={() => {
+          void dismissAppAnnouncement();
+        }}
+      />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -99,6 +219,7 @@ function RootLayoutContent() {
         <Stack.Screen name="register" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
+        <Stack.Screen name="journal" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="chart" />
       </Stack>

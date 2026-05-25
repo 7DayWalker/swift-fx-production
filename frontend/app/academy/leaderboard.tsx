@@ -66,7 +66,7 @@ export default function LeaderboardScreen() {
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: theme.surface }]} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Leaderboard</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Weekly Leaderboard</Text>
         <View style={{ width: 40 }} />
       </View>
 
