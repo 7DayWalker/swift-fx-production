@@ -16,6 +16,7 @@ import {
 import { useRouter, Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -77,6 +78,15 @@ export default function LoginScreen() {
     } finally {
       setOauthLoading(null);
     }
+  };
+
+  const handleContinueAsGuest = async () => {
+    try {
+      await AsyncStorage.setItem('swiftfx_guest', 'true');
+    } catch {
+      // fail-open: guest routing should still proceed
+    }
+    router.replace('/(tabs)/signals');
   };
 
   return (
@@ -164,6 +174,26 @@ export default function LoginScreen() {
               <Text style={[styles.dividerText, { color: theme.textSecondary }]}>OR</Text>
               <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
+
+            <Pressable
+              style={[
+                styles.loginButton,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                  marginBottom: 16,
+                },
+              ]}
+              onPress={handleContinueAsGuest}
+              disabled={isLoading || oauthLoading !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Continue as Guest"
+              testID="continue-as-guest-button"
+              data-testid="continue-as-guest-button"
+            >
+              <Text style={[styles.loginButtonText, { color: theme.text }]}>Continue as Guest</Text>
+            </Pressable>
 
             {/* Apple OAuth Button */}
             <Pressable

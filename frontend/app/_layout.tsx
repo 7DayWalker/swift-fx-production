@@ -82,7 +82,19 @@ function RootLayoutContent() {
     if (user) {
       router.replace('/(tabs)/dashboard');
     } else {
-      router.replace('/(auth)/login');
+      // Guest routing (frontend-only)
+      void (async () => {
+        try {
+          const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+          if (guestFlag === 'true') {
+            router.replace('/(tabs)/signals');
+            return;
+          }
+        } catch {
+          // fail-closed: fall back to login
+        }
+        router.replace('/(auth)/login');
+      })();
     }
   }, [isLoading, user, isPasswordRecovery]);
 
@@ -207,6 +219,7 @@ function RootLayoutContent() {
         <Stack.Screen name="register" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
+        <Stack.Screen name="journal" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="chart" />
       </Stack>

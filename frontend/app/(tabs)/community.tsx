@@ -149,7 +149,8 @@ export default function CommunityScreen() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
-    const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
+  const isGuest = !user;
+  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
 
   const fetchPosts = async () => {
     try {
@@ -180,6 +181,7 @@ export default function CommunityScreen() {
   }, [posts, activeTab])();
 
   const createPost = async () => {
+    if (isGuest) return;
     if (!newPostContent.trim()) {
       Alert.alert('Error', 'Please enter some content');
       return;
@@ -229,6 +231,7 @@ export default function CommunityScreen() {
   };
 
   const toggleLike = async (postId: string) => {
+    if (!user) return; // Guest: read-only (no like writes)
     try {
       const res = await api.post(`/community/posts/${postId}/like`);
       const { liked } = res.data;
@@ -261,6 +264,7 @@ export default function CommunityScreen() {
   };
 
   const addComment = async () => {
+    if (isGuest) return;
     if (!newComment.trim() || !selectedPost) return;
     try {
       const res = await api.post(`/community/posts/${selectedPost.post_id}/comments`, { content: newComment.trim() });

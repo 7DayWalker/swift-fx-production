@@ -9,6 +9,7 @@ import { WebView } from 'react-native-webview';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { useSubscription } from '../../src/context/SubscriptionContext';
+import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
 import { getCourseContent, LessonContent, CourseContent } from '../../src/data/academyContent';
@@ -596,6 +597,8 @@ const succ = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════
 export default function LessonScreen() {
   const { status: sub, isAdminPrivilege } = useSubscription();
+  const { user } = useAuth();
+  const isGuest = !user;
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -726,6 +729,7 @@ export default function LessonScreen() {
 
   // ─── Mark Lesson Complete ───
   const markComplete = async (lessonId: number) => {
+    if (isGuest) return; // Guest: read-only
     if (completedLessons.has(lessonId) || completing) return;
     setCompleting(true);
     try {
@@ -797,8 +801,7 @@ export default function LessonScreen() {
 
         <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}>
           {/* Video or Coming Soon */}
-          {lesson.type === 'video' && lesson.youtubeId && <YouTubePlayer videoId={lesson.youtubeId} color={color} />}
-          {lesson.type === 'video' && !lesson.youtubeId && <ComingSoonBanner color={color} />}
+          {lesson.type === 'video' && <ComingSoonBanner color={color} />}
 
           {/* Text lesson header */}
           {lesson.type === 'text' && (
@@ -903,7 +906,7 @@ export default function LessonScreen() {
           )}
 
           {/* Quiz Questions */}
-          {isQuiz && !quizResult && (
+          {isQuiz && !quizResult && !isGuest && (
             <View style={{ gap: 12 }}>
               {quizQs.map((q, i) => (
                 <QuizQuestion key={i} question={q} num={i + 1} color={color} onAnswer={(correct) => {
@@ -916,6 +919,15 @@ export default function LessonScreen() {
                   <Text style={s.completeBtnText}>Submit Quiz</Text>
                 </TouchableOpacity>
               )}
+            </View>
+          )}
+
+          {isQuiz && !quizResult && isGuest && (
+            <View style={[s.section, { backgroundColor: theme.surface, paddingHorizontal: 20, paddingVertical: 18, borderWidth: 1, borderColor: `${color}20` }]}>
+              <Text style={[s.sectionLabel, { color: theme.text, marginBottom: 8 }]}>Quizzes are disabled for guests</Text>
+              <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 20 }}>
+                Log in to take quizzes and earn XP.
+              </Text>
             </View>
           )}
 
@@ -935,7 +947,7 @@ export default function LessonScreen() {
           {/* Mark Complete + Navigation */}
           {!isQuiz && !quizResult && (
             <View style={s.navRow}>
-              {!isCompleted && !showSuccess && (
+              {!isGuest && !isCompleted && !showSuccess && (
                 <TouchableOpacity style={[s.completeBtn, { backgroundColor: color }]} onPress={() => markComplete(lesson.id)} disabled={completing} data-testid="mark-complete-btn">
                   {completing ? <ActivityIndicator size="small" color="#0A0E17" /> : (
                     <>

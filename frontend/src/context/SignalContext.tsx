@@ -140,6 +140,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     
     if (!userId) {
       console.log('[SignalContext] No user ID, defaulting to free');
+      setIsLoading(false);
       setUserTier('free');
       tierFetchedForUserRef.current = null;
       return;
@@ -236,8 +237,6 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   userTierRef.current = userTier;
 
   const refreshSignals = useCallback(async () => {
-    if (!token) return;
-
     try {
       const response = await api.get('/signals');
       const data = response.data;
@@ -248,7 +247,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('[Signals] refreshSignals failed:', err);
     }
-  }, [token]); // Only depends on token - backend resolves tier from JWT
+  }, []);
 
   const refreshStats = useCallback(async () => {
     if (!token) return;
@@ -397,6 +396,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       startPolling();
     } else if (!token) {
       // Logged out - reset everything
+      setIsLoading(false);
       setSignals([]);
       setStats(null);
       setHistoryData(null);
@@ -404,6 +404,7 @@ export function SignalProvider({ children }: { children: ReactNode }) {
       setUserTier('free');
       tierFetchedForUserRef.current = null;
       stopPolling();
+      void refreshSignals();
     }
     return () => stopPolling();
   }, [userId, token]); // ONLY primitive dependencies - no functions

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { api } from '../services/api';
 import { getStoredReferralCode, clearStoredReferralCode } from '../services/referralService';
@@ -231,8 +232,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!mounted) return;
 
-        if (session) {
+      if (session) {
           const sbUser = session.user;
+
+          // Real authenticated session ALWAYS supersedes guest mode.
+          // Clear stale guest flag only after confirmed session exists.
+          try {
+            await AsyncStorage.removeItem('swiftfx_guest');
+          } catch {
+            // fail-closed: auth routing still uses `user`, not guest flag
+          }
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);
@@ -305,6 +314,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session) {
           const sbUser = session.user;
+
+          // Real authenticated session ALWAYS supersedes guest mode.
+          // Clear stale guest flag only after confirmed session exists.
+          void (async () => {
+            try {
+              await AsyncStorage.removeItem('swiftfx_guest');
+            } catch {
+              // fail-closed
+            }
+          })();
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);

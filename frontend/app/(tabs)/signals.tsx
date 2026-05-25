@@ -93,9 +93,9 @@ const getEntryValidity = (state: string): { label: string; color: string; icon: 
 
 // ─── SignalCard component (needs its own Animated.Value) ─────────────────────
 
-interface CardProps { item: Signal; theme: any }
+interface CardProps { item: Signal; theme: any; canJournal: boolean }
 
-const SignalCard = ({ item, theme }: CardProps) => {
+const SignalCard = ({ item, theme, canJournal }: CardProps) => {
   const router = useRouter();
   const glowAnim = useRef(new Animated.Value(0)).current;
   const isActive = ['active', 'tp1', 'tp2', 'tp3'].includes(item.state);
@@ -322,7 +322,7 @@ const SignalCard = ({ item, theme }: CardProps) => {
             )}
 
             {/* ── Closed result ── */}
-            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
+            {canJournal && item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
               <>
                 <View style={[cardStyles.resultRow, { borderTopColor: theme.border }]}>
                   <Text style={[cardStyles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
@@ -480,7 +480,7 @@ export default function SignalsScreen() {
   });
 
   const renderSignal = ({ item }: { item: Signal }) => (
-    <SignalCard item={item} theme={theme} />
+    <SignalCard item={item} theme={theme} canJournal={!!user} />
   );
 
   if (isLoading) {
