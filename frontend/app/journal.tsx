@@ -10,6 +10,7 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import api from '../src/services/api';
 import { useTheme } from '../src/context/ThemeContext';
 import { useAuth } from '../src/context/AuthContext';
+import { useSubscription } from '../src/context/SubscriptionContext';
 
 type JournalType = 'signal' | 'manual';
 type JournalDirection = 'buy' | 'sell';
@@ -66,6 +68,13 @@ export default function JournalScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [stats, setStats] = useState<JournalStats | null>(null);
+  const [showJournalUpgrade, setShowJournalUpgrade] = useState(false);
+
+  // Subscription gating (Premium/VIP only)
+  const { status: subscriptionStatus } = useSubscription();
+  const journalTier =
+    subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
+  const hasJournalAccess = journalTier === 'premium' || journalTier === 'vip';
 
   // Manual create form (V1 minimal)
   const [typeMode, setTypeMode] = useState<JournalType>('manual');
@@ -92,6 +101,7 @@ export default function JournalScreen() {
 
   const fetchJournal = async () => {
     if (!user) return;
+    if (!hasJournalAccess) return;
 
     setIsLoading(true);
     try {
@@ -111,12 +121,27 @@ export default function JournalScreen() {
   };
 
   useEffect(() => {
+    if (!user) return;
+
+    if (!hasJournalAccess) {
+      setShowJournalUpgrade(true);
+      setIsLoading(false);
+      setEntries([]);
+      setStats(null);
+      return;
+    }
+
     void fetchJournal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.user_id]);
+  }, [user?.user_id, hasJournalAccess]);
 
   const onRefresh = async () => {
     if (!user) return;
+    if (!hasJournalAccess) {
+      setShowJournalUpgrade(true);
+      return;
+    }
+
     setIsRefreshing(true);
     try {
       await fetchJournal();
@@ -154,6 +179,11 @@ export default function JournalScreen() {
 
   const submitManual = async () => {
     if (!user) return;
+
+    if (!hasJournalAccess) {
+      setShowJournalUpgrade(true);
+      return;
+    }
 
     if (!canSubmitManual) {
       Alert.alert('Missing fields', 'Symbol, Entry, Stop Loss and TP1 are required.');
@@ -501,6 +531,76 @@ export default function JournalScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showJournalUpgrade}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowJournalUpgrade(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 18,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              borderRadius: 20,
+              padding: 18,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '900',
+                letterSpacing: -0.2,
+                color: theme.text,
+              }}
+            >
+              Trading Journal is a Premium feature
+            </Text>
+
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 12,
+                lineHeight: 18,
+                color: theme.textSecondary,
+              }}
+            >
+              Upgrade to Premium or VIP to track trades, analyze performance, and build your personal trading journal.
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                marginTop: 16,
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.primary,
+              }}
+              onPress={() => {
+                setShowJournalUpgrade(false);
+                router.push('/subscription');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Upgrade Now"
+              testID="journal-upgrade-now"
+            >
+              <Text style={{ color: '#0A0E17', fontWeight: '900', fontSize: 15 }}>Upgrade Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

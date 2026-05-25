@@ -19,7 +19,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
+import GuestOverlayGate from '../../src/components/GuestOverlayGate';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/services/supabase';
@@ -427,6 +429,22 @@ export default function AIScreen() {
   const insets = useSafeAreaInsets();
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
 
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestCheckDone, setGuestCheckDone] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
+
   const [usage, setUsage] = useState<AIUsage | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -614,10 +632,19 @@ export default function AIScreen() {
 
   const showUpgradeNudge = subscriptionStatus?.capability_tier !== 'vip' && subscriptionStatus?.capability_source !== 'admin_privilege';
 
+  const isGuestOverlay = guestCheckDone && isGuest;
+
   // ─── Loading ─────────────────────────────────────────────────────────────
   if (isLoadingUsage) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
@@ -629,6 +656,13 @@ export default function AIScreen() {
   if (showSuccess) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         <SuccessFlash onDone={() => { setShowSuccess(false); setScreenState('result'); }} />
       </SafeAreaView>
     );
@@ -638,6 +672,13 @@ export default function AIScreen() {
   if (screenState === 'analyzing') {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
           <AnalyzingProgress pair={selectedPair} timeframe={selectedTimeframe} />
         </ScrollView>
@@ -649,6 +690,13 @@ export default function AIScreen() {
   if (screenState === 'error') {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
           <View style={s.centeredContainer}>
             <View style={[s.iconCircle, { backgroundColor: 'rgba(255,71,87,0.12)' }]}>
@@ -675,6 +723,13 @@ export default function AIScreen() {
   if (screenState === 'limit_reached') {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         <ScrollView contentContainerStyle={{ paddingBottom: bottomPadding, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
           <View style={s.centeredContainer}>
             <View style={[s.iconCircle, { backgroundColor: 'rgba(255,215,0,0.12)' }]}>
@@ -715,6 +770,13 @@ export default function AIScreen() {
 
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="sparkles"
+          title="AI Analysis available for registered users"
+          description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+          buttonLabel="Create Free Account"
+        />
         {/* Header */}
         <View style={s.resultHeader}>
           <TouchableOpacity style={s.headerBtn} onPress={resetToUpload} data-testid="result-back-button">
@@ -842,6 +904,13 @@ export default function AIScreen() {
   // ─── Upload (Default) ───────────────────────────────────────────────────
   return (
     <SafeAreaView style={[s.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <GuestOverlayGate
+        isGuest={isGuestOverlay}
+        icon="sparkles"
+        title="AI Analysis available for registered users"
+        description="Create a free account to access AI-powered market analysis, chart insights, and smart trading assistance."
+        buttonLabel="Create Free Account"
+      />
       <ScrollView style={{ flex: 1, padding: 16 }} contentContainerStyle={{ paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
         <View style={{ marginBottom: 20 }}>
           <Text style={[s.screenTitle, { color: theme.text }]}>AI Chart Analyzer</Text>

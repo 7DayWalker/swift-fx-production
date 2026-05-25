@@ -18,6 +18,8 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../src/context/ThemeContext';
 import { useAuth } from '../src/context/AuthContext';
 import { api } from '../src/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import GuestOverlayGate from '../src/components/GuestOverlayGate';
 
 // Status configurations
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -58,6 +60,10 @@ export default function ReferralScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestCheckDone, setGuestCheckDone] = useState(false);
+  const isGuestOverlay = guestCheckDone && isGuest;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [referralCode, setReferralCode] = useState('');
@@ -66,22 +72,47 @@ export default function ReferralScreen() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [claiming, setClaiming] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (isRefresh = false) => {
-    try {
-      if (!isRefresh) setLoading(true);
-      const response = await api.get('/referral/my-code');
-      setReferralCode(response.data.referral_code);
-      setReferralLink(response.data.referral_link);
-      setStats(response.data.stats);
-      setReferrals(response.data.referrals || []);
-    } catch (error: any) {
-      console.error('Failed to fetch referral data:', error);
-      Alert.alert('Error', 'Failed to load referral data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
+
+  const fetchData = useCallback(
+    async (isRefresh = false) => {
+      if (!guestCheckDone) return;
+
+      // Guests must not access referral analytics / fetch.
+      if (isGuest) {
+        if (!isRefresh) setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      try {
+        if (!isRefresh) setLoading(true);
+        const response = await api.get('/referral/my-code');
+        setReferralCode(response.data.referral_code);
+        setReferralLink(response.data.referral_link);
+        setStats(response.data.stats);
+        setReferrals(response.data.referrals || []);
+      } catch (error: any) {
+        console.error('Failed to fetch referral data:', error);
+        Alert.alert('Error', 'Failed to load referral data');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [guestCheckDone, isGuest]
+  );
 
   useEffect(() => {
     fetchData();
@@ -126,6 +157,8 @@ export default function ReferralScreen() {
   };
 
   const handleClaimReward = async (referralId: string) => {
+    if (isGuest) return;
+
     try {
       setClaiming(referralId);
       const response = await api.post(`/referral/claim-reward/${referralId}`);
@@ -159,6 +192,13 @@ export default function ReferralScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="gift"
+          title="Referral rewards are for registered users"
+          description="Create a free account to share your code and claim subscription rewards."
+          buttonLabel="Create Free Account"
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
@@ -168,6 +208,13 @@ export default function ReferralScreen() {
 
   return (
     <SafeAreaView style={[styles.container, dynamicStyles.container]} edges={['top']}>
+      <GuestOverlayGate
+        isGuest={isGuestOverlay}
+        icon="gift"
+        title="Referral rewards are for registered users"
+        description="Create a free account to share your code and claim subscription rewards."
+        buttonLabel="Create Free Account"
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

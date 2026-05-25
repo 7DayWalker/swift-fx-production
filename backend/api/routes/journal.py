@@ -20,12 +20,14 @@ from typing import Optional, Literal, List, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 from core.database import db
 from core.dependencies import require_auth
 from models.enums import UserRole
 from models.schemas import User
 from services.subscription import get_effective_subscription
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,41 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+def _serialize_mongo_value(value: Any) -> Any:
+    """
+    Convert Mongo/BSON values into JSON-safe values.
+
+    Handles:
+    - ObjectId -> string
+    - datetime -> ISO string (UTC, Z suffix) matching backend/main.py
+    - dict/list -> recursive conversion
+    - unknown types -> string fallback (prevents response encoding 500s)
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, ObjectId):
+        return str(value)
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
+    if isinstance(value, dict):
+        return {k: _serialize_mongo_value(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_serialize_mongo_value(v) for v in value]
+
+    # JSON primitives
+    if isinstance(value, (str, int, float, bool)):
+        return value
+
+    # Fallback: last-resort safe conversion to string
+    return str(value)
+
+
 class JournalManualCreate(BaseModel):
     # Used for documentation; actual handler uses Form(...) for multipart screenshot.
     symbol: str
@@ -198,7 +235,38 @@ async def create_journal_from_signal(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    await db.journals.insert_one(doc)
+    try:
+        await db.journals.insert_one(doc)
+    except DuplicateKeyError:
+        # Race-safe dedupe: unique index may already have inserted this signal journal.
+        existing_after = await db.journals.find_one(
+            {
+                "user_id": current_user.user_id,
+                "type": "signal",
+                "source_signal_id": source_signal_id,
+            }
+        )
+        if existing_after:
+            return {
+                "message": "Signal already added to journal",
+                "journal_id": existing_after.get("journal_id"),
+                "already_journaled": True,
+                "snapshot": {
+                    "source_signal_id": existing_after.get("source_signal_id"),
+                    "symbol": existing_after.get("symbol"),
+                    "direction": existing_after.get("direction"),
+                    "entry": existing_after.get("entry"),
+                    "stop_loss": existing_after.get("stop_loss"),
+                    "tp1": existing_after.get("tp1"),
+                    "tp2": existing_after.get("tp2"),
+                    "tp3": existing_after.get("tp3"),
+                    "pips": existing_after.get("pips"),
+                    "rr": existing_after.get("rr"),
+                    "outcome": existing_after.get("outcome"),
+                    "timestamp": existing_after.get("timestamp"),
+                },
+            }
+        raise  # Unexpected: dedupe index triggered but document not found
 
     return {
         "message": "Added signal to journal",
@@ -290,15 +358,25 @@ async def create_journal_manual(
 async def list_journal_entries(current_user: User = Depends(require_auth)):
     _require_premium_vip(current_user)
 
-    entries = await db.journals.find(
-        {"user_id": current_user.user_id}
-    ).sort("created_at", -1).limit(100).to_list(100)
+    try:
+        entries = await db.journals.find(
+            {"user_id": current_user.user_id}
+        ).sort("created_at", -1).limit(100).to_list(100)
+    except Exception as e:
+        logger.exception("[Journal] GET /journal/list failed to fetch entries: %s", str(e))
+        raise
 
-    # Keep response explicit; do not leak Mongo _id
+    # Keep response explicit; do not leak Mongo _id and ensure JSON-safety for ALL fields
+    safe_entries: list[dict[str, Any]] = []
     for e in entries:
-        e.pop("_id", None)
+        if isinstance(e, dict):
+            e.pop("_id", None)
+            safe_entries.append(_serialize_mongo_value(e))
+        else:
+            # Shouldn't happen, but keep response stable
+            safe_entries.append(_serialize_mongo_value(e))
 
-    return {"entries": entries}
+    return {"entries": safe_entries}
 
 
 @router.get("/journal/stats")
@@ -317,7 +395,11 @@ async def get_journal_stats(current_user: User = Depends(require_auth)):
         {"_id": 0, "pips": 1, "outcome": 1},
     )
 
-    signal_entries = await cursor.to_list(None)
+    try:
+        signal_entries = await cursor.to_list(None)
+    except Exception as e:
+        logger.exception("[Journal] GET /journal/stats failed to fetch signal entries: %s", str(e))
+        raise
 
     total = len(signal_entries)
     wins = 0

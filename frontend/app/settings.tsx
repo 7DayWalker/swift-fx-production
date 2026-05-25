@@ -27,6 +27,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../src/context/AuthContext';
 import { useTheme, ThemeType } from '../src/context/ThemeContext';
+import GuestOverlayGate from '../src/components/GuestOverlayGate';
 import { supabase } from '../src/services/supabase';
 import api from '../src/services/api';
 import { uploadAvatarToSupabase } from '../src/services/storageUploader';
@@ -69,6 +70,10 @@ export default function SettingsScreen() {
   const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const [isGuest, setIsGuest] = React.useState(false);
+  const [guestCheckDone, setGuestCheckDone] = React.useState(false);
+  const isGuestOverlay = guestCheckDone && isGuest;
   
   // State
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -97,6 +102,19 @@ export default function SettingsScreen() {
   // Legal document content
   const [legalContent, setLegalContent] = useState<LegalDocument | null>(null);
   const [loadingLegal, setLoadingLegal] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
+        setIsGuest(guestFlag === 'true' && !user);
+      } catch {
+        setIsGuest(false);
+      } finally {
+        setGuestCheckDone(true);
+      }
+    })();
+  }, [user]);
 
   useEffect(() => {
     fetchData();
@@ -383,6 +401,18 @@ export default function SettingsScreen() {
 
   const confirmLogout = async () => {
     setShowLogoutModal(false);
+
+    // Guest users must NOT call Supabase signOut().
+    if (isGuest) {
+      try {
+        await AsyncStorage.removeItem('swiftfx_guest');
+      } catch {
+        // fail-closed: still route to login
+      }
+      router.replace('/(auth)/login');
+      return;
+    }
+
     await logout();
     router.replace('/(auth)/login');
   };
@@ -460,9 +490,18 @@ export default function SettingsScreen() {
     </View>
   );
 
+  // Guest UX: overlay gating (do not replace the settings UI)
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <GuestOverlayGate
+          isGuest={isGuestOverlay}
+          icon="settings-outline"
+          title="Sign up to personalize your experience"
+          description="Create an account to manage reminders, notifications, preferences, subscriptions, and your Swift FX experience."
+          buttonLabel="Create Free Account"
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={styles.loadingText}>Loading settings...</Text>
@@ -473,6 +512,13 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <GuestOverlayGate
+        isGuest={isGuestOverlay}
+        icon="settings-outline"
+        title="Sign up to personalize your experience"
+        description="Create an account to manage reminders, notifications, preferences, subscriptions, and your Swift FX experience."
+        buttonLabel="Create Free Account"
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSignals } from '../../src/context/SignalContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
 import { AdBanner, useInterstitialAd, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { LockedSignalBody } from '../../src/components/UpgradeKit';
 import api from '../../src/services/api';
@@ -93,9 +95,9 @@ const getEntryValidity = (state: string): { label: string; color: string; icon: 
 
 // ─── SignalCard component (needs its own Animated.Value) ─────────────────────
 
-interface CardProps { item: Signal; theme: any; canJournal: boolean }
+interface CardProps { item: Signal; theme: any; canJournal: boolean; hasJournalAccess: boolean }
 
-const SignalCard = ({ item, theme, canJournal }: CardProps) => {
+const SignalCard = ({ item, theme, canJournal, hasJournalAccess }: CardProps) => {
   const router = useRouter();
   const glowAnim = useRef(new Animated.Value(0)).current;
   const isActive = ['active', 'tp1', 'tp2', 'tp3'].includes(item.state);
@@ -149,6 +151,7 @@ const SignalCard = ({ item, theme, canJournal }: CardProps) => {
   const validity = getEntryValidity(item.state);
 
   const [isAddingJournal, setIsAddingJournal] = useState(false);
+  const [showJournalUpgrade, setShowJournalUpgrade] = useState(false);
 
   const handleAddToJournal = async () => {
     if (isAddingJournal) return;
@@ -161,6 +164,12 @@ const SignalCard = ({ item, theme, canJournal }: CardProps) => {
     // Type 1 journal entries require snapshot closure metrics, so only allow on closed signals.
     if (item.state !== 'closed') {
       Alert.alert('Not ready', 'This signal has no final result yet.');
+      return;
+    }
+
+    // Free-user gating UX: show upgrade modal only (NO journal API request)
+    if (!hasJournalAccess) {
+      setShowJournalUpgrade(true);
       return;
     }
 
@@ -322,7 +331,7 @@ const SignalCard = ({ item, theme, canJournal }: CardProps) => {
             )}
 
             {/* ── Closed result ── */}
-            {canJournal && item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
+            {item.state === 'closed' && (item.final_pips !== undefined || item.result_pips !== undefined) && (
               <>
                 <View style={[cardStyles.resultRow, { borderTopColor: theme.border }]}>
                   <Text style={[cardStyles.resultLabel, { color: theme.textSecondary }]}>Result:</Text>
@@ -363,6 +372,73 @@ const SignalCard = ({ item, theme, canJournal }: CardProps) => {
           </>
         )}
       </View>
+
+      <Modal
+        visible={showJournalUpgrade}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowJournalUpgrade(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 18,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              borderRadius: 20,
+              padding: 18,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', letterSpacing: -0.2, color: theme.text }}>
+                Trading Journal is a Premium feature
+              </Text>
+
+              <TouchableOpacity
+                style={{ padding: 8 }}
+                onPress={() => setShowJournalUpgrade(false)}
+                accessibilityRole="button"
+                testID="journal-upgrade-close"
+              >
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.textSecondary }}>
+              Upgrade to Premium or VIP to track trades, analyze performance, and build your personal trading journal.
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                marginTop: 16,
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.primary,
+              }}
+              onPress={() => {
+                setShowJournalUpgrade(false);
+                router.push('/subscription');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Upgrade Now"
+              testID="journal-upgrade-now"
+            >
+              <Text style={{ color: '#0A0E17', fontWeight: '900', fontSize: 15 }}>Upgrade Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -463,12 +539,16 @@ const cardStyles = StyleSheet.create({
 export default function SignalsScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { status: subscriptionStatus } = useSubscription();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
   const { signals, isLoading, isRefreshing, refreshSignals, lastUpdated } = useSignals();
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'closed'>('all');
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8 + AD_BANNER_HEIGHT;
+
+  const journalTier = subscriptionStatus?.capability_tier || 'free';
+  const hasJournalAccess = journalTier === 'premium' || journalTier === 'vip';
 
   // Interstitial — fires after multiple meaningful actions (refresh / filter change)
   const { recordAndMaybeShow } = useInterstitialAd();
@@ -480,7 +560,7 @@ export default function SignalsScreen() {
   });
 
   const renderSignal = ({ item }: { item: Signal }) => (
-    <SignalCard item={item} theme={theme} canJournal={!!user} />
+    <SignalCard item={item} theme={theme} canJournal={!!user} hasJournalAccess={hasJournalAccess} />
   );
 
   if (isLoading) {
