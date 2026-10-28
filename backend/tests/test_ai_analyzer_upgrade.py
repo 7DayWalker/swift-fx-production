@@ -16,7 +16,7 @@ SUPABASE_ANON_KEY = os.environ.get('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'eyJhbGciOiJ
 # Test credentials - using admin user (VIP credentials invalid)
 # Admin user has VIP-level access for feature gating
 TEST_USER_EMAIL = "ellapauledache@gmail.com"
-TEST_USER_PASSWORD = "Grace1992@"
+TEST_USER_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 
 def get_supabase_token(email: str, password: str) -> str:

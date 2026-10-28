@@ -206,7 +206,7 @@ curl -X POST \
 
 2. **Set Edge Function secrets**:
    - Go to Supabase Dashboard → Edge Functions → Secrets
-   - Add `OPENAI_API_KEY` with value: `sk-emergent-d262e87B959A8757cB`
+   - Add `OPENAI_API_KEY` with value: `<your-openai-or-emergent-llm-key>` (never commit live keys to git)
 
 3. **Deploy the Edge Function**:
    ```bash

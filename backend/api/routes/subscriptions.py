@@ -24,19 +24,36 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidSignature as CryptoInvalidSignature
 
 from core.database import db
-from core.dependencies import get_current_user, require_auth, require_admin
+from core.dependencies import get_current_user, require_auth, require_admin, require_super_admin
 from core.config import (
     APPLE_SHARED_SECRET, APPLE_BUNDLE_ID, APPLE_ENVIRONMENT,
     APPLE_KEY_ID, APPLE_ISSUER_ID, APPLE_PRIVATE_KEY, APPLE_WEBHOOK_SECRET,
-    GOOGLE_PACKAGE_NAME, GOOGLE_SERVICE_ACCOUNT_JSON, get_plan_from_product_id,
-    IAP_PRODUCT_IDS, IAP_PRODUCTS_BY_TIER,
+    GOOGLE_PACKAGE_NAME, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_WEBHOOK_TOKEN,
+    get_plan_from_product_id, IAP_PRODUCT_IDS, IAP_PRODUCTS_BY_TIER,
 )
-from services.subscription import get_effective_subscription, get_active_override, get_ai_weekly_limit
+from services.subscription import (
+    get_effective_subscription,
+    get_active_override,
+    get_ai_weekly_limit,
+    parse_utc_datetime,
+    resolve_subscription_details,
+    sync_profile_subscription,
+)
 from supabase_auth import fetch_profile, update_profile, count_profiles
 from models.schemas import User, DeviceTokenRegister
 from api.routes.referral import on_user_subscription_change
 
 logger = logging.getLogger(__name__)
+
+# Official Apple Root CA SHA-256 DER fingerprints (https://www.apple.com/certificateauthority/)
+TRUSTED_APPLE_ROOT_CA_SHA256 = {
+    "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179",  # Apple Root CA - G3
+    "c2b9b042dd57830e7d117dac55ac8ae19407d38e41d88f3215bc3a890444a050",  # Apple Root CA - G2
+    "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024",  # Apple Inc. Root Certificate
+    "0d83b611b648a1a75eb8558400795375cad92e264ed8e9d7a757c1f5ee2bb22d",  # Apple Computer Root Certificate
+}
+APPLE_LEAF_CERT_OID = "1.2.840.113635.100.6.11.1"
+APPLE_WWDR_INTERMEDIATE_OID = "1.2.840.113635.100.6.2.1"
 
 # ── Tier priority for downgrade protection ────────────────────────────────────
 TIER_PRIORITY = {"free": 0, "premium": 1, "vip": 2}
@@ -199,9 +216,9 @@ async def register_device_token(token_data: DeviceTokenRegister, current_user: U
 
 
 @router.post("/debug/cleanup-device-tokens")
-async def cleanup_device_tokens():
+async def cleanup_device_tokens(super_admin: User = Depends(require_super_admin)):
     """One-time cleanup: remove duplicate device tokens and ensure unique index.
-    Operates on the PRODUCTION database connected via MONGO_URL.
+    Restricted to Super Admins only.
     Safe to run multiple times — idempotent.
     
     Phase 1: Remove same-token+same-user duplicates (keep newest).
@@ -364,10 +381,9 @@ async def send_test_notification(current_user: User = Depends(require_auth)):
 
 
 @router.post("/debug/android-push-trace")
-async def android_push_trace():
+async def android_push_trace(super_admin: User = Depends(require_super_admin)):
     """
-    TEMPORARY DIAGNOSTIC: Send to exactly ONE Android token and log everything.
-    No auth required — this is a one-time trace endpoint.
+    SUPER_ADMIN DIAGNOSTIC: Send to one active Android token and return Expo receipt trace.
     """
     import httpx as httpx_lib
 
@@ -487,81 +503,56 @@ async def change_user_password(current_password: str, new_password: str, current
 @router.get("/subscription/status")
 async def get_subscription_status(current_user: User = Depends(require_auth)):
     """
-    Backend-authoritative subscription status.
-    Entitlement is derived STRICTLY from verified IAP transactions in MongoDB.
-    No Supabase profile.role fallback for subscription tier.
-    Admin flag is separate from subscription entitlement.
+    Backend-authoritative subscription status using unified resolve_subscription_details().
+    Supports Apple IAP, Google Play, Flutterwave, Referral Rewards, Overrides, and Admin elevation.
     """
     user_id = current_user.user_id
     now = datetime.now(timezone.utc)
 
-    # ── 1. Resolve admin status from Supabase profile (admin panel access only) ──
     profile = await fetch_profile(user_id)
-    profile_role = (profile or {}).get("role", "user")
-    is_admin = profile_role in ("admin", "super_admin")
+    profile_role = str((profile or {}).get("role") or "free").lower()
+    is_admin = profile_role in ("admin", "super_admin") or bool(
+        (profile or {}).get("admin_role") and (profile or {}).get("admin_enabled", True)
+    )
 
-    # ── 2. Check for active subscription override first ──
     override = await get_active_override(user_id)
     override_info = None
-
-    # ── 3. Resolve subscription tier from verified IAP transactions (MongoDB) ──
-    # Only transactions created by /iap/apple/verify or /iap/google/verify are stored here.
-    tier_priority = {"vip": 2, "premium": 1}
-    best_tier = "free"
-    best_priority = 0
-    subscription_expiry = None
-    subscription_active = False
-    subscription_platform = None
-    subscription_product_id = None
-    auto_renew = False
-
-    active_txns = await db.iap_transactions.find({
-        "user_id": user_id,
-        "status": "active",
-    }).sort("expiry_date", -1).to_list(20)
-
-    for txn in active_txns:
-        expiry = txn.get("expiry_date")
-        if expiry:
-            if isinstance(expiry, str):
-                try:
-                    expiry_dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
-                except ValueError:
-                    continue
-            else:
-                expiry_dt = expiry
-            if expiry_dt.tzinfo is None:
-                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
-            if expiry_dt <= now:
-                continue  # expired
-        # else: NULL expiry = lifetime (never expires)
-
-        txn_plan = txn.get("plan", "").lower()
-        priority = tier_priority.get(txn_plan, 0)
-        if priority > best_priority:
-            best_priority = priority
-            best_tier = txn_plan
-            subscription_expiry = txn.get("expiry_date")
-            subscription_active = True
-            subscription_platform = txn.get("platform")
-            subscription_product_id = txn.get("product_id")
-            auto_renew = txn.get("auto_renew", False)
-
-    # ── 4. Apply override if active (takes priority over store subscriptions) ──
-    effective = best_tier
     if override:
-        effective = override.get("tier", best_tier)
         override_info = {
             "tier": override.get("tier"),
             "expires_at": override.get("expires_at"),
             "is_active": True,
         }
 
-    # ── 5. Resolve capability tier (admin privilege override) ──
-    # billing_tier  = pure store/IAP tier (no override, no admin elevation)
-    # capability_tier = effective tier for feature gating (admin/super_admin → vip)
-    # capability_source = "admin_privilege" | "subscription"
-    billing_tier = best_tier
+    # Resolve pure non-admin entitlement (includes override if active)
+    non_admin_profile = dict(profile or {"id": user_id})
+    non_admin_profile["role"] = "free"
+    non_admin_profile["admin_role"] = None
+    non_admin_details = await resolve_subscription_details(
+        non_admin_profile,
+        user_role="free",
+        is_admin=False,
+    )
+
+    # Resolve pure store/payment tier (excluding temporary admin override)
+    if override:
+        # Compute underlying billing tier from verified transactions / profile without override
+        best_billing_tier = "free"
+        candidate_txns = await db.iap_transactions.find(
+            {"user_id": user_id, "status": {"$in": ["active", "billing_issue"]}}
+        ).sort("expiry_date", -1).to_list(20)
+        for txn in candidate_txns:
+            exp_dt = parse_utc_datetime(txn.get("expiry_date"))
+            if exp_dt is not None and exp_dt <= now:
+                continue
+            raw_plan = str(txn.get("plan") or txn.get("tier") or get_plan_from_product_id(str(txn.get("product_id") or "")) or "free").lower()
+            if TIER_PRIORITY.get(raw_plan, 0) > TIER_PRIORITY.get(best_billing_tier, 0):
+                best_billing_tier = raw_plan
+        billing_tier = best_billing_tier
+    else:
+        billing_tier = non_admin_details["tier"]
+
+    effective = non_admin_details["tier"]
     if is_admin:
         capability_tier = "vip"
         capability_source = "admin_privilege"
@@ -569,21 +560,27 @@ async def get_subscription_status(current_user: User = Depends(require_auth)):
         capability_tier = effective
         capability_source = "subscription"
 
-    # ── 6. Build feature flags from capability tier ──
-    ai_weekly_used = (profile or {}).get("ai_weekly_used", 0) or (profile or {}).get("ai_usage_count", 0)
+    # Compute AI weekly usage (accounting for expired reset timestamp)
+    ai_weekly_used = int((profile or {}).get("ai_weekly_used") or 0)
+    reset_dt = parse_utc_datetime((profile or {}).get("ai_weekly_reset"))
+    if reset_dt is not None and reset_dt < now:
+        ai_weekly_used = 0
     ai_limit = get_ai_weekly_limit(capability_tier)
 
     return {
         "user_id": user_id,
-        "entitlement": effective,              # Legacy: IAP + override tier
-        "billing_tier": billing_tier,          # Pure store tier (no override/admin)
-        "capability_tier": capability_tier,    # Effective tier for feature gating
-        "capability_source": capability_source,  # "admin_privilege" | "subscription"
-        "subscription_active": subscription_active or (override is not None) or is_admin,
-        "subscription_expiry": override.get("expires_at") if override else subscription_expiry,
-        "subscription_platform": "override" if override else subscription_platform,
-        "subscription_product_id": subscription_product_id,
-        "auto_renew": auto_renew,
+        "subscription": capability_tier,
+        "entitlement": effective,
+        "billing_tier": billing_tier,
+        "capability_tier": capability_tier,
+        "capability_source": capability_source,
+        "subscription_active": bool(non_admin_details["is_active"] or override is not None or is_admin),
+        "subscription_expiry": non_admin_details["expiry_date"],
+        "subscription_platform": non_admin_details["platform"],
+        "subscription_product_id": non_admin_details["product_id"],
+        "auto_renew": bool(non_admin_details["auto_renew"]),
+        "renewal_provider": non_admin_details.get("renewal_provider"),
+        "next_billing_date": non_admin_details.get("next_billing_date"),
         "is_admin": is_admin,
         "override": override_info,
         "features": {
@@ -764,128 +761,150 @@ def parse_apple_receipt(validation_result: dict) -> dict:
 @router.post("/iap/apple/verify", response_model=IAPValidationResponse)
 async def verify_apple_purchase(
     request: AppleReceiptValidationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """
-    Verify Apple App Store purchase receipt and update user subscription
-    
-    Flow:
-    1. Client sends receipt data after purchase
-    2. Server validates with Apple
-    3. Server updates user subscription
-    4. Returns success/failure
+    Verify Apple App Store purchase receipt and update user subscription.
+    Enforces bundle ID validation, cross-account hijacking protection, and unified entitlement storage.
     """
     user_id = current_user.user_id
-    
+
     try:
-        # Validate receipt with Apple
         validation_result = await validate_apple_receipt(
-            request.receipt_data, 
+            request.receipt_data,
             request.exclude_old_transactions
         )
-        
-        # Parse the validation result
         parsed = parse_apple_receipt(validation_result)
-        
+
         if not parsed.get('valid'):
             logger.warning(f"[Apple IAP] Invalid receipt for user {user_id}: {parsed.get('error')}")
             return IAPValidationResponse(
                 success=False,
                 message=f"Invalid receipt: {parsed.get('error')}"
             )
-        
+
+        receipt_bundle_id = parsed.get('bundle_id')
+        if receipt_bundle_id and APPLE_BUNDLE_ID and receipt_bundle_id != APPLE_BUNDLE_ID:
+            logger.error(f"[Apple IAP] Bundle ID mismatch for user {user_id}: got {receipt_bundle_id}, expected {APPLE_BUNDLE_ID}")
+            return IAPValidationResponse(
+                success=False,
+                message="Invalid receipt bundle identifier"
+            )
+
         if not parsed.get('active'):
             logger.info(f"[Apple IAP] No active subscription for user {user_id}")
             return IAPValidationResponse(
                 success=False,
                 message="No active subscription found"
             )
-        
-        # Get plan from product ID
+
         product_id = parsed.get('product_id')
-        plan = get_plan_from_product_id(product_id)
-        
+        plan = get_plan_from_product_id(product_id or '')
         if not plan:
             logger.error(f"[Apple IAP] Unknown product ID: {product_id}")
             return IAPValidationResponse(
                 success=False,
                 message=f"Unknown product: {product_id}"
             )
-        
-        # Update user subscription (with downgrade protection)
-        expiry_date = parsed.get('expiry_date')
-        
-        # Parse expiry for comparison
-        try:
-            expiry_dt = datetime.fromisoformat(str(expiry_date).replace("Z", "+00:00")) if expiry_date else datetime.now(timezone.utc)
-        except (ValueError, TypeError):
-            expiry_dt = datetime.now(timezone.utc)
-        
+
+        orig_txn_id = parsed.get('original_transaction_id') or parsed.get('transaction_id')
+        txn_id = parsed.get('transaction_id') or orig_txn_id
+
+        # Cross-user receipt hijacking check
+        if orig_txn_id:
+            existing_owner = await db.iap_transactions.find_one({
+                "$or": [
+                    {"original_transaction_id": orig_txn_id},
+                    {"transaction_id": txn_id},
+                ],
+                "platform": {"$in": ["apple", "ios"]},
+            })
+            if existing_owner and existing_owner.get("user_id") and existing_owner["user_id"] != user_id:
+                logger.warning(
+                    "[Apple IAP] Cross-account receipt hijack blocked: orig_txn=%s owner=%s attacker=%s",
+                    orig_txn_id,
+                    existing_owner["user_id"],
+                    user_id,
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail="This Apple subscription is already linked to another Swift FX account."
+                )
+
+        now = datetime.now(timezone.utc)
+        expiry_date_str = parsed.get('expiry_date')
+        expiry_dt = parse_utc_datetime(expiry_date_str) or now
+        purchase_dt = parse_utc_datetime(parsed.get('purchase_date')) or now
+
+        # Always store verified transaction in MongoDB first (unified 'apple' platform + datetime expiry)
+        transaction = {
+            "transaction_id": txn_id,
+            "original_transaction_id": orig_txn_id,
+            "user_id": user_id,
+            "platform": "apple",
+            "product_id": product_id,
+            "plan": plan,
+            "purchase_date": purchase_dt,
+            "expiry_date": expiry_dt,
+            "is_trial": bool(parsed.get('is_trial', False)),
+            "auto_renew": bool(parsed.get('auto_renew', True)),
+            "status": "active",
+            "raw_receipt": request.receipt_data[:500],
+            "updated_at": now,
+        }
+
+        await db.iap_transactions.update_one(
+            {
+                "original_transaction_id": orig_txn_id,
+                "platform": {"$in": ["apple", "ios"]},
+            },
+            {
+                "$set": transaction,
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )
+
         if await should_update_subscription(user_id, plan, expiry_dt):
-            await update_profile(user_id, {
-                    "subscription": plan,
-                    "subscription_status": "active",
-                    "subscription_expiry": expiry_date,
-                    "subscription_platform": "ios",
-                    "subscription_product_id": product_id,
-                    "subscription_auto_renew": parsed.get('auto_renew', True),
-                    "subscription_is_trial": parsed.get('is_trial', False),
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                })
-            # Trigger subscription change event only when profile was actually updated
+            await sync_profile_subscription(
+                user_id,
+                tier=plan,
+                status="active",
+                expiry=expiry_dt,
+                platform="apple",
+                product_id=product_id,
+                auto_renew=bool(parsed.get('auto_renew', True)),
+                is_trial=bool(parsed.get('is_trial', False)),
+                activated_at=now,
+            )
             await on_user_subscription_change(user_id, plan)
         else:
             logger.info(f"[Apple IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
-        
-        # Store transaction record
-        transaction = {
-            "transaction_id": parsed.get('transaction_id'),
-            "original_transaction_id": parsed.get('original_transaction_id'),
-            "user_id": user_id,
-            "platform": "ios",
-            "product_id": product_id,
-            "plan": plan,
-            "purchase_date": parsed.get('purchase_date'),
-            "expiry_date": expiry_date,
-            "is_trial": parsed.get('is_trial', False),
-            "auto_renew": parsed.get('auto_renew', True),
-            "status": "active",
-            "raw_receipt": request.receipt_data[:500],  # Store partial for debugging
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        await db.iap_transactions.update_one(
-            {"transaction_id": parsed.get('transaction_id')},
-            {"$set": transaction},
-            upsert=True
-        )
-        
+
         logger.info(f"[Apple IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
-        
+
         return IAPValidationResponse(
             success=True,
             plan=plan,
-            expiry_date=expiry_date,
-            is_trial=parsed.get('is_trial', False),
-            auto_renew=parsed.get('auto_renew', True),
+            expiry_date=expiry_dt.isoformat(),
+            is_trial=bool(parsed.get('is_trial', False)),
+            auto_renew=bool(parsed.get('auto_renew', True)),
             message=f"Successfully subscribed to {plan.upper()}"
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[Apple IAP] Error processing purchase for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process purchase: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process Apple purchase")
 
 
 @router.post("/iap/apple/restore")
 async def restore_apple_purchases(
     request: AppleReceiptValidationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
-    """
-    Restore Apple purchases - used when user reinstalls app or changes device
-    Same as verify but specifically for restore flow
-    """
+    """Restore Apple purchases - used when user reinstalls app or changes device."""
     return await verify_apple_purchase(request, current_user)
 
 
@@ -986,36 +1005,34 @@ async def acknowledge_google_purchase(purchase_token: str, product_id: str, pack
 @router.post("/iap/google/verify", response_model=IAPValidationResponse)
 async def verify_google_purchase(
     request: GooglePurchaseValidationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """
-    Verify Google Play purchase token and update user subscription
-    
-    Flow:
-    1. Client sends purchase token after purchase
-    2. Server validates with Google Play Developer API
-    3. Server acknowledges the purchase
-    4. Server updates user subscription
-    5. Returns success/failure
+    Verify Google Play purchase token and update user subscription.
+    Enforces package validation, cross-account hijacking protection, and RTDN token indexing.
     """
     user_id = current_user.user_id
-    
+
+    if request.package_name and GOOGLE_PACKAGE_NAME and request.package_name != GOOGLE_PACKAGE_NAME:
+        return IAPValidationResponse(
+            success=False,
+            message="Invalid Android package identifier"
+        )
+
     try:
-        # Validate with Google
         validation_result = await validate_google_purchase(
             request.purchase_token,
             request.product_id,
-            request.package_name
+            GOOGLE_PACKAGE_NAME
         )
-        
+
         if not validation_result.get('valid'):
             logger.warning(f"[Google IAP] Invalid purchase for user {user_id}: {validation_result.get('error')}")
             return IAPValidationResponse(
                 success=False,
                 message=f"Invalid purchase: {validation_result.get('error')}"
             )
-        
-        # Parse expiry time
+
         expiry_ms = validation_result.get('expiryTimeMillis') or validation_result.get('expiry_time_millis')
         if expiry_ms:
             expiry_date = datetime.fromtimestamp(int(expiry_ms) / 1000, tz=timezone.utc)
@@ -1030,91 +1047,121 @@ async def verify_google_purchase(
                 success=False,
                 message="Invalid subscription: missing expiry data"
             )
-        
-        # Get plan from product ID
+
         plan = get_plan_from_product_id(request.product_id)
-        
         if not plan:
             logger.error(f"[Google IAP] Unknown product ID: {request.product_id}")
             return IAPValidationResponse(
                 success=False,
                 message=f"Unknown product: {request.product_id}"
             )
-        
-        # Acknowledge the purchase (required by Google)
+
+        token_hash = hashlib.sha256(request.purchase_token.encode("utf-8")).hexdigest()
+        raw_order_id = validation_result.get('orderId') or f"google_{token_hash[:16]}"
+        # Strip Google renewal suffix '..0', '..1' to obtain base subscription order ID
+        base_order_id = raw_order_id.split("..")[0] if ".." in raw_order_id else raw_order_id
+
+        # Cross-account purchase-token hijacking check
+        existing_owner = await db.iap_transactions.find_one({
+            "platform": "android",
+            "$or": [
+                {"purchase_token_hash": token_hash},
+                {"purchase_token": request.purchase_token},
+                {"original_transaction_id": base_order_id},
+                {"transaction_id": raw_order_id},
+            ],
+        })
+        if existing_owner and existing_owner.get("user_id") and existing_owner["user_id"] != user_id:
+            logger.warning(
+                "[Google IAP] Cross-account token hijack blocked: order=%s owner=%s attacker=%s",
+                base_order_id,
+                existing_owner["user_id"],
+                user_id,
+            )
+            raise HTTPException(
+                status_code=409,
+                detail="This Google Play subscription is already linked to another Swift FX account."
+            )
+
         ack_state = validation_result.get('acknowledgementState') or validation_result.get('acknowledgement_state', 0)
         if ack_state != 1:
             await acknowledge_google_purchase(
                 request.purchase_token,
                 request.product_id,
-                request.package_name
+                GOOGLE_PACKAGE_NAME
             )
-        
-        # Update user subscription (with downgrade protection)
-        auto_renewing = validation_result.get('autoRenewing', validation_result.get('auto_renewing', True))
-        
-        if await should_update_subscription(user_id, plan, expiry_date):
-            await update_profile(user_id, {
-                    "subscription": plan,
-                    "subscription_status": "active",
-                    "subscription_expiry": expiry_date.isoformat(),
-                    "subscription_platform": "android",
-                    "subscription_product_id": request.product_id,
-                    "subscription_auto_renew": auto_renewing,
-                    "subscription_is_trial": False,
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                })
-            # Trigger subscription change event only when profile was actually updated
-            await on_user_subscription_change(user_id, plan)
-        else:
-            logger.info(f"[Google IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
-        
-        # Store transaction record
-        order_id = validation_result.get('orderId', f"google_{uuid.uuid4().hex[:12]}")
+
+        now = datetime.now(timezone.utc)
+        auto_renewing = bool(validation_result.get('autoRenewing', validation_result.get('auto_renewing', True)))
+        payment_state = validation_result.get('paymentState')
+        is_trial = payment_state == 2
+
         transaction = {
-            "transaction_id": order_id,
+            "transaction_id": raw_order_id,
+            "original_transaction_id": base_order_id,
             "user_id": user_id,
             "platform": "android",
             "product_id": request.product_id,
             "plan": plan,
-            "purchase_token": request.purchase_token[:100],  # Store partial
-            "purchase_date": datetime.now(timezone.utc).isoformat(),
-            "expiry_date": expiry_date.isoformat(),
-            "is_trial": False,
+            "purchase_token": request.purchase_token,
+            "purchase_token_hash": token_hash,
+            "purchase_date": now,
+            "expiry_date": expiry_date,
+            "is_trial": is_trial,
             "auto_renew": auto_renewing,
             "status": "active",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": now,
         }
-        
+
         await db.iap_transactions.update_one(
-            {"transaction_id": order_id},
-            {"$set": transaction},
-            upsert=True
+            {"purchase_token_hash": token_hash, "platform": "android"},
+            {
+                "$set": transaction,
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
         )
-        
+
+        if await should_update_subscription(user_id, plan, expiry_date):
+            await sync_profile_subscription(
+                user_id,
+                tier=plan,
+                status="active",
+                expiry=expiry_date,
+                platform="android",
+                product_id=request.product_id,
+                auto_renew=auto_renewing,
+                is_trial=is_trial,
+                activated_at=now,
+            )
+            await on_user_subscription_change(user_id, plan)
+        else:
+            logger.info(f"[Google IAP] Skipping profile update — user {user_id} has active higher-tier subscription")
+
         logger.info(f"[Google IAP] Successfully validated and updated subscription for user {user_id}: {plan}")
-        
+
         return IAPValidationResponse(
             success=True,
             plan=plan,
             expiry_date=expiry_date.isoformat(),
-            is_trial=False,
+            is_trial=is_trial,
             auto_renew=auto_renewing,
             message=f"Successfully subscribed to {plan.upper()}"
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[Google IAP] Error processing purchase for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process purchase: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process Google Play purchase")
 
 
 @router.post("/iap/google/restore")
 async def restore_google_purchases(
     request: GooglePurchaseValidationRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
-    """Restore Google Play purchases"""
+    """Restore Google Play purchases."""
     return await verify_google_purchase(request, current_user)
 
 
@@ -1133,26 +1180,44 @@ def _b64url_decode(b64_str: str) -> bytes:
     return base64.urlsafe_b64decode(b64_str)
 
 
-def verify_and_decode_apple_jws(signed_jws: str) -> Optional[dict]:
+def _cert_not_before_utc(cert: x509.Certificate) -> datetime:
+    dt = getattr(cert, "not_valid_before_utc", None)
+    if dt is not None:
+        return dt
+    return cert.not_valid_before.replace(tzinfo=timezone.utc)
+
+
+def _cert_not_after_utc(cert: x509.Certificate) -> datetime:
+    dt = getattr(cert, "not_valid_after_utc", None)
+    if dt is not None:
+        return dt
+    return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+
+def _verify_cert_issued_by(child: x509.Certificate, issuer: x509.Certificate) -> None:
+    if hasattr(child, "verify_directly_issued_by"):
+        child.verify_directly_issued_by(issuer)
+        return
+    if child.issuer != issuer.subject:
+        raise ValueError("Certificate issuer DN mismatch")
+    pub = issuer.public_key()
+    pub.verify(child.signature, child.tbs_certificate_bytes, ec.ECDSA(child.signature_hash_algorithm))
+
+
+def verify_and_decode_apple_jws(
+    signed_jws: str,
+    expected_bundle_id: Optional[str] = APPLE_BUNDLE_ID,
+) -> Optional[dict]:
     """
-    Verify and decode an Apple JWS token (App Store Server Notification V2).
+    Cryptographically verify and decode an Apple JWS token (App Store Server Notification V2).
 
-    Apple V2 notifications use JWS compact serialization:
-      header.payload.signature  (all base64url encoded)
-
-    The JWS header contains:
-      - alg: "ES256"  (ECDSA with P-256 and SHA-256)
-      - x5c: [ <leaf_cert_b64der>, <intermediate_cert_b64der>, ... ]
-
-    Verification steps:
-      1. Confirm algorithm is ES256.
-      2. Load the x5c certificate chain.
-      3. Verify each cert is signed by the next in the chain.
-      4. Verify the JWS signature over "header.payload" using the leaf cert's public key.
-      5. Confirm the root cert's issuer contains "Apple" (basic chain pinning).
-
-    No HMAC / shared secret is used for V2 — security is fully cryptographic.
-    Returns the decoded payload dict on success, or None on any failure.
+    Security guarantees:
+      1. Requires ES256 and a 3-certificate x5c chain [leaf, intermediate, root].
+      2. Pins the root certificate's SHA-256 DER digest to official Apple Root CAs (G3/G2/Inc/Computer).
+      3. Verifies full X.509 issuer signatures (root -> intermediate -> leaf) and BasicConstraints CA flags.
+      4. Enforces Apple's App Store JWS Leaf OID (1.2.840.113635.100.6.11.1) and WWDR Intermediate OID (1.2.840.113635.100.6.2.1).
+      5. Verifies certificate validity windows and the ES256 JWS signature.
+      6. Enforces bundleId == APPLE_BUNDLE_ID whenever bundleId is present in the signed payload.
     """
     try:
         parts = signed_jws.split('.')
@@ -1160,7 +1225,6 @@ def verify_and_decode_apple_jws(signed_jws: str) -> Optional[dict]:
             logger.error("[Apple JWS] Invalid format — expected 3 dot-separated parts")
             return None
 
-        # --- 1. Parse header ---
         header = json.loads(_b64url_decode(parts[0]))
         alg = header.get('alg', '')
         if alg != 'ES256':
@@ -1168,72 +1232,74 @@ def verify_and_decode_apple_jws(signed_jws: str) -> Optional[dict]:
             return None
 
         x5c_chain = header.get('x5c', [])
-        if not x5c_chain:
-            logger.error("[Apple JWS] Missing x5c certificate chain in JWS header")
+        if len(x5c_chain) != 3:
+            logger.error(f"[Apple JWS] Invalid x5c chain length {len(x5c_chain)}, expected 3 [leaf, intermediate, root]")
             return None
 
-        # --- 2. Load certificate chain ---
-        certs = []
-        for cert_b64 in x5c_chain:
-            cert_der = base64.b64decode(cert_b64)
-            cert = x509.load_der_x509_certificate(cert_der)
-            certs.append(cert)
+        certs = [x509.load_der_x509_certificate(base64.b64decode(c_b64)) for c_b64 in x5c_chain]
+        leaf_cert, intermediate_cert, root_cert = certs[0], certs[1], certs[2]
 
-        # --- 3. Verify certificate chain (each cert signed by the next) ---
-        for i in range(len(certs) - 1):
-            child = certs[i]
-            parent = certs[i + 1]
-            try:
-                parent_pub_key = parent.public_key()
-                sig_hash = child.signature_hash_algorithm
-                parent_pub_key.verify(
-                    child.signature,
-                    child.tbs_certificate_bytes,
-                    ec.ECDSA(sig_hash)
-                )
-            except Exception as chain_err:
-                logger.error(f"[Apple JWS] Chain verification failed at index {i}: {chain_err}")
-                return None
+        # 1. Pin root certificate SHA-256 fingerprint against official Apple Root CAs
+        root_fp = root_cert.fingerprint(hashes.SHA256()).hex().lower()
+        if root_fp not in TRUSTED_APPLE_ROOT_CA_SHA256:
+            logger.error(f"[Apple JWS] Untrusted root certificate fingerprint: {root_fp}")
+            return None
 
-        # --- 4. Basic root certificate pinning (Apple issuer check) ---
-        root_cert = certs[-1]
+        # 2. Verify cryptographic chain (root -> intermediate -> leaf) and CA constraints
+        _verify_cert_issued_by(root_cert, root_cert)
+        _verify_cert_issued_by(intermediate_cert, root_cert)
+        _verify_cert_issued_by(leaf_cert, intermediate_cert)
+
+        inter_bc = intermediate_cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        if not inter_bc.ca:
+            logger.error("[Apple JWS] Intermediate certificate does not have CA=True")
+            return None
+
+        # 3. Verify Apple-specific certificate extension OIDs
         try:
-            root_cn_attrs = root_cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-            root_cn = root_cn_attrs[0].value if root_cn_attrs else ""
-            if "Apple" not in root_cn:
-                logger.warning(f"[Apple JWS] Root cert CN '{root_cn}' does not appear to be Apple's CA")
-                return None
-        except Exception:
-            logger.warning("[Apple JWS] Could not inspect root cert CN")
+            leaf_cert.extensions.get_extension_for_oid(x509.ObjectIdentifier(APPLE_LEAF_CERT_OID))
+            intermediate_cert.extensions.get_extension_for_oid(x509.ObjectIdentifier(APPLE_WWDR_INTERMEDIATE_OID))
+        except x509.ExtensionNotFound as oid_err:
+            logger.error(f"[Apple JWS] Missing required Apple certificate OID: {oid_err}")
+            return None
 
-        # --- 5. Verify JWS signature ---
+        # 4. Verify ES256 JWS signature
         signing_input = f"{parts[0]}.{parts[1]}".encode('ascii')
         raw_signature = _b64url_decode(parts[2])
-
         if len(raw_signature) != 64:
             logger.error(f"[Apple JWS] Unexpected signature length {len(raw_signature)}, expected 64 bytes")
             return None
 
-        # JWS ES256: raw r||s (32 bytes each) → DER for cryptography library
         r = int.from_bytes(raw_signature[:32], 'big')
         s = int.from_bytes(raw_signature[32:], 'big')
         der_signature = encode_dss_signature(r, s)
 
-        leaf_pub_key = certs[0].public_key()
+        leaf_pub_key = leaf_cert.public_key()
         leaf_pub_key.verify(der_signature, signing_input, ec.ECDSA(hashes.SHA256()))
 
-        # Signature valid — decode payload
+        # 5. Decode verified payload and validate certificate validity window + bundleId
         payload = json.loads(_b64url_decode(parts[1]))
-        logger.info("[Apple JWS] Signature verified successfully")
+
+        signed_date_ms = payload.get("signedDate") or (payload.get("data") or {}).get("signedDate")
+        effective_dt = parse_utc_datetime(signed_date_ms) or datetime.now(timezone.utc)
+        for idx, cert in enumerate(certs):
+            if effective_dt < _cert_not_before_utc(cert) or effective_dt > _cert_not_after_utc(cert):
+                logger.error(f"[Apple JWS] Certificate at index {idx} outside validity window at {effective_dt.isoformat()}")
+                return None
+
+        payload_bundle_id = payload.get("bundleId") or (payload.get("data") or {}).get("bundleId")
+        if expected_bundle_id and payload_bundle_id and payload_bundle_id != expected_bundle_id:
+            logger.error(f"[Apple JWS] Bundle ID mismatch: got '{payload_bundle_id}', expected '{expected_bundle_id}'")
+            return None
+
+        logger.info("[Apple JWS] Signature, Apple Root CA pin, OIDs, and bundleId verified successfully")
         return payload
 
     except CryptoInvalidSignature:
         logger.error("[Apple JWS] Signature verification FAILED — notification may be forged")
         return None
     except Exception as e:
-        logger.error(f"[Apple JWS] Unexpected verification error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[Apple JWS] Verification failed: {e}")
         return None
 
 
@@ -1390,46 +1456,75 @@ async def apple_server_notification_v2(request: Request):
         return {"status": "error", "message": str(e)}
 
 
+async def _reconcile_user_profile_after_webhook(user_id: str, fallback_status: str = "expired") -> None:
+    """Recompute effective non-admin subscription after a webhook state change and sync public.profiles safely."""
+    if not user_id:
+        return
+    profile = await fetch_profile(user_id)
+    if not profile:
+        return
+
+    non_admin_copy = dict(profile)
+    non_admin_copy["role"] = "free"
+    non_admin_copy["admin_role"] = None
+    details = await resolve_subscription_details(non_admin_copy, user_role="free", is_admin=False)
+
+    if details["is_active"] and details["tier"] in ("premium", "vip"):
+        await sync_profile_subscription(
+            user_id,
+            tier=details["tier"],
+            status=details["status"],
+            expiry=details["expiry_date"],
+            platform=details["platform"],
+            product_id=details["product_id"],
+            auto_renew=bool(details["auto_renew"]),
+            is_trial=bool(details["is_trial"]),
+            profile=profile,
+        )
+    else:
+        await sync_profile_subscription(
+            user_id,
+            tier="free",
+            status=fallback_status,
+            expiry=None,
+            auto_renew=False,
+            is_trial=False,
+            profile=profile,
+        )
+
+
 async def handle_apple_subscription_active(transaction_info: dict, renewal_info: dict, notification_type: str):
-    """Handle new subscription or successful renewal"""
+    """Handle new subscription or successful renewal."""
     if not transaction_info:
         logger.error("[Apple Webhook] No transaction info for subscription active event")
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId")
     transaction_id = transaction_info.get("transactionId")
-    product_id = transaction_info.get("productId")
-    app_account_token = transaction_info.get("appAccountToken")  # This should be our user_id
+    product_id = transaction_info.get("productId") or ""
+    app_account_token = transaction_info.get("appAccountToken")
     expires_date_ms = transaction_info.get("expiresDate")
-    
-    # Find user by appAccountToken (user_id) or by existing transaction
+
     user_id = app_account_token
-    if not user_id:
-        # Try to find by original_transaction_id
+    if not user_id and original_transaction_id:
         existing_txn = await db.iap_transactions.find_one({
             "original_transaction_id": original_transaction_id,
-            "platform": "apple"
+            "platform": {"$in": ["apple", "ios"]},
         })
         if existing_txn:
             user_id = existing_txn.get("user_id")
-    
+
     if not user_id:
         logger.error(f"[Apple Webhook] Cannot identify user for transaction {transaction_id}")
         return
-    
-    # Calculate expiry date
-    expiry_date = None
-    if expires_date_ms:
-        expiry_date = datetime.fromtimestamp(expires_date_ms / 1000, tz=timezone.utc)
-    
-    # Determine tier from product_id
-    tier = "premium"
-    if "vip" in product_id.lower():
-        tier = "vip"
-    
-    # Update or create IAP transaction
+
+    expiry_date = parse_utc_datetime(expires_date_ms)
+    tier = get_plan_from_product_id(product_id) or ("vip" if "vip" in product_id.lower() else "premium")
+    auto_renew = renewal_info.get("autoRenewStatus", 1) == 1 if renewal_info else True
+    now = datetime.now(timezone.utc)
+
     await db.iap_transactions.update_one(
-        {"original_transaction_id": original_transaction_id, "platform": "apple"},
+        {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
         {
             "$set": {
                 "user_id": user_id,
@@ -1440,195 +1535,340 @@ async def handle_apple_subscription_active(transaction_info: dict, renewal_info:
                 "status": "active",
                 "plan": tier,
                 "expiry_date": expiry_date,
-                "auto_renew": renewal_info.get("autoRenewStatus", 1) == 1 if renewal_info else True,
-                "updated_at": datetime.now(timezone.utc),
-                "webhook_event": notification_type
+                "auto_renew": auto_renew,
+                "updated_at": now,
+                "webhook_event": notification_type,
             },
             "$setOnInsert": {
-                "purchase_date": datetime.now(timezone.utc),
-                "created_at": datetime.now(timezone.utc)
-            }
+                "purchase_date": now,
+                "created_at": now,
+            },
         },
-        upsert=True
+        upsert=True,
     )
-    
-    # Sync role to Supabase profile (MongoDB iap_transactions is the entitlement authority)
+
     try:
-        ok = await update_profile(user_id, {"role": tier})
-        if ok:
-            logger.info(f"[Apple Webhook] Updated user {user_id} to {tier} (expires: {expiry_date})")
-        else:
-            logger.error(f"[Apple Webhook] update_profile returned False for user {user_id}")
+        await _reconcile_user_profile_after_webhook(user_id, fallback_status="active")
+        await on_user_subscription_change(user_id, tier)
+        logger.info(f"[Apple Webhook] Reconciled user {user_id} to {tier} (expires: {expiry_date})")
     except Exception as e:
-        logger.error(f"[Apple Webhook] Failed to update Supabase profile: {e}")
+        logger.error(f"[Apple Webhook] Failed to reconcile Supabase profile: {e}")
 
 
 async def handle_apple_renewal_status_change(transaction_info: dict, renewal_info: dict, subtype: str):
-    """Handle auto-renew status change"""
+    """Handle auto-renew status change."""
     if not renewal_info:
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId") if transaction_info else None
     auto_renew_status = renewal_info.get("autoRenewStatus", 0) == 1
-    
+
     if original_transaction_id:
+        existing_txn = await db.iap_transactions.find_one({
+            "original_transaction_id": original_transaction_id,
+            "platform": {"$in": ["apple", "ios"]},
+        })
         await db.iap_transactions.update_one(
-            {"original_transaction_id": original_transaction_id, "platform": "apple"},
+            {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
             {
                 "$set": {
                     "auto_renew": auto_renew_status,
                     "updated_at": datetime.now(timezone.utc),
-                    "webhook_event": f"DID_CHANGE_RENEWAL_STATUS_{subtype}"
+                    "webhook_event": f"DID_CHANGE_RENEWAL_STATUS_{subtype}",
                 }
-            }
+            },
         )
-        
+        if existing_txn and existing_txn.get("user_id"):
+            await update_profile(existing_txn["user_id"], {"subscription_auto_renew": auto_renew_status})
         logger.info(f"[Apple Webhook] Auto-renew status changed to {auto_renew_status} for {original_transaction_id}")
 
 
 async def handle_apple_subscription_expired(transaction_info: dict, renewal_info: dict, notification_type: str):
-    """Handle subscription expiration"""
+    """Handle subscription expiration."""
     if not transaction_info:
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId")
     app_account_token = transaction_info.get("appAccountToken")
-    
-    # Find user
+
     user_id = app_account_token
-    if not user_id:
+    if not user_id and original_transaction_id:
         existing_txn = await db.iap_transactions.find_one({
             "original_transaction_id": original_transaction_id,
-            "platform": "apple"
+            "platform": {"$in": ["apple", "ios"]},
         })
         if existing_txn:
             user_id = existing_txn.get("user_id")
-    
-    # Update transaction status
+
     await db.iap_transactions.update_one(
-        {"original_transaction_id": original_transaction_id, "platform": "apple"},
+        {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
         {
             "$set": {
                 "status": "expired",
                 "auto_renew": False,
                 "updated_at": datetime.now(timezone.utc),
-                "webhook_event": notification_type
+                "webhook_event": notification_type,
             }
-        }
+        },
     )
-    
-    # Downgrade user to free tier
+
     if user_id:
         try:
-            # Check if user has any other active subscriptions
-            active_sub = await db.iap_transactions.find_one({
-                "user_id": user_id,
-                "status": "active",
-                "expiry_date": {"$gt": datetime.now(timezone.utc)}
-            })
-            
-            if not active_sub:
-                await update_profile(user_id, {"role": "free"})
-                logger.info(f"[Apple Webhook] Downgraded user {user_id} to free tier")
+            await _reconcile_user_profile_after_webhook(user_id, fallback_status="expired")
+            logger.info(f"[Apple Webhook] Processed expiration for user {user_id}")
         except Exception as e:
-            logger.error(f"[Apple Webhook] Failed to downgrade user: {e}")
+            logger.error(f"[Apple Webhook] Failed to reconcile expired user {user_id}: {e}")
 
 
 async def handle_apple_billing_issue(transaction_info: dict, renewal_info: dict, subtype: str):
-    """Handle billing failure (grace period)"""
+    """Handle billing failure (grace period vs billing retry)."""
     if not transaction_info:
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId")
-    
-    # Update transaction to billing_issue status
     await db.iap_transactions.update_one(
-        {"original_transaction_id": original_transaction_id, "platform": "apple"},
+        {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
         {
             "$set": {
                 "status": "billing_issue",
                 "updated_at": datetime.now(timezone.utc),
-                "webhook_event": f"DID_FAIL_TO_RENEW_{subtype}"
+                "webhook_event": f"DID_FAIL_TO_RENEW_{subtype}",
             }
-        }
+        },
     )
-    
     logger.info(f"[Apple Webhook] Billing issue for {original_transaction_id}, subtype: {subtype}")
 
 
 async def handle_apple_refund(transaction_info: dict):
-    """Handle refund - revoke access"""
+    """Handle refund - revoke access safely without demoting admin roles."""
     if not transaction_info:
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId")
     app_account_token = transaction_info.get("appAccountToken")
-    
-    # Find user
+
     user_id = app_account_token
-    if not user_id:
+    if not user_id and original_transaction_id:
         existing_txn = await db.iap_transactions.find_one({
             "original_transaction_id": original_transaction_id,
-            "platform": "apple"
+            "platform": {"$in": ["apple", "ios"]},
         })
         if existing_txn:
             user_id = existing_txn.get("user_id")
-    
-    # Update transaction status
+
     await db.iap_transactions.update_one(
-        {"original_transaction_id": original_transaction_id, "platform": "apple"},
+        {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
         {
             "$set": {
                 "status": "refunded",
+                "auto_renew": False,
                 "updated_at": datetime.now(timezone.utc),
-                "webhook_event": "REFUND"
+                "webhook_event": "REFUND",
             }
-        }
+        },
     )
-    
-    # Downgrade user
+
     if user_id:
         try:
-            await update_profile(user_id, {"role": "free"})
-            logger.info(f"[Apple Webhook] Refund processed, downgraded user {user_id}")
+            await _reconcile_user_profile_after_webhook(user_id, fallback_status="refunded")
+            logger.info(f"[Apple Webhook] Refund processed and profile reconciled for user {user_id}")
         except Exception as e:
-            logger.error(f"[Apple Webhook] Failed to process refund for user: {e}")
+            logger.error(f"[Apple Webhook] Failed to reconcile refund for user {user_id}: {e}")
 
 
 async def handle_apple_revoke(transaction_info: dict):
-    """Handle family sharing revoke"""
-    # Similar to refund handling
+    """Handle family sharing revoke."""
     await handle_apple_refund(transaction_info)
     logger.info("[Apple Webhook] Family sharing access revoked")
 
 
 async def handle_apple_plan_change(transaction_info: dict, renewal_info: dict):
-    """Handle subscription plan change (upgrade/downgrade)"""
+    """Handle subscription plan change (upgrade/downgrade)."""
     if not renewal_info:
         return
-    
+
     original_transaction_id = transaction_info.get("originalTransactionId") if transaction_info else None
     new_product_id = renewal_info.get("autoRenewProductId")
-    
+
     if original_transaction_id and new_product_id:
-        # Determine new tier
-        new_tier = "premium"
-        if "vip" in new_product_id.lower():
-            new_tier = "vip"
-        
+        new_tier = get_plan_from_product_id(new_product_id) or ("vip" if "vip" in new_product_id.lower() else "premium")
         await db.iap_transactions.update_one(
-            {"original_transaction_id": original_transaction_id, "platform": "apple"},
+            {"original_transaction_id": original_transaction_id, "platform": {"$in": ["apple", "ios"]}},
             {
                 "$set": {
                     "pending_plan_change": new_product_id,
                     "pending_tier": new_tier,
                     "updated_at": datetime.now(timezone.utc),
-                    "webhook_event": "DID_CHANGE_RENEWAL_PREF"
+                    "webhook_event": "DID_CHANGE_RENEWAL_PREF",
                 }
-            }
+            },
         )
-        
         logger.info(f"[Apple Webhook] Plan change pending to {new_product_id} for {original_transaction_id}")
+
+
+# ==================== GOOGLE PLAY RTDN WEBHOOK ====================
+# Google Play Real-Time Developer Notification types:
+#  1 = SUBSCRIPTION_RECOVERED
+#  2 = SUBSCRIPTION_RENEWED
+#  3 = SUBSCRIPTION_CANCELED
+#  4 = SUBSCRIPTION_PURCHASED
+#  5 = SUBSCRIPTION_ON_HOLD
+#  6 = SUBSCRIPTION_IN_GRACE_PERIOD
+#  7 = SUBSCRIPTION_RESTARTED
+#  8 = SUBSCRIPTION_PRICE_CHANGE_CONFIRMED
+#  9 = SUBSCRIPTION_DEFERRED
+# 10 = SUBSCRIPTION_PAUSED
+# 11 = SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED
+# 12 = SUBSCRIPTION_REVOKED
+# 13 = SUBSCRIPTION_EXPIRED
+
+@router.post("/webhooks/google")
+async def google_play_rtdn_webhook(request: Request):
+    """
+    Google Play Real-Time Developer Notifications (RTDN) via Cloud Pub/Sub push.
+    Verifies GOOGLE_WEBHOOK_TOKEN (required when set), decodes Pub/Sub message.data,
+    re-validates live subscription state with Google Play Developer API, and updates
+    MongoDB iap_transactions + Supabase profiles atomically.
+    """
+    if GOOGLE_WEBHOOK_TOKEN:
+        query_token = request.query_params.get("token", "")
+        auth_header = request.headers.get("Authorization", "")
+        bearer_token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else ""
+        provided = query_token or bearer_token
+        if not provided or not hmac.compare_digest(provided, GOOGLE_WEBHOOK_TOKEN):
+            logger.warning("[Google Webhook] Rejected RTDN request due to invalid verification token")
+            return JSONResponse(status_code=401, content={"error": "Unauthorized webhook token"})
+
+    try:
+        raw_body = await request.body()
+        envelope = json.loads(raw_body)
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid Pub/Sub JSON payload"})
+
+    message = envelope.get("message") or {}
+    data_b64 = message.get("data")
+    if not data_b64:
+        return JSONResponse(status_code=400, content={"error": "Missing Pub/Sub message.data"})
+
+    try:
+        decoded_event = json.loads(base64.b64decode(data_b64).decode("utf-8"))
+    except Exception as e:
+        logger.error(f"[Google Webhook] Failed to decode base64 Pub/Sub message.data: {e}")
+        return JSONResponse(status_code=400, content={"error": "Malformed base64 message.data"})
+
+    package_name = decoded_event.get("packageName")
+    if package_name and GOOGLE_PACKAGE_NAME and package_name != GOOGLE_PACKAGE_NAME:
+        logger.warning(f"[Google Webhook] Ignoring RTDN for unexpected package '{package_name}'")
+        return {"status": "ignored_package"}
+
+    if "testNotification" in decoded_event:
+        logger.info("[Google Webhook] Received Google Play RTDN testNotification")
+        return {"status": "ok", "type": "test"}
+
+    sub_notif = decoded_event.get("subscriptionNotification")
+    if not sub_notif:
+        return {"status": "ignored"}
+
+    notification_type = int(sub_notif.get("notificationType", 0))
+    purchase_token = sub_notif.get("purchaseToken") or ""
+    subscription_id = sub_notif.get("subscriptionId") or ""
+
+    if not purchase_token or not subscription_id:
+        return JSONResponse(status_code=400, content={"error": "Missing purchaseToken or subscriptionId"})
+
+    token_hash = hashlib.sha256(purchase_token.encode("utf-8")).hexdigest()
+    existing_txn = await db.iap_transactions.find_one({
+        "platform": "android",
+        "$or": [
+            {"purchase_token_hash": token_hash},
+            {"purchase_token": purchase_token},
+            {"purchase_token": purchase_token[:100]},
+        ],
+    })
+    user_id = existing_txn.get("user_id") if existing_txn else None
+    plan = get_plan_from_product_id(subscription_id) or (existing_txn.get("plan") if existing_txn else "premium")
+    now = datetime.now(timezone.utc)
+
+    # Re-verify live state against Google Play Developer API whenever configured
+    live_info = None
+    if GOOGLE_SERVICE_ACCOUNT_JSON:
+        live_res = await validate_google_purchase(purchase_token, subscription_id, GOOGLE_PACKAGE_NAME)
+        if live_res.get("valid"):
+            live_info = live_res
+            if not user_id:
+                user_id = live_res.get("obfuscatedExternalAccountId")
+
+    expiry_dt = None
+    auto_renew = existing_txn.get("auto_renew", False) if existing_txn else False
+    if live_info:
+        exp_ms = live_info.get("expiryTimeMillis") or live_info.get("expiry_time_millis")
+        expiry_dt = parse_utc_datetime(int(exp_ms)) if exp_ms else None
+        auto_renew = bool(live_info.get("autoRenewing", live_info.get("auto_renewing", False)))
+
+    # Map notificationType -> transaction status
+    if notification_type in (1, 2, 4, 7, 8, 9):
+        new_status = "active" if (expiry_dt is None or expiry_dt > now) else "expired"
+    elif notification_type == 3:
+        # Canceled auto-renew; remains active until expiry_date
+        auto_renew = False
+        existing_exp = expiry_dt or (parse_utc_datetime(existing_txn.get("expiry_date")) if existing_txn else None)
+        new_status = "active" if (existing_exp and existing_exp > now) else "cancelled"
+        expiry_dt = existing_exp
+    elif notification_type == 6:
+        new_status = "billing_issue"
+    elif notification_type in (5, 10, 13):
+        new_status = "expired"
+        auto_renew = False
+    elif notification_type == 12:
+        new_status = "revoked"
+        auto_renew = False
+    else:
+        new_status = existing_txn.get("status", "active") if existing_txn else "active"
+
+    update_fields: Dict[str, Any] = {
+        "platform": "android",
+        "product_id": subscription_id,
+        "plan": plan,
+        "purchase_token": purchase_token,
+        "purchase_token_hash": token_hash,
+        "status": new_status,
+        "auto_renew": auto_renew,
+        "updated_at": now,
+        "webhook_event": f"GOOGLE_RTDN_{notification_type}",
+    }
+    if expiry_dt is not None:
+        update_fields["expiry_date"] = expiry_dt
+    if user_id:
+        update_fields["user_id"] = user_id
+
+    if existing_txn:
+        await db.iap_transactions.update_one({"_id": existing_txn["_id"]}, {"$set": update_fields})
+    elif user_id:
+        await db.iap_transactions.insert_one({
+            "transaction_id": (live_info or {}).get("orderId") or f"google_{token_hash[:16]}",
+            "original_transaction_id": ((live_info or {}).get("orderId") or f"google_{token_hash[:16]}").split("..")[0],
+            "created_at": now,
+            "purchase_date": now,
+            **update_fields,
+        })
+
+    if user_id:
+        fallback = "refunded" if notification_type == 12 else "expired"
+        await _reconcile_user_profile_after_webhook(user_id, fallback_status=fallback)
+        if new_status == "active" and plan in ("premium", "vip"):
+            await on_user_subscription_change(user_id, plan)
+
+    await db.audit_logs.insert_one({
+        "type": "google_webhook",
+        "notification_type": notification_type,
+        "product_id": subscription_id,
+        "user_id": user_id,
+        "status_applied": new_status,
+        "timestamp": now,
+        "message_id": message.get("messageId"),
+    })
+
+    return {"status": "ok"}
 
 @router.get("/iap/products")
 async def get_iap_products():
@@ -1645,16 +1885,17 @@ async def get_iap_products():
 
 @router.get("/iap/transactions")
 async def get_iap_transactions(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     limit: int = 10
 ):
-    """Get user's IAP transaction history"""
+    """Get user's IAP transaction history."""
     user_id = current_user.user_id
-    
+    capped = min(max(1, limit), 50)
+
     transactions = await db.iap_transactions.find(
         {"user_id": user_id}
-    ).sort("created_at", -1).limit(limit).to_list(limit)
-    
+    ).sort("created_at", -1).limit(capped).to_list(capped)
+
     return {
         "transactions": [
             {
@@ -1662,8 +1903,8 @@ async def get_iap_transactions(
                 "platform": t.get("platform"),
                 "product_id": t.get("product_id"),
                 "plan": t.get("plan"),
-                "purchase_date": t.get("purchase_date"),
-                "expiry_date": t.get("expiry_date"),
+                "purchase_date": t.get("purchase_date").isoformat() if isinstance(t.get("purchase_date"), datetime) else t.get("purchase_date"),
+                "expiry_date": t.get("expiry_date").isoformat() if isinstance(t.get("expiry_date"), datetime) else t.get("expiry_date"),
                 "status": t.get("status"),
                 "auto_renew": t.get("auto_renew"),
             }
@@ -1710,35 +1951,54 @@ async def admin_get_iap_transactions(
 
 @router.get("/admin/iap/stats")
 async def admin_get_iap_stats(admin: User = Depends(require_admin)):
-    """Admin: Get IAP statistics"""
-    # Count by platform
-    ios_count = await db.iap_transactions.count_documents({"platform": "ios"})
+    """Admin: Get IAP & payment statistics across all platforms."""
+    ios_count = await db.iap_transactions.count_documents({"platform": {"$in": ["ios", "apple"]}})
     android_count = await db.iap_transactions.count_documents({"platform": "android"})
-    
-    # Count by status
+    flw_count = await db.iap_transactions.count_documents({"platform": "flutterwave"})
+    referral_count = await db.iap_transactions.count_documents({"platform": "referral"})
+
     active_count = await db.iap_transactions.count_documents({"status": "active"})
     expired_count = await db.iap_transactions.count_documents({"status": "expired"})
-    cancelled_count = await db.iap_transactions.count_documents({"status": "cancelled"})
-    
-    # Count active subscriptions by plan
-    premium_users = await count_profiles("premium")
-    vip_users = await count_profiles("vip")
-    
+    cancelled_count = await db.iap_transactions.count_documents({"status": {"$in": ["cancelled", "refunded", "revoked"]}})
+
+    now = datetime.now(timezone.utc)
+    active_txns = await db.iap_transactions.find(
+        {"status": {"$in": ["active", "billing_issue"]}},
+        {"user_id": 1, "plan": 1, "tier": 1, "expiry_date": 1},
+    ).to_list(5000)
+
+    user_best_tier: Dict[str, str] = {}
+    for txn in active_txns:
+        uid = txn.get("user_id")
+        if not uid:
+            continue
+        exp = parse_utc_datetime(txn.get("expiry_date"))
+        if exp is not None and exp <= now:
+            continue
+        plan_tier = str(txn.get("plan") or txn.get("tier") or "free").lower()
+        if TIER_PRIORITY.get(plan_tier, 0) > TIER_PRIORITY.get(user_best_tier.get(uid, "free"), 0):
+            user_best_tier[uid] = plan_tier
+
+    premium_users = sum(1 for t in user_best_tier.values() if t == "premium")
+    vip_users = sum(1 for t in user_best_tier.values() if t == "vip")
+
     return {
         "by_platform": {
             "ios": ios_count,
-            "android": android_count
+            "android": android_count,
+            "flutterwave": flw_count,
+            "referral": referral_count,
         },
         "by_status": {
             "active": active_count,
             "expired": expired_count,
-            "cancelled": cancelled_count
+            "cancelled": cancelled_count,
         },
         "active_subscribers": {
             "premium": premium_users,
             "vip": vip_users,
-            "total": premium_users + vip_users
-        }
+            "total": premium_users + vip_users,
+        },
     }
 
 

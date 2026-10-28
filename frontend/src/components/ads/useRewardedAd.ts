@@ -24,14 +24,14 @@ if (Platform.OS !== 'web') {
 }
 
 export function useRewardedAd() {
-  const { status } = useSubscription();
+  const { status, isLoading } = useSubscription();
   const adRef = useRef<any>(null);
   const resolverRef = useRef<((earned: boolean) => void) | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [adFailed, setAdFailed] = useState(false);
 
   const tier = status?.capability_tier || status?.subscription || 'free';
-  const isFree = tier === 'free';
+  const isFree = !isLoading && !status?.is_admin && tier === 'free';
 
   const initAd = useCallback(() => {
     if (Platform.OS === 'web' || !isFree || !RewardedAd || !AdEventType || !RewardedAdEventType) return;

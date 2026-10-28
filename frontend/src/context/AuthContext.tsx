@@ -13,7 +13,10 @@ interface User {
   name: string;
   email: string;
   role: 'free' | 'premium' | 'vip';
+  raw_role?: string;
+  subscription?: 'free' | 'premium' | 'vip';
   subscription_status?: string;
+  account_status?: string;
   picture?: string;
   is_admin?: boolean;
   admin_role?: string;
@@ -25,6 +28,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  isProfileLoading: boolean;
   isAdmin: boolean;
   isPasswordRecovery: boolean;
   login: (email: string, password: string) => Promise<User>;
@@ -43,24 +47,53 @@ const buildUserFromSession = (sbUser: SupabaseUser): User => ({
   name: sbUser.user_metadata?.name || sbUser.email || '',
   email: sbUser.email || '',
   role: 'free',
+  subscription: 'free',
   is_admin: false,
 });
 
 /** Enrich User with profile data from Supabase profiles table */
 const enrichWithProfile = (
   sbUser: SupabaseUser,
-  profile: { name?: string; role?: string; admin_role?: string; picture?: string } | null,
+  profile: {
+    name?: string;
+    role?: string;
+    admin_role?: string;
+    admin_enabled?: boolean;
+    subscription?: string;
+    subscription_tier?: string;
+    subscription_status?: string;
+    account_status?: string;
+    picture?: string;
+  } | null,
 ): User => {
   const profileRole = profile?.role ?? 'free';
-  const isAdmin = profileRole === 'admin' || profileRole === 'super_admin';
+  const adminEnabled = profile?.admin_enabled !== false;
+  const isAdmin =
+    adminEnabled &&
+    (profileRole === 'admin' || profileRole === 'super_admin' || Boolean(profile?.admin_role));
+
+  const rawTier = (
+    profile?.subscription ||
+    profile?.subscription_tier ||
+    (['free', 'premium', 'vip'].includes(profileRole) ? profileRole : 'free')
+  ).toLowerCase();
+  const normalizedTier: 'free' | 'premium' | 'vip' = isAdmin
+    ? 'vip'
+    : rawTier === 'vip' || rawTier === 'premium'
+      ? rawTier
+      : 'free';
 
   return {
     user_id: sbUser.id,
     name: profile?.name || sbUser.user_metadata?.name || sbUser.email || '',
     email: sbUser.email || '',
-    role: isAdmin ? 'vip' : (profileRole as 'free' | 'premium' | 'vip'),
+    role: normalizedTier,
+    raw_role: profileRole,
+    subscription: normalizedTier,
+    subscription_status: profile?.subscription_status ?? undefined,
+    account_status: profile?.account_status ?? 'active',
     is_admin: isAdmin,
-    admin_role: profile?.admin_role ?? undefined,
+    admin_role: profile?.admin_role ?? (profileRole === 'super_admin' ? 'super_admin' : undefined),
     picture: profile?.picture ?? undefined,
   };
 };
@@ -69,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // When an OAuth deep link is detected, we will bridge stored referral attribution into
@@ -82,12 +116,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsPasswordRecovery(false);
   }, []);
 
-  // Background profile enrichment — NEVER blocks UI
+  // Background profile enrichment — NEVER blocks normal tab UI, while signaling admin layout readiness
   const enrichProfile = useCallback(async (sbUser: SupabaseUser, accessToken: string) => {
+    setIsProfileLoading(true);
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('name, role, admin_role, picture')
+        .select('name, role, admin_role, admin_enabled, subscription, subscription_tier, subscription_status, account_status, picture')
         .eq('id', sbUser.id)
         .single();
 
@@ -96,11 +131,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (profile?.account_status === 'deactivated' || profile?.account_status === 'deleted') {
+        console.warn('[Auth] Account is deactivated/deleted, signing out.');
+        try {
+          await supabase.auth.signOut();
+        } catch {}
+        setUser(null);
+        setToken(null);
+        return;
+      }
+
       const enrichedUser = enrichWithProfile(sbUser, profile);
       setUser(enrichedUser);
       setToken(accessToken);
     } catch (err) {
       console.error('[Auth] enrichProfile failed:', err);
+    } finally {
+      setIsProfileLoading(false);
     }
   }, []);
 
@@ -245,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);
+          setIsProfileLoading(true);
           setIsLoading(false);
 
           // OAuth referral attribution bridge:
@@ -327,6 +375,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setUser(buildUserFromSession(sbUser));
           setToken(session.access_token);
+          setIsProfileLoading(true);
           setIsLoading(false);
 
           // OAuth referral attribution bridge (runtime + cold-start safety):
@@ -508,6 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
     setIsPasswordRecovery(false);
+    setIsProfileLoading(false);
     setIsLoading(false);
     console.log('[Auth] State cleared: user=null, token=null');
   };
@@ -521,7 +571,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery }}
+      value={{ user, token, isLoading, isProfileLoading, isAdmin, isPasswordRecovery, login, signInWithProvider, register, logout, refreshUser, clearPasswordRecovery }}
     >
       {children}
     </AuthContext.Provider>

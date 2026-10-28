@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/api';
 import { TAB_BAR_HEIGHT } from './_layout';
@@ -106,6 +107,7 @@ const formatPostDate = (dateStr: string): string => {
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -150,7 +152,8 @@ export default function CommunityScreen() {
 
   const bottomPadding = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   const isGuest = !user;
-  const canUploadImages = user?.role === 'premium' || user?.role === 'vip';
+  const effectiveTier = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || user?.subscription || user?.role || 'free';
+  const canUploadImages = Boolean(subscriptionStatus?.is_admin || user?.is_admin || effectiveTier === 'premium' || effectiveTier === 'vip');
 
   const fetchPosts = async () => {
     try {

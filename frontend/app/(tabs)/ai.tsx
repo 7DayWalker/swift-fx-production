@@ -475,31 +475,34 @@ export default function AIScreen() {
 
   const fetchUsage = async () => {
     try {
-      if (!user) { setUsage({ current_usage: 0, weekly_limit: 0, remaining: 0, has_access: false }); setIsLoadingUsage(false); return; }
-      if (!subscriptionStatus) return;
+      if (!user) {
+        setUsage({ current_usage: 0, weekly_limit: 0, remaining: 0, has_access: false });
+        setIsLoadingUsage(false);
+        return;
+      }
 
-      const effectiveTier = subscriptionStatus.subscription || 'free';
+      // Authoritative backend quota endpoint (resolves effective subscription + expired weekly resets)
+      const res = await api.get('/ai/usage');
+      const data = res.data;
+      setUsage({
+        current_usage: data.current_usage ?? 0,
+        weekly_limit: data.weekly_limit ?? 3,
+        remaining: data.weekly_limit === 'unlimited' ? 999 : (data.remaining ?? 0),
+        has_access: data.has_access ?? true,
+      });
+    } catch {
+      const effectiveTier = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || 'free';
       const limit = TIER_LIMITS[effectiveTier] ?? TIER_LIMITS.free;
       const isUnlimited = limit === -1;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('ai_weekly_used, ai_weekly_reset')
-        .eq('id', user.user_id)
-        .single();
-
-      let currentUsage = profile?.ai_weekly_used || 0;
-      const resetDate = profile?.ai_weekly_reset ? new Date(profile.ai_weekly_reset) : null;
-      if (!resetDate || (Date.now() - resetDate.getTime()) >= 7 * 86400000) currentUsage = 0;
-
       setUsage({
-        current_usage: currentUsage,
+        current_usage: 0,
         weekly_limit: isUnlimited ? 'unlimited' : limit,
-        remaining: isUnlimited ? 999 : Math.max(0, limit - currentUsage),
+        remaining: isUnlimited ? 999 : limit,
         has_access: true,
       });
-    } catch { setUsage({ current_usage: 0, weekly_limit: 3, remaining: 3, has_access: true }); }
-    finally { setIsLoadingUsage(false); }
+    } finally {
+      setIsLoadingUsage(false);
+    }
   };
 
   const fetchHistory = async () => {

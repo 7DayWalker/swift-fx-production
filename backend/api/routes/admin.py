@@ -20,7 +20,14 @@ import core.engine_state as engine_state
 from models.enums import UserRole, AdminRole
 from services.auth import is_super_admin, is_protected_super_admin, has_permission
 from services.admin import log_admin_action, create_admin_notification
-from services.subscription import get_effective_subscription, get_active_override, check_subscription_active, get_ai_weekly_limit
+from services.subscription import (
+    get_effective_subscription,
+    get_active_override,
+    check_subscription_active,
+    get_ai_weekly_limit,
+    parse_utc_datetime,
+    sync_profile_subscription,
+)
 from services.signal_engine import (
     get_engine_config, save_engine_config, run_price_automation,
     DeterministicPriceTrigger, calculate_signal_pips_with_trace,
@@ -39,7 +46,18 @@ router = APIRouter(prefix="/api")
 @router.get("/admin/users")
 async def get_all_users(admin: User = Depends(require_admin)):
     users = await list_profiles()
-    return users
+    auth_users = await list_auth_users()
+    email_map = {u["id"]: u.get("email", "") for u in auth_users}
+
+    enriched = []
+    for u in users:
+        uid = u.get("id")
+        enriched.append({
+            **u,
+            "user_id": uid,
+            "email": u.get("email") or email_map.get(uid, ""),
+        })
+    return enriched
 
 
 @router.get("/admin/active-overrides")
@@ -71,17 +89,75 @@ async def get_all_active_overrides(admin: User = Depends(require_admin)):
 
 @router.put("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, role: UserRole, admin: User = Depends(require_admin)):
-    result = await update_profile(user_id, {"role": role})
-    if result.modified_count == 0:
+    target = await fetch_profile(user_id)
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
+
+    target_email = await get_auth_user_email(user_id) or ""
+    if is_protected_super_admin(target_email):
+        raise HTTPException(status_code=403, detail="Cannot change role of a protected Super Admin")
+
+    target_current_role = str(target.get("role") or "free").lower()
+    if (role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) or target_current_role in ("admin", "super_admin")) and not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Only Super Admins can assign or revoke admin roles")
+    if role == UserRole.SUPER_ADMIN and not is_protected_super_admin(target_email):
+        raise HTTPException(status_code=403, detail="Only protected emails can hold the Super Admin role")
+
+    ok = await update_profile(user_id, {"role": role.value})
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to update user role")
     return {"message": "User role updated"}
 
 @router.get("/admin/stats")
 async def get_admin_stats(admin: User = Depends(require_admin)):
-    """Admin dashboard stats — real counts from MongoDB + Supabase."""
-    total_users = await count_profiles()
-    premium_users = await count_profiles("premium")
-    vip_users = await count_profiles("vip")
+    """Admin dashboard stats — accurate subscriber & content counts from MongoDB + Supabase."""
+    profiles = await list_profiles()
+    total_users = len(profiles)
+
+    now = datetime.now(timezone.utc)
+    tier_priority = {"free": 0, "premium": 1, "vip": 2}
+    user_best_tier: dict[str, str] = {}
+
+    for p in profiles:
+        uid = p.get("id")
+        if not uid:
+            continue
+        if check_subscription_active(p):
+            p_tier = str(p.get("subscription_tier") or p.get("subscription") or "free").lower()
+            if p_tier in ("premium", "vip"):
+                user_best_tier[uid] = p_tier
+
+    active_txns = await db.iap_transactions.find(
+        {"status": {"$in": ["active", "billing_issue"]}},
+        {"user_id": 1, "plan": 1, "tier": 1, "expiry_date": 1},
+    ).to_list(5000)
+    for txn in active_txns:
+        uid = txn.get("user_id")
+        if not uid:
+            continue
+        exp = parse_utc_datetime(txn.get("expiry_date"))
+        if exp is not None and exp <= now:
+            continue
+        t_plan = str(txn.get("plan") or txn.get("tier") or "free").lower()
+        if tier_priority.get(t_plan, 0) > tier_priority.get(user_best_tier.get(uid, "free"), 0):
+            user_best_tier[uid] = t_plan
+
+    overrides = await db.subscription_overrides.find(
+        {"is_active": True},
+        {"user_id": 1, "tier": 1, "expires_at": 1},
+    ).to_list(1000)
+    for ov in overrides:
+        uid = ov.get("user_id")
+        if not uid:
+            continue
+        exp = parse_utc_datetime(ov.get("expires_at"))
+        if exp is not None and exp <= now:
+            continue
+        ov_tier = str(ov.get("tier") or "free").lower()
+        user_best_tier[uid] = ov_tier
+
+    premium_users = sum(1 for t in user_best_tier.values() if t == "premium")
+    vip_users = sum(1 for t in user_best_tier.values() if t == "vip")
 
     # Signals from MongoDB (all states)
     total_signals = await db.signals.count_documents({})
@@ -116,29 +192,6 @@ class OverrideSubscriptionRequest(BaseModel):
 
 class RevokeOverrideRequest(BaseModel):
     user_id: str
-
-
-async def get_active_override(user_id: str) -> Optional[dict]:
-    """Fetch active, non-expired override for a user. Returns None if none found."""
-    now = datetime.now(timezone.utc)
-    override = await db.subscription_overrides.find_one(
-        {"user_id": user_id, "is_active": True},
-        {"_id": 0}
-    )
-    if not override:
-        return None
-    expires_at = override.get("expires_at")
-    if expires_at:
-        if isinstance(expires_at, str):
-            try:
-                expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-            except ValueError:
-                return None
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if expires_at <= now:
-            return None
-    return override
 
 
 @router.post("/admin/override-subscription")
@@ -280,97 +333,118 @@ class AdminSubscriptionUpdate(BaseModel):
 
 @router.put("/admin/users/{user_id}/subscription")
 async def admin_update_user_subscription(
-    user_id: str, 
-    update_data: AdminSubscriptionUpdate, 
+    user_id: str,
+    update_data: AdminSubscriptionUpdate,
     admin: User = Depends(require_admin)
 ):
-    """Admin endpoint to update a user's subscription plan and expiry"""
-    # Validate subscription value
+    """Admin endpoint to update a user's subscription plan and expiry without overwriting admin roles."""
     valid_subscriptions = ["free", "premium", "vip"]
-    if update_data.subscription.lower() not in valid_subscriptions:
+    subscription = update_data.subscription.lower()
+    if subscription not in valid_subscriptions:
         raise HTTPException(status_code=400, detail=f"Invalid subscription. Must be one of: {valid_subscriptions}")
-    
-    # Find user
+
     user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Build update document
-    subscription = update_data.subscription.lower()
-    update_doc = {
-        "subscription": subscription,
-        "role": subscription,  # Keep role in sync with subscription
-    }
-    
-    # Set expiry
+
+    now = datetime.now(timezone.utc)
     if subscription == "free":
-        update_doc["subscription_expiry"] = None
-        update_doc["subscription_status"] = "inactive"
+        expiry_dt = None
+        sub_status = "inactive"
+        await db.subscription_overrides.update_many(
+            {"user_id": user_id, "is_active": True},
+            {"$set": {"is_active": False, "revoked_by": admin.user_id, "revoked_at": now.isoformat()}},
+        )
     else:
-        if update_data.expiry_days:
-            update_doc["subscription_expiry"] = datetime.now(timezone.utc) + timedelta(days=update_data.expiry_days)
-        else:
-            # No expiry = lifetime/indefinite
-            update_doc["subscription_expiry"] = None
-        update_doc["subscription_status"] = "active"
-    
-    result_ok = await update_profile(user_id, update_doc)
-    
+        expiry_dt = (now + timedelta(days=update_data.expiry_days)) if update_data.expiry_days else None
+        sub_status = "active"
+        await db.subscription_overrides.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "tier": subscription,
+                    "is_active": True,
+                    "expires_at": expiry_dt.isoformat() if expiry_dt else None,
+                    "granted_by": admin.user_id,
+                    "granted_at": now.isoformat(),
+                }
+            },
+            upsert=True,
+        )
+
+    result_ok = await sync_profile_subscription(
+        user_id,
+        tier=subscription,
+        status=sub_status,
+        expiry=expiry_dt,
+        platform="admin_manual",
+        auto_renew=False,
+        is_trial=False,
+        activated_at=now if subscription != "free" else None,
+        profile=user,
+    )
     if not result_ok:
-        raise HTTPException(status_code=400, detail="No changes made")
-    
+        raise HTTPException(status_code=400, detail="Failed to update user subscription")
+
     return {
         "message": f"User subscription updated to {subscription}",
         "user_id": user_id,
         "subscription": subscription,
-        "expiry": update_doc.get("subscription_expiry")
+        "expiry": expiry_dt.isoformat() if expiry_dt else None,
     }
 
 
 @router.post("/admin/users/{user_id}/reset-ai-usage")
 async def admin_reset_user_ai_usage(user_id: str, admin: User = Depends(require_admin)):
-    """Admin endpoint to reset a user's AI usage counter"""
+    """Admin endpoint to reset a user's AI usage counter."""
     user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    result = await update_profile(user_id, {
+
+    new_reset = datetime.now(timezone.utc) + timedelta(days=7)
+    result = await update_profile(
+        user_id,
+        {
             "ai_weekly_used": 0,
-            "ai_usage_count": 0,
-            "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
-            "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-        })
-    
+            "ai_weekly_reset": new_reset.isoformat(),
+        },
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to reset AI usage")
+
     return {
         "message": "AI usage reset successfully",
         "user_id": user_id,
-        "new_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
+        "new_reset_date": new_reset.isoformat(),
     }
 
 
 @router.get("/admin/users/{user_id}/details")
 async def admin_get_user_details(user_id: str, admin: User = Depends(require_admin)):
-    """Admin endpoint to get detailed user information including subscription status"""
+    """Admin endpoint to get detailed user information including subscription status."""
     user = await fetch_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Calculate effective subscription
+
+    email = await get_auth_user_email(user_id) or ""
     effective_subscription = await get_effective_subscription(user)
-    
+
     return {
         **user,
+        "user_id": user.get("id", user_id),
+        "email": email,
         "effective_subscription": effective_subscription,
-        "subscription_active": check_subscription_active(user),
-        "ai_limit": get_ai_weekly_limit(effective_subscription)
+        "subscription_active": effective_subscription in ("premium", "vip"),
+        "ai_limit": get_ai_weekly_limit(effective_subscription),
     }
 
 
 # ===================== VIP FEATURE ACCESS ENDPOINTS =====================
 
 @router.get("/automation/status")
-async def get_automation_status():
-    """Get the status of the signal engine"""
+async def get_automation_status(admin: User = Depends(require_admin)):
+    """Get the status of the signal engine (Admin only)."""
     config = await get_engine_config()
     
     return {
@@ -827,8 +901,12 @@ async def get_my_admin_info(current_user: User = Depends(require_admin)):
 
 @router.get("/admin/rbac/admins")
 async def list_all_admins(super_admin: User = Depends(require_super_admin)):
-    """List all admin accounts. Super Admin only."""
-    admins = await list_profiles({"role": "admin"})
+    """List all admin & super_admin accounts. Super Admin only."""
+    all_profiles = await list_profiles()
+    admins = [
+        p for p in all_profiles
+        if p.get("role") in ("admin", "super_admin") or p.get("admin_role") is not None
+    ]
     
     # Fetch emails from auth.users for all admins
     auth_users = await list_auth_users()

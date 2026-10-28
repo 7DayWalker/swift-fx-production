@@ -124,28 +124,56 @@ export default function SettingsScreen() {
     try {
       setLoading(true);
       if (!user) return;
-      
-      // Fetch profile from Supabase
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.user_id)
-        .single();
-      
-      if (profile && !error) {
-        setProfile({
-          user_id: profile.id,
-          name: profile.name || user.email,
-          email: user.email,
-          role: profile.role,
-          subscription: profile.role === 'admin' ? 'vip' : profile.role,
-          admin_role: profile.admin_role,
-          is_admin: profile.role === 'admin',
-          account_status: 'active',
-          created_at: profile.created_at,
-          picture: profile.picture,
-        });
-        setEditName(profile.name || '');
+
+      // Fetch unified profile from backend (resolves effective subscription + phone + admin status)
+      try {
+        const profRes = await api.get('/settings/profile');
+        const p = profRes.data;
+        if (p) {
+          setProfile({
+            user_id: p.user_id || user.user_id,
+            name: p.name || user.email,
+            email: p.email || user.email,
+            phone: p.phone || '',
+            role: p.role || 'free',
+            subscription: p.subscription || (p.is_admin ? 'vip' : 'free'),
+            subscription_expiry: p.subscription_expiry,
+            admin_role: p.admin_role,
+            is_admin: Boolean(p.is_admin),
+            account_status: p.account_status || 'active',
+            created_at: p.created_at,
+            last_login: p.last_login,
+            picture: p.picture,
+          });
+          setEditName(p.name || '');
+          setEditPhone(p.phone || '');
+        }
+      } catch {
+        const { data: profileRow, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.user_id)
+          .single();
+
+        if (profileRow && !error) {
+          const isAdminRow = profileRow.role === 'admin' || profileRow.role === 'super_admin' || Boolean(profileRow.admin_role);
+          setProfile({
+            user_id: profileRow.id,
+            name: profileRow.name || user.email,
+            email: user.email,
+            phone: profileRow.phone || '',
+            role: profileRow.role,
+            subscription: isAdminRow ? 'vip' : (profileRow.subscription || profileRow.subscription_tier || 'free'),
+            subscription_expiry: profileRow.subscription_expiry,
+            admin_role: profileRow.admin_role,
+            is_admin: isAdminRow,
+            account_status: profileRow.account_status || 'active',
+            created_at: profileRow.created_at,
+            picture: profileRow.picture,
+          });
+          setEditName(profileRow.name || '');
+          setEditPhone(profileRow.phone || '');
+        }
       }
       
       // Fetch notification preferences from backend (source of truth)
@@ -180,19 +208,16 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Name must be at least 2 characters');
       return;
     }
-    
+
     try {
       setSaving(true);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ name: editName.trim() })
-        .eq('id', user?.user_id);
-      if (error) throw error;
+      await api.put('/settings/profile', { name: editName.trim() });
+      await refreshUser();
       setProfile(prev => prev ? { ...prev, name: editName.trim() } : null);
       setShowEditName(false);
       Alert.alert('Success', 'Name updated successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update name');
+      Alert.alert('Error', error.response?.data?.detail || error.message || 'Failed to update name');
     } finally {
       setSaving(false);
     }
@@ -201,12 +226,12 @@ export default function SettingsScreen() {
   const handleUpdatePhone = async () => {
     try {
       setSaving(true);
-      // Phone field not in profiles table yet — store locally
+      await api.put('/settings/profile', { phone: editPhone.trim() });
       setProfile(prev => prev ? { ...prev, phone: editPhone.trim() } : null);
       setShowEditPhone(false);
       Alert.alert('Success', 'Phone number updated');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update phone');
+      Alert.alert('Error', error.response?.data?.detail || error.message || 'Failed to update phone');
     } finally {
       setSaving(false);
     }
@@ -259,26 +284,28 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Please enter your current password');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      Alert.alert('Error', 'New password must be at least 8 characters');
       return;
     }
     if (newPassword !== confirmNewPassword) {
       Alert.alert('Error', 'New passwords do not match');
       return;
     }
-    
+
     try {
       setSaving(true);
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
+      await api.put('/settings/password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
       setShowChangePassword(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
       Alert.alert('Success', 'Password changed successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to change password');
+      Alert.alert('Error', error.response?.data?.detail || error.message || 'Failed to change password');
     } finally {
       setSaving(false);
     }
@@ -355,15 +382,16 @@ export default function SettingsScreen() {
   const handleDeactivateAccount = async () => {
     try {
       setSaving(true);
-      // Sign out and inform user (actual deactivation needs admin action)
+      await api.post('/settings/deactivate', { reason: 'Self-deactivated from app settings' });
       setShowDeactivateConfirm(false);
+      await logout();
+      router.replace('/(auth)/login');
       Alert.alert(
-        'Account Deactivation',
-        'Please contact support@swiftfx.online to deactivate your account.',
-        [{ text: 'OK' }]
+        'Account Deactivated',
+        'Your account has been deactivated. Contact support@swiftfx.online if you wish to restore it.',
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to deactivate account');
+      Alert.alert('Error', error.response?.data?.detail || error.message || 'Failed to deactivate account');
     } finally {
       setSaving(false);
     }
@@ -372,13 +400,25 @@ export default function SettingsScreen() {
   const handleDeleteRequest = async () => {
     try {
       setSaving(true);
+      await api.delete('/settings/account');
       setShowDeleteConfirm(false);
-      Alert.alert(
-        'Deletion Request',
-        'Please contact support@swiftfx.online to request account deletion. We will process your request within 30 days.'
-      );
+      try {
+        await AsyncStorage.clear();
+      } catch {}
+      await logout();
+      router.replace('/(auth)/login');
+      if (Platform.OS === 'web') {
+        window.alert('Your account and personal data have been permanently deleted.');
+      } else {
+        Alert.alert('Account Deleted', 'Your account and personal data have been permanently deleted.');
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit deletion request');
+      const msg = error.response?.data?.detail || error.message || 'Failed to delete account';
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Error', msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -957,9 +997,9 @@ export default function SettingsScreen() {
             <View style={[styles.confirmIconBox, { backgroundColor: `${theme.error}15` }]}>
               <Ionicons name="trash" size={48} color={theme.error} />
             </View>
-            <Text style={styles.confirmTitle}>Delete Account?</Text>
+            <Text style={styles.confirmTitle}>Permanently Delete Account?</Text>
             <Text style={styles.confirmDescription}>
-              This will submit a deletion request. Our team will process it within 30 days. This action cannot be undone.
+              This immediately deletes your Swift FX account, profile, journal, and personal data. Active App Store or Google Play subscriptions must still be cancelled in your device store settings. This action cannot be undone.
             </Text>
             <View style={styles.confirmButtons}>
               <TouchableOpacity style={styles.confirmButtonCancel} onPress={() => setShowDeleteConfirm(false)}>
@@ -970,7 +1010,7 @@ export default function SettingsScreen() {
                 onPress={handleDeleteRequest}
                 disabled={saving}
               >
-                {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.confirmButtonActionText}>Request Deletion</Text>}
+                {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.confirmButtonActionText}>Delete Permanently</Text>}
               </TouchableOpacity>
             </View>
           </View>

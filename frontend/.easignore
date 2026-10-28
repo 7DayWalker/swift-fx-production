@@ -1,2 +1,19 @@
-# Skip EAS updates - we don't need OTA for this deployment
-*
+# EAS Build & Update upload ignore list.
+# NOTE: Do NOT put '*' here — .easignore overrides .gitignore for EAS Build tarball uploads!
+node_modules/
+.expo/
+.expo-shared/
+.metro-cache/
+.metro-health-check*
+dump/
+*.bson
+dist/
+web-build/
+coverage/
+*.tsbuildinfo
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+.env.local
+.env.*.local

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -20,7 +21,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const safeStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      if (typeof window === 'undefined') return null;
+      if (Platform.OS === 'web' && typeof window === 'undefined') return null;
       return await AsyncStorage.getItem(key);
     } catch {
       return null;
@@ -28,7 +29,7 @@ const safeStorage = {
   },
   setItem: async (key: string, value: string): Promise<void> => {
     try {
-      if (typeof window === 'undefined') return;
+      if (Platform.OS === 'web' && typeof window === 'undefined') return;
       await AsyncStorage.setItem(key, value);
     } catch {
       // silently ignore
@@ -36,7 +37,7 @@ const safeStorage = {
   },
   removeItem: async (key: string): Promise<void> => {
     try {
-      if (typeof window === 'undefined') return;
+      if (Platform.OS === 'web' && typeof window === 'undefined') return;
       await AsyncStorage.removeItem(key);
     } catch {
       // silently ignore

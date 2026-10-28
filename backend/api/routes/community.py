@@ -13,6 +13,7 @@ from core.database import db
 from core.dependencies import get_current_user, require_auth
 from models.schemas import User, PostCreate, CommentCreate
 from models.enums import UserRole
+from services.subscription import get_effective_subscription
 from supabase_auth import fetch_profile
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,11 @@ async def create_post(
 ):
     post_id = f"post_{uuid.uuid4().hex[:12]}"
     
-    # Handle image upload (only for premium/vip users)
+    # Handle image upload (only for premium/vip/admin users via unified entitlement)
     image_base64 = None
     if image:
-        # Check if user can upload images (premium or vip only)
-        if current_user.role == UserRole.FREE:
+        effective_tier = await get_effective_subscription(current_user)
+        if effective_tier == "free":
             raise HTTPException(status_code=403, detail="Image uploads require Premium or VIP subscription")
         
         # Validate file type
@@ -84,21 +85,26 @@ async def create_post(
 
 @router.post("/posts/{post_id}/like")
 async def toggle_like(post_id: str, current_user: User = Depends(require_auth)):
-    post = await db.posts.find_one({"post_id": post_id})
-    if not post:
+    exists = await db.posts.find_one({"post_id": post_id}, {"_id": 1})
+    if not exists:
         raise HTTPException(status_code=404, detail="Post not found")
-    
-    likes = post.get("likes", [])
-    if current_user.user_id in likes:
-        likes.remove(current_user.user_id)
+
+    pull_res = await db.posts.update_one(
+        {"post_id": post_id, "likes": current_user.user_id},
+        {"$pull": {"likes": current_user.user_id}},
+    )
+    if pull_res.modified_count > 0:
         liked = False
     else:
-        likes.append(current_user.user_id)
+        await db.posts.update_one(
+            {"post_id": post_id},
+            {"$addToSet": {"likes": current_user.user_id}},
+        )
         liked = True
-    
-    await db.posts.update_one({"post_id": post_id}, {"$set": {"likes": likes}})
-    
-    return {"liked": liked, "likes_count": len(likes)}
+
+    updated = await db.posts.find_one({"post_id": post_id}, {"likes": 1})
+    likes_count = len((updated or {}).get("likes", []))
+    return {"liked": liked, "likes_count": likes_count}
 
 @router.get("/posts/{post_id}/comments")
 async def get_comments(post_id: str):

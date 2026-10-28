@@ -10,7 +10,7 @@ Set these on the production backend service in Railway → **Variables**:
 | Key | Value | Notes |
 |---|---|---|
 | `FLW_SECRET_KEY` | `FLWSECK-...` (live) | From Flutterwave Dashboard → Settings → API keys (Live mode). |
-| `FLW_SECRET_HASH` | `lYulNbNd-maoYKLUHMMCm0tlysoW505RseAM6t0zKswslvPA7FeK1_DG57q84Rh4` | **Suggested strong random value generated for you.** Paste the SAME value into Flutterwave dashboard. |
+| `FLW_SECRET_HASH` | `<generate-with-openssl-rand-base64-48>` | **Generate a fresh secret (`openssl rand -base64 48`) and never commit it.** Paste the SAME value into Flutterwave dashboard. |
 | `FLW_BASE_URL` | `https://api.flutterwave.com/v3` | Optional — defaults to this when unset. |
 | `FLW_REDIRECT_URL` | `https://swift-fx-production-production.up.railway.app/api/payments/flutterwave/redirect` | Optional — defaults to this when unset. |
 

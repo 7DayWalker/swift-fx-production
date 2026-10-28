@@ -36,6 +36,7 @@ from core.database import db
 from core.dependencies import require_auth
 from supabase_auth import fetch_profile, update_profile
 from models.schemas import User
+from services.subscription import parse_utc_datetime, sync_profile_subscription
 from api.routes.referral import on_user_subscription_change
 from api.routes.subscriptions import should_update_subscription
 
@@ -415,15 +416,48 @@ async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = No
 
         tier = plan["tier"]
         now = datetime.now(timezone.utc)
-        expiry_dt = now + timedelta(days=plan["duration_days"])
-        expiry_iso = expiry_dt.isoformat()
         vdata = _verified_data(verify or {})
         flw_id = _verified_flw_id(vdata) or txn.get("flutterwave_transaction_id")
         email = txn.get("email") or txn.get("customer_email")
 
+        profile_before = await fetch_profile(user_id) or {}
+        email = email or profile_before.get("email")
+
+        # Idempotency check: if this tx_ref was already activated, reuse its computed expiry_date
+        existing_iap = await db.iap_transactions.find_one(
+            {"original_transaction_id": txn["tx_ref"], "platform": "flutterwave"}
+        )
+        if existing_iap and existing_iap.get("expiry_date"):
+            expiry_dt = parse_utc_datetime(existing_iap["expiry_date"]) or (now + timedelta(days=plan["duration_days"]))
+        else:
+            # Extend from current active expiry when renewing the SAME tier instead of truncating remaining days
+            base_start = now
+            prof_tier = str(profile_before.get("subscription_tier") or profile_before.get("subscription") or "").lower()
+            prof_exp = parse_utc_datetime(profile_before.get("subscription_expiry"))
+            if prof_tier == tier and prof_exp and prof_exp > base_start:
+                base_start = prof_exp
+
+            same_tier_txns = await db.iap_transactions.find(
+                {
+                    "user_id": user_id,
+                    "plan": tier,
+                    "status": {"$in": ["active", "billing_issue"]},
+                    "original_transaction_id": {"$ne": txn["tx_ref"]},
+                },
+                {"expiry_date": 1},
+            ).to_list(10)
+            for st in same_tier_txns:
+                st_exp = parse_utc_datetime(st.get("expiry_date"))
+                if st_exp and st_exp > base_start:
+                    base_start = st_exp
+
+            expiry_dt = base_start + timedelta(days=plan["duration_days"])
+
+        expiry_iso = expiry_dt.isoformat()
+
         logger.info(
             "[Flutterwave] Activation start tx_ref=%s user_id=%s email=%s plan_id=%s billing_cycle=%s "
-            "txn_status=%s tier=%s expiry=%s verify_response=%s",
+            "txn_status=%s tier=%s expiry=%s",
             txn.get("tx_ref"),
             user_id,
             email,
@@ -432,47 +466,9 @@ async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = No
             txn.get("status"),
             tier,
             expiry_iso,
-            verify,
         )
 
-        profile_before = await fetch_profile(user_id) or {}
-        email = email or profile_before.get("email")
-        logger.info(
-            "[Flutterwave] Profile before activation tx_ref=%s user_id=%s email=%s subscription=%s "
-            "subscription_tier=%s subscription_expiry=%s role=%s",
-            txn.get("tx_ref"),
-            user_id,
-            email,
-            profile_before.get("subscription"),
-            profile_before.get("subscription_tier"),
-            profile_before.get("subscription_expiry"),
-            profile_before.get("role"),
-        )
-
-        should_update = await should_update_subscription(user_id, tier, expiry_dt)
-        logger.info("[Flutterwave] should_update_subscription tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, should_update)
-        if not should_update:
-            logger.info(f"[Flutterwave] Skipping profile update - user {user_id} has higher active tier.")
-            return profile_before.get("subscription_expiry") or expiry_iso
-
-        profile_update = {
-            "subscription": tier,
-            "subscription_tier": tier,
-            "subscription_status": "active",
-            "subscription_expiry": expiry_iso,
-            "subscription_platform": "flutterwave",
-            "subscription_product_id": plan["product_id"],
-            "subscription_auto_renew": False,
-            "subscription_is_trial": False,
-            "activated_at": now.isoformat(),
-            "updated_at": now.isoformat(),
-        }
-        logger.info("[Flutterwave] Before update_profile tx_ref=%s user_id=%s payload=%s", txn.get("tx_ref"), user_id, profile_update)
-        profile_ok = await update_profile(user_id, profile_update)
-        logger.info("[Flutterwave] After update_profile tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, profile_ok)
-        if not profile_ok:
-            raise RuntimeError("update_profile returned False")
-
+        # Always persist the verified payment transaction first (even if user also holds a higher active tier)
         iap_doc = {
             "user_id": user_id,
             "transaction_id": str(flw_id or txn["tx_ref"]),
@@ -495,7 +491,6 @@ async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = No
             "updated_at": now,
             "webhook_event": "flutterwave_success",
         }
-        logger.info("[Flutterwave] Before iap_transactions upsert tx_ref=%s user_id=%s doc=%s", txn.get("tx_ref"), user_id, iap_doc)
         iap_result = await db.iap_transactions.update_one(
             {"original_transaction_id": txn["tx_ref"], "platform": "flutterwave"},
             {
@@ -515,23 +510,27 @@ async def _activate_subscription_from_txn(txn: dict, verify: Optional[dict] = No
             iap_result.upserted_id,
         )
 
-        logger.info("[Flutterwave] Before on_user_subscription_change tx_ref=%s user_id=%s tier=%s", txn.get("tx_ref"), user_id, tier)
-        referral_result = await on_user_subscription_change(user_id, tier)
-        logger.info("[Flutterwave] After on_user_subscription_change tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, referral_result)
+        should_update = await should_update_subscription(user_id, tier, expiry_dt)
+        logger.info("[Flutterwave] should_update_subscription tx_ref=%s user_id=%s result=%s", txn.get("tx_ref"), user_id, should_update)
+        if should_update:
+            profile_ok = await sync_profile_subscription(
+                user_id,
+                tier=tier,
+                status="active",
+                expiry=expiry_dt,
+                platform="flutterwave",
+                product_id=plan["product_id"],
+                auto_renew=False,
+                is_trial=False,
+                activated_at=now,
+                profile=profile_before if profile_before else None,
+            )
+            if not profile_ok:
+                raise RuntimeError("sync_profile_subscription returned False")
+        else:
+            logger.info(f"[Flutterwave] Skipping profile update - user {user_id} has higher active tier.")
 
-        profile_after = await fetch_profile(user_id) or {}
-        logger.info(
-            "[Flutterwave] Profile after activation tx_ref=%s user_id=%s subscription=%s subscription_tier=%s "
-            "subscription_expiry=%s activated_at=%s platform=%s product_id=%s",
-            txn.get("tx_ref"),
-            user_id,
-            profile_after.get("subscription"),
-            profile_after.get("subscription_tier"),
-            profile_after.get("subscription_expiry"),
-            profile_after.get("activated_at"),
-            profile_after.get("subscription_platform"),
-            profile_after.get("subscription_product_id"),
-        )
+        await on_user_subscription_change(user_id, tier)
         logger.info("[Flutterwave] Subscription activated successfully for user %s", user_id)
         return expiry_iso
     except Exception as e:

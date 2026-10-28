@@ -15,14 +15,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
 import { useTheme, ThemeType } from '../../src/context/ThemeContext';
 import { SubscriptionBadge, SubscriptionCard } from '../../src/components/SubscriptionBadge';
 import { AdBanner, AD_BANNER_HEIGHT } from '../../src/components/ads';
 import { TAB_BAR_HEIGHT } from './_layout';
 import PressableScale from '../../src/components/ui/PressableScale';
+import api from '../../src/services/api';
 
 export default function MoreScreen() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+  const { getPlanDisplayName } = useSubscription();
   const { theme, themeType, setThemeType, isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -51,7 +54,50 @@ export default function MoreScreen() {
         setGuestCheckDone(true);
       }
     })();
+
+    if (user) {
+      void (async () => {
+        try {
+          const res = await api.get('/settings/notifications');
+          if (typeof res.data?.preferences?.push_enabled === 'boolean') {
+            setNotificationEnabled(res.data.preferences.push_enabled);
+          }
+        } catch {
+          try {
+            const cached = await AsyncStorage.getItem('notification_prefs');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (typeof parsed.push_enabled === 'boolean') {
+                setNotificationEnabled(parsed.push_enabled);
+              }
+            }
+          } catch {}
+        }
+      })();
+    }
   }, [user]);
+
+  const handleTogglePushNotifications = async (enabled: boolean) => {
+    setNotificationEnabled(enabled);
+    if (!user) return;
+    try {
+      const res = await api.get('/settings/notifications').catch(() => ({ data: {} }));
+      const prefs = {
+        push_enabled: enabled,
+        email_enabled: true,
+        signals: true,
+        fund_updates: true,
+        referral_rewards: true,
+        support_replies: true,
+        ...(res.data?.preferences || {}),
+      };
+      prefs.push_enabled = enabled;
+      await api.put('/settings/notifications', prefs);
+      await AsyncStorage.setItem('notification_prefs', JSON.stringify(prefs));
+    } catch {
+      setNotificationEnabled(!enabled);
+    }
+  };
 
   // Dynamic styles based on theme
   const dynamicStyles = {
@@ -102,7 +148,10 @@ export default function MoreScreen() {
     {
       section: 'Account',
       items: [
-        { icon: 'card-outline', label: 'Subscription', badge: user?.role?.toUpperCase(), locked: false, action: () => router.push('/subscription') },
+        ...(isAdmin
+          ? [{ icon: 'shield-checkmark-outline', label: 'Admin Dashboard', badge: 'ADMIN', locked: false, action: () => router.push('/(admin)/dashboard') }]
+          : []),
+        { icon: 'card-outline', label: 'Subscription', badge: getPlanDisplayName().toUpperCase(), locked: false, action: () => router.push('/subscription') },
         { icon: 'gift-outline', label: 'Referral Program', badge: null, locked: false, action: () => router.push('/referrals') },
         { icon: 'help-circle-outline', label: 'Help & Support', badge: null, locked: false, action: () => router.push('/help-support') },
         { icon: 'settings-outline', label: 'Settings', badge: null, locked: false, action: () => router.push('/settings') },
@@ -152,7 +201,7 @@ export default function MoreScreen() {
           </View>
           <Switch
             value={notificationEnabled}
-            onValueChange={setNotificationEnabled}
+            onValueChange={handleTogglePushNotifications}
             trackColor={{ false: theme.border, true: theme.primary }}
             thumbColor="#FFFFFF"
           />

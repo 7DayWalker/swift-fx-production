@@ -471,6 +471,8 @@ async def get_all_investor_portfolios(
     admin: User = Depends(require_admin)
 ):
     """Get all investor portfolios. Admin only."""
+    if not has_permission(admin, "investor_portfolios", "read"):
+        raise HTTPException(status_code=403, detail="You don't have permission to view investor portfolios")
     query = {}
     if status:
         query["account_status"] = status
@@ -495,6 +497,8 @@ async def get_investor_portfolio_detail(
     admin: User = Depends(require_admin)
 ):
     """Get detailed investor portfolio. Admin only."""
+    if not has_permission(admin, "investor_portfolios", "read"):
+        raise HTTPException(status_code=403, detail="You don't have permission to view investor portfolios")
     portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
     
     if not portfolio:
@@ -532,6 +536,8 @@ async def update_investor_portfolio(
     admin: User = Depends(require_admin)
 ):
     """Update investor portfolio. Admin only."""
+    if not has_permission(admin, "investor_portfolios", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update investor portfolios")
     portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
     
     if not portfolio:
@@ -567,6 +573,8 @@ async def add_performance_entry(
     admin: User = Depends(require_admin)
 ):
     """Add monthly performance entry for an investor. Admin only."""
+    if not has_permission(admin, "investor_portfolios", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update investor portfolios")
     portfolio = await db.investor_portfolios.find_one({"portfolio_id": portfolio_id})
     
     if not portfolio:
@@ -579,17 +587,24 @@ async def add_performance_entry(
     })
     
     if existing:
-        # Update existing entry
+        now_iso = datetime.now(timezone.utc).isoformat()
+        eq_before = existing.get("equity_before", portfolio["current_equity"])
+        recalculated_equity = eq_before * (1 + entry.return_percentage / 100)
         await db.fund_performance.update_one(
             {"portfolio_id": portfolio_id, "month": entry.month},
             {"$set": {
                 "return_percentage": entry.return_percentage,
+                "equity_after": recalculated_equity,
                 "notes": entry.notes,
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": now_iso,
             }}
         )
+        await db.investor_portfolios.update_one(
+            {"portfolio_id": portfolio_id},
+            {"$set": {"current_equity": recalculated_equity, "updated_at": now_iso}}
+        )
         logger.info(f"[Investor] Admin updated performance for {portfolio_id} month {entry.month}")
-        return {"success": True, "message": f"Performance updated for {entry.month}"}
+        return {"success": True, "message": f"Performance updated for {entry.month}", "new_equity": recalculated_equity}
     
     # Create new entry
     performance_id = f"perf_{uuid.uuid4().hex[:12]}"
@@ -637,6 +652,8 @@ async def get_all_withdrawal_requests(
     admin: User = Depends(require_admin)
 ):
     """Get all withdrawal requests. Admin only."""
+    if not has_permission(admin, "withdrawals", "read"):
+        raise HTTPException(status_code=403, detail="You don't have permission to view withdrawal requests")
     query = {}
     if status:
         query["status"] = status
@@ -656,7 +673,9 @@ async def process_withdrawal(
     admin_notes: Optional[str] = None,
     admin: User = Depends(require_admin)
 ):
-    """Process a withdrawal request. Admin only."""
+    """Process a withdrawal request idempotently. Admin only."""
+    if not has_permission(admin, "withdrawals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to process withdrawal requests")
     valid_statuses = ["approved", "paid", "rejected"]
     if status not in valid_statuses:
         raise HTTPException(
@@ -669,6 +688,7 @@ async def process_withdrawal(
     if not withdrawal:
         raise HTTPException(status_code=404, detail="Withdrawal request not found")
     
+    previous_status = withdrawal.get("status")
     now = datetime.now(timezone.utc)
     
     update_data = {
@@ -677,13 +697,13 @@ async def process_withdrawal(
         "processed_at": now.isoformat()
     }
     
-    await db.withdrawal_requests.update_one(
-        {"withdrawal_id": withdrawal_id},
+    transition = await db.withdrawal_requests.update_one(
+        {"withdrawal_id": withdrawal_id, "status": previous_status},
         {"$set": update_data}
     )
     
-    # If paid, deduct from portfolio equity
-    if status == "paid":
+    # Deduct from portfolio equity ONLY on the first transition into 'paid'
+    if status == "paid" and previous_status != "paid" and transition.modified_count > 0:
         await db.investor_portfolios.update_one(
             {"portfolio_id": withdrawal["portfolio_id"]},
             {"$inc": {"current_equity": -withdrawal["amount"]}}
@@ -698,6 +718,8 @@ async def process_withdrawal(
 @router.get("/admin/investor/notices")
 async def get_all_notices(admin: User = Depends(require_admin)):
     """Get all fund notices. Admin only."""
+    if not has_permission(admin, "notices", "read"):
+        raise HTTPException(status_code=403, detail="You don't have permission to view notices")
     notices = await db.fund_notices.find({}).sort("created_at", -1).to_list(50)
     
     for n in notices:
@@ -712,6 +734,8 @@ async def create_notice(
     admin: User = Depends(require_admin)
 ):
     """Create a fund notice/announcement. Admin only."""
+    if not has_permission(admin, "notices", "create"):
+        raise HTTPException(status_code=403, detail="You don't have permission to create notices")
     notice_id = f"notice_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)
     
@@ -736,6 +760,8 @@ async def delete_notice(
     admin: User = Depends(require_admin)
 ):
     """Delete a fund notice. Admin only."""
+    if not has_permission(admin, "notices", "delete"):
+        raise HTTPException(status_code=403, detail="You don't have permission to delete notices")
     result = await db.fund_notices.delete_one({"notice_id": notice_id})
     
     if result.deleted_count == 0:

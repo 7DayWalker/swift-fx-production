@@ -3,13 +3,14 @@
 Detailed RBAC Testing - Focus on the specific issues found
 """
 
+import os
 import requests
 import json
 import time
 
 BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com/api"
 SUPER_ADMIN_EMAIL = "ellaniswell@gmail.com"
-SUPER_ADMIN_PASSWORD = "SuperAdmin_c4e25774!"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 def test_permission_enforcement_detailed():
     """Test the specific permission enforcement issue"""

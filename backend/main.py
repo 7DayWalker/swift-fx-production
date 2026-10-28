@@ -100,29 +100,46 @@ from services.signal_engine import (
 import core.engine_state as engine_state
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
+DEFAULT_CORS_ORIGINS = [
+    "https://swiftfx.online",
+    "https://www.swiftfx.online",
+    "https://swiftfx.app",
+    "https://www.swiftfx.app",
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://localhost:19006",
+]
+
 raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
 
 if raw_cors == '*':
+    # Never pair wildcard origins with allow_credentials=True (violates Fetch/CORS security spec)
     CORS_ORIGINS = ["*"]
-    logger.info("[CORS] Configured to allow ALL origins (*)")
+    CORS_ALLOW_CREDENTIALS = False
+    CORS_ORIGIN_REGEX = None
+    logger.warning("[CORS] Wildcard '*' configured — forcing allow_credentials=False")
 else:
-    CORS_ORIGINS = [
+    parsed_origins = [
         origin.strip()
         for origin in raw_cors.split(',')
         if origin.strip()
     ]
-    if not CORS_ORIGINS:
-        logger.warning("[CORS] CORS_ORIGINS not configured - web/admin access will be blocked")
-    else:
-        for origin in CORS_ORIGINS:
+    if parsed_origins:
+        for origin in parsed_origins:
             if not origin.startswith(('http://', 'https://')):
                 raise ValueError(f"[CORS] Invalid origin format: {origin}. Must start with http:// or https://")
-        logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
+        CORS_ORIGINS = parsed_origins
+    else:
+        CORS_ORIGINS = DEFAULT_CORS_ORIGINS
+    CORS_ALLOW_CREDENTIALS = True
+    CORS_ORIGIN_REGEX = r"^https://([a-zA-Z0-9-]+\.)*(swiftfx\.online|swiftfx\.app|e2b\.app)$"
+    logger.info(f"[CORS] Configured origins: {CORS_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
@@ -249,9 +266,9 @@ async def initialize_super_admins():
     for email in PROTECTED_SUPER_ADMINS:
         existing = await fetch_profile_by_email(email.lower())
         if existing:
-            if (existing.get("role") != UserRole.ADMIN.value
+            if (existing.get("role") not in (UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value)
                     or existing.get("admin_role") != AdminRole.SUPER_ADMIN.value
-                    or not existing.get("is_admin")):
+                    or not existing.get("admin_enabled", True)):
                 await update_profile(existing["id"], {
                     "role": UserRole.ADMIN.value,
                     "admin_role": AdminRole.SUPER_ADMIN.value,

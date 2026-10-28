@@ -60,7 +60,7 @@ interface OverrideLog {
 export default function UserManagement() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
-  const isSuperAdmin = currentUser?.admin_role === 'super_admin';
+  const isSuperAdmin = currentUser?.admin_role === 'super_admin' || currentUser?.raw_role === 'super_admin';
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,30 +87,42 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      // Fetch users from Supabase and active overrides from backend in parallel
-      const [usersResult, overridesResult] = await Promise.all([
-        supabase.rpc('get_all_users'),
+      // Primary source: backend /admin/users (merges Supabase profiles, Auth emails, IAP & overrides)
+      const [backendUsersRes, overridesResult] = await Promise.all([
+        api.get('/admin/users').catch(() => null),
         api.get('/admin/active-overrides').catch(() => ({ data: { overrides: {} } })),
       ]);
 
-      if (usersResult.error) throw usersResult.error;
-
       const activeOverrides: Record<string, string> = overridesResult.data?.overrides || {};
+      let rawUsers: any[] = [];
 
-      const mapped = (usersResult.data || []).map((u: any) => {
-        const baseRole = u.role === 'admin' || u.role === 'super_admin' ? u.role : u.role;
-        // If user has an active override, use the override tier for display
-        const effectiveRole = activeOverrides[u.user_id] || baseRole;
+      if (backendUsersRes?.data && Array.isArray(backendUsersRes.data)) {
+        rawUsers = backendUsersRes.data;
+      } else {
+        const usersResult = await supabase.rpc('get_all_users');
+        if (usersResult.error) throw usersResult.error;
+        rawUsers = usersResult.data || [];
+      }
+
+      const mapped = rawUsers.map((u: any) => {
+        const uid = u.user_id || u.id;
+        const isAdminUser = u.role === 'admin' || u.role === 'super_admin' || Boolean(u.admin_role);
+        const subTier = (
+          activeOverrides[uid] ||
+          u.subscription ||
+          u.subscription_tier ||
+          (isAdminUser ? 'vip' : ['free', 'premium', 'vip'].includes(u.role) ? u.role : 'free')
+        ).toLowerCase();
 
         return {
-          user_id: u.user_id,
-          name: u.name || u.email,
-          email: u.email,
-          role: effectiveRole,
-          is_admin: u.role === 'admin' || u.role === 'super_admin',
+          user_id: uid,
+          name: u.name || u.email || 'Unknown',
+          email: u.email || '',
+          role: subTier,
+          is_admin: isAdminUser,
           admin_role: u.admin_role,
           created_at: u.created_at,
-          has_override: !!activeOverrides[u.user_id],
+          has_override: Boolean(activeOverrides[uid]),
         };
       });
       setUsers(mapped);
@@ -186,6 +198,7 @@ export default function UserManagement() {
       const msg = `Override granted: ${tier.toUpperCase()} for ${days} days`;
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
       fetchOverrideStatus(selectedUser.user_id);
+      fetchUsers();
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Failed to grant override';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
@@ -202,6 +215,7 @@ export default function UserManagement() {
       const msg = 'Override revoked successfully';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
       fetchOverrideStatus(selectedUser.user_id);
+      fetchUsers();
     } catch (err: any) {
       const msg = err?.response?.data?.detail || 'Failed to revoke override';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);

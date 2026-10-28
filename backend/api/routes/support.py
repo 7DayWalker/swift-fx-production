@@ -16,8 +16,10 @@ from core.database import db
 from core.dependencies import require_auth, require_admin, get_current_user
 from models.schemas import User
 from services.admin import create_admin_notification, log_admin_action
+from services.auth import is_super_admin
 from services.push_notifications import notify_admin_support_ticket
-from supabase_auth import fetch_profile
+from services.subscription import get_effective_subscription
+from supabase_auth import fetch_profile, get_auth_user_email
 from models.enums import AdminRole
 
 logger = logging.getLogger(__name__)
@@ -209,13 +211,19 @@ async def initialize_faqs():
     """Populate default FAQs if none exist"""
     faq_count = await db.faqs.count_documents({})
     if faq_count == 0:
-        for faq in DEFAULT_FAQS:
-            faq["faq_id"] = f"faq_{uuid.uuid4().hex[:12]}"
-            faq["is_active"] = True
-            faq["created_at"] = datetime.now(timezone.utc).isoformat()
-            faq["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.faqs.insert_many(DEFAULT_FAQS)
-        logger.info(f"[FAQs] Initialized {len(DEFAULT_FAQS)} default FAQs")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        seed_docs = [
+            {
+                **faq,
+                "faq_id": f"faq_{uuid.uuid4().hex[:12]}",
+                "is_active": True,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+            for faq in DEFAULT_FAQS
+        ]
+        await db.faqs.insert_many(seed_docs)
+        logger.info(f"[FAQs] Initialized {len(seed_docs)} default FAQs")
 
 # ==================== USER SUPPORT ENDPOINTS ====================
 
@@ -252,7 +260,7 @@ async def get_faqs(category: Optional[str] = None):
 @router.post("/support/tickets")
 async def create_support_ticket(
     ticket: SupportTicketCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Create a new support ticket"""
     ticket_id = f"TKT-{uuid.uuid4().hex[:8].upper()}"
@@ -306,7 +314,7 @@ async def create_support_ticket(
     }
 
 @router.get("/support/tickets")
-async def get_user_tickets(current_user: User = Depends(get_current_user)):
+async def get_user_tickets(current_user: User = Depends(require_auth)):
     """Get all support tickets for the current user"""
     tickets = await db.support_tickets.find(
         {"user_id": current_user.user_id}
@@ -322,7 +330,7 @@ async def get_user_tickets(current_user: User = Depends(get_current_user)):
 @router.get("/support/tickets/{ticket_id}")
 async def get_ticket_details(
     ticket_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Get details of a specific support ticket"""
     ticket = await db.support_tickets.find_one({
@@ -363,7 +371,7 @@ async def admin_get_tickets(
 ):
     """Get all support tickets. Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to view support tickets")
     
     query = {}
@@ -395,7 +403,7 @@ async def admin_get_ticket_details(
 ):
     """Get detailed view of a support ticket. Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to view support tickets")
     
     ticket = await db.support_tickets.find_one({"ticket_id": ticket_id})
@@ -404,12 +412,19 @@ async def admin_get_ticket_details(
     
     ticket["_id"] = str(ticket["_id"])
     
-    # Get user details
+    # Get user details with unified entitlement & auth email fallback
     user = await fetch_profile(ticket["user_id"])
+    resolved_email = (
+        (user.get("email") if user else None)
+        or ticket.get("user_email")
+        or await get_auth_user_email(ticket["user_id"])
+        or "Unknown"
+    )
+    resolved_sub = await get_effective_subscription({**user, "user_id": ticket["user_id"]}) if user else "free"
     user_info = {
-        "name": user.get("name", "Unknown") if user else "Unknown",
-        "email": user.get("email", "Unknown") if user else "Unknown",
-        "subscription": user.get("subscription", "free") if user else "free",
+        "name": user.get("name", "Unknown") if user else ticket.get("user_name", "Unknown"),
+        "email": resolved_email,
+        "subscription": resolved_sub,
         "created_at": user.get("created_at") if user else None,
     }
     
@@ -423,7 +438,7 @@ async def admin_update_ticket_status(
 ):
     """Update ticket status. Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to update tickets")
     
     ticket = await db.support_tickets.find_one({"ticket_id": ticket_id})
@@ -476,7 +491,7 @@ async def admin_add_note(
 ):
     """Add internal admin note to ticket. Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to add notes")
     
     ticket = await db.support_tickets.find_one({"ticket_id": ticket_id})
@@ -520,7 +535,7 @@ async def admin_add_reply(
 ):
     """Add reply to ticket (visible to user). Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to reply to tickets")
     
     ticket = await db.support_tickets.find_one({"ticket_id": ticket_id})
@@ -569,7 +584,7 @@ async def admin_add_reply(
 async def admin_get_faqs(admin: User = Depends(require_admin)):
     """Get all FAQs including inactive ones. Super Admin, Customer Support only."""
     allowed_roles = [AdminRole.SUPER_ADMIN, AdminRole.CUSTOMER_SUPPORT]
-    if admin.admin_role not in allowed_roles:
+    if not is_super_admin(admin) and admin.admin_role not in allowed_roles:
         raise HTTPException(status_code=403, detail="You don't have permission to manage FAQs")
     
     faqs = await db.faqs.find({}).sort([("category", 1), ("order", 1)]).to_list(100)
@@ -584,7 +599,7 @@ async def admin_create_faq(
     admin: User = Depends(require_admin)
 ):
     """Create a new FAQ. Super Admin only."""
-    if admin.admin_role != AdminRole.SUPER_ADMIN:
+    if not is_super_admin(admin):
         raise HTTPException(status_code=403, detail="Only Super Admin can create FAQs")
     
     faq_id = f"faq_{uuid.uuid4().hex[:12]}"
@@ -603,7 +618,7 @@ async def admin_create_faq(
     
     await log_admin_action(
         admin.user_id,
-        admin.admin_role.value,
+        admin.admin_role.value if admin.admin_role else "super_admin",
         "create",
         "faq",
         faq_id,
@@ -619,7 +634,7 @@ async def admin_update_faq(
     admin: User = Depends(require_admin)
 ):
     """Update an FAQ. Super Admin only."""
-    if admin.admin_role != AdminRole.SUPER_ADMIN:
+    if not is_super_admin(admin):
         raise HTTPException(status_code=403, detail="Only Super Admin can update FAQs")
     
     faq = await db.faqs.find_one({"faq_id": faq_id})
@@ -640,7 +655,7 @@ async def admin_update_faq(
     
     await log_admin_action(
         admin.user_id,
-        admin.admin_role.value,
+        admin.admin_role.value if admin.admin_role else "super_admin",
         "update",
         "faq",
         faq_id,
@@ -655,7 +670,7 @@ async def admin_delete_faq(
     admin: User = Depends(require_admin)
 ):
     """Delete an FAQ (soft delete - sets is_active=False). Super Admin only."""
-    if admin.admin_role != AdminRole.SUPER_ADMIN:
+    if not is_super_admin(admin):
         raise HTTPException(status_code=403, detail="Only Super Admin can delete FAQs")
     
     faq = await db.faqs.find_one({"faq_id": faq_id})
@@ -670,7 +685,7 @@ async def admin_delete_faq(
     
     await log_admin_action(
         admin.user_id,
-        admin.admin_role.value,
+        admin.admin_role.value if admin.admin_role else "super_admin",
         "delete",
         "faq",
         faq_id,

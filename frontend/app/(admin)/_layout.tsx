@@ -4,17 +4,20 @@ import { useAuth } from '../../src/context/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function AdminLayout() {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading, isProfileLoading, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Protect admin routes - redirect non-admins
-    if (!isLoading && (!user || !isAdmin)) {
+    // Wait until BOTH session check and profile role enrichment have finished
+    if (isLoading || isProfileLoading) return;
+    if (!user) {
       router.replace('/(auth)/login');
+    } else if (!isAdmin) {
+      router.replace('/(tabs)/dashboard');
     }
-  }, [isLoading, user, isAdmin]);
+  }, [isLoading, isProfileLoading, user, isAdmin]);
 
-  if (isLoading) {
+  if (isLoading || isProfileLoading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#00D4AA" />
@@ -22,7 +25,7 @@ export default function AdminLayout() {
     );
   }
 
-  if (!isAdmin) {
+  if (!user || !isAdmin) {
     return null;
   }
 

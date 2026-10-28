@@ -2,50 +2,36 @@
 Centralized Push Notification Service
 ======================================
 Sends push notifications via Expo Push API, handles token cleanup,
-respects user preferences, and checks the engine config flag.
-
-DEDUPLICATION: Uses atomic MongoDB findOneAndUpdate to ensure each
-signal event (new_signal, closed, tp_hit) sends exactly ONE notification.
+respects user preferences, enforces signal tier visibility, and checks engine config.
 """
+import os
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
 import httpx
 
 from core.database import db
+from services.subscription import can_access_visibility, parse_utc_datetime, get_subscription_level
 
 logger = logging.getLogger(__name__)
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 BATCH_SIZE = 100
+PROFILE_CHUNK_SIZE = 100
 
 
-async def _claim_notification_slot(signal_id: str, event_type: str) -> bool:
-    """
-    Atomically claim a notification slot for a signal event.
-    Returns True if this caller is the first to claim it (should send).
-    Returns False if already claimed by another caller (skip).
-    """
-    key = f"notif_{event_type}_{signal_id}"
-    result = await db.notification_dedup.find_one_and_update(
-        {"_id": key, "sent": {"$ne": True}},
-        {"$set": {"sent": True, "claimed_at": datetime.now(timezone.utc)}},
-        upsert=True,
-        return_document=False,  # return the BEFORE document
-    )
-    # If result is None and no error, this was an upsert (first claim) → send
-    # If result exists with sent=True, the $ne filter would have failed the match
-    # and no update occurs. But with upsert=True and $ne filter, it's trickier.
-    # Simpler: use a try/except for duplicate key on the upsert.
-    return True  # upsert succeeded = first claim
+def _get_supabase_credentials() -> tuple[str, str]:
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    return supabase_url, supabase_key
 
 
 async def _claim_notification_slot_safe(signal_id: str, event_type: str) -> bool:
     """
     Safely claim a notification slot. Returns True only for the first caller.
-    Uses insert_one with a unique _id to guarantee exactly-once.
+    Uses insert_one with a unique _id to guarantee exactly-once delivery per event.
     """
     key = f"notif_{event_type}_{signal_id}"
     try:
@@ -55,90 +41,139 @@ async def _claim_notification_slot_safe(signal_id: str, event_type: str) -> bool
             "event_type": event_type,
             "sent_at": datetime.now(timezone.utc),
         })
-        return True  # Insert succeeded — we are the first caller
+        return True
     except Exception:
-        # Duplicate key error — another caller already claimed this slot
         return False
 
 
 async def _get_engine_notifications_enabled() -> bool:
-    """Check if push notifications are enabled in engine config."""
-    config = await db.engine_config.find_one({"_id": "signal_engine"}, {"_id": 0})
-    if not config:
-        return True  # Default enabled
-    return config.get("send_notifications", True)
+    """Check if push notifications are enabled in signal_engine_config."""
+    config_doc = await db.settings.find_one({"setting_id": "signal_engine_config"}, {"_id": 0})
+    if config_doc and isinstance(config_doc.get("config"), dict):
+        return bool(config_doc["config"].get("send_notifications", True))
+    legacy_doc = await db.engine_config.find_one({"_id": "signal_engine"}, {"_id": 0})
+    if legacy_doc:
+        return bool(legacy_doc.get("send_notifications", True))
+    return True
 
 
-async def _fetch_active_tokens() -> List[dict]:
-    """Get all active Expo push tokens from MongoDB."""
-    return await db.device_tokens.find(
-        {"is_active": True},
-        {"_id": 0}
-    ).to_list(10000)
+async def _fetch_active_tokens(user_ids: Optional[List[str]] = None) -> List[dict]:
+    """Get active Expo push tokens from MongoDB, optionally filtered to specific user_ids."""
+    query: dict = {"is_active": True}
+    if user_ids is not None:
+        if not user_ids:
+            return []
+        query["user_id"] = {"$in": list(set(user_ids))}
+    return await db.device_tokens.find(query, {"_id": 0}).to_list(10000)
 
 
-async def _fetch_user_profiles_batch(user_ids: List[str]) -> dict:
-    """Batch fetch notification preferences from Supabase profiles."""
-    import os
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+async def _fetch_user_profiles_batch(user_ids: List[str], select_cols: str) -> Dict[str, dict]:
+    """Batch fetch user profiles from Supabase in 100-UUID chunks using SUPABASE_SERVICE_ROLE_KEY."""
+    supabase_url, supabase_key = _get_supabase_credentials()
     if not supabase_url or not supabase_key or not user_ids:
         return {}
 
+    unique_ids = list(dict.fromkeys(uid for uid in user_ids if uid))
+    profiles_map: Dict[str, dict] = {}
+
     try:
-        ids_param = ",".join(user_ids)
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"{supabase_url}/rest/v1/profiles",
-                headers={
-                    "apikey": supabase_key,
-                    "Authorization": f"Bearer {supabase_key}",
-                },
-                params={
-                    "select": "id,notification_preferences",
-                    "id": f"in.({ids_param})",
-                },
-            )
-            profiles_data = r.json() if r.status_code == 200 else []
-        return {p["id"]: p for p in profiles_data}
+        async with httpx.AsyncClient(timeout=15) as client:
+            for start in range(0, len(unique_ids), PROFILE_CHUNK_SIZE):
+                chunk = unique_ids[start:start + PROFILE_CHUNK_SIZE]
+                ids_param = ",".join(chunk)
+                r = await client.get(
+                    f"{supabase_url}/rest/v1/profiles",
+                    headers={
+                        "apikey": supabase_key,
+                        "Authorization": f"Bearer {supabase_key}",
+                    },
+                    params={
+                        "select": select_cols,
+                        "id": f"in.({ids_param})",
+                    },
+                )
+                if r.status_code == 200:
+                    for p in r.json():
+                        if p.get("id"):
+                            profiles_map[p["id"]] = p
+                else:
+                    logger.warning("[Push] Supabase profile chunk fetch returned %s", r.status_code)
     except Exception as e:
         logger.warning(f"Failed to batch fetch profiles: {e}")
-        return {}
+
+    return profiles_map
 
 
-async def _fetch_user_admin_flags_batch(user_ids: List[str]) -> dict:
+async def _resolve_user_tiers_batch(user_ids: List[str], profiles_map: Dict[str, dict]) -> Dict[str, str]:
     """
-    Batch fetch admin flags from Supabase profiles.
-
-    We need admin_role + admin_enabled to target only:
-      - super_admin
-      - customer_support
+    Efficiently resolve effective subscription tiers in batch for push gating:
+      1. admin / super_admin -> 'vip'
+      2. active db.subscription_overrides -> override tier
+      3. active db.iap_transactions -> highest non-expired tier
+      4. active non-expired profile subscription fallback -> profile tier
+      5. otherwise -> 'free'
     """
-    import os
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
-    if not supabase_url or not supabase_key or not user_ids:
-        return {}
+    now = datetime.now(timezone.utc)
+    tiers: Dict[str, str] = {uid: "free" for uid in user_ids}
+    if not user_ids:
+        return tiers
 
-    try:
-        ids_param = ",".join(user_ids)
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"{supabase_url}/rest/v1/profiles",
-                headers={
-                    "apikey": supabase_key,
-                    "Authorization": f"Bearer {supabase_key}",
-                },
-                params={
-                    "select": "id,admin_role,admin_enabled,notification_preferences",
-                    "id": f"in.({ids_param})",
-                },
-            )
-            profiles_data = r.json() if r.status_code == 200 else []
-        return {p["id"]: p for p in profiles_data}
-    except Exception as e:
-        logger.warning(f"Failed to batch fetch admin flags: {e}")
-        return {}
+    non_admin_ids: List[str] = []
+    for uid in user_ids:
+        prof = profiles_map.get(uid) or {}
+        role_val = str(prof.get("role") or "free").lower()
+        if role_val in ("admin", "super_admin") or (prof.get("admin_role") and prof.get("admin_enabled", True) is not False):
+            tiers[uid] = "vip"
+            continue
+
+        prof_tier = str(prof.get("subscription_tier") or prof.get("subscription") or "free").lower()
+        prof_status = str(prof.get("subscription_status") or "").lower()
+        prof_exp = parse_utc_datetime(prof.get("subscription_expiry"))
+        if prof_tier in ("premium", "vip") and prof_status not in ("inactive", "expired", "revoked", "refunded"):
+            if (prof_exp is None and prof_status == "active") or (prof_exp is not None and prof_exp > now):
+                tiers[uid] = prof_tier
+
+        non_admin_ids.append(uid)
+
+    if not non_admin_ids:
+        return tiers
+
+    # Batch check verified iap_transactions
+    txns = await db.iap_transactions.find(
+        {
+            "user_id": {"$in": non_admin_ids},
+            "status": {"$in": ["active", "billing_issue"]},
+        },
+        {"user_id": 1, "plan": 1, "tier": 1, "expiry_date": 1},
+    ).to_list(10000)
+
+    for txn in txns:
+        uid = txn.get("user_id")
+        if not uid:
+            continue
+        exp = parse_utc_datetime(txn.get("expiry_date"))
+        if exp is not None and exp <= now:
+            continue
+        t_plan = str(txn.get("plan") or txn.get("tier") or "free").lower()
+        if get_subscription_level(t_plan) > get_subscription_level(tiers.get(uid, "free")):
+            tiers[uid] = t_plan
+
+    # Batch check active subscription_overrides (takes precedence over store tier)
+    overrides = await db.subscription_overrides.find(
+        {"user_id": {"$in": non_admin_ids}, "is_active": True},
+        {"user_id": 1, "tier": 1, "expires_at": 1},
+    ).to_list(2000)
+
+    for ov in overrides:
+        uid = ov.get("user_id")
+        if not uid:
+            continue
+        exp = parse_utc_datetime(ov.get("expires_at"))
+        if exp is not None and exp <= now:
+            continue
+        tiers[uid] = str(ov.get("tier") or "free").lower()
+
+    return tiers
 
 
 async def _mark_tokens_inactive(tokens: List[str]):
@@ -147,16 +182,13 @@ async def _mark_tokens_inactive(tokens: List[str]):
         return
     await db.device_tokens.update_many(
         {"token": {"$in": tokens}},
-        {"$set": {"is_active": False, "deactivated_at": datetime.now(timezone.utc)}}
+        {"$set": {"is_active": False, "deactivated_at": datetime.now(timezone.utc)}},
     )
     logger.info(f"Marked {len(tokens)} invalid tokens as inactive")
 
 
 async def _send_expo_push_batch(messages: List[dict]) -> List[str]:
-    """
-    Send messages via Expo Push API in batches.
-    Returns list of receipt IDs for follow-up.
-    """
+    """Send messages via Expo Push API in batches of 100."""
     all_ticket_ids = []
     invalid_tokens = []
 
@@ -171,12 +203,10 @@ async def _send_expo_push_batch(messages: List[dict]) -> List[str]:
                         "Accept": "application/json",
                         "Accept-Encoding": "gzip, deflate",
                         "Content-Type": "application/json",
-                    }
+                    },
                 )
 
             response_json = response.json()
-            logger.info(f"Expo push API response (batch {i//BATCH_SIZE}): {response_json}")
-
             if response.status_code != 200:
                 logger.error(f"Expo push API returned {response.status_code}: {response.text[:200]}")
                 continue
@@ -202,22 +232,14 @@ async def _send_expo_push_batch(messages: List[dict]) -> List[str]:
         except Exception as e:
             logger.error(f"Failed to send push batch: {e}")
 
-    # Clean up invalid tokens
     await _mark_tokens_inactive(invalid_tokens)
-
     return all_ticket_ids
 
 
 async def check_push_receipts(ticket_ids: List[str]):
-    """
-    Check Expo push receipts for delivery status.
-    Called asynchronously after sending to handle delayed failures.
-    """
+    """Check Expo push receipts for delivery status."""
     if not ticket_ids:
         return
-
-    invalid_tokens = []
-
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
@@ -226,22 +248,17 @@ async def check_push_receipts(ticket_ids: List[str]):
                 headers={
                     "Accept": "application/json",
                     "Content-Type": "application/json",
-                }
+                },
             )
-
         if response.status_code != 200:
             logger.warning(f"Expo receipts API returned {response.status_code}")
             return
-
         receipts = response.json().get("data", {})
         for receipt_id, receipt in receipts.items():
             if receipt.get("status") == "error":
                 detail = receipt.get("details", {})
                 if detail.get("error") == "DeviceNotRegistered":
-                    # We don't have the token from the receipt directly,
-                    # but we can log it for awareness
                     logger.warning(f"Receipt {receipt_id}: DeviceNotRegistered")
-
     except Exception as e:
         logger.error(f"Failed to check push receipts: {e}")
 
@@ -253,6 +270,8 @@ async def send_notification(
     data: dict,
     preference_key: str = "signals",
     check_engine_config: bool = True,
+    user_ids: Optional[List[str]] = None,
+    visibility: Optional[str] = None,
 ):
     """
     Central notification dispatcher.
@@ -261,49 +280,57 @@ async def send_notification(
         title: Notification title
         body: Notification body text
         data: Payload data (e.g. signalId, type)
-        preference_key: Which user preference to check (e.g. "signals", "fund_updates")
+        preference_key: Which user preference to check
         check_engine_config: Whether to check engine send_notifications flag
+        user_ids: Optional explicit recipient user IDs (e.g. targeted streak reminders)
+        visibility: Optional signal tier ('free' | 'premium' | 'vip') to restrict delivery
     """
     try:
-        # Check engine config
         if check_engine_config:
             enabled = await _get_engine_notifications_enabled()
             if not enabled:
                 logger.info("Push notifications disabled in engine config, skipping")
                 return
 
-        # Get active tokens
-        device_tokens = await _fetch_active_tokens()
+        device_tokens = await _fetch_active_tokens(user_ids=user_ids)
         if not device_tokens:
             logger.info("No active device tokens found")
             return
 
-        # Batch fetch user profiles for preference checks
-        user_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
-        profiles_map = await _fetch_user_profiles_batch(user_ids)
+        recipient_ids = list(set(t.get("user_id") for t in device_tokens if t.get("user_id")))
+        select_cols = "id,role,admin_role,admin_enabled,account_status,notification_preferences,subscription,subscription_tier,subscription_status,subscription_expiry"
+        profiles_map = await _fetch_user_profiles_batch(recipient_ids, select_cols)
 
-        # Enrich data payload with title/body so Android background handlers
-        # can display the notification even when the app process is killed.
+        vis_str = (visibility.value if hasattr(visibility, "value") else str(visibility or "")).lower().strip()
+        tiers_map: Dict[str, str] = {}
+        if vis_str in ("premium", "vip"):
+            tiers_map = await _resolve_user_tiers_batch(recipient_ids, profiles_map)
+
         enriched_data = {**data, "title": title, "body": body}
-
-        # Build messages with platform-specific fields
         messages = []
+
         for token_doc in device_tokens:
             token = token_doc.get("token", "")
-            user_id = token_doc.get("user_id")
+            uid = token_doc.get("user_id")
             platform = token_doc.get("platform", "unknown")
 
-            if not token.startswith("ExponentPushToken") or not user_id:
-                logger.debug(f"Skipping invalid token: {token[:30]}... user={user_id}")
+            if not token.startswith("ExponentPushToken") or not uid:
                 continue
 
-            # Check global push override — if push_enabled is false, skip entirely
-            user = profiles_map.get(user_id, {})
-            prefs = user.get("notification_preferences", {})
+            user = profiles_map.get(uid)
+            if user:
+                acct_status = str(user.get("account_status") or "active").lower()
+                if acct_status in ("deactivated", "deleted"):
+                    continue
+
+            if vis_str in ("premium", "vip"):
+                user_tier = tiers_map.get(uid, "free")
+                if not can_access_visibility(user_tier, vis_str):
+                    continue
+
+            prefs = (user or {}).get("notification_preferences") or {}
             if prefs.get("push_enabled") is False:
                 continue
-
-            # Check per-category preference
             if not prefs.get(preference_key, True):
                 continue
 
@@ -316,23 +343,14 @@ async def send_notification(
                 "priority": "high",
                 "channelId": "default",
             }
-
-            # iOS: enable background content and mutable content for rich notifications
             if platform == "ios":
                 message["_contentAvailable"] = True
-
-            # Android: include large icon for branded notifications
             if platform == "android":
                 message["android"] = {
                     "largeIcon": "https://hrzghlqcfccnmgcipxxo.supabase.co/storage/v1/object/public/public-assets/SwiftFX-logo.png"
                 }
 
             messages.append(message)
-
-            if platform == "android":
-                logger.info(f"ANDROID_PUSH_PAYLOAD → {message}")
-            else:
-                logger.info(f"  -> Queued for {platform} user={user_id[:12]}... token={token[:35]}...")
 
         if not messages:
             logger.info(f"No eligible users for notification: {title}")
@@ -341,9 +359,6 @@ async def send_notification(
         logger.info(f"Sending '{title}' to {len(messages)} devices...")
         ticket_ids = await _send_expo_push_batch(messages)
         logger.info(f"Sent '{title}' to {len(messages)} users ({len(ticket_ids)} tickets)")
-
-        # Fire-and-forget receipt check after a delay (Expo recommends 15min)
-        # For now we just log ticket count; a cron job can check receipts later
     except Exception as e:
         logger.error(f"send_notification failed: {e}")
 
@@ -352,8 +367,13 @@ async def send_notification(
 # Convenience wrappers for signal events
 # ======================================================================
 
-async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
-    """Notify all users about a new signal activation. Deduped per signal_id."""
+async def notify_new_signal(
+    signal_id: str,
+    pair: str,
+    signal_type: str,
+    visibility: Optional[str] = None,
+):
+    """Notify eligible users about a new signal activation. Deduped per signal_id."""
     claimed = await _claim_notification_slot_safe(signal_id, "new_signal")
     if not claimed:
         logger.info(f"[Dedup] Skipping duplicate new_signal notification for {signal_id}")
@@ -363,54 +383,69 @@ async def notify_new_signal(signal_id: str, pair: str, signal_type: str):
         body=f"{pair} • {signal_type.upper()}",
         data={"signalId": signal_id, "type": "new_signal"},
         preference_key="signals",
+        visibility=visibility,
     )
 
 
-async def notify_signal_closed(signal_id: str, pair: str, signal_type: str, final_pips: float, tp_hit: int = 0):
-    """Notify all users that a signal was closed. Deduped per signal_id."""
+async def notify_signal_closed(
+    signal_id: str,
+    pair: str,
+    signal_type: str,
+    final_pips: float,
+    tp_hit: int = 0,
+    visibility: Optional[str] = None,
+):
+    """Notify eligible users that a signal was closed. Deduped per signal_id."""
     claimed = await _claim_notification_slot_safe(signal_id, "closed")
     if not claimed:
         logger.info(f"[Dedup] Skipping duplicate closed notification for {signal_id}")
         return
-    
-    # Determine result: BREAKEVEN if final_pips=0 and tp_hit >= 1, else WIN/LOSS
+
     if final_pips > 0:
         result = "WIN"
     elif final_pips == 0 and tp_hit >= 1:
         result = "BREAKEVEN"
     else:
         result = "LOSS"
-    
+
     pips_str = f"+{final_pips:.1f}" if final_pips > 0 else f"{final_pips:.1f}"
     await send_notification(
         title=f"Signal Closed: {result}",
         body=f"{pair} • {signal_type.upper()} • {pips_str} pips",
         data={"signalId": signal_id, "type": "signal_closed", "result": result},
         preference_key="signals",
+        visibility=visibility,
     )
 
 
-async def notify_tp_hit(signal_id: str, pair: str, signal_type: str, tp_level: int, running_pips: Optional[float] = None):
-    """Notify all users that an intermediate TP level was hit. Deduped per signal_id + tp_level."""
+async def notify_tp_hit(
+    signal_id: str,
+    pair: str,
+    signal_type: str,
+    tp_level: int,
+    running_pips: Optional[float] = None,
+    visibility: Optional[str] = None,
+):
+    """Notify eligible users that an intermediate TP level was hit. Deduped per signal_id + tp_level."""
     claimed = await _claim_notification_slot_safe(signal_id, f"tp{tp_level}")
     if not claimed:
         logger.info(f"[Dedup] Skipping duplicate TP{tp_level} notification for {signal_id}")
         return
     pips_part = f" • +{running_pips:.1f} pips" if running_pips else ""
-    
-    # Include trailing SL action in the notification body
+
     if tp_level == 1:
         trail_info = " • SL moved to entry"
     elif tp_level == 2:
         trail_info = " • SL moved to TP1"
     else:
         trail_info = ""
-    
+
     await send_notification(
         title=f"TP{tp_level} Hit!",
         body=f"{pair} • {signal_type.upper()}{pips_part}{trail_info}",
         data={"signalId": signal_id, "type": "tp_hit", "level": tp_level},
         preference_key="signals",
+        visibility=visibility,
     )
 
 
@@ -428,21 +463,8 @@ async def notify_admin_support_ticket(
     category: str,
     subject: str,
 ):
-    """
-    Best-effort admin-only Expo push notification for support tickets.
-
-    Target admin roles:
-      - super_admin
-      - customer_support
-
-    This function:
-      - does NOT create any DB records
-      - sends via existing Expo push infrastructure
-      - respects push_enabled in notification_preferences
-      - never blocks ticket creation (caller should fire-and-forget)
-    """
+    """Best-effort admin-only Expo push notification for support tickets."""
     try:
-        # Only send to admin devices, so we cannot reuse send_notification() directly.
         device_tokens = await _fetch_active_tokens()
         if not device_tokens:
             return
@@ -451,7 +473,10 @@ async def notify_admin_support_ticket(
         if not user_ids:
             return
 
-        admin_flags_map = await _fetch_user_admin_flags_batch(user_ids)
+        admin_flags_map = await _fetch_user_profiles_batch(
+            user_ids,
+            "id,admin_role,admin_enabled,account_status,notification_preferences",
+        )
         enriched_data = {
             "type": "admin_support_ticket",
             "ticket_id": ticket_id,
@@ -472,20 +497,17 @@ async def notify_admin_support_ticket(
                 continue
 
             profile = admin_flags_map.get(user_id) or {}
+            if str(profile.get("account_status") or "active").lower() in ("deactivated", "deleted"):
+                continue
+
             admin_role = profile.get("admin_role")
             admin_enabled = profile.get("admin_enabled", True)
-
-            # Target only configured staff roles
-            if not admin_enabled:
-                continue
-            if admin_role not in _ADMIN_SUPPORT_TARGET_ROLES:
+            if not admin_enabled or admin_role not in _ADMIN_SUPPORT_TARGET_ROLES:
                 continue
 
             prefs = profile.get("notification_preferences", {}) or {}
             if prefs.get("push_enabled") is False:
                 continue
-
-            # Optional per-key toggle (defaults to True if missing)
             if not prefs.get("admin_support_ticket", True):
                 continue
 
@@ -498,10 +520,8 @@ async def notify_admin_support_ticket(
                 "priority": "high",
                 "channelId": "default",
             }
-
             if platform == "ios":
                 message["_contentAvailable"] = True
-
             if platform == "android":
                 message["android"] = {
                     "largeIcon": "https://hrzghlqcfccnmgcipxxo.supabase.co/storage/v1/object/public/public-assets/SwiftFX-logo.png"
@@ -516,5 +536,4 @@ async def notify_admin_support_ticket(
         logger.info(f"[AdminTicketPush] Sending admin ticket alert to {len(messages)} devices (ticket={ticket_id})")
         await _send_expo_push_batch(messages)
     except Exception as e:
-        # Caller promised best-effort, and we never want to break ticket creation.
         logger.error(f"[AdminTicketPush] notify_admin_support_ticket failed: {e}")

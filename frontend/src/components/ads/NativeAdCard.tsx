@@ -34,25 +34,26 @@ function NativeAdCardInner({ style }: NativeAdCardProps) {
   const { status, isLoading } = useSubscription();
 
   const tier = status?.capability_tier || status?.subscription || 'free';
-  const isFreeTier = !status?.is_admin && tier === 'free';
+  const isFreeTier = !isLoading && !status?.is_admin && tier === 'free';
 
   const [nativeAd, setNativeAd] = useState<any>(null);
   const [adError, setAdError] = useState(false);
 
-  // Hard gate: Premium/VIP/Admin => no native ads
-  if (isLoading) return null;
-  if (!isFreeTier) return null;
-
   useEffect(() => {
-    if (!NativeAdClass || !AD_UNITS.NATIVE) return;
+    if (!isFreeTier || !NativeAdClass || !AD_UNITS.NATIVE) return;
 
     let destroyed = false;
+    let loadedAd: any = null;
 
     NativeAdClass.createForAdRequest(AD_UNITS.NATIVE, {
       requestNonPersonalizedAdsOnly: true,
     })
       .then((ad: any) => {
+        loadedAd = ad;
         if (!destroyed) setNativeAd(ad);
+        else if (ad?.destroy) {
+          try { ad.destroy(); } catch {}
+        }
       })
       .catch((err: any) => {
         console.warn('[Ads] NativeAd load failed:', err);
@@ -61,8 +62,8 @@ function NativeAdCardInner({ style }: NativeAdCardProps) {
 
     return () => {
       destroyed = true;
-      if (nativeAd?.destroy) {
-        try { nativeAd.destroy(); } catch {}
+      if (loadedAd?.destroy) {
+        try { loadedAd.destroy(); } catch {}
       }
     };
   }, [isFreeTier]);
@@ -76,6 +77,8 @@ function NativeAdCardInner({ style }: NativeAdCardProps) {
     };
   }, [nativeAd]);
 
+  // Hard gate placed AFTER all hooks so React hook order stays invariant across renders
+  if (isLoading || !isFreeTier) return null;
   if (!NativeAdClass || !NativeAdView || adError || !nativeAd) return null;
 
   try {

@@ -55,9 +55,11 @@ async def get_active_announcement() -> Optional[dict[str, Any]]:
     return _normalize_announcement(document)
 
 
-# Frontend contract: fetch latest active announcement
+# Frontend contract: fetch latest active announcement (admin namespace requires admin auth)
 @router.get("/admin/app-announcements/latest-active", response_model=Optional[AppAnnouncementRead])
-async def get_latest_active_announcement() -> Optional[dict[str, Any]]:
+async def get_latest_active_announcement(
+    admin_user: Any = Depends(require_admin),
+) -> Optional[dict[str, Any]]:
     return await get_active_announcement()
 
 

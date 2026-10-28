@@ -43,7 +43,14 @@ async def get_dashboard(current_user: Optional[User] = Depends(get_current_user)
     
     win_rate = round((winning_signals / total_signals * 100) if total_signals > 0 else 0, 1)
     
-    user_role = current_user.role if current_user else UserRole.FREE
+    if current_user:
+        if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            user_role = current_user.role
+        else:
+            effective_tier = await get_effective_subscription(current_user)
+            user_role = UserRole(effective_tier) if effective_tier in ("free", "premium", "vip") else UserRole.FREE
+    else:
+        user_role = UserRole.FREE
     
     # Filter signals based on role
     filtered_signals = []

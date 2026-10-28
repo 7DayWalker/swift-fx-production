@@ -27,9 +27,9 @@ SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTc5NzIsImV4cCI6MjA4NTg3Mzk3Mn0.yImldZ1cCW4yEat4b6X1lAFufVs6ym_Hudm4lsRXwkQ"
 
 TEST_USER_EMAIL = "paradoxella@gmail.com"
-TEST_USER_PASSWORD = "Grace1992@"
+TEST_USER_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 ADMIN_USER_EMAIL = "ellapauledache@gmail.com"
-ADMIN_USER_PASSWORD = "Grace1992@"
+ADMIN_USER_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

@@ -22,7 +22,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
-SUPER_ADMIN_PASSWORD = "Grace1992@"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 TEST_TARGET_USER_ID = "8e8be463-b261-4af2-8259-524ed0bf6596"  # User with active VIP override
 
 

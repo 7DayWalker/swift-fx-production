@@ -89,8 +89,7 @@ export default function PaymentPage() {
     if (method === 'email') {
       Linking.openURL(`mailto:support@swiftfx.online?subject=${subject}&body=${body}`);
     } else {
-      // WhatsApp - replace with your actual number
-      Linking.openURL(`https://wa.me/1234567890?text=${body}`);
+      Linking.openURL(`https://wa.me/2348169427440?text=${body}`);
     }
   };
 

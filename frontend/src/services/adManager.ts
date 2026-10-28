@@ -1,35 +1,51 @@
 /**
  * Centralized Ad Manager — controls frequency, state, and test/production ID switching.
  *
- * iOS uses LIVE production ad unit IDs.
- * Android still uses Google well-known TEST IDs (swap when going live on Play Store).
- * TestIds are hardcoded Google well-known test IDs to avoid importing
- * the native-only SDK at the module level (breaks web bundling).
+ * Development builds (__DEV__) ALWAYS use Google's official AdMob test unit IDs
+ * so simulator/device testing never generates invalid production impressions.
+ * Release builds (!__DEV__) use live production AdMob unit IDs.
  */
 import { Platform } from 'react-native';
 
+const GOOGLE_TEST_UNITS = {
+  BANNER: 'ca-app-pub-3940256099942544/6300978111',
+  INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712',
+  REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+  NATIVE: 'ca-app-pub-3940256099942544/2247696110',
+};
+
+const isDevEnv = typeof __DEV__ !== 'undefined' && __DEV__;
+
 // ─── Ad Unit IDs ────────────────────────────────────────────────────────────
 export const AD_UNITS = {
-  BANNER: Platform.select({
-    android: 'ca-app-pub-3249620629100588/7634484992',
-    ios: 'ca-app-pub-3249620629100588/3292403004',
-    default: 'test-banner',
-  }),
-  INTERSTITIAL: Platform.select({
-    android: 'ca-app-pub-3249620629100588/1327033881',
-    ios: 'ca-app-pub-3249620629100588/1155370427',
-    default: 'test-interstitial',
-  }),
-  REWARDED: Platform.select({
-    android: 'ca-app-pub-3249620629100588/8822380527',
-    ios: 'ca-app-pub-3249620629100588/5016548217',
-    default: 'test-rewarded',
-  }),
-  NATIVE: Platform.select({
-    android: 'ca-app-pub-3249620629100588/4182325141',
-    ios: 'ca-app-pub-3249620629100588/5343851273',
-    default: 'test-native',
-  }),
+  BANNER: isDevEnv
+    ? GOOGLE_TEST_UNITS.BANNER
+    : Platform.select({
+        android: 'ca-app-pub-3249620629100588/7634484992',
+        ios: 'ca-app-pub-3249620629100588/3292403004',
+        default: GOOGLE_TEST_UNITS.BANNER,
+      }),
+  INTERSTITIAL: isDevEnv
+    ? GOOGLE_TEST_UNITS.INTERSTITIAL
+    : Platform.select({
+        android: 'ca-app-pub-3249620629100588/1327033881',
+        ios: 'ca-app-pub-3249620629100588/1155370427',
+        default: GOOGLE_TEST_UNITS.INTERSTITIAL,
+      }),
+  REWARDED: isDevEnv
+    ? GOOGLE_TEST_UNITS.REWARDED
+    : Platform.select({
+        android: 'ca-app-pub-3249620629100588/8822380527',
+        ios: 'ca-app-pub-3249620629100588/5016548217',
+        default: GOOGLE_TEST_UNITS.REWARDED,
+      }),
+  NATIVE: isDevEnv
+    ? GOOGLE_TEST_UNITS.NATIVE
+    : Platform.select({
+        android: 'ca-app-pub-3249620629100588/4182325141',
+        ios: 'ca-app-pub-3249620629100588/5343851273',
+        default: GOOGLE_TEST_UNITS.NATIVE,
+      }),
 };
 
 // ─── Interstitial Frequency Gate ────────────────────────────────────────────

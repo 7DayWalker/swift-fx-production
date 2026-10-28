@@ -303,7 +303,11 @@ async def get_streak_status(current_user: User = Depends(require_auth)):
 
 
 @router.get("/academy/lesson-content/{course_id}/{lesson_id}")
-async def get_lesson_content(course_id: str, lesson_id: int):
+async def get_lesson_content(
+    course_id: str,
+    lesson_id: int,
+    current_user: User = Depends(require_auth),
+):
     col = db["academy_lesson_content"]
     doc = await col.find_one(
         {"course_id": course_id, "lesson_id": lesson_id}, {"_id": 0}
@@ -387,11 +391,12 @@ Return ONLY valid JSON (no markdown, no code blocks):
 async def _run_batch_content_generation():
     """Background task: generate content for all lessons."""
     import json as json_module
+    metadata_path = Path(__file__).resolve().parent.parent.parent / "academy_metadata.json"
     try:
-        with open("/app/backend/academy_metadata.json") as f:
+        with open(metadata_path) as f:
             courses = json_module.load(f)
     except Exception as e:
-        print(f"[Academy Content] Failed to load metadata: {e}")
+        print(f"[Academy Content] Failed to load metadata from {metadata_path}: {e}")
         return
 
     col = db["academy_lesson_content"]

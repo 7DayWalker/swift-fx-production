@@ -26,40 +26,22 @@ logger = logging.getLogger(__name__)
 async def send_signal_notification(signal_id, pair, signal_type, visibility):
     from services.push_notifications import notify_new_signal
     sig_type = signal_type.value if hasattr(signal_type, 'value') else str(signal_type)
-    import traceback
-    caller = traceback.extract_stack(limit=3)[0]
-    logger.warning(
-        f"TRIGGER CALL → new_signal → signal_id={signal_id} → "
-        f"source=signal_engine.send_signal_notification → "
-        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
-    )
-    await notify_new_signal(signal_id, pair, sig_type)
+    vis = visibility.value if hasattr(visibility, 'value') else str(visibility or "free")
+    await notify_new_signal(signal_id, pair, sig_type, visibility=vis)
 
 
 async def send_signal_close_notification(signal_id, pair, signal_type, pips, visibility, tp_hit=0):
     from services.push_notifications import notify_signal_closed
     sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
-    import traceback
-    caller = traceback.extract_stack(limit=3)[0]
-    logger.warning(
-        f"TRIGGER CALL → signal_closed → signal_id={signal_id} → pips={pips} → tp_hit={tp_hit} → "
-        f"source=signal_engine.send_signal_close_notification → "
-        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
-    )
-    await notify_signal_closed(signal_id, pair, sig_type, pips, tp_hit)
+    vis = visibility.value if hasattr(visibility, 'value') else str(visibility or "free")
+    await notify_signal_closed(signal_id, pair, sig_type, pips, tp_hit, visibility=vis)
 
 
-async def send_tp_hit_notification(signal_id, pair, signal_type, tp_level, running_pips=None):
+async def send_tp_hit_notification(signal_id, pair, signal_type, tp_level, running_pips=None, visibility="free"):
     from services.push_notifications import notify_tp_hit
     sig_type = signal_type if isinstance(signal_type, str) else signal_type.value
-    import traceback
-    caller = traceback.extract_stack(limit=3)[0]
-    logger.warning(
-        f"TRIGGER CALL → tp_hit → signal_id={signal_id} → tp_level={tp_level} → "
-        f"source=signal_engine.send_tp_hit_notification → "
-        f"caller={caller.filename}:{caller.lineno}:{caller.name}"
-    )
-    await notify_tp_hit(signal_id, pair, sig_type, tp_level, running_pips)
+    vis = visibility.value if hasattr(visibility, 'value') else str(visibility or "free")
+    await notify_tp_hit(signal_id, pair, sig_type, tp_level, running_pips, visibility=vis)
 
 # ==============================================================================
 # SIGNAL LIFECYCLE ENGINE v4.0 - AUDITED ABSOLUTE THRESHOLD ENGINE
@@ -276,32 +258,41 @@ def calculate_signal_pips(entry_price: float, exit_price: float, signal_type: st
 # DETERMINISTIC PRICE TRIGGER ENGINE v4.0 - AUDITED ABSOLUTE THRESHOLDS
 # ==============================================================================
 
+def _get_price_epsilon(pair: Optional[str] = None) -> float:
+    """
+    Instrument-scaled spread tolerance (applied ONLY to Entry and TP, NEVER to SL):
+      - XAUUSD / Gold (or None legacy simulation default): 0.50 ($0.50 = 5 gold pips)
+      - BTCUSD: 5.00
+      - ETHUSD: 1.00
+      - US30 / DJ30 / WS30: 2.00
+      - Standard 4-decimal FX (EURUSD, GBPUSD, etc.): 0.0002 (2 pips)
+      - JPY pairs (USDJPY, GBPJPY): 0.02 (2 pips)
+    """
+    if not pair:
+        return 0.5
+    upper = pair.upper().replace("/", "").strip()
+    if "XAU" in upper or "GOLD" in upper:
+        return 0.5
+    if "BTC" in upper:
+        return 5.0
+    if "ETH" in upper:
+        return 1.0
+    if upper.startswith(("US30", "DJ30", "WS30")):
+        return 2.0
+    info = get_instrument_info(pair)
+    return round(2.0 * float(info.get("pip_size", 0.0001)), 6)
+
+
 class DeterministicPriceTrigger:
     """
     AUDITED absolute threshold price trigger — NO crossing detection.
     
     Every tick is evaluated independently. No dependency on previous_price.
-    
-    EXECUTION RULES (v4.0 — AUDITED):
-      BUY signals (limit order: buy when price drops to entry):
-        Entry:  price <= entry + EPSILON
-        TP:     price >= tp - EPSILON
-        SL:     price <= stop_loss        (NO epsilon)
-      
-      SELL signals (limit order: sell when price rises to entry):
-        Entry:  price >= entry - EPSILON
-        TP:     price <= tp + EPSILON
-        SL:     price >= stop_loss        (NO epsilon)
-    
-    PRICE_EPSILON = 0.5 — broker spread tolerance.
+    Spread tolerance epsilon is scaled per instrument via _get_price_epsilon(pair).
     Applied ONLY to Entry and TP. NEVER to SL.
-    
-    GAP PROTECTION: Returns the DEFINED level price for execution,
-    not the gapped market price. Deterministic and auditable.
     """
     
-    PRICE_EPSILON = 0.5  # Broker spread tolerance (in price units)
-    # Legacy alias
+    PRICE_EPSILON = 0.5  # Default gold/legacy spread tolerance when pair is omitted
     BUFFER = PRICE_EPSILON
     
     @staticmethod
@@ -334,10 +325,11 @@ class DeterministicPriceTrigger:
         current_price: float,
         take_profit: float,
         signal_type: str,
-        last_price: Optional[float] = None
+        last_price: Optional[float] = None,
+        pair: Optional[str] = None,
     ) -> tuple:
         """
-        Take Profit — EPSILON applied for broker spread tolerance.
+        Take Profit — instrument-scaled EPSILON applied for broker spread tolerance.
         
         BUY:  price >= tp - EPSILON  (price rises to TP)
         SELL: price <= tp + EPSILON  (price drops to TP)
@@ -345,7 +337,7 @@ class DeterministicPriceTrigger:
         if not take_profit or not current_price:
             return (False, None)
         
-        eps = DeterministicPriceTrigger.PRICE_EPSILON
+        eps = _get_price_epsilon(pair)
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
@@ -360,28 +352,24 @@ class DeterministicPriceTrigger:
         current_price: float,
         entry_price: float,
         signal_type: str,
-        last_price: Optional[float] = None
+        last_price: Optional[float] = None,
+        pair: Optional[str] = None,
     ) -> tuple:
         """
-        Entry — EPSILON applied. Limit order behavior.
+        Entry — instrument-scaled EPSILON applied. Limit order behavior.
         
         BUY:  price <= entry + EPSILON  (price drops TO entry for buy limit)
         SELL: price >= entry - EPSILON  (price rises TO entry for sell limit)
-        
-        v4.0 FIX: Previous version had BUY/SELL conditions INVERTED,
-        causing pending orders to trigger late or not at all.
         """
         if not entry_price or not current_price:
             return (False, None)
         
-        eps = DeterministicPriceTrigger.PRICE_EPSILON
+        eps = _get_price_epsilon(pair)
         sig_type = signal_type.lower()
         
         if sig_type == "sell":
-            # SELL LIMIT: activate when price rises to entry
             triggered = current_price >= entry_price - eps
         else:
-            # BUY LIMIT: activate when price drops to entry
             triggered = current_price <= entry_price + eps
         
         return (triggered, entry_price if triggered else None)
@@ -697,7 +685,7 @@ class SignalLifecycleController:
         tp3 = signal.get("tp3")
         
         sig_type = signal_type.lower()
-        eps = DeterministicPriceTrigger.PRICE_EPSILON
+        eps = _get_price_epsilon(pair)
         
         # ===== STEP 1: MANDATORY TRACE LOG (every signal, every cycle) =====
         logger.info(
@@ -731,7 +719,7 @@ class SignalLifecycleController:
                 return None
             
             triggered, activation_price = self.trigger.check_entry_triggered(
-                current_price, entry, signal_type, last_price
+                current_price, entry, signal_type, last_price, pair=pair
             )
             
             # TRACE: Log exact entry evaluation
@@ -816,16 +804,21 @@ class SignalLifecycleController:
                     )
                     
                     if success:
-                        pips = calculate_signal_pips(entry_actual, sl_exit_price, signal_type, pair)
-                        tp_hit = signal.get("tp_hit", 0)  # Get tp_hit from signal (set when TP was hit before SL)
+                        existing_tp = signal.get("tp_hit", 0)
+                        pip_exit = sl_exit_price
+                        if existing_tp >= 1:
+                            tp_prices = {1: signal.get("tp1"), 2: signal.get("tp2"), 3: signal.get("tp3")}
+                            pip_exit = tp_prices.get(existing_tp) or sl_exit_price
+                        pips = calculate_signal_pips(entry_actual, pip_exit, signal_type, pair)
                         visibility = SignalVisibility(signal.get("visibility", "free"))
                         asyncio.create_task(send_signal_close_notification(
-                            signal_id, pair, signal_type, pips, visibility, tp_hit
+                            signal_id, pair, signal_type, pips, visibility, existing_tp
                         ))
                         return {
                             "action": "closed",
                             "reason": "sl",
                             "pips": pips,
+                            "tp_hit": existing_tp,
                             "signal_id": signal_id,
                             "exit_price": sl_exit_price,
                             "gap_protected": sl_exit_price != current_price
@@ -837,7 +830,7 @@ class SignalLifecycleController:
             
             if tp_target:
                 tp_triggered, tp_exit_price = self.trigger.check_tp_triggered(
-                    current_price, tp_target, signal_type, last_price
+                    current_price, tp_target, signal_type, last_price, pair=pair
                 )
                 
                 # TRACE: Log exact TP evaluation
@@ -862,7 +855,8 @@ class SignalLifecycleController:
                         f"→ new_state={new_state}"
                     )
                     
-                    tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(new_state, 1)
+                    reason_str = exit_reason.value if hasattr(exit_reason, "value") else str(exit_reason or "tp1").lower()
+                    tp_level = {"tp1": 1, "tp2": 2, "tp3": 3}.get(reason_str, 1)
                     
                     if new_state == "closed":
                         # Single-TP or final TP → close immediately
@@ -871,15 +865,16 @@ class SignalLifecycleController:
                         )
                         if success:
                             pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
-                            tp_hit_value = tp_level if exit_reason in ["tp1", ExitReason.TP1, "tp2", ExitReason.TP2, "tp3", ExitReason.TP3] else 0
+                            tp_hit_value = tp_level if reason_str in ("tp1", "tp2", "tp3") else 0
                             visibility = SignalVisibility(signal.get("visibility", "free"))
                             asyncio.create_task(send_signal_close_notification(
                                 signal_id, pair, signal_type, pips, visibility, tp_hit_value
                             ))
                             return {
                                 "action": "closed",
-                                "reason": str(exit_reason),
+                                "reason": reason_str,
                                 "pips": pips,
+                                "tp_hit": tp_hit_value,
                                 "signal_id": signal_id,
                                 "exit_price": tp_exit_price,
                                 "gap_protected": tp_exit_price != current_price
@@ -890,10 +885,7 @@ class SignalLifecycleController:
                             signal_id, current_state, new_state, tp_level, signal=signal
                         )
                         if success:
-                            # Send TP hit notification with trailing SL info
                             running_pips = calculate_signal_pips(entry_actual, tp_exit_price, signal_type, pair)
-                            
-                            # Determine what the SL was trailed to for the notification
                             if tp_level == 1:
                                 trail_msg = f"SL moved to entry ({entry_actual})"
                             elif tp_level == 2:
@@ -901,9 +893,10 @@ class SignalLifecycleController:
                                 trail_msg = f"SL moved to TP1 ({tp1_price})"
                             else:
                                 trail_msg = ""
-                            
+
+                            visibility = SignalVisibility(signal.get("visibility", "free"))
                             asyncio.create_task(send_tp_hit_notification(
-                                signal_id, pair, signal_type, tp_level, running_pips
+                                signal_id, pair, signal_type, tp_level, running_pips, visibility=visibility
                             ))
                             return {
                                 "action": "tp_hit",

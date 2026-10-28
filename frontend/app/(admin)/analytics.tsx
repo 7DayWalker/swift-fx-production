@@ -15,9 +15,13 @@ import { api } from '../../src/services/api';
 
 interface User {
   user_id: string;
+  id?: string;
   name: string;
   email: string;
-  role: 'free' | 'premium' | 'vip';
+  role: string;
+  subscription?: string;
+  ai_weekly_used?: number;
+  ai_weekly_reset?: string;
   ai_usage_count?: number;
   ai_usage_reset_date?: string;
 }
@@ -62,20 +66,23 @@ export default function AnalyticsScreen() {
     setRefreshing(false);
   };
 
-  const getAIUsageByRole = () => {
-    const premium = users.filter(u => u.role === 'premium');
-    const vip = users.filter(u => u.role === 'vip');
+  const getUserTier = (u: User) => (u.subscription || u.role || 'free').toLowerCase();
+  const getUserAIUsage = (u: User) => u.ai_weekly_used ?? u.ai_usage_count ?? 0;
 
-    const premiumUsage = premium.reduce((sum, u) => sum + (u.ai_usage_count || 0), 0);
-    const vipUsage = vip.reduce((sum, u) => sum + (u.ai_usage_count || 0), 0);
+  const getAIUsageByRole = () => {
+    const premium = users.filter(u => getUserTier(u) === 'premium');
+    const vip = users.filter(u => getUserTier(u) === 'vip');
+
+    const premiumUsage = premium.reduce((sum, u) => sum + getUserAIUsage(u), 0);
+    const vipUsage = vip.reduce((sum, u) => sum + getUserAIUsage(u), 0);
 
     return { premiumUsage, vipUsage, total: premiumUsage + vipUsage };
   };
 
   const getTopAIUsers = () => {
     return users
-      .filter(u => (u.ai_usage_count || 0) > 0)
-      .sort((a, b) => (b.ai_usage_count || 0) - (a.ai_usage_count || 0))
+      .filter(u => getUserAIUsage(u) > 0)
+      .sort((a, b) => getUserAIUsage(b) - getUserAIUsage(a))
       .slice(0, 5);
   };
 
@@ -137,7 +144,7 @@ export default function AnalyticsScreen() {
             </View>
             <Text style={styles.usageValue}>{aiUsage.premiumUsage}</Text>
             <Text style={styles.usageLabel}>Premium</Text>
-            <Text style={styles.usageSubtext}>5 per week limit</Text>
+            <Text style={styles.usageSubtext}>10 per week limit</Text>
           </View>
           <View style={styles.usageCard}>
             <View style={[styles.usageIconContainer, { backgroundColor: 'rgba(255, 215, 0, 0.15)' }]}>
@@ -145,7 +152,7 @@ export default function AnalyticsScreen() {
             </View>
             <Text style={styles.usageValue}>{aiUsage.vipUsage}</Text>
             <Text style={styles.usageLabel}>VIP</Text>
-            <Text style={styles.usageSubtext}>20 per week limit</Text>
+            <Text style={styles.usageSubtext}>Unlimited</Text>
           </View>
         </View>
 
@@ -183,25 +190,28 @@ export default function AnalyticsScreen() {
           </View>
         ) : (
           <View style={styles.topUsersContainer}>
-            {topUsers.map((user, index) => (
-              <View key={user.user_id} style={styles.topUserCard}>
+            {topUsers.map((user, index) => {
+              const tier = getUserTier(user);
+              return (
+              <View key={user.user_id || user.id || index} style={styles.topUserCard}>
                 <View style={styles.rankBadge}>
                   <Text style={styles.rankText}>#{index + 1}</Text>
                 </View>
                 <View style={styles.topUserInfo}>
                   <Text style={styles.topUserName}>{user.name}</Text>
-                  <View style={[styles.topUserRole, { backgroundColor: `${getRoleColor(user.role)}20` }]}>
-                    <Text style={[styles.topUserRoleText, { color: getRoleColor(user.role) }]}>
-                      {user.role?.toUpperCase()}
+                  <View style={[styles.topUserRole, { backgroundColor: `${getRoleColor(tier)}20` }]}>
+                    <Text style={[styles.topUserRoleText, { color: getRoleColor(tier) }]}>
+                      {tier.toUpperCase()}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.topUserUsage}>
-                  <Text style={styles.topUserUsageValue}>{user.ai_usage_count}</Text>
+                  <Text style={styles.topUserUsageValue}>{getUserAIUsage(user)}</Text>
                   <Text style={styles.topUserUsageLabel}>analyses</Text>
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -211,9 +221,9 @@ export default function AnalyticsScreen() {
           <View style={styles.infoContent}>
             <Text style={styles.infoTitle}>AI Usage Limits</Text>
             <Text style={styles.infoText}>
-              Premium users: 5 analyses per week{"\n"}
-              VIP users: 20 analyses per week{"\n"}
-              Free users: No AI access
+              Free users: 3 analyses per week{"\n"}
+              Premium users: 10 analyses per week{"\n"}
+              VIP users: Unlimited analyses
             </Text>
           </View>
         </View>

@@ -26,7 +26,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 # Super Admin credentials
 SA_EMAIL = "ellapauledache@gmail.com"
-SA_PASSWORD = "Grace1992@"
+SA_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

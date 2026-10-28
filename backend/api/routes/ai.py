@@ -58,21 +58,17 @@ async def analyze_chart_legacy(
             reset_date = reset_date.replace(tzinfo=timezone.utc)
         
         if reset_date < datetime.now(timezone.utc):
-            # Reset weekly counter
+            # Reset weekly counter using valid profiles columns
             await update_profile(current_user.user_id, {
-                    "ai_weekly_used": 0,
-                    "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
-                    # Also reset legacy fields
-                    "ai_usage_count": 0,
-                    "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-                })
+                "ai_weekly_used": 0,
+                "ai_weekly_reset": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            })
             current_usage = 0
     else:
         # Initialize reset date if not set
         await update_profile(current_user.user_id, {
-                "ai_weekly_reset": datetime.now(timezone.utc) + timedelta(days=7),
-                "ai_usage_reset_date": datetime.now(timezone.utc) + timedelta(days=7)
-            })
+            "ai_weekly_reset": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        })
     
     # Check usage limit (VIP has unlimited = 999999)
     if current_usage >= weekly_limit:
@@ -210,16 +206,30 @@ async def get_ai_usage(current_user: User = Depends(require_auth)):
     current_usage = user_doc.get("ai_weekly_used", 0) or user_doc.get("ai_usage_count", 0)
     reset_date = user_doc.get("ai_weekly_reset") or user_doc.get("ai_usage_reset_date")
     
-    remaining = max(0, weekly_limit - current_usage)
-    
+    effective_usage = current_usage
+    if reset_date:
+        reset_dt = reset_date
+        if isinstance(reset_dt, str):
+            try:
+                reset_dt = datetime.fromisoformat(reset_dt.replace('Z', '+00:00'))
+            except ValueError:
+                reset_dt = None
+        if reset_dt is not None:
+            if reset_dt.tzinfo is None:
+                reset_dt = reset_dt.replace(tzinfo=timezone.utc)
+            if reset_dt < datetime.now(timezone.utc):
+                effective_usage = 0
+
+    remaining = max(0, weekly_limit - effective_usage)
+
     return {
-        "current_usage": current_usage,
+        "current_usage": effective_usage,
         "weekly_limit": weekly_limit if weekly_limit < 100000 else "unlimited",
         "remaining": remaining if weekly_limit < 100000 else "unlimited",
         "reset_date": reset_date,
         "has_access": True,  # All users have access, just different limits
         "subscription": effective_subscription,
-        "limit_reached": current_usage >= weekly_limit if weekly_limit < 100000 else False
+        "limit_reached": effective_usage >= weekly_limit if weekly_limit < 100000 else False
     }
 
 # ===================== AI CHART ANALYZER =====================

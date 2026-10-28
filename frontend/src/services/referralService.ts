@@ -140,10 +140,11 @@ export async function validateReferralCode(code: string): Promise<ReferralValida
 export function extractReferralCodeFromUrl(url: string): string | null {
   try {
     // Handle various URL formats:
+    // https://swiftfx.online/app/invite?ref=CODE
     // https://swiftfx.online/app/?ref=CODE
-    // swiftfx://register?ref=CODE
+    // swiftfx://invite?ref=CODE
+    // swiftfx://register?ref=CODE (legacy compatibility)
     // swiftfx://ref/CODE
-    // (also tolerant of https://swiftfx.online/app/register?ref=CODE)
     
     const normalizedUrl = url.startsWith('swiftfx://')
       ? url.replace('swiftfx://', 'https://swiftfx.online/app/')
@@ -248,6 +249,5 @@ export function getDeviceType(): 'android' | 'ios' | 'desktop' {
  * Generate referral link for sharing
  */
 export function generateReferralLink(code: string): string {
-  // Backend expects the landing route to accept `?ref=CODE` on `/app/`
-  return `${DEEP_LINK_SCHEMES.universal}/?ref=${code}`;
+  return `${DEEP_LINK_SCHEMES.universal}/invite?ref=${code}`;
 }

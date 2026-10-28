@@ -6,22 +6,24 @@ import pytest
 import requests
 import os
 
-# Using preview URL for testing
-BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com"
+# Using preview/configured URL for testing
+BASE_URL = os.environ.get("TEST_BACKEND_URL", "https://rbac-audit-logs.preview.emergentagent.com")
 
-# Supabase credentials
-SUPABASE_URL = "https://hrzghlqcfccnmgcipxxo.supabase.co"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDI5Nzk3MiwiZXhwIjoyMDg1ODczOTcyfQ.6lQ5_g-LnORjWrz9Yn1hBYA3-SXcI5aidmyKI9SjGvY"
+# Supabase credentials (sourced strictly from environment — never hardcode service_role keys)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://hrzghlqcfccnmgcipxxo.supabase.co")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 # Test user credentials
-TEST_EMAIL = "testbro@gmail.com"
-TEST_PASSWORD = "TestBro123!@#"
-TEST_USER_ID = "233d098e-64f7-4120-970b-f5424c92922b"
+TEST_EMAIL = os.environ.get("TEST_USER_EMAIL", "testbro@gmail.com")
+TEST_PASSWORD = os.environ.get("TEST_USER_PASSWORD", "")
+TEST_USER_ID = os.environ.get("TEST_USER_ID", "233d098e-64f7-4120-970b-f5424c92922b")
 
 
 @pytest.fixture(scope="module")
 def supabase_access_token():
     """Get a Supabase access token using email/password auth"""
+    if not SUPABASE_SERVICE_KEY or not TEST_PASSWORD:
+        pytest.skip("SUPABASE_SERVICE_ROLE_KEY and TEST_USER_PASSWORD env vars required for live auth test")
     response = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
         headers={

@@ -3,6 +3,7 @@
 Corrected RBAC Testing - Following the exact review request sequence
 """
 
+import os
 import requests
 import json
 import time
@@ -23,7 +24,7 @@ def test_complete_rbac_sequence():
     # Use the correct super admin credentials
     login_response = requests.post(f"{BASE_URL}/auth/login", json={
         "email": "ellaniswell@gmail.com",
-        "password": "SuperAdmin_c4e25774!"
+        "password": os.environ.get("TEST_ADMIN_PASSWORD", "")
     })
     
     if login_response.status_code == 200:

@@ -16,6 +16,7 @@ Review Request Sequence:
 9. DELETE POST (cascade) → DELETE .../rest/v1/posts, verify cascade
 """
 
+import os
 import requests
 import json
 import sys
@@ -27,7 +28,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 # Admin Credentials
 ADMIN_EMAIL = "admin@swiftfx.app"
-ADMIN_PASSWORD = "Admin123!@#"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 ADMIN_UUID = "e87eb3a8-0b34-420f-96bc-903f8b9a921d"
 
 class SupabaseCommunityTester:

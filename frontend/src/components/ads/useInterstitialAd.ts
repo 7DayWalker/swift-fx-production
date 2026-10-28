@@ -20,12 +20,12 @@ if (Platform.OS !== 'web') {
 }
 
 export function useInterstitialAd() {
-  const { status } = useSubscription();
+  const { status, isLoading } = useSubscription();
   const adRef = useRef<any>(null);
   const isLoadedRef = useRef(false);
 
   const tier = status?.capability_tier || status?.subscription || 'free';
-  const isFree = tier === 'free';
+  const isFree = !isLoading && !status?.is_admin && tier === 'free';
 
   // Preload ad on mount (native + free only)
   useEffect(() => {

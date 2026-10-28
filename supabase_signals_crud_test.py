@@ -11,6 +11,7 @@ Test Sequence:
 5. DELETE signal → Delete signal and verify count back to 11
 """
 
+import os
 import requests
 import json
 from typing import Dict, Any, Optional
@@ -25,7 +26,7 @@ class SupabaseSignalsCrudTester:
         
         # Admin credentials from review request
         self.admin_email = "admin@swiftfx.app"
-        self.admin_password = "Admin123!@#"
+        self.admin_password = os.environ.get("TEST_ADMIN_PASSWORD", "")
         self.admin_user_id = "e87eb3a8-0b34-420f-96bc-903f8b9a921d"
         
         # Session tracking

@@ -20,9 +20,9 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 # Test credentials
 TEST_USER_EMAIL = "paradoxella@gmail.com"
-TEST_USER_PASSWORD = "Grace1992@"
+TEST_USER_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 ADMIN_USER_EMAIL = "ellapauledache@gmail.com"
-ADMIN_USER_PASSWORD = "Grace1992@"
+ADMIN_USER_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 # Official 6 SKUs (locked - match App Store Connect / Google Play Console)
 EXPECTED_SKUS = [

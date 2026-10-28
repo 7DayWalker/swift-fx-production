@@ -4,6 +4,7 @@ Backend Testing Suite for User Settings System
 Tests all User Settings System endpoints with proper authentication
 """
 
+import os
 import requests
 import json
 import sys
@@ -14,7 +15,7 @@ BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com/api"
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
-SUPER_ADMIN_PASSWORD = "SuperAdmin2025!"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 VIP_USER_EMAIL = "fundtest@test.com"
 VIP_USER_PASSWORD = "password"
 

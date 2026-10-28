@@ -1,35 +1,30 @@
 """
 services/market_data.py — Multi-provider market data service with fallback chain.
 
-Provider priority (strict order):
-  1. gold-api.com → PRIMARY (free, no key, stable for testing)
-  2. TwelveData   → SECONDARY (rate-limited on free tier)
-  3. Metals-API   → bonus (if key configured)
-  4. GoldAPI      → bonus (if key configured)
-  5. Finnhub      → low priority (free tier lacks gold)
-  6. Alpha Vantage → low priority (free tier rate-limited)
-
-Adding new symbols:
-  1. Add provider functions per symbol
-  2. Register in SYMBOL_PROVIDERS
-  3. Done — get_price() handles routing, caching, and normalization
+Provider priority for XAUUSD (strict order):
+  1. TwelveData   → PRIMARY when TWELVEDATA_KEY is configured (institutional spot feed)
+  2. gold-api.com → SECONDARY (free, no key, live spot fallback)
+  3. Metals-API   → TERTIARY (if key configured)
+  4. GoldAPI      → QUATERNARY (if key configured)
+  5. Finnhub      → fallback (if FINNHUB_API_KEY configured)
+  6. Alpha Vantage → last resort (if ALPHA_VANTAGE_API_KEY configured)
 """
 import os
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# API keys — os.getenv with fallback for preview, overridden in production
+# API keys — strictly from environment variables (never hardcoded in repo)
 # ---------------------------------------------------------------------------
-TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY", "")
-FINNHUB_KEY = os.getenv("FINNHUB_API_KEY") or "d76480pr01qm4b7st7e0d76480pr01qm4b7st7eg"
-ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_API_KEY") or "WPZNQ8BM1THQ0XXY"
+TWELVEDATA_KEY = os.environ.get("TWELVEDATA_KEY") or os.environ.get("TWELVEDATA_API_KEY", "")
+FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
+ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 METALS_API_KEY = os.environ.get("METALS_API_KEY", "")
 GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
 
@@ -40,7 +35,7 @@ GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
 _price_cache: dict[str, dict] = {}
 CACHE_TTL_SECONDS = 3
 
-# Provider request timeout (2 seconds per user spec)
+# Provider request timeout (2 seconds)
 PROVIDER_TIMEOUT = 2.0
 
 
@@ -71,8 +66,7 @@ def _is_real_key(key: str) -> bool:
 
 
 # ===================================================================
-# PROVIDER 1: TwelveData (PRIMARY)
-# Symbol: XAU/USD
+# GOLD PROVIDERS (XAUUSD)
 # ===================================================================
 
 async def _gold_twelvedata(client: httpx.AsyncClient) -> Optional[dict]:
@@ -98,14 +92,10 @@ async def _gold_twelvedata(client: httpx.AsyncClient) -> Optional[dict]:
                 logger.warning("[PROVIDER] TwelveData: rate limited (429) → fallback")
             elif data.get("status") == "error":
                 logger.warning(f"[PROVIDER] TwelveData API error: {data.get('message', 'unknown')}")
-            else:
-                logger.warning(f"[PROVIDER] TwelveData: unexpected response: {str(data)[:200]}")
         elif resp.status_code == 429:
             logger.warning("[PROVIDER] TwelveData: HTTP 429 → fallback")
         elif resp.status_code == 401:
             logger.warning("[PROVIDER] TwelveData: HTTP 401 invalid key")
-        else:
-            logger.warning(f"[PROVIDER] TwelveData: HTTP {resp.status_code}")
     except httpx.TimeoutException:
         logger.warning("[PROVIDER] TwelveData: timeout → fallback")
     except Exception as e:
@@ -113,10 +103,61 @@ async def _gold_twelvedata(client: httpx.AsyncClient) -> Optional[dict]:
     return None
 
 
-# ===================================================================
-# PROVIDER 2: Finnhub (FALLBACK)
-# Symbol: OANDA:XAU_USD
-# ===================================================================
+async def _gold_free_api(client: httpx.AsyncClient) -> Optional[dict]:
+    try:
+        resp = await client.get("https://api.gold-api.com/price/XAU")
+        if resp.status_code == 200:
+            data = resp.json()
+            price = data.get("price")
+            if price and float(price) > 0:
+                logger.info(f"[PROVIDER] gold-api.com used price={float(price)}")
+                return _make_response("XAUUSD", round(float(price), 2), "gold-api.com")
+        elif resp.status_code == 429:
+            logger.warning("[PROVIDER] gold-api.com: rate limited (429)")
+    except httpx.TimeoutException:
+        logger.warning("[PROVIDER] gold-api.com: timeout")
+    except Exception as e:
+        logger.warning(f"[PROVIDER] gold-api.com exception: {e}")
+    return None
+
+
+async def _gold_metals_api(client: httpx.AsyncClient) -> Optional[dict]:
+    if not _is_real_key(METALS_API_KEY):
+        return None
+    try:
+        resp = await client.get(
+            "https://api.metals-api.com/v1/latest",
+            params={"access_key": METALS_API_KEY, "base": "USD", "symbols": "XAU"},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("success"):
+                rate = data.get("rates", {}).get("XAU")
+                if rate and float(rate) > 0:
+                    price = 1.0 / float(rate)
+                    return _make_response("XAUUSD", round(price, 2), "metals-api")
+    except Exception as e:
+        logger.warning(f"[PROVIDER] Metals-API exception: {e}")
+    return None
+
+
+async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
+    if not _is_real_key(GOLDAPI_KEY):
+        return None
+    try:
+        resp = await client.get(
+            "https://www.goldapi.io/api/XAU/USD",
+            headers={"x-access-token": GOLDAPI_KEY},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            price = data.get("price")
+            if price and float(price) > 0:
+                return _make_response("XAUUSD", round(float(price), 2), "goldapi")
+    except Exception as e:
+        logger.warning(f"[PROVIDER] GoldAPI exception: {e}")
+    return None
+
 
 async def _gold_finnhub(client: httpx.AsyncClient) -> Optional[dict]:
     if not _is_real_key(FINNHUB_KEY):
@@ -128,29 +169,13 @@ async def _gold_finnhub(client: httpx.AsyncClient) -> Optional[dict]:
         )
         if resp.status_code == 200:
             data = resp.json()
-            price = data.get("c")  # "c" = current price
+            price = data.get("c")
             if price and float(price) > 0:
-                logger.info(f"[PROVIDER] finnhub fallback used price={float(price)}")
                 return _make_response("XAUUSD", round(float(price), 2), "finnhub")
-            else:
-                logger.warning(f"[PROVIDER] Finnhub: no valid price in response: {str(data)[:200]}")
-        elif resp.status_code == 429:
-            logger.warning("[PROVIDER] Finnhub: rate limited (429) → fallback")
-        elif resp.status_code == 401:
-            logger.warning("[PROVIDER] Finnhub: HTTP 401 invalid key")
-        else:
-            logger.warning(f"[PROVIDER] Finnhub: HTTP {resp.status_code}")
-    except httpx.TimeoutException:
-        logger.warning("[PROVIDER] Finnhub: timeout → fallback")
     except Exception as e:
         logger.warning(f"[PROVIDER] Finnhub exception: {e}")
     return None
 
-
-# ===================================================================
-# PROVIDER 3: Alpha Vantage (LAST RESORT — requires premium for spot gold)
-# Free tier: gold futures (GC) only, not spot XAU/USD
-# ===================================================================
 
 async def _gold_alphavantage(client: httpx.AsyncClient) -> Optional[dict]:
     if not _is_real_key(ALPHA_VANTAGE_KEY):
@@ -170,158 +195,47 @@ async def _gold_alphavantage(client: httpx.AsyncClient) -> Optional[dict]:
             exchange = data.get("Realtime Currency Exchange Rate", {})
             rate_str = exchange.get("5. Exchange Rate")
             if rate_str:
-                try:
-                    price = float(rate_str)
-                except (ValueError, TypeError):
-                    logger.warning(f"[PROVIDER] AlphaVantage: cannot parse rate: {rate_str}")
-                    return None
+                price = float(rate_str)
                 if price > 0:
-                    logger.info(f"[PROVIDER] alphavantage fallback used price={price}")
                     return _make_response("XAUUSD", round(price, 2), "alphavantage")
-            if "Note" in data or "Information" in data:
-                msg = data.get("Note") or data.get("Information", "")
-                logger.warning(f"[PROVIDER] AlphaVantage: rate limited — {msg[:80]}")
-            elif "Error Message" in data:
-                logger.warning("[PROVIDER] AlphaVantage: endpoint not supported on free tier → fallback")
-            elif not exchange:
-                logger.warning(f"[PROVIDER] AlphaVantage: unexpected response: {str(data)[:150]}")
-        elif resp.status_code == 429:
-            logger.warning("[PROVIDER] AlphaVantage: HTTP 429 → fallback")
-        else:
-            logger.warning(f"[PROVIDER] AlphaVantage: HTTP {resp.status_code}")
-    except httpx.TimeoutException:
-        logger.warning("[PROVIDER] AlphaVantage: timeout")
     except Exception as e:
         logger.warning(f"[PROVIDER] AlphaVantage exception: {e}")
     return None
 
 
-# ===================================================================
-# PROVIDER 4: Gold-API.com (FREE — no key required, live spot gold)
-# ===================================================================
-
-async def _gold_free_api(client: httpx.AsyncClient) -> Optional[dict]:
-    try:
-        resp = await client.get("https://api.gold-api.com/price/XAU")
-        if resp.status_code == 200:
-            data = resp.json()
-            price = data.get("price")
-            if price and float(price) > 0:
-                logger.info(f"[PROVIDER] gold-api.com fallback used price={float(price)}")
-                return _make_response("XAUUSD", round(float(price), 2), "gold-api.com")
-            else:
-                logger.warning(f"[PROVIDER] gold-api.com: no valid price: {str(data)[:150]}")
-        elif resp.status_code == 429:
-            logger.warning("[PROVIDER] gold-api.com: rate limited (429)")
-        else:
-            logger.warning(f"[PROVIDER] gold-api.com: HTTP {resp.status_code}")
-    except httpx.TimeoutException:
-        logger.warning("[PROVIDER] gold-api.com: timeout")
-    except Exception as e:
-        logger.warning(f"[PROVIDER] gold-api.com exception: {e}")
-    return None
-
-
-# ===================================================================
-# PROVIDER 5: Metals-API (bonus, if key configured)
-# ===================================================================
-
-async def _gold_metals_api(client: httpx.AsyncClient) -> Optional[dict]:
-    if not _is_real_key(METALS_API_KEY):
-        return None
-    try:
-        resp = await client.get(
-            "https://api.metals-api.com/v1/latest",
-            params={"access_key": METALS_API_KEY, "base": "USD", "symbols": "XAU"},
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("success"):
-                rate = data.get("rates", {}).get("XAU")
-                if rate and float(rate) > 0:
-                    price = 1.0 / float(rate)
-                    logger.info(f"[PROVIDER] metals-api fallback used price={round(price, 2)}")
-                    return _make_response("XAUUSD", round(price, 2), "metals-api")
-    except Exception as e:
-        logger.warning(f"[PROVIDER] Metals-API exception: {e}")
-    return None
-
-
-# ===================================================================
-# PROVIDER 5: GoldAPI (bonus, if key configured)
-# ===================================================================
-
-async def _gold_goldapi(client: httpx.AsyncClient) -> Optional[dict]:
-    if not _is_real_key(GOLDAPI_KEY):
-        return None
-    try:
-        resp = await client.get(
-            "https://www.goldapi.io/api/XAU/USD",
-            headers={"x-access-token": GOLDAPI_KEY},
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            price = data.get("price")
-            if price and float(price) > 0:
-                logger.info(f"[PROVIDER] goldapi fallback used price={float(price)}")
-                return _make_response("XAUUSD", float(price), "goldapi")
-    except Exception as e:
-        logger.warning(f"[PROVIDER] GoldAPI exception: {e}")
-    return None
-
-
-# ===================================================================
-# GOLD PRICE — Provider chain
-# ===================================================================
-
 async def _get_gold_price() -> Optional[dict]:
     """
     Fetch XAUUSD price using strict provider priority:
-      1. gold-api.com  (primary — FREE, stable, no rate-limit issues)
-      2. TwelveData    (secondary — rate-limited on free tier)
-      3. Metals-API    (if key configured)
-      4. GoldAPI.io    (if key configured)
-      5. Finnhub       (low priority — free tier lacks gold support)
-      6. Alpha Vantage  (low priority — free tier rate-limited)
-    
-    Each provider has a 2-second timeout. No retries within same cycle.
+      1. TwelveData   (PRIMARY when TWELVEDATA_KEY is set)
+      2. gold-api.com (SECONDARY — free live spot fallback)
+      3. Metals-API
+      4. GoldAPI.io
+      5. Finnhub
+      6. Alpha Vantage
     """
     async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
-        result = await _gold_free_api(client)
-        if result:
-            return result
-
-        result = await _gold_twelvedata(client)
-        if result:
-            return result
-
-        result = await _gold_metals_api(client)
-        if result:
-            return result
-
-        result = await _gold_goldapi(client)
-        if result:
-            return result
-
-        result = await _gold_finnhub(client)
-        if result:
-            return result
-
-        result = await _gold_alphavantage(client)
-        if result:
-            return result
+        for provider_fn in (
+            _gold_twelvedata,
+            _gold_free_api,
+            _gold_metals_api,
+            _gold_goldapi,
+            _gold_finnhub,
+            _gold_alphavantage,
+        ):
+            result = await provider_fn(client)
+            if result:
+                return result
 
     logger.error("[PROVIDER] ALL PROVIDERS FAILED for XAUUSD")
     return None
 
 
 # ===================================================================
-# FOREX PAIRS via TwelveData + Finnhub fallback
+# INTRADAY FOREX PAIRS (TwelveData → Finnhub OANDA → open.er-api fallback)
 # ===================================================================
 
-async def _get_forex_twelvedata(pair_slash: str, symbol_out: str) -> Optional[dict]:
-    """Fetch forex pair from TwelveData. pair_slash like 'EUR/USD'."""
-    if not TWELVEDATA_KEY:
+async def _get_forex_twelvedata(pair_slash: str, symbol_out: str, decimals: int = 5) -> Optional[dict]:
+    if not _is_real_key(TWELVEDATA_KEY):
         return None
     try:
         async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
@@ -332,15 +246,16 @@ async def _get_forex_twelvedata(pair_slash: str, symbol_out: str) -> Optional[di
             if r.status_code == 200:
                 data = r.json()
                 price = data.get("price")
-                if price:
-                    return _make_response(symbol_out, round(float(price), 5), "twelvedata")
+                if price and float(price) > 0:
+                    return _make_response(symbol_out, round(float(price), decimals), "twelvedata")
     except Exception as e:
         logger.warning(f"[TwelveData] {symbol_out} failed: {e}")
     return None
 
 
-async def _get_forex_finnhub(oanda_symbol: str, symbol_out: str) -> Optional[dict]:
-    """Fetch forex pair from Finnhub. oanda_symbol like 'OANDA:EUR_USD'."""
+async def _get_forex_finnhub(oanda_symbol: str, symbol_out: str, decimals: int = 5) -> Optional[dict]:
+    if not _is_real_key(FINNHUB_KEY):
+        return None
     try:
         async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
             r = await client.get(
@@ -351,93 +266,140 @@ async def _get_forex_finnhub(oanda_symbol: str, symbol_out: str) -> Optional[dic
                 data = r.json()
                 price = data.get("c")
                 if price and float(price) > 0:
-                    return _make_response(symbol_out, round(float(price), 5), "finnhub")
+                    return _make_response(symbol_out, round(float(price), decimals), "finnhub")
     except Exception as e:
         logger.warning(f"[Finnhub] {symbol_out} failed: {e}")
     return None
 
 
-async def _get_eurusd_price() -> Optional[dict]:
-    """Fetch EURUSD using TwelveData → Finnhub fallback."""
-    result = await _get_forex_twelvedata("EUR/USD", "EURUSD")
-    if result:
-        return result
-    result = await _get_forex_finnhub("OANDA:EUR_USD", "EURUSD")
-    if result:
-        return result
-    logger.error("[PROVIDER] ALL PROVIDERS FAILED for EURUSD")
-    return None
-
-
-async def _get_gbpusd_price() -> Optional[dict]:
-    """Fetch GBPUSD using TwelveData → Finnhub fallback."""
-    result = await _get_forex_twelvedata("GBP/USD", "GBPUSD")
-    if result:
-        return result
-    result = await _get_forex_finnhub("OANDA:GBP_USD", "GBPUSD")
-    if result:
-        return result
-    logger.error("[PROVIDER] ALL PROVIDERS FAILED for GBPUSD")
-    return None
-
-
-# ===================================================================
-# BTCUSD via CoinGecko (free, no key) + TwelveData fallback
-# ===================================================================
-
-async def _get_btcusd_coingecko() -> Optional[dict]:
-    """Fetch BTCUSD from CoinGecko (free, no API key needed)."""
+async def _get_forex_alphavantage(base_ccy: str, quote_ccy: str, symbol_out: str, decimals: int = 5) -> Optional[dict]:
+    if not _is_real_key(ALPHA_VANTAGE_KEY):
+        return None
     try:
         async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
             r = await client.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": "bitcoin", "vs_currencies": "usd"},
+                "https://www.alphavantage.co/query",
+                params={
+                    "function": "CURRENCY_EXCHANGE_RATE",
+                    "from_currency": base_ccy,
+                    "to_currency": quote_ccy,
+                    "apikey": ALPHA_VANTAGE_KEY,
+                },
             )
             if r.status_code == 200:
                 data = r.json()
-                price = data.get("bitcoin", {}).get("usd")
-                if price:
-                    return _make_response("BTCUSD", round(float(price), 2), "coingecko")
+                rate_str = (data.get("Realtime Currency Exchange Rate") or {}).get("5. Exchange Rate")
+                if rate_str and float(rate_str) > 0:
+                    return _make_response(symbol_out, round(float(rate_str), decimals), "alphavantage")
     except Exception as e:
-        logger.warning(f"[CoinGecko] BTCUSD failed: {e}")
+        logger.warning(f"[AlphaVantage] {symbol_out} failed: {e}")
     return None
 
 
-async def _get_btcusd_price() -> Optional[dict]:
-    """Fetch BTCUSD using CoinGecko → TwelveData fallback."""
-    result = await _get_btcusd_coingecko()
-    if result:
-        return result
-    result = await _get_forex_twelvedata("BTC/USD", "BTCUSD")
-    if result:
-        return result
-    logger.error("[PROVIDER] ALL PROVIDERS FAILED for BTCUSD")
+async def _get_forex_er_api(base_ccy: str, quote_ccy: str, symbol_out: str, decimals: int = 5) -> Optional[dict]:
+    """Keyless fallback forex rate provider."""
+    try:
+        async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+            r = await client.get(f"https://open.er-api.com/v6/latest/{base_ccy}")
+            if r.status_code == 200:
+                data = r.json()
+                rate = (data.get("rates") or {}).get(quote_ccy)
+                if rate and float(rate) > 0:
+                    return _make_response(symbol_out, round(float(rate), decimals), "er-api")
+    except Exception as e:
+        logger.warning(f"[ER-API] {symbol_out} failed: {e}")
     return None
+
+
+def _make_fx_provider(base_ccy: str, quote_ccy: str, decimals: int = 5) -> Callable:
+    pair_slash = f"{base_ccy}/{quote_ccy}"
+    oanda_sym = f"OANDA:{base_ccy}_{quote_ccy}"
+    symbol_out = f"{base_ccy}{quote_ccy}"
+
+    async def _provider() -> Optional[dict]:
+        res = await _get_forex_twelvedata(pair_slash, symbol_out, decimals)
+        if res:
+            return res
+        res = await _get_forex_finnhub(oanda_sym, symbol_out, decimals)
+        if res:
+            return res
+        res = await _get_forex_alphavantage(base_ccy, quote_ccy, symbol_out, decimals)
+        if res:
+            return res
+        res = await _get_forex_er_api(base_ccy, quote_ccy, symbol_out, decimals)
+        if res:
+            return res
+        logger.error(f"[PROVIDER] ALL PROVIDERS FAILED for {symbol_out}")
+        return None
+
+    return _provider
+
+
+# ===================================================================
+# CRYPTO PROVIDERS (CoinGecko → TwelveData fallback)
+# ===================================================================
+
+def _make_crypto_provider(coingecko_id: str, td_pair: str, symbol_out: str) -> Callable:
+    async def _provider() -> Optional[dict]:
+        try:
+            async with httpx.AsyncClient(timeout=PROVIDER_TIMEOUT) as client:
+                r = await client.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    params={"ids": coingecko_id, "vs_currencies": "usd"},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    price = (data.get(coingecko_id) or {}).get("usd")
+                    if price and float(price) > 0:
+                        return _make_response(symbol_out, round(float(price), 2), "coingecko")
+        except Exception as e:
+            logger.warning(f"[CoinGecko] {symbol_out} failed: {e}")
+
+        res = await _get_forex_twelvedata(td_pair, symbol_out, decimals=2)
+        if res:
+            return res
+        logger.error(f"[PROVIDER] ALL PROVIDERS FAILED for {symbol_out}")
+        return None
+
+    return _provider
 
 
 # ===================================================================
 # SYMBOL PROVIDER REGISTRY
 # ===================================================================
-SYMBOL_PROVIDERS: dict[str, callable] = {
+SYMBOL_PROVIDERS: dict[str, Callable] = {
     "XAUUSD": _get_gold_price,
-    "EURUSD": _get_eurusd_price,
-    "GBPUSD": _get_gbpusd_price,
-    "BTCUSD": _get_btcusd_price,
+    "EURUSD": _make_fx_provider("EUR", "USD", 5),
+    "GBPUSD": _make_fx_provider("GBP", "USD", 5),
+    "USDJPY": _make_fx_provider("USD", "JPY", 3),
+    "GBPJPY": _make_fx_provider("GBP", "JPY", 3),
+    "AUDUSD": _make_fx_provider("AUD", "USD", 5),
+    "USDCAD": _make_fx_provider("USD", "CAD", 5),
+    "USDCHF": _make_fx_provider("USD", "CHF", 5),
+    "BTCUSD": _make_crypto_provider("bitcoin", "BTC/USD", "BTCUSD"),
+    "ETHUSD": _make_crypto_provider("ethereum", "ETH/USD", "ETHUSD"),
 }
 
 SYMBOL_ALIASES: dict[str, str] = {
     "XAU/USD": "XAUUSD",
-    "GOLD":    "XAUUSD",
+    "GOLD": "XAUUSD",
     "EUR/USD": "EURUSD",
     "GBP/USD": "GBPUSD",
+    "USD/JPY": "USDJPY",
+    "GBP/JPY": "GBPJPY",
+    "AUD/USD": "AUDUSD",
+    "USD/CAD": "USDCAD",
+    "USD/CHF": "USDCHF",
     "BTC/USD": "BTCUSD",
     "BITCOIN": "BTCUSD",
+    "ETH/USD": "ETHUSD",
+    "ETHEREUM": "ETHUSD",
 }
 
 
 def _normalize_symbol(symbol: str) -> str:
     upper = symbol.upper().strip()
-    return SYMBOL_ALIASES.get(upper, upper)
+    return SYMBOL_ALIASES.get(upper, upper.replace("/", ""))
 
 
 # ===================================================================
@@ -448,7 +410,6 @@ async def get_price_fresh(symbol: str) -> dict:
     """
     Fetch price directly from provider, BYPASSING the TTL cache.
     Used by the signal engine to guarantee fresh data every tick.
-    Still updates the cache for other consumers (HTTP API).
     """
     normalized = _normalize_symbol(symbol)
 
@@ -470,10 +431,7 @@ async def get_price_fresh(symbol: str) -> dict:
 
 
 async def get_price(symbol: str) -> dict:
-    """
-    Fetch current price with TTL cache (for HTTP API consumers).
-    Engine uses get_price_fresh() instead.
-    """
+    """Fetch current price with TTL cache (for HTTP API consumers)."""
     normalized = _normalize_symbol(symbol)
 
     cached = _get_cached(normalized)

@@ -12,6 +12,7 @@ Test Scenarios:
 6. Subscriptions Fetch (authenticated)
 """
 
+import os
 import requests
 import json
 from typing import Dict, Any, Optional
@@ -20,14 +21,14 @@ from datetime import datetime
 
 class SupabaseBackendTester:
     def __init__(self):
-        # Supabase Configuration from review request
-        self.base_url = "https://hrzghlqcfccnmgcipxxo.supabase.co"
-        self.anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTc5NzIsImV4cCI6MjA4NTg3Mzk3Mn0.yImldZ1cCW4yEat4b6X1lAFufVs6ym_Hudm4lsRXwkQ"
-        self.service_role_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyemdobHFjZmNjbm1nY2lweHhvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDI5Nzk3MiwiZXhwIjoyMDg1ODczOTcyfQ.6lQ5_g-LnORjWrz9Yn1hBYA3-SXcI5aidmyKI9SjGvY"
+        # Supabase Configuration (read from environment — never hardcode service_role keys)
+        self.base_url = os.environ.get("SUPABASE_URL", "https://hrzghlqcfccnmgcipxxo.supabase.co")
+        self.anon_key = os.environ.get("EXPO_PUBLIC_SUPABASE_ANON_KEY", "")
+        self.service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
         
         # Test credentials
-        self.admin_email = "admin@swiftfx.app"
-        self.admin_password = "Admin123!@#"
+        self.admin_email = os.environ.get("TEST_ADMIN_EMAIL", "admin@swiftfx.app")
+        self.admin_password = os.environ.get("TEST_ADMIN_PASSWORD", "")
         
         # Session tracking
         self.access_token = None

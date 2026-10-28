@@ -11,13 +11,21 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.database import db
-from core.dependencies import require_auth, require_admin, get_current_user
+from core.dependencies import require_auth, require_admin, require_super_admin
 from models.schemas import User
-from models.enums import AccountStatus, AdminRole, TicketStatus
+from models.enums import AccountStatus, AdminRole, TicketStatus, UserRole
 from services.subscription import get_effective_subscription
 from services.admin import log_admin_action, create_admin_notification
-from services.auth import is_protected_super_admin
-from supabase_auth import fetch_profile, update_profile, update_auth_user
+from services.auth import is_protected_super_admin, is_super_admin
+from supabase_auth import (
+    fetch_profile,
+    update_profile,
+    update_auth_user,
+    verify_user_password,
+    delete_profile,
+    delete_auth_user,
+    get_auth_user_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -203,21 +211,29 @@ By using Swift FX Signals, you acknowledge that:
 
 @router.get("/settings/profile")
 async def get_user_profile(current_user: User = Depends(require_auth)):
-    """Get current user's profile information"""
+    """Get current user's profile information with unified subscription state."""
     user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    role_val = user_doc.get("role", "free")
+    is_admin_flag = role_val in (UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value, "admin", "super_admin")
+    effective_sub = await get_effective_subscription(
+        current_user.user_id,
+        user_role=role_val,
+        is_admin=is_admin_flag,
+    )
+
     return {
         "user_id": user_doc["id"],
         "name": user_doc.get("name", ""),
         "email": current_user.email,
-        "phone": user_doc.get("phone", ""),
-        "role": user_doc.get("role", "free"),
-        "subscription": user_doc.get("role", "free"),
-        "subscription_expiry": None,
+        "phone": user_doc.get("phone", "") or "",
+        "role": role_val,
+        "subscription": effective_sub,
+        "subscription_expiry": user_doc.get("subscription_expiry"),
         "admin_role": user_doc.get("admin_role"),
-        "is_admin": user_doc.get("role") == "admin",
+        "is_admin": is_admin_flag,
         "account_status": user_doc.get("account_status", "active"),
         "created_at": user_doc.get("created_at"),
         "last_login": user_doc.get("last_login"),
@@ -227,9 +243,9 @@ async def get_user_profile(current_user: User = Depends(require_auth)):
 @router.put("/settings/profile")
 async def update_user_profile(
     update: ProfileUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
-    """Update user profile (name and phone)"""
+    """Update user profile (name, phone, picture)"""
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     
     if update.name is not None:
@@ -238,17 +254,18 @@ async def update_user_profile(
         update_data["name"] = update.name.strip()
     
     if update.phone is not None:
-        update_data["phone"] = update.phone.strip()
+        phone_clean = update.phone.strip()
+        if len(phone_clean) > 30:
+            raise HTTPException(status_code=400, detail="Phone number is too long")
+        update_data["phone"] = phone_clean
 
     if update.picture is not None:
-        # Allow clearing picture by sending null/empty string; here we treat empty string as null.
         picture_value = update.picture.strip()
-        if picture_value == "":
-            picture_value = None
-        if picture_value is not None:
-            update_data["picture"] = picture_value
+        update_data["picture"] = picture_value if picture_value else None
     
-    await update_profile(current_user.user_id, update_data)
+    ok = await update_profile(current_user.user_id, update_data)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to update profile")
     
     logger.info(f"[Settings] User {current_user.user_id} updated profile")
     
@@ -259,11 +276,15 @@ async def change_password(
     password_change: PasswordChange,
     current_user: User = Depends(require_auth)
 ):
-    """Change user password via Supabase Auth Admin API"""
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    # Update password via Supabase Auth Admin API
+    """Change user password after verifying current_password."""
+    if len(password_change.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+
+    # Verify current_password before allowing password overwrite (prevents session-steal takeover)
+    is_valid_current = await verify_user_password(current_user.email, password_change.current_password)
+    if not is_valid_current:
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
     success = await update_auth_user(current_user.user_id, {"password": password_change.new_password})
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update password")
@@ -273,7 +294,7 @@ async def change_password(
     return {"success": True, "message": "Password changed successfully"}
 
 @router.get("/settings/notifications")
-async def get_notification_preferences(current_user: User = Depends(get_current_user)):
+async def get_notification_preferences(current_user: User = Depends(require_auth)):
     """Get user notification preferences"""
     user_doc = await fetch_profile(current_user.user_id)
     if not user_doc:
@@ -301,7 +322,7 @@ async def get_notification_preferences(current_user: User = Depends(get_current_
 @router.put("/settings/notifications")
 async def update_notification_preferences(
     update: NotificationPreferencesUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Update notification preferences"""
     user_doc = await fetch_profile(current_user.user_id)
@@ -348,27 +369,30 @@ async def get_legal_document(document_type: str):
 
 @router.post("/settings/deactivate")
 async def deactivate_account(
-    request: AccountDeactivateRequest,
-    current_user: User = Depends(get_current_user)
+    request: Optional[AccountDeactivateRequest] = None,
+    current_user: User = Depends(require_auth)
 ):
-    """Deactivate user account (soft delete)"""
-    # Prevent protected admin deactivation
+    """Deactivate user account (soft delete) and disable active push tokens."""
     if is_protected_super_admin(current_user.email):
         raise HTTPException(status_code=403, detail="Protected admin accounts cannot be deactivated")
     
     await update_profile(current_user.user_id, {
-            "account_status": AccountStatus.DEACTIVATED.value,
-            "deactivated_at": datetime.now(timezone.utc).isoformat(),
-            "deactivation_reason": request.reason,
-        })
+        "account_status": AccountStatus.DEACTIVATED.value,
+        "deactivated_at": datetime.now(timezone.utc).isoformat(),
+        "deactivation_reason": request.reason if request else None,
+    })
+    await db.device_tokens.update_many(
+        {"user_id": current_user.user_id},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
     
     logger.info(f"[Settings] User {current_user.user_id} deactivated account")
     
-    return {"success": True, "message": "Account deactivated. You can contact support to reactivate."}
+    return {"success": True, "message": "Account deactivated. Contact support@swiftfx.online to reactivate."}
 
 @router.post("/settings/delete-request")
 async def request_account_deletion(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Submit account deletion request (creates a support ticket)"""
     # Prevent protected admin deletion
@@ -413,18 +437,66 @@ async def request_account_deletion(
         "ticket_id": ticket_id
     }
 
+@router.delete("/settings/account")
+async def delete_own_account(
+    current_user: User = Depends(require_auth),
+):
+    """
+    Permanently delete the authenticated user's account and personal data.
+    Satisfies Apple App Store Review Guideline 5.1.1(v) and Google Play User Data Policy.
+    """
+    if is_protected_super_admin(current_user.email) or is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Super Admin accounts cannot be self-deleted")
+
+    uid = current_user.user_id
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Clean up personal/user-scoped collections in MongoDB
+    await db.device_tokens.delete_many({"user_id": uid})
+    await db.journals.delete_many({"user_id": uid})
+    await db.ai_analyses.delete_many({"user_id": uid})
+    await db.academy_progress.delete_many({"user_id": uid})
+    await db.user_streaks.delete_many({"user_id": uid})
+    await db.insight_likes.delete_many({"user_id": uid})
+    await db.insight_comments.delete_many({"user_id": uid})
+    await db.posts.delete_many({"user_id": uid})
+    await db.comments.delete_many({"user_id": uid})
+    await db.subscription_overrides.delete_many({"user_id": uid})
+
+    # Anonymize billing/audit records that must remain for financial reconciliation
+    await db.iap_transactions.update_many(
+        {"user_id": uid},
+        {"$set": {"account_deleted_at": now_iso}},
+    )
+    await db.payment_transactions.update_many(
+        {"user_id": uid},
+        {"$set": {"user_email": "[deleted]", "account_deleted_at": now_iso}},
+    )
+
+    # Delete Supabase profile & GoTrue Auth account
+    await delete_profile(uid)
+    auth_deleted = await delete_auth_user(uid)
+    if not auth_deleted:
+        logger.warning(f"[Settings] delete_auth_user returned False for {uid}")
+
+    logger.info(f"[Settings] Permanently deleted account for user {uid}")
+    return {
+        "success": True,
+        "message": "Your account and personal data have been permanently deleted.",
+    }
+
 @router.get("/settings/sessions")
-async def get_user_sessions(current_user: User = Depends(get_current_user)):
+async def get_user_sessions(current_user: User = Depends(require_auth)):
     """Get user session information (prepared for multi-device control)"""
-    user_doc = await fetch_profile(current_user.user_id)
+    user_doc = await fetch_profile(current_user.user_id) or {}
     
     return {
         "current_session": {
             "last_login": user_doc.get("last_login"),
             "login_ip": user_doc.get("last_login_ip"),
         },
-        "multi_device_enabled": False,  # Future feature placeholder
-        "active_sessions": 1,  # Future feature placeholder
+        "multi_device_enabled": False,
+        "active_sessions": 1,
     }
 
 # ==================== ADMIN USER SETTINGS ENDPOINTS ====================
@@ -453,30 +525,31 @@ async def admin_get_user_settings(
 async def admin_deactivate_user(
     user_id: str,
     reason: str,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_super_admin)
 ):
     """Force deactivate a user account. Super Admin only."""
-    if admin.admin_role != AdminRole.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="Only Super Admin can deactivate accounts")
-    
     user_doc = await fetch_profile(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Prevent deactivating protected super admins
-    if is_protected_super_admin(user_doc.get("email", "")):
+    target_email = await get_auth_user_email(user_id) or user_doc.get("email", "")
+    if is_protected_super_admin(target_email):
         raise HTTPException(status_code=403, detail="Cannot deactivate protected Super Admin accounts")
     
     await update_profile(user_id, {
-            "account_status": AccountStatus.DEACTIVATED.value,
-            "deactivated_at": datetime.now(timezone.utc).isoformat(),
-            "deactivated_by": admin.user_id,
-            "deactivation_reason": reason,
-        })
+        "account_status": AccountStatus.DEACTIVATED.value,
+        "deactivated_at": datetime.now(timezone.utc).isoformat(),
+        "deactivated_by": admin.user_id,
+        "deactivation_reason": reason,
+    })
+    await db.device_tokens.update_many(
+        {"user_id": user_id},
+        {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
     
     await log_admin_action(
         admin.user_id,
-        admin.admin_role.value,
+        admin.admin_role.value if admin.admin_role else "super_admin",
         "deactivate_user",
         "user",
         user_id,
@@ -490,12 +563,9 @@ async def admin_deactivate_user(
 @router.post("/admin/users/{user_id}/restore")
 async def admin_restore_user(
     user_id: str,
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_super_admin)
 ):
     """Restore a deactivated user account. Super Admin only."""
-    if admin.admin_role != AdminRole.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="Only Super Admin can restore accounts")
-    
     user_doc = await fetch_profile(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
@@ -511,7 +581,7 @@ async def admin_restore_user(
     
     await log_admin_action(
         admin.user_id,
-        admin.admin_role.value,
+        admin.admin_role.value if admin.admin_role else "super_admin",
         "restore_user",
         "user",
         user_id,

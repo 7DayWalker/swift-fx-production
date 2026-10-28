@@ -9,7 +9,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from core.database import db
-from core.dependencies import get_current_user, require_admin
+from core.dependencies import get_current_user, require_auth, require_admin
 from models.schemas import User
 
 logger = logging.getLogger(__name__)
@@ -185,24 +185,26 @@ async def get_insights_feed(
 @router.post("/insights/{insight_id}/like")
 async def toggle_like(
     insight_id: str = Path(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
 ):
     """Toggle like on an insight. Returns new state."""
-
-    existing = await db.insight_likes.find_one({
+    delete_res = await db.insight_likes.delete_one({
         "insight_id": insight_id,
         "user_id": current_user.user_id,
     })
 
-    if existing:
-        await db.insight_likes.delete_one({"_id": existing["_id"]})
+    if delete_res.deleted_count > 0:
         is_liked = False
     else:
-        await db.insight_likes.insert_one({
-            "insight_id": insight_id,
-            "user_id": current_user.user_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        await db.insight_likes.update_one(
+            {"insight_id": insight_id, "user_id": current_user.user_id},
+            {"$setOnInsert": {
+                "insight_id": insight_id,
+                "user_id": current_user.user_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
         is_liked = True
 
     count = await db.insight_likes.count_documents({"insight_id": insight_id})
@@ -235,7 +237,7 @@ async def get_comments(
 async def add_comment(
     body: CommentCreate,
     insight_id: str = Path(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
 ):
     """Add a comment to an insight."""
     text = body.text.strip()

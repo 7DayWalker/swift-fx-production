@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
+import { useSubscription } from './SubscriptionContext';
 import { SubscriptionTier } from '../utils/signalAccess';
 import api from '../services/api';
 
@@ -105,14 +105,24 @@ const mapBackendSignal = (row: any): Signal => ({
 
 export function SignalProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
+  const { status: subscriptionStatus } = useSubscription();
 
   // Extract user_id once to use as stable dependency
   const userId = user?.user_id;
 
+  // Derive unified effective tier directly from SubscriptionContext (backed by /api/subscription/status)
+  // Precedence: admin/super_admin → vip, capability_tier/subscription → tier, fallback → user.role / free
+  const resolvedTier: SubscriptionTier = (() => {
+    if (subscriptionStatus?.is_admin || user?.is_admin) return 'vip';
+    const subTier = subscriptionStatus?.capability_tier || subscriptionStatus?.subscription || user?.subscription || user?.role;
+    if (subTier === 'vip' || subTier === 'premium') return subTier;
+    return 'free';
+  })();
+
   const [signals, setSignals] = useState<Signal[]>([]);
   const [stats, setStats] = useState<SignalStats | null>(null);
   const [historyData, setHistoryData] = useState<SignalHistoryData | null>(null);
-  const [userTier, setUserTier] = useState<SubscriptionTier>('free');
+  const [userTier, setUserTier] = useState<SubscriptionTier>(resolvedTier);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -121,115 +131,16 @@ export function SignalProvider({ children }: { children: ReactNode }) {
   const [isPolling, setIsPolling] = useState(false);
   const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  
-  // Track if tier has been fetched for current user to prevent duplicate calls
-  const tierFetchedForUserRef = useRef<string | null>(null);
 
-  // DEBUG: Track renders
-  console.log('[SignalContext] RENDER - userId:', userId, 'userTier:', userTier);
+  // Sync userTier reactively whenever SubscriptionContext or AuthContext updates
+  useEffect(() => {
+    setUserTier(resolvedTier);
+  }, [resolvedTier]);
 
   // Derived lists - "active" = all non-closed signals (pending, active, tp1, tp2, tp3)
   const activeSignals = signals.filter((s) => s.state !== 'closed');
   const pendingSignals = signals.filter((s) => s.state === 'pending');
   const closedSignals = signals.filter((s) => s.state === 'closed');
-
-  // Fetch user's subscription tier - ONLY depends on userId (primitive)
-  // Precedence: super_admin → vip, admin → vip, Active VIP sub → vip, Active Premium sub → premium, else → free
-  const fetchUserTier = useCallback(async () => {
-    console.log('[SignalContext] fetchUserTier called - userId:', userId, 'alreadyFetchedFor:', tierFetchedForUserRef.current);
-    
-    if (!userId) {
-      console.log('[SignalContext] No user ID, defaulting to free');
-      setIsLoading(false);
-      setUserTier('free');
-      tierFetchedForUserRef.current = null;
-      return;
-    }
-
-    // Skip if already fetched for this user
-    if (tierFetchedForUserRef.current === userId) {
-      console.log('[SignalContext] Tier already fetched for this user, skipping');
-      return;
-    }
-
-    try {
-      // STEP 1: Fetch profile to check admin roles FIRST (highest precedence)
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (profileError) {
-        console.warn('[SignalContext] Profile fetch error:', profileError.message);
-      }
-
-      const profileRole = profile?.role;
-      console.log('[SignalContext] Profile role:', profileRole);
-
-      // RULE 1 & 2: super_admin or admin → VIP (highest precedence)
-      if (profileRole === 'super_admin' || profileRole === 'admin') {
-        console.log('[SignalContext] Admin detected, granting VIP access');
-        console.log('[SignalContext] FINAL RESOLVED TIER: vip');
-        setUserTier('vip');
-        tierFetchedForUserRef.current = userId;
-        return;
-      }
-
-      // STEP 2: Check active subscription from subscriptions table
-      const now = new Date().toISOString();
-      const { data: subscriptions, error: subError } = await supabase
-        .from('subscriptions')
-        .select('id, status, current_period_end, plans(tier)')
-        .eq('user_id', userId)
-        .eq('status', 'active');
-
-      if (subError) {
-        console.warn('[SignalContext] Subscription fetch error:', subError.message);
-      }
-
-      console.log('[SignalContext] Raw subscriptions:', subscriptions);
-
-      // Filter active subscriptions: current_period_end IS NULL OR current_period_end > now
-      const activeSubscriptions = (subscriptions || []).filter((sub) => {
-        if (!sub.current_period_end) return true; // NULL means never expires
-        return sub.current_period_end > now;
-      });
-
-      console.log('[SignalContext] Active subscriptions after filter:', activeSubscriptions);
-
-      if (activeSubscriptions.length > 0) {
-        // Find the highest tier among active subscriptions
-        const tierPriority: Record<string, number> = { vip: 2, premium: 1, free: 0 };
-        let highestTier: SubscriptionTier = 'free';
-        let highestPriority = 0;
-
-        for (const sub of activeSubscriptions) {
-          const subTier = ((sub.plans as any)?.tier || 'free').toLowerCase() as SubscriptionTier;
-          const priority = tierPriority[subTier] ?? 0;
-          if (priority > highestPriority) {
-            highestPriority = priority;
-            highestTier = subTier;
-          }
-        }
-
-        console.log('[SignalContext] FINAL RESOLVED TIER:', highestTier);
-        setUserTier(highestTier);
-        tierFetchedForUserRef.current = userId;
-        return;
-      }
-
-      // No active subscription found
-      console.log('[SignalContext] No active subscription, defaulting to free');
-      console.log('[SignalContext] FINAL RESOLVED TIER: free');
-      setUserTier('free');
-      tierFetchedForUserRef.current = userId;
-    } catch (err) {
-      console.error('[SignalContext] fetchUserTier error:', err);
-      setUserTier('free');
-      tierFetchedForUserRef.current = userId;
-    }
-  }, [userId]); // ONLY depends on userId primitive
 
   // ---- Data fetching ----
   // Store userTier in ref to avoid dependency in refreshSignals
@@ -379,30 +290,20 @@ export function SignalProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [refreshAll]);
 
-  // SINGLE useEffect for userId changes - fetches tier and signals
-  // This is the ONLY place that should call fetchUserTier
+  // SINGLE useEffect for userId changes - fetches signals cleanly
   useEffect(() => {
-    console.log('[SignalContext] useEffect[userId, token] triggered - userId:', userId, 'token:', !!token);
-    
     if (token && userId) {
       setIsLoading(true);
-      // Reset tier fetched ref when user changes
-      tierFetchedForUserRef.current = null;
-      
-      // Fetch user tier first, then signals
-      fetchUserTier().then(() => {
-        refreshAll().finally(() => setIsLoading(false));
-      });
+      refreshAll().finally(() => setIsLoading(false));
       startPolling();
     } else if (!token) {
-      // Logged out - reset everything
+      // Logged out / guest - reset user state and fetch public/free signals
       setIsLoading(false);
       setSignals([]);
       setStats(null);
       setHistoryData(null);
       setLastUpdated(null);
       setUserTier('free');
-      tierFetchedForUserRef.current = null;
       stopPolling();
       void refreshSignals();
     }

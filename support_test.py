@@ -4,6 +4,7 @@ Backend Testing Suite for Swift FX Signals - Help & Support System
 Tests all Help & Support System endpoints with proper authentication and role-based access control.
 """
 
+import os
 import requests
 import json
 import sys
@@ -14,7 +15,7 @@ BASE_URL = "https://rbac-audit-logs.preview.emergentagent.com/api"
 
 # Test credentials from review request
 SUPER_ADMIN_EMAIL = "ellapauledache@gmail.com"
-SUPER_ADMIN_PASSWORD = "SuperAdmin2025!"
+SUPER_ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 VIP_USER_EMAIL = "fundtest@test.com"
 VIP_USER_PASSWORD = "password"
 

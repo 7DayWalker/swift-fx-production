@@ -26,7 +26,7 @@ from core.database import db
 from core.dependencies import require_auth
 from models.enums import UserRole
 from models.schemas import User
-from services.subscription import get_effective_subscription
+from services.subscription import get_effective_subscription, can_access_visibility
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def _allowed_image_content_types() -> List[str]:
     return ["image/jpeg", "image/jpg", "image/png"]
 
 
-def _validate_and_read_image_base64(image: UploadFile, max_bytes: int) -> str:
+async def _validate_and_read_image_base64(image: UploadFile, max_bytes: int) -> str:
     if not image:
         raise HTTPException(status_code=400, detail="Screenshot image missing")
 
@@ -100,7 +100,7 @@ def _validate_and_read_image_base64(image: UploadFile, max_bytes: int) -> str:
     if image.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail="Only JPG/PNG images are allowed")
 
-    image_data = image.file.read()
+    image_data = await image.read()
     if not image_data:
         raise HTTPException(status_code=400, detail="Empty screenshot image")
     if len(image_data) > max_bytes:
@@ -172,7 +172,7 @@ async def create_journal_from_signal(
     payload: JournalFromSignalCreate,
     current_user: User = Depends(require_auth),
 ):
-    await _require_premium_vip(current_user)
+    tier = await _require_premium_vip(current_user)
 
     source_signal_id = payload.source_signal_id.strip()
     if not source_signal_id:
@@ -196,6 +196,9 @@ async def create_journal_from_signal(
     signal = await db.signals.find_one({"signal_id": source_signal_id}, {"_id": 0})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
+
+    if not can_access_visibility(tier, str(signal.get("visibility") or "free")):
+        raise HTTPException(status_code=403, detail="Upgrade your subscription to journal this signal")
 
     pips = _get_pips_value(signal)
     outcome = _derive_outcome_from_pips(pips)
@@ -317,10 +320,12 @@ async def create_journal_manual(
     if screenshot is not None:
         try:
             screenshot_content_type = screenshot.content_type
-            screenshot_base64 = _validate_and_read_image_base64(
+            screenshot_base64 = await _validate_and_read_image_base64(
                 screenshot,
                 max_bytes=5 * 1024 * 1024,  # match community upload cap
             )
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -381,7 +386,7 @@ async def list_journal_entries(current_user: User = Depends(require_auth)):
 
 @router.get("/journal/stats")
 async def get_journal_stats(current_user: User = Depends(require_auth)):
-    _require_premium_vip(current_user)
+    await _require_premium_vip(current_user)
 
     # Basic analytics only (V1):
     # total trades, wins, losses, win rate, total pips

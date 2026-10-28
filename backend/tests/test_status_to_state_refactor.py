@@ -20,7 +20,7 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 # VIP test credentials
 VIP_EMAIL = "paradoxella@gmail.com"
-VIP_PASSWORD = "Grace1992@"
+VIP_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

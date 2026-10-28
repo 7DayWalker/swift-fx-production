@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Stack } from 'expo-router';
-import { router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -49,6 +48,8 @@ if (Platform.OS === 'android') {
 function RootLayoutContent() {
   const { theme, isDark } = useTheme();
   const { user, isLoading, isPasswordRecovery } = useAuth();
+  const segments = useSegments();
+  const userId = user?.user_id;
 
   const DISMISSED_ANNOUNCEMENT_ID_KEY = '@dismissed_app_announcement_id';
 
@@ -74,29 +75,45 @@ function RootLayoutContent() {
   useEffect(() => {
     if (isLoading) return;
 
+    const topSegment = segments[0];
+
     if (isPasswordRecovery) {
-      router.replace('/reset-password');
+      if (topSegment !== 'reset-password') {
+        router.replace('/reset-password');
+      }
       return;
     }
 
-    if (user) {
-      router.replace('/(tabs)/dashboard');
+    // Preserve standalone deep-link / checkout / callback routes
+    if (topSegment === 'invite' || topSegment === 'pay' || topSegment === 'checkout-flutterwave') {
+      return;
+    }
+
+    if (userId) {
+      // Only redirect to dashboard when sitting on root index or auth screens
+      if (!topSegment || topSegment === 'index' || topSegment === '(auth)' || topSegment === 'auth' || topSegment === 'reset-password') {
+        router.replace('/(tabs)/dashboard');
+      }
     } else {
       // Guest routing (frontend-only)
       void (async () => {
         try {
           const guestFlag = await AsyncStorage.getItem('swiftfx_guest');
           if (guestFlag === 'true') {
-            router.replace('/(tabs)/signals');
+            if (!topSegment || topSegment === 'index' || topSegment === '(auth)') {
+              router.replace('/(tabs)/signals');
+            }
             return;
           }
         } catch {
           // fail-closed: fall back to login
         }
-        router.replace('/(auth)/login');
+        if (topSegment !== '(auth)' && topSegment !== 'auth') {
+          router.replace('/(auth)/login');
+        }
       })();
     }
-  }, [isLoading, user, isPasswordRecovery]);
+  }, [isLoading, userId, isPasswordRecovery, segments[0]]);
 
   // ── App announcement popup (show once, after auth stabilization) ──
   useEffect(() => {
@@ -216,7 +233,9 @@ function RootLayoutContent() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="auth" />
-        <Stack.Screen name="register" />
+        <Stack.Screen name="invite" />
+        <Stack.Screen name="pay" />
+        <Stack.Screen name="checkout-flutterwave" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="signal-history" />
         <Stack.Screen name="journal" />

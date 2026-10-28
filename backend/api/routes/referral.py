@@ -14,9 +14,13 @@ from core.database import db
 from core.dependencies import require_auth, require_admin
 from models.schemas import User
 from models.enums import ReferralStatus, RewardStatus, AdminRole, UserRole
-from services.subscription import get_effective_subscription
+from services.subscription import (
+    get_effective_subscription,
+    get_effective_expiry,
+    sync_profile_subscription,
+)
 from services.admin import log_admin_action
-from supabase_auth import fetch_profile, list_profiles, update_profile
+from supabase_auth import fetch_profile, list_profiles, update_profile, list_auth_users
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,9 @@ def generate_referral_code(user_id: str) -> str:
 async def get_my_referral_code(current_user: User = Depends(require_auth)):
     """Get current user's referral code and stats"""
     user_doc = await fetch_profile(current_user.user_id)
-    
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
     referral_code = user_doc.get("referral_code")
     
     # Generate code if not exists (for existing users)
@@ -118,6 +124,9 @@ async def record_referral_signup(
     """
     referral_code = body.referral_code.upper()
     referred_user_id = body.user_id
+
+    if referred_user_id != current_user.user_id and current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=403, detail="Cannot record a referral signup for another user")
     
     # Validate that the referral code exists and find the referrer
     referrer_profile = (await list_profiles({"referral_code": referral_code}) or [None])[0]
@@ -246,61 +255,79 @@ async def claim_referral_reward(
     referral_id: str,
     current_user: User = Depends(require_auth)
 ):
-    """Claim a pending referral reward (auto-applies subscription extension)"""
-    referral = await db.referrals.find_one({
-        "referral_id": referral_id,
-        "referrer_id": current_user.user_id,
-        "reward_status": RewardStatus.PENDING.value
-    })
-    
+    """Claim a pending referral reward atomically and grant verified entitlement."""
+    now = datetime.now(timezone.utc)
+
+    # Atomically transition PENDING -> APPLIED to prevent double-claim race conditions
+    referral = await db.referrals.find_one_and_update(
+        {
+            "referral_id": referral_id,
+            "referrer_id": current_user.user_id,
+            "reward_status": RewardStatus.PENDING.value,
+        },
+        {
+            "$set": {
+                "reward_status": RewardStatus.APPLIED.value,
+                "reward_applied_at": now.isoformat(),
+            }
+        },
+    )
+
     if not referral:
         raise HTTPException(status_code=404, detail="No pending reward found")
-    
-    # Determine days to add
+
     reward_type = referral.get("reward_type", "premium_7_days")
     days_to_add = 14 if reward_type == "premium_14_days" else 7
-    
-    # Get current user's subscription
-    user_doc = await fetch_profile(current_user.user_id)
-    current_expiry = user_doc.get("subscription_expiry")
-    current_subscription = user_doc.get("subscription", "free")
-    
-    now = datetime.now(timezone.utc)
-    
-    # Calculate new expiry
-    if current_expiry:
-        if isinstance(current_expiry, str):
-            current_expiry = datetime.fromisoformat(current_expiry.replace('Z', '+00:00'))
-        if current_expiry > now:
-            new_expiry = current_expiry + timedelta(days=days_to_add)
-        else:
-            new_expiry = now + timedelta(days=days_to_add)
-    else:
-        new_expiry = now + timedelta(days=days_to_add)
-    
-    # Update user's subscription
-    update_fields = {
-        "subscription_expiry": new_expiry.isoformat()
-    }
-    
-    # If user is free, upgrade to premium
-    if current_subscription == "free":
-        update_fields["subscription"] = "premium"
-        update_fields["role"] = UserRole.PREMIUM.value
-    
-    await update_profile(current_user.user_id, update_fields)
-    
-    # Mark reward as applied
-    await db.referrals.update_one(
-        {"referral_id": referral_id},
-        {"$set": {
-            "reward_status": RewardStatus.APPLIED.value,
-            "reward_applied_at": now.isoformat()
-        }}
+
+    user_doc = await fetch_profile(current_user.user_id) or {}
+    current_effective_tier = await get_effective_subscription(user_doc or current_user.user_id)
+    current_expiry = await get_effective_expiry(current_user.user_id, profile=user_doc)
+
+    base_dt = current_expiry if (current_expiry and current_expiry > now) else now
+    new_expiry = base_dt + timedelta(days=days_to_add)
+
+    # Record referral reward in iap_transactions so unified entitlement engine & /subscription/status honor it
+    await db.iap_transactions.update_one(
+        {"original_transaction_id": f"referral_{referral_id}", "platform": "referral"},
+        {
+            "$set": {
+                "user_id": current_user.user_id,
+                "transaction_id": f"referral_{referral_id}",
+                "original_transaction_id": f"referral_{referral_id}",
+                "product_id": f"com.swiftfx.signals.referral.{reward_type}",
+                "platform": "referral",
+                "provider": "referral",
+                "plan": "premium",
+                "status": "active",
+                "expiry_date": new_expiry,
+                "auto_renew": False,
+                "is_trial": False,
+                "updated_at": now,
+                "webhook_event": "REFERRAL_REWARD_CLAIMED",
+            },
+            "$setOnInsert": {
+                "purchase_date": now,
+                "created_at": now,
+            },
+        },
+        upsert=True,
     )
-    
-    logger.info(f"[Referral] Reward claimed by {current_user.user_id}: +{days_to_add} days premium")
-    
+
+    # Sync profile without downgrading an active VIP user or overwriting admin roles
+    target_tier = "vip" if current_effective_tier == "vip" else "premium"
+    await sync_profile_subscription(
+        current_user.user_id,
+        tier=target_tier,
+        status="active",
+        expiry=new_expiry,
+        platform=user_doc.get("subscription_platform") or "referral",
+        auto_renew=bool(user_doc.get("subscription_auto_renew", False)),
+        is_trial=False,
+        profile=user_doc if user_doc else None,
+    )
+
+    logger.info(f"[Referral] Reward claimed by {current_user.user_id}: +{days_to_add} days premium (until {new_expiry.isoformat()})")
+
     return {
         "success": True,
         "reward_type": reward_type,
@@ -333,15 +360,16 @@ async def get_all_referrals(
         query["flagged"] = flagged
     
     referrals = await db.referrals.find(query).sort("created_at", -1).to_list(200)
-    
+    auth_users = await list_auth_users()
+    email_map = {u["id"]: u.get("email", "Unknown") for u in auth_users}
+
     # Enrich with user data
     for ref in referrals:
         ref.pop("_id", None)
-        # Get referrer info
         referrer = await fetch_profile(ref["referrer_id"])
         if referrer:
             ref["referrer_name"] = referrer.get("name", "Unknown")
-            ref["referrer_email"] = referrer.get("email", "Unknown")
+            ref["referrer_email"] = email_map.get(ref["referrer_id"], "Unknown")
     
     # Calculate stats
     total = len(referrals)
@@ -423,6 +451,10 @@ async def revoke_referral_reward(
             "admin_notes": reason or "Revoked by admin"
         }}
     )
+    await db.iap_transactions.update_many(
+        {"original_transaction_id": f"referral_{referral_id}", "platform": "referral"},
+        {"$set": {"status": "revoked", "updated_at": datetime.now(timezone.utc)}},
+    )
     
     await log_admin_action(
         admin.user_id,
@@ -459,6 +491,10 @@ async def flag_referral(
             "flag_reason": reason,
             "reward_status": RewardStatus.REVOKED.value
         }}
+    )
+    await db.iap_transactions.update_many(
+        {"original_transaction_id": f"referral_{referral_id}", "platform": "referral"},
+        {"$set": {"status": "revoked", "updated_at": datetime.now(timezone.utc)}},
     )
     
     await log_admin_action(

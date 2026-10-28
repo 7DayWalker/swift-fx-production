@@ -40,7 +40,7 @@ def calculate_risk_reward(entry: float, stop_loss: float, take_profit: float, si
 
 
 def can_access_signal(user_role: UserRole, signal_visibility: SignalVisibility) -> bool:
-    if user_role == UserRole.ADMIN:
+    if user_role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
         return True
     role_hierarchy = {UserRole.FREE: 0, UserRole.PREMIUM: 1, UserRole.VIP: 2}
     visibility_hierarchy = {SignalVisibility.FREE: 0, SignalVisibility.PREMIUM: 1, SignalVisibility.VIP: 2}
@@ -59,19 +59,6 @@ def get_status_from_state(state: str) -> str:
         return "active"
     else:
         return "closed"
-
-
-def get_pips_value(pair: str) -> dict:
-    return get_instrument_info(pair)
-
-
-def calculate_pips(pair: str, entry_price: float, exit_price: float, signal_type: str) -> float:
-    info = get_pips_value(pair)
-    multiplier = info["pip_multiplier"]
-    if signal_type.lower() == "buy":
-        return round((exit_price - entry_price) * multiplier, 1)
-    else:
-        return round((entry_price - exit_price) * multiplier, 1)
 
 
 @router.get("/signals")
@@ -245,6 +232,8 @@ async def manual_state_transition(
     Admin endpoint for manual state transitions.
     Respects the valid transition map and hard lock rule.
     """
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -350,6 +339,8 @@ async def manual_state_transition(
 @router.post("/admin/signals/{signal_id}/activate")
 async def activate_signal(signal_id: str, admin: User = Depends(require_admin)):
     """Quick action: Activate a pending signal (pending → active)"""
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -395,6 +386,8 @@ async def mark_tp_hit_new(
     """
     if tp_level not in [1, 2, 3]:
         raise HTTPException(status_code=400, detail="tp_level must be 1, 2, or 3")
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
     
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
@@ -501,6 +494,8 @@ async def force_close_signal(
     Quick action: Force-close any non-closed signal.
     This is the only action that works on any state (except closed).
     """
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -592,6 +587,8 @@ async def update_signal(
     admin: User = Depends(require_admin)
 ):
     """Legacy admin endpoint - routes to new state system"""
+    if not has_permission(admin, "signals", "update"):
+        raise HTTPException(status_code=403, detail="You don't have permission to update signals")
     signal = await db.signals.find_one({"signal_id": signal_id})
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -858,8 +855,15 @@ def get_pips_value(signal: dict) -> float:
 
 @router.get("/signals/history/stats")
 async def get_signal_history_stats(current_user: Optional[User] = Depends(get_current_user)):
-    """Get signal history with performance statistics based on user's access level"""
-    user_role = current_user.role if current_user else UserRole.FREE
+    """Get signal history with performance statistics based on user's effective entitlement."""
+    if current_user:
+        if current_user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            user_role = current_user.role
+        else:
+            effective_tier = await get_effective_subscription(current_user)
+            user_role = UserRole(effective_tier) if effective_tier in ("free", "premium", "vip") else UserRole.FREE
+    else:
+        user_role = UserRole.FREE
     
     # Get all closed signals
     all_closed = await db.signals.find({"state": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(None)
@@ -972,16 +976,18 @@ async def get_signal_history_stats(current_user: Optional[User] = Depends(get_cu
     }
 
 async def send_signal_notification(signal_id: str, pair: str, signal_type: SignalType, visibility: SignalVisibility):
-    """Send push notification to ALL users about new signal — delegates to centralized service."""
+    """Send push notification to eligible users about new signal — delegates to centralized service."""
     from services.push_notifications import notify_new_signal
     sig_type = signal_type.value if hasattr(signal_type, 'value') else str(signal_type)
-    await notify_new_signal(signal_id, pair, sig_type)
+    vis = visibility.value if hasattr(visibility, 'value') else str(visibility or "free")
+    await notify_new_signal(signal_id, pair, sig_type, visibility=vis)
 
 
 async def send_signal_close_notification(signal_id: str, pair: str, signal_type: str, final_pips: float, visibility: SignalVisibility):
     """Send push notification when signal is closed — delegates to centralized service."""
     from services.push_notifications import notify_signal_closed
-    await notify_signal_closed(signal_id, pair, signal_type, final_pips)
+    vis = visibility.value if hasattr(visibility, 'value') else str(visibility or "free")
+    await notify_signal_closed(signal_id, pair, signal_type, final_pips, visibility=vis)
 
 
 

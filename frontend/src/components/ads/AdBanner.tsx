@@ -26,10 +26,11 @@ interface AdBannerProps {
 }
 
 export const AdBanner: React.FC<AdBannerProps> = ({ bottomOffset = 0 }) => {
-  const { status } = useSubscription();
+  const { status, isLoading } = useSubscription();
   const [adError, setAdError] = useState(false);
 
-  // Only free users see ads
+  // Never show ads while subscription status is still loading or for admins/paid tiers
+  if (isLoading || status?.is_admin) return null;
   const tier = status?.capability_tier || status?.subscription || 'free';
   if (tier !== 'free') return null;
 
